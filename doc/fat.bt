@@ -1,0 +1,134 @@
+//------------------------------------------------
+//--- 010 Editor v10.0.2 Binary Template
+//
+//        File: fat.bt
+//     Authors: Wes Hampson
+//     Purpose: FAT12 & FAT16 file system documentation.
+//
+//------------------------------------------------
+
+
+/**
+ * Disk Layout
+ * -----------
+ *
+ *  Region             Contents           Size (sectors)
+ * +==================+==================+=================================================+
+ * |                  |    Boot Sector   |                                                 |
+ * |     Reserved     +------------------+ reserved_sectors                                |
+ * |                  | Reserved Sectors |                                                 |
+ * |                  |    (optional)    |                                                 |
+ * +==================+==================+=================================================+
+ * |                  | File Allocation  |                                                 |
+ * |                  |      Table       |                                                 |
+ * | File Allocation  +------------------+ table_count * sectors_per_table                 |
+ * |      Tables      | Additional FATs  |                                                 |
+ * |                  |    (optional)    |                                                 |
+ * +==================+==================+=================================================+
+ * |                  |                  |                                                 |
+ * |  Root Directory  | Root Dir Entries | (root_dir_entries * 32) / bytes_per_sector      |
+ * |                  |                  |                                                 |
+ * +==================+==================+=================================================+
+ * |                  |                  | total_sectors                                   |
+ * |                  |      Files       |    - reserved_sectors                           |
+ * |      Data        |        &         |    - table_count * sectors_per_table            |
+ * |                  |   Directories    |    - (root_dir_entries * 32) / bytes_per_sector |
+ * |                  |                  |                                                 |
+ * +==================+==================+=================================================+
+ */
+
+typedef struct {
+    char short_file_name[8];
+    char short_file_ext[3];
+    ubyte file_attrs;
+    ubyte _reserved;
+    ubyte _reserved;
+    int16 _reserved;
+    int16 _reserved;
+    int16 _reserved;
+    int16 _reserved;
+    int16 _reserved;
+    int16 _reserved;
+    int16 file_start <comment="cluster #">;
+    int32 file_size;
+} dir_entry;
+
+// Boot sector
+struct {
+    byte jmp[3] <format=hex>;
+    char oem_name[8];
+    struct {
+        int16 bytes_per_sector;
+        ubyte sectors_per_cluster;
+        int16 reserved_sectors;
+        ubyte table_count;
+        int16 root_dir_entries;
+        int16 total_sectors;
+        ubyte media_type <format=hex>;
+        int16 sectors_per_table;
+        int16 sectors_per_track;
+        int16 heads;
+        int32 hidden_sectors;
+        int32 large_sectors;
+        struct {
+            ubyte drive_number;
+            ubyte _reserved;
+            ubyte extended_boot_signature <format=hex, comment="0x28 or 0x29">;
+            uint32 volume_id <format=hex>;
+            char label[11];
+            char file_system_type[8];
+        } ebpb <comment="Extended BIOS Parameter Block", open=true>;
+    } bpb <comment="BIOS Parameter Block", open=true>;
+    ubyte boot_code[448];
+    ushort boot_signature <format=hex>;
+} boot_sector;
+
+local int sector_size = boot_sector.bpb.bytes_per_sector;
+local int cluster_size = sector_size * boot_sector.bpb.sectors_per_cluster;
+local int reserved_sectors = boot_sector.bpb.reserved_sectors;
+local int sectors_per_fat = boot_sector.bpb.sectors_per_table;
+local int fat_size = sector_size * sectors_per_fat;
+local int num_fats = boot_sector.bpb.table_count;
+local int fat_sectors = num_fats * sectors_per_fat;
+local int root_dir_sectors = (boot_sector.bpb.root_dir_entries * sizeof(dir_entry)) / sector_size;
+local int data_sectors = boot_sector.bpb.total_sectors - fat_sectors - root_dir_sectors - reserved_sectors;
+local int data_clusters = data_sectors / boot_sector.bpb.sectors_per_cluster;
+local int first_fat_sector = reserved_sectors;
+local int first_root_dir_sector = reserved_sectors + fat_sectors;
+local int first_data_sector = reserved_sectors + fat_sectors + root_dir_sectors;
+
+Printf("Sector size: %d\n", sector_size);
+Printf("Cluster size: %d\n", cluster_size);
+Printf("Number of FATs: %d\n", num_fats);
+Printf("Sectors per FAT: %d\n", sectors_per_fat);
+Printf("Total FAT sectors: %d\n", fat_sectors);
+Printf("Total root dir sectors: %d\n", root_dir_sectors);
+Printf("Total reserved sectors: %d\n", reserved_sectors);
+Printf("Total data sectors: %d\n", data_sectors);
+Printf("First FAT sector: %d\n", first_fat_sector);
+Printf("First root dir sector: %d\n", first_root_dir_sector);
+Printf("First data sector: %d\n", first_data_sector);
+
+// Reserved sectors (boot sector is also reserved)
+struct {
+    byte data[sector_size] <format=hex>;
+} reserved_sectors[reserved_sectors - 1] <optimize=false>;
+
+// File Allocation Tables
+struct {
+    struct {
+        byte data[fat_size] <format=hex, comment="12 or 16 bits per FAT entry">;
+    } file_allocation_tables[num_fats] <optimize=false>;
+} fat;
+
+// Root directory entries
+struct {
+    dir_entry entries[boot_sector.bpb.root_dir_entries];
+} root_dir_entries;
+
+// Data clusters
+struct {
+    struct {
+        byte cluster_data[cluster_size];
+    } cluster[data_clusters] <optimize=false>;
+} data;
