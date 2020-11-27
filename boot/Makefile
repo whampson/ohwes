@@ -8,41 +8,51 @@
 # directory of this codebase.                                                  #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-AS				:= i686-elf-as
-ASFLAGS			:=
-LD 				:= i686-elf-ld
-LDFLAGS			:=
+ifneq ($(MAKELEVEL), 1)
+$(error To build, please run 'make boot' from the top-level directory)
+endif
 
-STAGE1_SOURCES	:= fat.S
-STAGE1_OBJECTS	= $(STAGE1_SOURCES:.S=.S.o)
+TARGETS				:= bootsect init.sys kernel.sys
 
-STAGE2_SOURCES	:= init.S
-STAGE2_OBJECTS	= $(STAGE2_SOURCES:.S=.S.o)
+CURDIR_R			:= $(subst $(BASEDIR)/,,$(CURDIR))
+BINDIR_R			:= $(subst $(BASEDIR)/,,$(BINDIR))
+OBJDIR_R			:= $(subst $(BASEDIR)/,,$(OBJDIR)/$(CURDIR_R))
+OBJDIR				:= $(OBJDIR)/$(CURDIR_R)
 
-KERNEL_SOURCES	:= kernel.S
-KERNEL_OBJECTS	= $(KERNEL_SOURCES:.S=.S.o)
+STAGE1_SOURCES		:= fat.S
+STAGE1_OBJECTS		= $(addprefix $(OBJDIR)/,$(STAGE1_SOURCES:.S=.o))
+STAGE1_ENTRY		:= entry
+STAGE1_OFFSET		:= 0x7C00
 
-.PHONY: all clean
+STAGE2_SOURCES		:= init.S
+STAGE2_OBJECTS		= $(addprefix $(OBJDIR)/,$(STAGE2_SOURCES:.S=.o))
+STAGE2_ENTRY		:= init
+STAGE2_OFFSET		:= 0x8000
 
-all: bootsect init.sys kernel.sys
+KERNEL_SOURCES		:= kernel.S
+KERNEL_OBJECTS		= $(addprefix $(OBJDIR)/,$(KERNEL_SOURCES:.S=.o))
+KERNEL_ENTRY		:= kmain
+KERNEL_OFFSET		:= 0x0000
 
-bootsect: $(STAGE1_OBJECTS)
-	@printf 'LD  $^\n    ==> $@\n'
-	@$(LD) --oformat binary -Ttext 0x7C00 -e entry -o $@ $^
+.PHONY: all dirs
 
-init.sys: $(STAGE2_OBJECTS)
-	@printf 'LD  $^\n    ==> $@\n'
-	@$(LD) --oformat binary -Ttext 0x8000 -e stage2 -o $@ $^
+all: dirs $(addprefix $(BINDIR)/,$(TARGETS))
 
-kernel.sys: $(KERNEL_OBJECTS)
-	@printf 'LD  $^\n    ==> $@\n'
-	@$(LD) --oformat binary -Ttext 0x0000 -e kentry -o $@ $^
+dirs:
+	@$(MKDIR) $(OBJDIR)
 
-%.S.o: %.S
-	@echo 'AS  $<'
+$(BINDIR)/bootsect: $(STAGE1_OBJECTS)
+	@printf 'LD  $(OBJDIR_R)/$(notdir $^)\n==> $(BINDIR_R)/$(notdir $@)\n'
+	@$(LD) --oformat binary -Ttext $(STAGE1_OFFSET) -e $(STAGE1_ENTRY) -o $@ $^
+
+$(BINDIR)/init.sys: $(STAGE2_OBJECTS)
+	@printf 'LD  $(OBJDIR_R)/$(notdir $^)\n==> $(BINDIR_R)/$(notdir $@)\n'
+	@$(LD) --oformat binary -Ttext $(STAGE2_OFFSET) -e $(STAGE2_ENTRY) -o $@ $^
+
+$(BINDIR)/kernel.sys: $(KERNEL_OBJECTS)
+	@printf 'LD  $(OBJDIR_R)/$(notdir $^)\n==> $(BINDIR_R)/$(notdir $@)\n'
+	@$(LD) --oformat binary -Ttext $(KERNEL_OFFSET) -e $(KERNEL_ENTRY) -o $@ $^
+
+$(OBJDIR)/%.o: %.S
+	@echo 'AS  $(CURDIR_R)/$<'
 	@$(AS) $(ASFLAGS) -c -o $@ $<
-
-clean:
-	@rm -f *.o
-	@rm -f *.sys
-	@rm -f bootsect
