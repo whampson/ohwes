@@ -1,20 +1,15 @@
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#==============================================================================#
 # Copyright (C) 2020 Wes Hampson. All Rights Reserved.                         #
 #                                                                              #
-# This file is part of AFROS - Another FRee Operating System.                  #
-#                                                                              #
-# AFROS is free software. You can redistribute it and/or modify it under the   #
-# terms of the MIT License as written in the LICENSE file in the top-level     #
-# directory of this codebase.                                                  #
+# This file is part of the Niobium Operating System.                           #
+# Niobium is free software; you may redistribute it and/or modify it under     #
+# the terms of the license agreement provided with this software.              #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-#-------------------------------------------------------------------------------
-#   File: stage2.S
-# Author: Wes Hampson
-#   Desc: Stage 2 of the boot loader.
-#         Loads the kernel, switches the CPU into 32-bit Protected Mode, and
-#         calls the kernel entry point.
-#-------------------------------------------------------------------------------
+#     File: init.S                                                             #
+#   Author: Wes Hampson                                                        #
+#     Date: Nov. 25, 2020                                                      #
+#     Desc: (TODO)                                                             #
+#==============================================================================#
 
 .code16
 

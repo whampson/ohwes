@@ -1,12 +1,10 @@
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#==============================================================================#
 # Copyright (C) 2020 Wes Hampson. All Rights Reserved.                         #
 #                                                                              #
-# This file is part of AFROS - Another FRee Operating System.                  #
-#                                                                              #
-# AFROS is free software. You can redistribute it and/or modify it under the   #
-# terms of the MIT License as written in the LICENSE file in the top-level     #
-# directory of this codebase.                                                  #
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# This file is part of the Niobium Operating System.                           #
+# Niobium is free software; you may redistribute it and/or modify it under     #
+# the terms of the license agreement provided with this software.              #
+#==============================================================================#
 
 ifneq ($(MAKELEVEL), 1)
 $(error To build, please run 'make boot' from the top-level directory)

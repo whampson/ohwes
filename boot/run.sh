@@ -1,3 +1,11 @@
+#==============================================================================#
+# Copyright (C) 2020 Wes Hampson. All Rights Reserved.                         #
+#                                                                              #
+# This file is part of the Niobium Operating System.                           #
+# Niobium is free software; you may redistribute it and/or modify it under     #
+# the terms of the license agreement provided with this software.              #
+#==============================================================================#
+
 #!/bin/bash
 
 qemu_args="-drive file=floppy.img,if=floppy,format=raw,index=0 -boot a -m 2G"

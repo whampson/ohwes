@@ -1,8 +1,5 @@
-# AFROS
-**A**nother **FR**ee **O**perating **S**ystem
-
-## About
-**AFROS** is a free operating system designed by Wes Hampson.
+# Niobium Operating System
+**Niobium** is a free operating system designed by Wes Hampson.
 
 ## Design Goals
 - Keep it small; kernel and programs should fit on a 3.5in floppy (<1.44 MiB)
@@ -13,8 +10,8 @@
 
 ## TODO List
 - [ ] Boot Loader
-    - [ ] Basic FS driver
-    - [ ] Load kernel
+    - [x] Basic FS driver
+    - [x] Load kernel
     - [ ] Enter protected mode
 - [ ] Interrupt & Exception handling
 - [ ] Terminal I/O
