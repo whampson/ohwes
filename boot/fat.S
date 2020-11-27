@@ -48,12 +48,12 @@ file_system_type:       .ascii      "FAT12   "
 # --------------------------------------------------------------------------
 # -------------------------------- Constants -------------------------------
 # --------------------------------------------------------------------------
-FAT_ADDR                            = 0x0500
-ROOT_DIR_ADDR                       = 0x2000
 INIT_SEGMENT                        = 0x0000
 INIT_ENTRY                          = 0x8000
 KERNEL_SEGMENT                      = 0x1000
 KERNEL_ENTRY                        = 0x0000
+FAT_ADDR                            = 0x0500
+ROOT_DIR_ADDR                       = 0x2000
 SIZEOF_DIR_ENTRY                    = 32
 FILE_NAME_LENGTH                    = 11
 
@@ -199,6 +199,9 @@ _load_file_done:
 ####
 # Reads a contiguous line of sectors from disk.
 #
+# NOTE: Maximum file size: 64 KiB. This function cannot store
+# data in a buffer that crosses segment boundaries. 
+#
 # NOTE: For floppies, reading multiple sectors may stop after
 # the last sector is read on a given track.
 #
@@ -210,9 +213,6 @@ _load_file_done:
 # Clobbers: ax, bx, dx
 ####
 read_sectors:
-    #
-    # !!! TODO: Ensure disk read can cross segment boundaries
-    #
     pushw   %cx
 _read_sectors_loop:
     call    read_sector
