@@ -40,15 +40,31 @@
 typedef struct {
     char short_file_name[8];
     char short_file_ext[3];
-    ubyte file_attrs;
+    ubyte file_attrs <format=hex>;
     ubyte _reserved;
     ubyte _reserved;
+    struct {
+        int16 seconds   : 5;
+        int16 minutes   : 6;
+        int16 hours     : 5;
+    } creation_time <open=true>;
+    struct {
+        int16 day       : 5;
+        int16 month     : 4;
+        int16 year      : 7;
+    } creation_date <open=true>;
     int16 _reserved;
     int16 _reserved;
-    int16 _reserved;
-    int16 _reserved;
-    int16 _reserved;
-    int16 _reserved;
+    struct {
+        int16 seconds   : 5;
+        int16 minutes   : 6;
+        int16 hours     : 5;
+    } modified_time <open=true>;
+    struct {
+        int16 day       : 5;
+        int16 month     : 4;
+        int16 year      : 7;
+    } modified_date <open=true>;
     int16 file_start <comment="cluster #">;
     int32 file_size;
 } dir_entry;
@@ -117,7 +133,7 @@ struct {
 // File Allocation Tables
 struct {
     struct {
-        byte data[fat_size] <format=hex, comment="12 or 16 bits per FAT entry">;
+        ubyte data[fat_size] <format=hex, comment="12 or 16 bits per FAT entry">;
     } file_allocation_tables[num_fats] <optimize=false>;
 } fat;
 
