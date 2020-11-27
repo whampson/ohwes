@@ -1,7 +1,7 @@
 .code16
 
-.global kentry
-kentry:
+.global kmain
+kmain:
     pushw   %cs
     popw    %ds
     leaw    msg, %si

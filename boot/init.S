@@ -18,8 +18,8 @@
 
 .code16
 
-.global stage2
-stage2:
+.global init
+init:
     leaw    stage2_msg0, %si
     call    print
     leaw    stage2_msg1, %si
