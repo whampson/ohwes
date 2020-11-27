@@ -39,6 +39,7 @@ KERNEL_OFFSET		:= 0x0000
 all: dirs $(addprefix $(BINDIR)/,$(TARGETS))
 
 dirs:
+	@$(MKDIR) $(BINDIR)
 	@$(MKDIR) $(OBJDIR)
 
 $(BINDIR)/bootsect: $(STAGE1_OBJECTS)

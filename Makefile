@@ -12,17 +12,13 @@ export BASEDIR		:= $(PWD)
 export BINDIR     	:= $(BASEDIR)/bin
 export OBJDIR      	:= $(BASEDIR)/obj
 
-.PHONY: all dirs boot
+.PHONY: all clean boot
 
-all: dirs boot
+all: boot
 
 clean:
 	@$(RM) -r $(BINDIR)
 	@$(RM) -r $(OBJDIR)
 
-dirs:
-	@$(MKDIR) $(BINDIR)
-	@$(MKDIR) $(OBJDIR)
-
 boot:
-	@$(MAKE) -C boot all
+	@$(MAKE) -C boot
