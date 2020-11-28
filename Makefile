@@ -26,17 +26,17 @@ export OBJDIR		:= $(TOPDIR)/obj
 
 .PHONY: all tools clean-tools boot
 
-all: tools boot
+all: boot tools 
 
 clean-tools:
 	@$(RM) -r tools/bin
 	@$(RM) -r tools/obj
 
-tools: dirs
-	@$(MAKE) -C tools
-
 boot: dirs
 	@$(MAKE) -C boot
 
+tools: dirs
+	@$(MAKE) -C tools
 
-include $(TOPDIR)/Rules.mk
+
+include $(TOPDIR)/include/Rules.mk

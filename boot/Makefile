@@ -10,7 +10,7 @@ ifeq ($(MAKELEVEL), 0)
 $(error To build, please run 'make boot' from the top-level directory)
 endif
 
-include $(TOPDIR)/Tree.mk
+include $(TOPDIR)/include/Tree.mk
 
 STAGE1_ENTRY		:= entry
 STAGE1_OFFSET		:= 0x7C00
@@ -32,7 +32,7 @@ KERNEL_TARGETS		:= $(BINDIR)/kernel.sys
 
 TARGETS 			:= $(STAGE1_TARGETS) $(STAGE2_TARGETS) $(KERNEL_TARGETS)
 
-include $(TOPDIR)/Rules.mk
+include $(TOPDIR)/include/Rules.mk
 
 $(STAGE1_TARGETS): LDFLAGS := --oformat binary -Ttext $(STAGE1_OFFSET) -e $(STAGE1_ENTRY)
 $(STAGE1_TARGETS): $(STAGE1_OBJECTS)

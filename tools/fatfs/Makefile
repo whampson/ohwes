@@ -10,10 +10,10 @@ ifeq ($(MAKELEVEL), 0)
 $(error To build, please run 'make tools' from the top-level directory)
 endif
 
-include $(TOPDIR)/Tree.mk
+include $(TOPDIR)/include/Tree.mk
 
 SOURCES				:= $(wildcard *.c)
 OBJECTS 			:= $(addprefix $(OBJDIR)/,$(SOURCES:.c=.o))
 TARGETS				:= $(BINDIR)/fatfs
 
-include $(TOPDIR)/Rules.mk
+include $(TOPDIR)/include/Rules.mk
