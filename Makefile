@@ -6,27 +6,37 @@
 # the terms of the license agreement provided with this software.              #
 #==============================================================================#
 
-export AS       	:= i686-elf-as
-export ASFLAGS  	:=
-export CC       	:= i686-elf-gcc
-export CFLAGS   	:= 
-export LD       	:= i686-elf-ld
-export LDFLAGS  	:=
-#export MAKEFLAGS	:= --no-print-directory
+# i686-elf-tools can be found here: https://github.com/lordmilko/i686-elf-tools
+
+export AS			:= i686-elf-as
+export ASFLAGS		:=
+export CC			:= i686-elf-gcc
+export CFLAGS		:=
+export LD			:= i686-elf-ld
+export LDFLAGS		:=
+export MAKEFLAGS	:= --no-print-directory
+
 export MKDIR		:= mkdir -p
 export RM			:= rm -f
 
-export BASEDIR		:= $(PWD)
-export BINDIR     	:= $(BASEDIR)/bin
-export OBJDIR      	:= $(BASEDIR)/obj
+export TREE 		:=
+export TOPDIR 		:= $(CURDIR)
+export BINDIR		:= $(TOPDIR)/bin
+export OBJDIR		:= $(TOPDIR)/obj
 
-.PHONY: all clean boot
+.PHONY: all tools clean-tools boot
 
-all: boot
+all: tools boot
 
-clean:
-	@$(RM) -r $(BINDIR)
-	@$(RM) -r $(OBJDIR)
+clean-tools:
+	@$(RM) -r tools/bin
+	@$(RM) -r tools/obj
 
-boot:
+tools: dirs
+	@$(MAKE) -C tools
+
+boot: dirs
 	@$(MAKE) -C boot
+
+
+include $(TOPDIR)/Rules.mk
