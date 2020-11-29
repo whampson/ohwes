@@ -8,4 +8,4 @@
 #==============================================================================#
 
 export NBDIR=$(realpath .)
-export PATH=${NBDIR}/bin:${NBDIR}/tools:${NBDIR}/scripts:${PATH}
+export PATH=${NBDIR}/bin:${NBDIR}/tools/bin:${NBDIR}/scripts:${PATH}
