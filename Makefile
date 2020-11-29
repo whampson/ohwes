@@ -11,7 +11,7 @@
 export AS			:= i686-elf-as
 export ASFLAGS		:=
 export CC			:= i686-elf-gcc
-export CFLAGS		:=
+export CFLAGS		:= -g
 export LD			:= i686-elf-ld
 export LDFLAGS		:=
 export MAKEFLAGS	:= --no-print-directory
@@ -24,9 +24,9 @@ export TOPDIR 		:= $(CURDIR)
 export BINDIR		:= $(TOPDIR)/bin
 export OBJDIR		:= $(TOPDIR)/obj
 
-.PHONY: all tools clean-tools boot
+.PHONY: all tools clean-tools fatfs boot
 
-all: boot tools 
+all: boot tools
 
 clean-tools:
 	@$(RM) -r tools/bin
@@ -38,5 +38,7 @@ boot: dirs
 tools: dirs
 	@$(MAKE) -C tools
 
+fatfs: dirs
+	@$(MAKE) -C tools fatfs
 
 include $(TOPDIR)/include/Rules.mk
