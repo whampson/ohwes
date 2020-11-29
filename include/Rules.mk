@@ -29,6 +29,10 @@ $(OBJDIR)/%.o: %.c
 	@echo 'CC  $(join $(TREE),$^)'
 	@$(CC) $(CFLAGS) -c -o $@ $^
 
+$(OBJDIR)/%.o: %.cpp
+	@echo 'CXX $(join $(TREE),$^)'
+	@$(CXX) $(CXXFLAGS) -c -o $@ $^
+
 $(OBJDIR)/%.o: %.S
 	@echo 'AS  $(join $(TREE),$^)'
 	@$(AS) $(ASFLAGS) -c -o $@ $^
