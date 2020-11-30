@@ -4,13 +4,21 @@
 # This file is part of the Niobium Operating System.                           #
 # Niobium is free software; you may redistribute it and/or modify it under     #
 # the terms of the license agreement provided with this software.              #
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#     File: fat.S                                                              #
-#   Author: Wes Hampson                                                        #
-#     Date: Nov. 22, 2020                                                      #
-#     Desc: Boot sector for FAT12-formatted disks. This code is responsible    #
-#           for loading INIT.SYS and KERNEL.SYS into memory and passing        #
-#           control onto INIT.SYS.                                             #
+#                                                                              #
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR   #
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,     #
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL      #
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER   #
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING      #
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER          #
+# DEALINGS IN THE SOFTWARE.                                                    #
+#==============================================================================#
+#    File: boot/fat.S                                                          #
+# Created: November 22, 2020                                                   #
+#  Author: Wes Hampson                                                         #
+#------------------------------------------------------------------------------#
+# Boot sector for FAT12-formatted disks. This code is responsible for loading  #
+# INIT.SYS and KERNEL.SYS into memory and passing control over to INIT.SYS.    #
 #==============================================================================#
 
 .code16
@@ -23,7 +31,7 @@ entry:
 # -----------------------------------------------------------------------------
 # --------------------------- BIOS Parameter Block ----------------------------
 # -----------------------------------------------------------------------------
-oem_name:               .ascii      "AFROS0.1"
+oem_name:               .ascii      "NBOS 0.1"
 bytes_per_sector:       .short      512
 sectors_per_cluster:    .byte       1
 reserved_sectors:       .short      1
@@ -39,7 +47,7 @@ large_sectors:          .int        0
 drive_number:           .byte       0
 _reserved:              .byte       0
 extended_boot_sig:      .byte       0x29
-volume_id:              .int        0xAFAFAFAF
+volume_id:              .int        0xCA55E77E
 label:                  .ascii      "SYSTEM DISK"
 file_system_type:       .ascii      "FAT12   "
 

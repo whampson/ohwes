@@ -1,3 +1,5 @@
+# Dummy kernel, will be removed soon...
+
 .code16
 
 .global kmain
