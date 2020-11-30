@@ -43,9 +43,11 @@ export TOPDIR		:= $(CURDIR)
 export BINDIR		:= $(TOPDIR)/bin
 export OBJDIR		:= $(TOPDIR)/obj
 
-.PHONY: all tools clean-tools fatfs boot
+.PHONY: all wipe tools clean-tools fatfs boot
 
 all: boot tools
+
+wipe: clean clean-tools
 
 clean-tools:
 	@$(RM) -r tools/bin
