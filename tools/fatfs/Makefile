@@ -24,8 +24,8 @@ endif
 
 include $(TOPDIR)/include/Tree.mk
 
-SOURCES				:= $(wildcard *.cpp)
-OBJECTS				:= $(addprefix $(OBJDIR)/,$(SOURCES:.cpp=.o))
-TARGETS				:= $(BINDIR)/fatfs
+SRC	:= $(wildcard *.cpp)
+OBJ	:= $(addprefix $(OBJDIR)/,$(SRC:.cpp=.o))
+BIN	:= $(BINDIR)/fatfs
 
 include $(TOPDIR)/include/Rules.mk

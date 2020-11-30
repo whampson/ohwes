@@ -24,33 +24,34 @@ endif
 
 include $(TOPDIR)/include/Tree.mk
 
-STAGE1_ENTRY		:= entry
-STAGE1_OFFSET		:= 0x7C00
-STAGE1_SOURCES		:= fat.S
-STAGE1_OBJECTS		:= $(addprefix $(OBJDIR)/,$(STAGE1_SOURCES:.S=.o))
-STAGE1_TARGETS		:= $(BINDIR)/bootsect
+STAGE1_ENTRY	:= entry
+STAGE1_OFFSET	:= 0x7C00
+STAGE1_SRC		:= fat.S
+STAGE1_OBJ		:= $(addprefix $(OBJDIR)/,$(STAGE1_SRC:.S=.o))
+STAGE1_BIN		:= $(BINDIR)/bootsect
 
-STAGE2_ENTRY		:= init
-STAGE2_OFFSET		:= 0x8000
-STAGE2_SOURCES		:= init.S
-STAGE2_OBJECTS		:= $(addprefix $(OBJDIR)/,$(STAGE2_SOURCES:.S=.o))
-STAGE2_TARGETS		:= $(BINDIR)/init.sys
+STAGE2_ENTRY	:= init
+STAGE2_OFFSET	:= 0x8000
+STAGE2_SRC		:= init.S
+STAGE2_OBJ		:= $(addprefix $(OBJDIR)/,$(STAGE2_SRC:.S=.o))
+STAGE2_BIN		:= $(BINDIR)/init.sys
 
-KERNEL_ENTRY		:= kmain
-KERNEL_OFFSET		:= 0x0000
-KERNEL_SOURCES		:= kernel.S
-KERNEL_OBJECTS		:= $(addprefix $(OBJDIR)/,$(KERNEL_SOURCES:.S=.o))
-KERNEL_TARGETS		:= $(BINDIR)/kernel.sys
+# Dummy, will be removed soon...
+KERNEL_ENTRY	:= kmain
+KERNEL_OFFSET	:= 0x0000
+KERNEL_SRC		:= kernel.S
+KERNEL_OBJ		:= $(addprefix $(OBJDIR)/,$(KERNEL_SRC:.S=.o))
+KERNEL_BIN		:= $(BINDIR)/kernel.sys
 
-TARGETS				:= $(STAGE1_TARGETS) $(STAGE2_TARGETS) $(KERNEL_TARGETS)
+BIN				:= $(STAGE1_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
 
 include $(TOPDIR)/include/Rules.mk
 
-$(STAGE1_TARGETS): LDFLAGS := --oformat binary -Ttext $(STAGE1_OFFSET) -e $(STAGE1_ENTRY)
-$(STAGE1_TARGETS): $(STAGE1_OBJECTS)
+$(STAGE1_BIN): LDFLAGS := --oformat binary -Ttext $(STAGE1_OFFSET) -e $(STAGE1_ENTRY)
+$(STAGE1_BIN): $(STAGE1_OBJ)
 
-$(STAGE2_TARGETS): LDFLAGS := --oformat binary -Ttext $(STAGE2_OFFSET) -e $(STAGE2_ENTRY)
-$(STAGE2_TARGETS): $(STAGE2_OBJECTS)
+$(STAGE2_BIN): LDFLAGS := --oformat binary -Ttext $(STAGE2_OFFSET) -e $(STAGE2_ENTRY)
+$(STAGE2_BIN): $(STAGE2_OBJ)
 
-$(KERNEL_TARGETS): LDFLAGS := --oformat binary -Ttext $(KERNEL_OFFSET) -e $(KERNEL_ENTRY)
-$(KERNEL_TARGETS): $(KERNEL_OBJECTS)
+$(KERNEL_BIN): LDFLAGS := --oformat binary -Ttext $(KERNEL_OFFSET) -e $(KERNEL_ENTRY)
+$(KERNEL_BIN): $(KERNEL_OBJ)

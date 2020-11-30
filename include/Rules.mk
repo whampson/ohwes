@@ -22,7 +22,7 @@
 
 .PHONY: all clean dirs
 
-all: dirs $(TARGETS)
+all: dirs $(BIN)
 
 clean:
 	@$(RM) -r $(BINDIR)
@@ -32,7 +32,7 @@ dirs:
 	@$(MKDIR) $(BINDIR)
 	@$(MKDIR) $(OBJDIR)
 
-$(TARGETS): $(OBJECTS)
+$(BIN): $(OBJ)
 	@echo 'LD  $(subst $(TOPDIR)/,,$^)'
 	@$(LD) $(LDFLAGS) -o $@ $^
 	@echo 'OUT $(subst $(TOPDIR)/,,$@)'
