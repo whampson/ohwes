@@ -21,4 +21,10 @@
 # Writes the bootsector in the Niobium floppy image.                           #
 #==============================================================================#
 
-dd if=${NBDIR}/bin/bootsect of=${NBDIR}/floppy.img conv=notrunc
+if [ -z ${NB_BINDIR+x} ]; then
+    echo "Error: Niobium develoment environment not set."
+    echo "Please source 'scripts/devenv.sh' and try again."
+    exit 1
+fi
+
+dd if=${NB_BINDIR}/bootsect of=${NB_BINDIR}/img/niobium.img conv=notrunc

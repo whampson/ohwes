@@ -14,13 +14,15 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER          #
 # DEALINGS IN THE SOFTWARE.                                                    #
 #==============================================================================#
-#    File: devenv.sh                                                           #
+#    File: scripts/devenv.sh                                                   #
 # Created: November 27, 2020                                                   #
 #  Author: Wes Hampson                                                         #
 #------------------------------------------------------------------------------#
-# Niobium development environment variables.                                   #
+# Initializes the Niobium development environment.                             #
 # To use, run `source devenv.sh` in your shell.                                #
 #==============================================================================#
 
-export NBDIR=$(realpath .)
-export PATH=${NBDIR}/bin:${NBDIR}/tools/bin:${NBDIR}/scripts:${PATH}
+export NB_TOPDIR=$(dirname $(dirname $(realpath ${BASH_SOURCE[0]})))
+export NB_BINDIR=${NB_TOPDIR}/bin
+
+export PATH=${NB_TOPDIR}/tools/bin:${NB_TOPDIR}/scripts:${PATH}
