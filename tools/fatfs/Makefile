@@ -26,6 +26,7 @@ include $(TOPDIR)/include/Tree.mk
 
 SRC	:= $(wildcard *.cpp)
 OBJ	:= $(addprefix $(OBJDIR)/,$(SRC:.cpp=.o))
+DEP	:= $(OBJ:%.o=%.d)
 BIN	:= $(BINDIR)/fatfs
 
 include $(TOPDIR)/include/Rules.mk

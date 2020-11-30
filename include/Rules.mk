@@ -38,13 +38,15 @@ $(BIN): $(OBJ)
 	@echo 'OUT $(subst $(TOPDIR)/,,$@)'
 
 $(OBJDIR)/%.o: %.c
-	@echo 'CC  $(join $(TREE),$^)'
-	@$(CC) $(CFLAGS) -c -o $@ $^
+	@echo 'CC  $(join $(TREE),$<)'
+	@$(CC) $(CFLAGS) -MMD -c -o $@ $<
 
 $(OBJDIR)/%.o: %.cpp
-	@echo 'CXX $(join $(TREE),$^)'
-	@$(CXX) $(CXXFLAGS) -c -o $@ $^
+	@echo 'CXX $(join $(TREE),$<)'
+	@$(CXX) $(CXXFLAGS) -MMD -c -o $@ $<
 
 $(OBJDIR)/%.o: %.S
-	@echo 'AS  $(join $(TREE),$^)'
-	@$(AS) $(ASFLAGS) -c -o $@ $^
+	@echo 'AS  $(join $(TREE),$<)'
+	@$(AS) $(ASFLAGS) -c -o $@ $<
+
+-include $(DEP)
