@@ -18,11 +18,14 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
+#include <cstdio>
+#include <cstring>
+#include <fstream>
 #include "fat.hpp"
 #include "FatImage.hpp"
-#include <string.h>
 
-static void info(FatImage &fs, int argc, char **argv);
+static int add(FatImage &fs, int argc, char **argv);
+static int info(FatImage &fs, int argc, char **argv);
 
 int main(int argc, char **argv)
 {
@@ -32,32 +35,48 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    std::string img = argv[1];
-    std::string cmd = argv[2];
-    char **args = &argv[3];
-    argc -= 2;
+    int c = argc - 3;
+    char **v = argv + 3;
 
     FatImage fs;
-    if (cmd.compare("create") == 0) {
-        if (!fs.Create(img)) return 2;
+    if (strcmp(argv[2], "create") == 0) {
+        if (!fs.Create(argv[1])) return 2;
+        return 0;
     }
-    else if (cmd.compare("info") == 0) {
-        if (!fs.Load(img)) return 2;
-        info(fs, argc, args);
+
+    if (!fs.Load(argv[1])) return 2;
+    
+    if (strcmp(argv[2], "add") == 0) {
+        return add(fs, c, v);
+    }
+    else if (strcmp(argv[2], "info") == 0) {
+        return info(fs, c, v);
     }
     // else if (command.compare("set-label") == 0) {
     // }
     else {
-        printf("fatfs: error: invalid command");
+        printf("fatfs: error: invalid command\n");
     }
 
+    return 1;
+}
+
+static int add(FatImage &fs, int argc, char **argv)
+{
+    if (argc == 0) {
+        printf("fatfs: error: missing file name\n");
+        return 1;
+    }
+
+    if (!fs.AddFile(argv[0])) return 1;
+    
     return 0;
 }
 
-static void info(FatImage &fs, int argc, char **argv)
+static int info(FatImage &fs, int argc, char **argv)
 {
     printf("Volume Label:        %s\n", fs.GetVolumeLabel().c_str());
-    printf("Volume ID:           %8X\n", fs.GetParamBlock()->VolumeId);
+    printf("Volume ID:           %08X\n", fs.GetParamBlock()->VolumeId);
     printf("Media Type:          %Xh\n", fs.GetParamBlock()->MediaType);
     printf("Drive Number:        %d\n", fs.GetParamBlock()->DriveNumber);
     printf("FAT Count:           %d\n", fs.GetParamBlock()->TableCount);
@@ -74,4 +93,6 @@ static void info(FatImage &fs, int argc, char **argv)
     printf("Extended Boot Sig:   %Xh\n", fs.GetParamBlock()->ExtendedBootSignature);
     printf("File System Type:    %s\n", fs.GetFileSystemType().c_str());
     printf("OEM Name:            %s\n", fs.GetOemName().c_str());
+
+    return 0;
 }

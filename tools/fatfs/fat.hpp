@@ -24,7 +24,7 @@
 #ifndef __FAT_HPP
 #define __FAT_HPP
 
-#include <inttypes.h>
+#include <cinttypes>
 
 #define JUMPCODE_SIZE       3
 #define BOOTCODE_SIZE       448

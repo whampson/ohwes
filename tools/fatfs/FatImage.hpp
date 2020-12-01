@@ -33,6 +33,8 @@ public:
 
     bool Create(const std::string &filename);
     bool Load(const std::string &filename);
+
+    bool AddFile(const std::string &filename);
     
     std::string GetVolumeLabel() const;
     void SetVolumeLabel(const std::string &label);
@@ -43,11 +45,13 @@ public:
     std::string GetFileSystemType() const;
     void SetFileSystemType(const std::string &name);
 
-    int GetDataStartSector() const;
     BiosParameterBlock * GetParamBlock() const;
 
+    int GetFirstFileAllocSectorNumber() const;
+    int GetFirstRootDirSectorNumber() const;
+    int GetFirstDataSectorNumber() const;
+
 private:
-    bool m_isFileOpen;
     std::fstream m_file;
     BootSector *m_bootSect;
     DirectoryEntry *m_rootDir;
@@ -68,7 +72,11 @@ private:
     bool WriteFileAllocTable();
     bool WriteRootDirectory();
 
-    // error
+    uint16_t GetClusterValue(int num);
+    void SetClusterValue(int num, uint16_t value);
+
+    bool WriteDataCluster(int num, char *data);
+    bool ZeroData();
 
     void WriteString(char *dest, const std::string &source, int length);
 };
