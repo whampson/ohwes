@@ -21,78 +21,143 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <getopt.h>
+#include "helpers.hpp"
 #include "fat.hpp"
 #include "FatImage.hpp"
 
-static int add(FatImage &fs, int argc, char **argv);
-static int info(FatImage &fs, int argc, char **argv);
+#define E_ARG                   1
+#define E_IO                    2
+
+#define RIF_ARG_M(x,m)          do { if (!(x)) { ERROR(m); return E_ARG; } } while(0)
+#define RIF_ARG_MF(x,m,...)     do { if (!(x)) { ERRORF(m, __VA_ARGS__); return E_ARG; } } while(0)
+#define RIT_ARG_M(x,m)          do { if (x) { ERROR(m); return E_ARG; } } while(0)
+#define RIT_ARG_MF(x,m,...)     do { if (x) { ERRORF(m, __VA_ARGS__); return E_ARG; } } while(0)
+#define RIF_IO(x)               do { if (!(x)) return E_IO; } while(0)
+
+struct command {
+    const char *name;
+    int (*func)(int, char **);
+};
+
+static int add(int argc, char **argv);
+static int create(int argc, char **argv);
+static int info(int argc, char **argv);
+static int help(int argc, char **argv);
+
+static struct command cmds[] = {
+    { "add", add },
+    { "create", create },
+    { "info", info },
+    { "help", help },
+    { NULL, NULL },
+};
+
+static const char *image_file = NULL;
+static FatImage fs_image;
 
 int main(int argc, char **argv)
 {
-    if (argc <= 2) {
-        printf("fatfs: error: missing argument\n");
-        printf("Usage: fatfs command image [options]\n");
-        return 1;
+    int opt_help = 0;
+    struct option long_options[] = {
+        { "help", no_argument, &opt_help, 1 },
+        { "image-file", required_argument, NULL, 'i' },
+        { "quiet", no_argument, NULL, 'q' }
+    };
+
+    int o;
+    opterr = 0;
+    while (1) {
+        int option_index = 0;
+        o = getopt_long(argc, argv, "i:q", long_options, &option_index);
+        if (o == -1) break;
+
+        switch (o) {
+        case 'i':
+            image_file = optarg;
+            break;
+        case 'q':
+            fs_image.Quiet = true;
+            break;
+        case '?':
+            RIT_ARG_M(optopt == 'i', "missing disk image\n");
+            RIT_ARG_M(optopt = 0, "invalid argument\n");
+            RIT_ARG_MF(isprint(optopt), "unknown option '%c'\n", optopt);
+            ERRORF("unknown option character '\\x%02X'\n", optopt);
+            return E_ARG;
+        }
     }
 
-    int c = argc - 3;
-    char **v = argv + 3;
-
-    FatImage fs;
-    if (strcmp(argv[2], "create") == 0) {
-        if (!fs.Create(argv[1])) return 2;
-        return 0;
+    if (opt_help) {
+        return help(0, NULL);
     }
 
-    if (!fs.Load(argv[1])) return 2;
+    RIT_ARG_M(optind >= argc, "missing command\n");
     
-    if (strcmp(argv[2], "add") == 0) {
-        return add(fs, c, v);
-    }
-    else if (strcmp(argv[2], "info") == 0) {
-        return info(fs, c, v);
-    }
-    // else if (command.compare("set-label") == 0) {
-    // }
-    else {
-        printf("fatfs: error: invalid command\n");
+    const char *cmd = argv[optind];
+    int cmdargc = argc - optind - 1;
+    char **cmdargv = argv + optind + 1;
+
+    int i = 0;
+    while (cmds[i].name != NULL) {
+        if (strcmp(cmd, cmds[i].name) == 0) {
+            return cmds[i].func(cmdargc, cmdargv);
+        }
+        i++;
     }
 
-    return 1;
+    ERRORF("invalid command '%s'\n", cmd);
+    return E_ARG;
 }
 
-static int add(FatImage &fs, int argc, char **argv)
+static int add(int argc, char **argv)
 {
-    if (argc == 0) {
-        printf("fatfs: error: missing file name\n");
-        return 1;
-    }
+    RIF_ARG_M(argc > 0, "missing file\n");
+    RIF_ARG_M(image_file, "missing disk image\n");
 
-    if (!fs.AddFile(argv[0])) return 1;
-    
+    RIF_IO(fs_image.Load(image_file));
+    RIF_IO(fs_image.AddFile(argv[0]));
+
     return 0;
 }
 
-static int info(FatImage &fs, int argc, char **argv)
+static int create(int argc, char **argv)
 {
-    printf("Volume Label:        %s\n", fs.GetVolumeLabel().c_str());
-    printf("Volume ID:           %08X\n", fs.GetParamBlock()->VolumeId);
-    printf("Media Type:          %Xh\n", fs.GetParamBlock()->MediaType);
-    printf("Drive Number:        %d\n", fs.GetParamBlock()->DriveNumber);
-    printf("FAT Count:           %d\n", fs.GetParamBlock()->TableCount);
-    printf("Head Count:          %d\n", fs.GetParamBlock()->HeadCount);
-    printf("Sector Size:         %d\n", fs.GetParamBlock()->SectorSize);
-    printf("Sector Count:        %d\n", fs.GetParamBlock()->SectorCount);
-    printf("Sectors per Track:   %d\n", fs.GetParamBlock()->SectorsPerTrack);
-    printf("Sectors per FAT:     %d\n", fs.GetParamBlock()->SectorsPerTable);
-    printf("Sectors per Cluster: %d\n", fs.GetParamBlock()->SectorsPerCluster);
-    printf("Reserved Sectors:    %d\n", fs.GetParamBlock()->ReservedSectorCount);
-    printf("Hidden Sectors:      %d\n", fs.GetParamBlock()->HiddenSectorCount);
-    printf("Large Sectors:       %d\n", fs.GetParamBlock()->LargeSectorCount);
-    printf("Max Root Dir Size:   %d\n", fs.GetParamBlock()->MaxRootDirEntries);
-    printf("Extended Boot Sig:   %Xh\n", fs.GetParamBlock()->ExtendedBootSignature);
-    printf("File System Type:    %s\n", fs.GetFileSystemType().c_str());
-    printf("OEM Name:            %s\n", fs.GetOemName().c_str());
+    RIF_IO(fs_image.Create(image_file));
+    return 0;
+}
+
+static int info(int argc, char **argv)
+{
+    // printf("Volume Label:        %s\n", fs.GetVolumeLabel().c_str());
+    // printf("Volume ID:           %08X\n", fs.GetParamBlock()->VolumeId);
+    // printf("Media Type:          %Xh\n", fs.GetParamBlock()->MediaType);
+    // printf("Drive Number:        %d\n", fs.GetParamBlock()->DriveNumber);
+    // printf("FAT Count:           %d\n", fs.GetParamBlock()->TableCount);
+    // printf("Head Count:          %d\n", fs.GetParamBlock()->HeadCount);
+    // printf("Sector Size:         %d\n", fs.GetParamBlock()->SectorSize);
+    // printf("Sector Count:        %d\n", fs.GetParamBlock()->SectorCount);
+    // printf("Sectors per Track:   %d\n", fs.GetParamBlock()->SectorsPerTrack);
+    // printf("Sectors per FAT:     %d\n", fs.GetParamBlock()->SectorsPerTable);
+    // printf("Sectors per Cluster: %d\n", fs.GetParamBlock()->SectorsPerCluster);
+    // printf("Reserved Sectors:    %d\n", fs.GetParamBlock()->ReservedSectorCount);
+    // printf("Hidden Sectors:      %d\n", fs.GetParamBlock()->HiddenSectorCount);
+    // printf("Large Sectors:       %d\n", fs.GetParamBlock()->LargeSectorCount);
+    // printf("Max Root Dir Size:   %d\n", fs.GetParamBlock()->MaxRootDirEntries);
+    // printf("Extended Boot Sig:   %Xh\n", fs.GetParamBlock()->ExtendedBootSignature);
+    // printf("File System Type:    %s\n", fs.GetFileSystemType().c_str());
+    // printf("OEM Name:            %s\n", fs.GetOemName().c_str());
+
+    return 0;
+}
+
+// usage: fatfs help [command] OR fatfs --help
+static int help(int argc, char **argv)
+{
+    printf("HELP!!!\n");
+    if (argc > 0) {
+        printf("command = %s\n", argv[0]);
+    }
 
     return 0;
 }

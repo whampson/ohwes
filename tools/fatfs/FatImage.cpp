@@ -22,11 +22,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cstdarg>
 #include <ctime>
+#include "helpers.hpp"
 #include "FatImage.hpp"
 
 FatImage::FatImage()
 {
+    Quiet = false;
     m_bootSect = nullptr;
     m_rootDir = nullptr;
     m_allocTable = nullptr;
@@ -52,7 +55,66 @@ FatImage::~FatImage()
     if (m_allocTable) delete[] m_allocTable;
 }
 
-bool FatImage::Create(const std::string &filename)
+BiosParameterBlock * FatImage::GetParamBlock() const
+{
+    return &m_bootSect->Params;
+}
+
+int FatImage::GetFirstFileAllocSectorNumber() const
+{
+    return GetParamBlock()->ReservedSectorCount;
+}
+
+int FatImage::GetFirstRootDirSectorNumber() const
+{
+    int sector = GetFirstFileAllocSectorNumber();
+    sector += GetParamBlock()->SectorsPerTable * GetParamBlock()->TableCount;
+
+    return sector;
+}
+
+int FatImage::GetFirstDataSectorNumber() const
+{
+    int sector = GetFirstRootDirSectorNumber();
+    sector += GetParamBlock()->MaxRootDirEntries * sizeof(DirectoryEntry) / GetParamBlock()->SectorSize;
+
+    return sector;
+}
+
+std::string FatImage::GetVolumeLabel() const
+{
+    return std::string(GetParamBlock()->Label, LABEL_LENGTH);
+}
+
+void FatImage::SetVolumeLabel(const std::string &label)
+{
+    SetString(GetParamBlock()->Label, label, LABEL_LENGTH);
+    m_bootSectNeedsUpdate = true;
+}
+
+std::string FatImage::GetOemName() const
+{
+    return std::string(m_bootSect->OemName, OEMNAME_LENGTH);
+}
+
+void FatImage::SetOemName(const std::string &name)
+{
+    SetString(m_bootSect->OemName, name, OEMNAME_LENGTH);
+    m_bootSectNeedsUpdate = true;
+}
+
+std::string FatImage::GetFileSystemType() const
+{
+    return std::string(GetParamBlock()->FileSystemType, FSTYPE_LENGTH);
+}
+
+void FatImage::SetFileSystemType(const std::string &name)
+{
+    SetString(GetParamBlock()->FileSystemType, name, FSTYPE_LENGTH);
+    m_bootSectNeedsUpdate = true;
+}
+
+bool FatImage::Create(const std::string &path)
 {
     // TODO: disk geometry params
 
@@ -63,14 +125,11 @@ bool FatImage::Create(const std::string &filename)
     auto openMode = std::ios_base::in | std::ios_base::out | std::ios_base::binary;
     auto createMode = openMode | std::ios_base::trunc;
 
-    m_file.open(filename, openMode);
+    m_file.open(path, openMode);
     if (!m_file.is_open()) {
-        m_file.open(filename, createMode);
+        m_file.open(path, createMode);
     }
-    if (!m_file.good()) {
-        printf("fatfs: error: failed to create disk image file\n");
-        return false;
-    }
+    RIF_M(m_file.good(), "failed to create disk image\n");
 
     CreateBootSector();
     CreateFileAllocTable();
@@ -86,26 +145,29 @@ bool FatImage::Create(const std::string &filename)
     m_allocTableNeedsUpdate = false;
     m_rootDirNeedsUpdate = false;
 
-    const char *name = filename.c_str();
-    int sectors = GetParamBlock()->SectorCount;
-    int size = sectors * GetParamBlock()->SectorSize;
-    printf("Created '%s': sectors = %d, size = %d\n", name, sectors, size);
+    int sectSize = GetParamBlock()->SectorSize;
+    int sectCount = GetParamBlock()->SectorCount;
+    int size = sectSize * sectCount;
+    int free = (sectCount - GetFirstDataSectorNumber()) * sectSize;
+
+    Info("%s: sectors = %d, size = %d, free = %d\n",
+        get_filename(path).c_str(),
+        sectCount,
+        size,
+        free);
 
     return true;
 }
 
-bool FatImage::Load(const std::string &filename)
+bool FatImage::Load(const std::string &path)
 {
     if (m_file.is_open()) {
         m_file.close();
     }
 
     auto mode = std::ios_base::in | std::ios_base::out | std::ios_base::binary;
-    m_file.open(filename, mode);
-    if (!m_file.good()) {
-        printf("fatfs: error: failed to open disk image file\n");
-        return false;
-    }
+    m_file.open(path, mode);
+    RIF_MF(m_file.good(), "failed to open disk image '%s'\n", path.c_str());
 
     if (!LoadBootSector()) return false;
     if (!LoadFileAllocTable()) return false;
@@ -120,12 +182,11 @@ bool FatImage::AddFile(const std::string &filename)
     auto mode = std::ios_base::in | std::ios_base::out | std::ios_base::binary;
     
     newFile.open(filename, mode);
-    if (!m_file.good()) {
-        printf("fatfs: error: failed to open file '%s'\n", filename.c_str());
-        return false;
-    }
+    RIF_MF(m_file.good(), "failed to open file '%s'\n", filename.c_str());
     
+    // TODO: overwrite file if it exists
     // TODO: support nested directories
+    // TODO: support long file names
 
     DirectoryEntry *dirEntry = nullptr;
     for (int i = 0; i < GetParamBlock()->MaxRootDirEntries; i++) {
@@ -135,39 +196,31 @@ bool FatImage::AddFile(const std::string &filename)
             break;
         }
     }
+    RIF_M(dirEntry, "root directory is full\n");
 
-    if (dirEntry == nullptr) {
-        printf("fatfs: error: root directory is full!\n");
-        return false;
-    }
-
-    std::string s(filename);
-    std::transform(s.begin(), s.end(), s.begin(), ::toupper);
-    std::string name = s.substr(s.find_last_of("/\\") + 1);
+    std::string s = upper(filename);
+    std::string name = get_filename(s);
     std::string extension = "";
     if (name.find('.') != std::string::npos) {
         int dotPos = name.find_last_of(".");
         extension = name.substr(dotPos + 1);
         name = name.substr(0, dotPos);
     }
+    SetString(dirEntry->FileName, name, FILENAME_LENGTH);
+    SetString(dirEntry->FileExtension, extension, EXTENSION_LENGTH);
 
-    WriteString(dirEntry->FileName, name, FILENAME_LENGTH);
-    WriteString(dirEntry->FileExtension, extension, EXTENSION_LENGTH);
+    time_t now = time(0);
+    tm *ltm = localtime(&now);
+    dirEntry->CreationDate.Year = ltm->tm_year - 80;    // FAT year0 = 1980, tm year0 = 1900
+    dirEntry->CreationDate.Month = ltm->tm_mon + 1;     // FAT month: 1-12
+    dirEntry->CreationDate.Day = ltm->tm_mday ;         // FAT day: 1-31
+    dirEntry->CreationTime.Hours = ltm->tm_hour;        // FAT hour: 0-23
+    dirEntry->CreationTime.Minutes = ltm->tm_min;       // FAT min: 0-59
+    dirEntry->CreationTime.Seconds = ltm->tm_sec / 2;   // FAT sec: 0-29 (secs / 2)
+    dirEntry->ModifiedDate = dirEntry->CreationDate;
+    dirEntry->ModifiedTime = dirEntry->CreationTime;
+    dirEntry->LastAccessDate = dirEntry->CreationDate;
 
-    // TODO
-    dirEntry->CreationDate.Year = 0;
-    dirEntry->CreationDate.Month = 0;
-    dirEntry->CreationDate.Day = 0;
-    dirEntry->CreationTime.Hours = 0;
-    dirEntry->CreationTime.Minutes = 0;
-    dirEntry->CreationTime.Seconds = 0;
-    dirEntry->ModifiedDate.Year = 0;
-    dirEntry->ModifiedDate.Month = 0;
-    dirEntry->ModifiedDate.Day = 0;
-    dirEntry->ModifiedTime.Hours = 0;
-    dirEntry->ModifiedTime.Minutes = 0;
-    dirEntry->ModifiedTime.Seconds = 0;
-    dirEntry->FileAttributes = 0;
     dirEntry->_Reserved0 = 0;
     dirEntry->_Reserved1 = 0;
     dirEntry->_Reserved2 = 0;
@@ -189,11 +242,11 @@ bool FatImage::AddFile(const std::string &filename)
     // TODO: alloc table/disk space bounds check
 
     while (bytesRemaining > 0) {
-        while (GetClusterValue(currCluster) != 0) {
+        while (GetClusterTableValue(currCluster) != 0) {
             currCluster++;
         }
         if (lastCluster > 0) {
-            SetClusterValue(lastCluster, currCluster);
+            SetClusterTableValue(lastCluster, currCluster);
         }
         if (firstCluster < 0) {
             firstCluster = currCluster;
@@ -201,10 +254,7 @@ bool FatImage::AddFile(const std::string &filename)
 
         memset(buf, 0, sectorSize);
         newFile.read(buf, std::min(sectorSize, bytesRemaining));
-        if (!newFile.good()) {
-            printf("fatfs: error: failed to read file\n");
-            return false;
-        }
+        RIF_MF(newFile.good(), "failed to read '%s'\n", filename.c_str());
 
         bytesRemaining -= newFile.gcount();
         WriteDataCluster(currCluster, buf);
@@ -214,95 +264,50 @@ bool FatImage::AddFile(const std::string &filename)
         currCluster++;
     }
 
-    SetClusterValue(lastCluster, -1);
-    dirEntry->FileBegin = firstCluster;
+    SetClusterTableValue(lastCluster, -1);
+    dirEntry->Cluster = firstCluster;
+
+    std::string fatName = GetString(dirEntry->FileName, FILENAME_LENGTH);
+    std::string fatExt = GetString(dirEntry->FileExtension, EXTENSION_LENGTH);
+    if (!fatExt.empty()) {
+        fatName += "." + fatExt;
+    }
+
+    int clusterSize = sectorSize * GetParamBlock()->SectorsPerCluster;
+    int clustersInUse = ceil(dirEntry->FileSize, clusterSize);
+
+    Info("%s: size = %d, size on disk = %d, clusters = %d\n",
+        fatName.c_str(),
+        dirEntry->FileSize,
+        clustersInUse * clusterSize,
+        clustersInUse);
 
     m_rootDirNeedsUpdate = true;
     return true;
 }
 
-BiosParameterBlock * FatImage::GetParamBlock() const
-{
-    return &m_bootSect->Params;
-}
-
-int FatImage::GetFirstFileAllocSectorNumber() const
-{
-    return GetParamBlock()->ReservedSectorCount;
-}
-
-int FatImage::GetFirstRootDirSectorNumber() const
-{
-    int sector = GetFirstFileAllocSectorNumber();
-    sector += GetParamBlock()->SectorsPerTable * GetParamBlock()->TableCount;
-    
-    return sector;
-}
-
-int FatImage::GetFirstDataSectorNumber() const
-{
-    int sector = GetFirstRootDirSectorNumber();
-    sector += GetParamBlock()->MaxRootDirEntries * sizeof(DirectoryEntry) / GetParamBlock()->SectorSize;
-    
-    return sector;
-}
-
-std::string FatImage::GetVolumeLabel() const
-{
-    return std::string(GetParamBlock()->Label, LABEL_LENGTH);
-}
-
-void FatImage::SetVolumeLabel(const std::string &label)
-{
-    WriteString(GetParamBlock()->Label, label, LABEL_LENGTH);
-    m_bootSectNeedsUpdate = true;
-}
-
-std::string FatImage::GetOemName() const
-{
-    return std::string(m_bootSect->OemName, OEMNAME_LENGTH);
-}
-
-void FatImage::SetOemName(const std::string &name)
-{
-    WriteString(m_bootSect->OemName, name, OEMNAME_LENGTH);
-    m_bootSectNeedsUpdate = true;
-}
-
-std::string FatImage::GetFileSystemType() const
-{
-    return std::string(GetParamBlock()->FileSystemType, FSTYPE_LENGTH);
-}
-
-void FatImage::SetFileSystemType(const std::string &name)
-{
-    WriteString(GetParamBlock()->FileSystemType, name, FSTYPE_LENGTH);
-    m_bootSectNeedsUpdate = true;
-}
-
 void FatImage::CreateBootSector()
 {
-    // TODO: disk geometry params
-    int cyl = 80;
-    int hed = 2;
-    int sec = 18;
+    int cyl = 80;                                   // TODO: command-line param for this
+    int hed = 2;                                    // TODO: command-line param for this
+    int sec = 18;                                   // TODO: command-line param for this
 
     if (m_bootSect) {
         delete m_bootSect;
     }
 
     m_bootSect = new BootSector();
-    SetOemName("fatfs");
-    SetVolumeLabel("NO NAME");
+    SetOemName("fatfs");                            // TODO: command-line param for this
+    SetVolumeLabel("NO NAME");                      // TODO: command-line param for this
     SetFileSystemType("FAT12");
-    GetParamBlock()->VolumeId = (uint32_t) time(NULL);
-    GetParamBlock()->DriveNumber = 0;
-    GetParamBlock()->MediaType = 0xF0;             // 3.5in floppy
+    GetParamBlock()->VolumeId = (uint32_t) time(0); // TODO: command-line param for this
+    GetParamBlock()->DriveNumber = 0;               // TODO: command-line param for this
+    GetParamBlock()->MediaType = 0xF0;              // 3.5in floppy, TODO: command-line param for this
     GetParamBlock()->HeadCount = hed;
     GetParamBlock()->SectorsPerTrack = sec;
     GetParamBlock()->SectorCount = cyl * hed * sec;
-    GetParamBlock()->SectorSize = 512;
-    GetParamBlock()->SectorsPerCluster = 1;
+    GetParamBlock()->SectorSize = 512;              // TODO: command-line param for this
+    GetParamBlock()->SectorsPerCluster = 1;         // TODO: command-line param for this
     GetParamBlock()->SectorsPerTable = 9;
     GetParamBlock()->TableCount = 2;
     GetParamBlock()->MaxRootDirEntries = 224;
@@ -317,7 +322,9 @@ void FatImage::CreateBootSector()
         '\xEB', '\x3C',     // entry:       jmp     boot_code
         '\x90'              //              nop
     };
-    char bootcode[BOOTCODE_SIZE] = {
+
+    
+    char bootcode[BOOTCODE_SIZE] = {                // TODO: command-line param for this
         "\x0E"              // boot_code:   pushw   %cs
         "\x1F"              //              popw    %ds
         "\x8D\x36\x58\x7C"  //              leaw    message
@@ -348,10 +355,7 @@ bool FatImage::LoadBootSector()
     
     m_bootSect = new BootSector;
     m_file.read((char *) m_bootSect, sizeof(BootSector));
-    if (!m_file.good()) {
-        printf("fatfs: error: failed to read boot sector\n");
-        return false;
-    }
+    RIF_M(m_file.good(), "failed to read boot sector\n");
 
     return true;
 }
@@ -362,13 +366,9 @@ bool FatImage::WriteBootSector()
         return false;
     }
 
-    // printf("Writing boot sector...\n");
     m_file.seekp(0, std::ios_base::beg);
     m_file.write((char *) m_bootSect, sizeof(BootSector));
-    if (!m_file.good()) {
-        printf("fatfs: error: failed to write boot sector\n");
-        return false;
-    }
+    RIF_M(m_file.good(), "failed to write boot sector\n");
 
     return true;
 }
@@ -378,8 +378,8 @@ void FatImage::CreateFileAllocTable()
     size_t fatSize = GetParamBlock()->SectorsPerTable * GetParamBlock()->SectorSize;
     m_allocTable = new char[fatSize]();
 
-    SetClusterValue(0, 0xFF0);  // Reserved: ??? (endianness marker?)
-    SetClusterValue(1, 0xFFF);  // Reserved: End-of-chain value
+    SetClusterTableValue(0, 0xFF0);  // Reserved cluster: ??? (endianness marker?)
+    SetClusterTableValue(1, -1);     // Reserved cluster: End-of-chain marker value
 }
 
 bool FatImage::LoadFileAllocTable()
@@ -392,12 +392,9 @@ bool FatImage::LoadFileAllocTable()
     m_allocTable = new char[fatSize];
 
     for (int i = 0; i < GetParamBlock()->TableCount; i++) {
-        // Read-in all FATs, keep the last one
+        // Read-in all FATs, keep only the last one
         m_file.read((char *) m_allocTable, fatSize);
-        if (!m_file.good()) {
-            printf("fatfs: error: failed to read file allocation table\n");
-            return false;
-        }
+        RIF_M(m_file.good(), "failed to create file allocation table\n");
     }
 
     return true;
@@ -412,14 +409,10 @@ bool FatImage::WriteFileAllocTable()
     long seekOffset = GetFirstFileAllocSectorNumber() * GetParamBlock()->SectorSize;
     size_t allocTableSize = GetParamBlock()->SectorsPerTable * GetParamBlock()->SectorSize;
 
-    // printf("Writing file allocation table...\n");
     m_file.seekp(seekOffset, std::ios_base::beg);
     for (int i = 0; i < GetParamBlock()->TableCount; i++) {
         m_file.write((char *) m_allocTable, allocTableSize);
-        if (!m_file.good()) {
-            printf("fatfs: error: failed to write file allocation table\n");
-            return false;
-        }
+        RIF_M(m_file.good(), "failed to write file allocation table\n");
     }
 
     return true;
@@ -441,10 +434,7 @@ bool FatImage::LoadRootDirectory()
     m_rootDir = new DirectoryEntry[numEntries];
 
     m_file.read((char *) m_rootDir, rootDirSize);
-    if (!m_file.good()) {
-        printf("fatfs: error: failed to read root directory\n");
-        return false;
-    }
+    RIF_M(m_file.good(), "failed to read root directory\n");
 
     return true;
 }
@@ -459,13 +449,9 @@ bool FatImage::WriteRootDirectory()
     size_t rootDirSize = numEntries * sizeof(DirectoryEntry);
     long seekOffset = GetFirstRootDirSectorNumber() * GetParamBlock()->SectorSize; 
 
-    // printf("Writing root directory...\n");
     m_file.seekp(seekOffset, std::ios_base::beg);
     m_file.write((char *) m_rootDir, rootDirSize);
-    if (!m_file.good()) {
-        printf("fatfs: error: failed to write root directory\n");
-        return false;
-    }
+    RIF_M(m_file.good(), "failed to write root directory\n");
 
     return true;
 }
@@ -475,30 +461,20 @@ bool FatImage::WriteDataCluster(int num, char *data)
     int sectorSize = GetParamBlock()->SectorSize;
     int sectorsPerCluster = GetParamBlock()->SectorsPerCluster;
     int clusterSize = sectorSize * sectorsPerCluster;
-    int clusterCount = GetParamBlock()->SectorCount /sectorsPerCluster;
-    int originalNum = num;
+    int clusterCount = GetParamBlock()->SectorCount / sectorsPerCluster;
 
-    // Clusters 0 and 1 are reserved, data clusters actually begin at 2
-    num -= 2;
-    if (num < 0 || num >= clusterCount) {
-        printf("fatfs: error: invalid cluster number - %d\n", num);
-        return false;
-    }
+    RIF_MF(num >= 2 && num < clusterCount, "cannot write reserved cluster %d\n", num);
+    int actualNum = num - 2;    // Clusters 0 and 1 are reserved, data clusters actually begin at 2
 
-    long seekOffset = (GetFirstDataSectorNumber() * sectorSize) + (num * clusterSize);
+    long seekOffset = (GetFirstDataSectorNumber() * sectorSize) + (actualNum * clusterSize);
     m_file.seekp(seekOffset, std::ios_base::beg);
-
-    // printf("Writing cluster %d\n", originalNum);
     m_file.write(data, sectorSize);
-    if (!m_file.good()) {
-        printf("fatfs: error: failed to write cluster %d\n", originalNum);
-        return false;
-    }
+    RIF_MF(m_file.good(), "failed to write cluster %d\n", num);
 
     return true;
 }
 
-uint16_t FatImage::GetClusterValue(int num)
+uint16_t FatImage::GetClusterTableValue(int num) const
 {
     // FAT12
     // TODO: FAT16
@@ -513,7 +489,7 @@ uint16_t FatImage::GetClusterValue(int num)
     
 }
 
-void FatImage::SetClusterValue(int num, uint16_t value)
+void FatImage::SetClusterTableValue(int num, uint16_t value)
 {
     // FAT12
     // TODO: FAT16
@@ -537,24 +513,37 @@ bool FatImage::ZeroData()
     int sectorSize = GetParamBlock()->SectorSize;
     char zeroBuf[sectorSize] = { 0 };
 
-    long seekOffset = GetFirstDataSectorNumber() * sectorSize;
+    int firstDataSector = GetFirstDataSectorNumber();
+    long seekOffset = firstDataSector * sectorSize;
     m_file.seekp(seekOffset, std::ios_base::beg);
 
-    int count = GetParamBlock()->SectorCount - GetFirstDataSectorNumber();
-    for (int i = 0; i < count; i++) {
+    for (int i = firstDataSector; i < GetParamBlock()->SectorCount; i++) {
         m_file.write(zeroBuf, sectorSize);
-        if (!m_file.good()) {
-            printf("fatfs: error: failed to write cluster %d\n", i);
-            return false;
-        }
+        RIF_MF(m_file.good(), "failed to write cluster %d\n", i);
     }
 
     return true;
 }
 
-void FatImage::WriteString(char *dest, const std::string &source, int length)
+std::string FatImage::GetString(char *src, int length) const
 {
-    std::string s = source;
+    std::string s(src, length);
+    return rtrim(s);
+}
+
+void FatImage::SetString(char *dest, const std::string &src, int length)
+{
+    std::string s = src;
     s.resize(length, ' ');
     strncpy(dest, s.c_str(), length);
+}
+
+void FatImage::Info(const char *fmt, ...) const
+{
+    va_list args;
+    va_start(args, fmt);
+    
+    if (!Quiet) vprintf(fmt, args);
+    
+    va_end(args);
 }

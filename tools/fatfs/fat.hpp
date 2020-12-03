@@ -49,7 +49,7 @@ typedef struct
     uint16_t HeadCount;
     uint32_t HiddenSectorCount;
     uint32_t LargeSectorCount;
-    struct {    // Extended BIOS Parameter Block
+    struct { // Extended BIOS Parameter Block
         uint8_t DriveNumber;
         uint8_t _Reserved;
         uint8_t ExtendedBootSignature;
@@ -68,41 +68,37 @@ typedef struct
     uint16_t BootSignature;
 } BootSector;
 
+typedef struct {
+    uint16_t Day       : 5;     // 1-31
+    uint16_t Month     : 4;     // 1-12
+    uint16_t Year      : 7;     // 0-127 (0 = 1980)
+} FatDate;
+
+typedef struct {
+    uint16_t Seconds   : 5;     // 0-29 (secs/2)
+    uint16_t Minutes   : 6;     // 0-59
+    uint16_t Hours     : 5;     // 0-23
+} FatTime;
+
 typedef struct
 {
     char FileName[FILENAME_LENGTH];
     char FileExtension[EXTENSION_LENGTH];
-    uint8_t FileAttributes;
-    uint8_t _Reserved0;
-    uint8_t _Reserved1;
-    struct {
-        uint16_t Seconds   : 5;
-        uint16_t Minutes   : 6;
-        uint16_t Hours     : 5;
-    } CreationTime;
-    struct {
-        uint16_t Day       : 5;
-        uint16_t Month     : 4;
-        uint16_t Year      : 7;
-    } CreationDate;
-    uint16_t _Reserved2;
-    uint16_t _Reserved3;
-    struct {
-        uint16_t Seconds   : 5;
-        uint16_t Minutes   : 6;
-        uint16_t Hours     : 5;
-    } ModifiedTime;
-    struct {
-        uint16_t Day       : 5;
-        uint16_t Month     : 4;
-        uint16_t Year      : 7;
-    } ModifiedDate;
-    uint16_t FileBegin;
+    uint8_t _Reserved0;     // TODO: file attributes
+    uint8_t _Reserved1;     // varies by system, do not use
+    uint8_t _Reserved2;     // TODO: fine creation time
+    FatTime CreationTime;
+    FatDate CreationDate;
+    FatDate LastAccessDate;
+    uint16_t _Reserved3;    // TODO: access rights bitmap
+    FatTime ModifiedTime;
+    FatDate ModifiedDate;
+    uint16_t Cluster;
     uint32_t FileSize;
 } DirectoryEntry;
 
 static_assert(sizeof(BiosParameterBlock) == 51, "Invalid BIOS Parameter Block size!");
-static_assert(sizeof(BootSector) == 512, "Invalid boot sector size!");
-static_assert(sizeof(DirectoryEntry) == 32, "Invalid boot sector size!");
+static_assert(sizeof(BootSector) == 512, "Invalid Boot Sector size!");
+static_assert(sizeof(DirectoryEntry) == 32, "Invalid Directory Entry size!");
 
 #endif  // __FAT_HPP

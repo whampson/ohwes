@@ -28,11 +28,13 @@
 class FatImage
 {
 public:
+    bool Quiet;
+
     FatImage();
     ~FatImage();
 
-    bool Create(const std::string &filename);
-    bool Load(const std::string &filename);
+    bool Create(const std::string &path);
+    bool Load(const std::string &path);
 
     bool AddFile(const std::string &filename);
     
@@ -47,10 +49,6 @@ public:
 
     BiosParameterBlock * GetParamBlock() const;
 
-    int GetFirstFileAllocSectorNumber() const;
-    int GetFirstRootDirSectorNumber() const;
-    int GetFirstDataSectorNumber() const;
-
 private:
     std::fstream m_file;
     BootSector *m_bootSect;
@@ -59,6 +57,10 @@ private:
     bool m_bootSectNeedsUpdate;
     bool m_allocTableNeedsUpdate;
     bool m_rootDirNeedsUpdate;
+
+    int GetFirstFileAllocSectorNumber() const;
+    int GetFirstRootDirSectorNumber() const;
+    int GetFirstDataSectorNumber() const;
 
     void CreateBootSector();
     void CreateFileAllocTable();
@@ -72,13 +74,16 @@ private:
     bool WriteFileAllocTable();
     bool WriteRootDirectory();
 
-    uint16_t GetClusterValue(int num);
-    void SetClusterValue(int num, uint16_t value);
+    uint16_t GetClusterTableValue(int num) const;
+    void SetClusterTableValue(int num, uint16_t value);
 
     bool WriteDataCluster(int num, char *data);
     bool ZeroData();
 
-    void WriteString(char *dest, const std::string &source, int length);
+    std::string GetString(char *src, int length) const;
+    void SetString(char *dest, const std::string &src, int length);
+    
+    void Info(const char *fmt, ...) const;
 };
 
 #endif  // __FATIMAGE_HPP
