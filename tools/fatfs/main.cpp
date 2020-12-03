@@ -61,7 +61,7 @@ int main(int argc, char **argv)
     int opt_help = 0;
     struct option long_options[] = {
         { "help", no_argument, &opt_help, 1 },
-        { "image-file", required_argument, NULL, 'i' },
+        { "image", required_argument, NULL, 'i' },
         { "quiet", no_argument, NULL, 'q' }
     };
 
@@ -123,6 +123,7 @@ static int add(int argc, char **argv)
 
 static int create(int argc, char **argv)
 {
+    RIF_ARG_M(image_file, "missing disk image\n");
     RIF_IO(fs_image.Create(image_file));
     return 0;
 }
@@ -151,12 +152,56 @@ static int info(int argc, char **argv)
     return 0;
 }
 
-// usage: fatfs help [command] OR fatfs --help
 static int help(int argc, char **argv)
 {
-    printf("HELP!!!\n");
-    if (argc > 0) {
-        printf("command = %s\n", argv[0]);
+    // TODO: not done
+    
+    if (argc == 0) {
+        printf("fatfs - FAT file system disk image utility\n");
+        printf("Usage: fatfs [options] command [arguments]\n");
+        printf("\n");
+        printf("Options:\n");
+        printf("    -i, --image     specifies the disk image to work with\n");
+        printf("    -q, --quiet     suppreses extraneous output\n");
+        printf("\n");
+        printf("Commands:\n");
+        printf("    add             add a new file or directory\n");
+        printf("    create          create a new blank disk image\n");
+        printf("    extract         extract a file or directory\n");
+        printf("    info            gets information about the disk or a file\n");
+        printf("    mkdir           create a new empty directory\n");
+        printf("    remove          remove a file or directory\n");
+        printf("    rename          renames a file or directory\n");
+        printf("    touch           update a file's access and modification times\n");
+        printf("\n");
+        printf("Run 'fatfs help command' to get more information about a specific command.\n");
+        return 0;
+    }
+
+    if (strcmp(argv[0], "add") == 0) {
+        printf("Adds a file or directory to the image.\n");
+        printf("Usage: fatfs add file [options]\n");
+        printf("\n");
+        printf("Options:\n");
+        printf("    -f, --force     overwrite any existing files with the same name\n");
+    }
+    if (strcmp(argv[0], "create") == 0) {
+
+    }
+    if (strcmp(argv[0], "extract") == 0) {
+        
+    }
+    if (strcmp(argv[0], "info") == 0) {
+        
+    }
+    if (strcmp(argv[0], "mkdir") == 0) {
+        
+    }
+    if (strcmp(argv[0], "remove") == 0) {
+        
+    }
+    if (strcmp(argv[0], "touch") == 0) {
+        
     }
 
     return 0;
