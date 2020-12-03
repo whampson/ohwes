@@ -52,7 +52,11 @@ typedef struct {
         int16 month     : 4;
         int16 year      : 7;
     } creation_date <open=true>;
-    int16 _reserved;
+    struct {
+        int16 day       : 5;
+        int16 month     : 4;
+        int16 year      : 7;
+    } last_access_date <open=true>;
     int16 _reserved;
     struct {
         int16 seconds   : 5;
