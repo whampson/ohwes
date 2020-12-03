@@ -203,8 +203,27 @@ bool FatImage::AddFile(const std::string &srcPath)
     RIF_M(dirEntry, "root directory is full\n");
 
     std::string filename = get_filename(srcPath);
-    std::string shortName = ConvertToShortName(filename);
-    std::string shortExt = ConvertToShortExtension(filename);
+    std::string basename = get_basename(filename);
+    std::string extension = get_extension(filename);
+
+    // Handle dotfiles
+    if (basename.empty() && !extension.empty()) {
+        basename = extension;
+        extension = "";
+    }
+
+    // TODO: .foo -> FOO~1
+    // If shortname != basename, append ~1
+    // Search directory for existing NAME~1 files and increment number if found
+
+    std::string shortName = ConvertToShortName(basename);
+    std::string shortExt = ConvertToShortExtension(extension);
+
+    if (shortName.empty() && shortExt.empty()) {
+        ERRORF("invalid file name '%s'\n", filename.c_str());
+        return false;
+    }
+
     SetString(dirEntry->FileName, shortName, FILENAME_LENGTH);
     SetString(dirEntry->FileExtension, shortExt, EXTENSION_LENGTH);
 
@@ -516,20 +535,19 @@ bool FatImage::ZeroData()
     return true;
 }
 
-std::string FatImage::ConvertToShortName(const std::string &name) const
+std::string FatImage::ConvertToShortName(const std::string &basename) const
 {
-    std::string s = get_basename(trim(upper(name)));
+    std::string s = trim(upper(basename));
     s.erase(std::remove_if(s.begin(), s.end(), FatImage::IsValidShortNameChar), s.end());
     if (s.length() > FILENAME_LENGTH) {
         s = s.substr(0, 6) + "~1";
     }
-
     return s;
 }
 
-std::string FatImage::ConvertToShortExtension(const std::string &name) const
+std::string FatImage::ConvertToShortExtension(const std::string &extension) const
 {
-    std::string s = get_extension(trim(upper(name)));
+    std::string s = trim(upper(extension));
     s.erase(std::remove_if(s.begin(), s.end(), IsValidShortNameChar), s.end());
     return s.substr(0, EXTENSION_LENGTH);
 }

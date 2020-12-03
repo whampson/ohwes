@@ -80,8 +80,8 @@ private:
     bool WriteDataCluster(int num, char *data);
     bool ZeroData();
 
-    std::string ConvertToShortName(const std::string &filename) const;
-    std::string ConvertToShortExtension(const std::string &filename) const;
+    std::string ConvertToShortName(const std::string &basename) const;
+    std::string ConvertToShortExtension(const std::string &extension) const;
 
     std::string GetShortFileName(const DirectoryEntry *dirEntry) const;
     std::string GetLongFileName(const DirectoryEntry *dirEntry) const;
