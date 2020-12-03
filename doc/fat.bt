@@ -46,28 +46,28 @@ typedef struct {
         int16 seconds   : 5;
         int16 minutes   : 6;
         int16 hours     : 5;
-    } creation_time <open=true>;
+    } creation_time;
     struct {
         int16 day       : 5;
         int16 month     : 4;
         int16 year      : 7;
-    } creation_date <open=true>;
+    } creation_date;
     struct {
         int16 day       : 5;
         int16 month     : 4;
         int16 year      : 7;
-    } last_access_date <open=true>;
+    } last_access_date;
     int16 _reserved;
     struct {
         int16 seconds   : 5;
         int16 minutes   : 6;
         int16 hours     : 5;
-    } modified_time <open=true>;
+    } modified_time;
     struct {
         int16 day       : 5;
         int16 month     : 4;
         int16 year      : 7;
-    } modified_date <open=true>;
+    } modified_date;
     int16 file_start <comment="cluster #">;
     int32 file_size;
 } dir_entry;
