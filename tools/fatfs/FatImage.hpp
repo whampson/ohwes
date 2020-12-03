@@ -36,7 +36,7 @@ public:
     bool Create(const std::string &path);
     bool Load(const std::string &path);
 
-    bool AddFile(const std::string &filename);
+    bool AddFile(const std::string &srcPath);
     
     std::string GetVolumeLabel() const;
     void SetVolumeLabel(const std::string &label);
@@ -80,10 +80,18 @@ private:
     bool WriteDataCluster(int num, char *data);
     bool ZeroData();
 
-    std::string GetString(char *src, int length) const;
+    std::string ConvertToShortName(const std::string &filename) const;
+    std::string ConvertToShortExtension(const std::string &filename) const;
+
+    std::string GetShortFileName(const DirectoryEntry *dirEntry) const;
+    std::string GetLongFileName(const DirectoryEntry *dirEntry) const;
+
+    std::string GetString(const char *src, int length) const;
     void SetString(char *dest, const std::string &src, int length);
     
-    void Info(const char *fmt, ...) const;
+    void PrintInfo(const char *fmt, ...) const;
+
+    static bool IsValidShortNameChar(char c);
 };
 
 #endif  // __FATIMAGE_HPP

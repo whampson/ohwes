@@ -150,7 +150,7 @@ bool FatImage::Create(const std::string &path)
     int size = sectSize * sectCount;
     int free = (sectCount - GetFirstDataSectorNumber()) * sectSize;
 
-    Info("%s: sectors = %d, size = %d, free = %d\n",
+    PrintInfo("%s: sectors = %d, size = %d, free = %d\n",
         get_filename(path).c_str(),
         sectCount,
         size,
@@ -176,13 +176,17 @@ bool FatImage::Load(const std::string &path)
     return true;
 }
 
-bool FatImage::AddFile(const std::string &filename)
+bool FatImage::AddFile(const std::string &srcPath)
 {
+    int sectorSize = GetParamBlock()->SectorSize;
+    int clusterSize = sectorSize * GetParamBlock()->SectorsPerCluster;
+    char buf[sectorSize];
+
     std::fstream newFile;
     auto mode = std::ios_base::in | std::ios_base::out | std::ios_base::binary;
-    
-    newFile.open(filename, mode);
-    RIF_MF(m_file.good(), "failed to open file '%s'\n", filename.c_str());
+
+    newFile.open(srcPath, mode);
+    RIF_MF(m_file.good(), "failed to open file '%s'\n", srcPath.c_str());
     
     // TODO: overwrite file if it exists
     // TODO: support nested directories
@@ -198,16 +202,11 @@ bool FatImage::AddFile(const std::string &filename)
     }
     RIF_M(dirEntry, "root directory is full\n");
 
-    std::string s = upper(filename);
-    std::string name = get_filename(s);
-    std::string extension = "";
-    if (name.find('.') != std::string::npos) {
-        int dotPos = name.find_last_of(".");
-        extension = name.substr(dotPos + 1);
-        name = name.substr(0, dotPos);
-    }
-    SetString(dirEntry->FileName, name, FILENAME_LENGTH);
-    SetString(dirEntry->FileExtension, extension, EXTENSION_LENGTH);
+    std::string filename = get_filename(srcPath);
+    std::string shortName = ConvertToShortName(filename);
+    std::string shortExt = ConvertToShortExtension(filename);
+    SetString(dirEntry->FileName, shortName, FILENAME_LENGTH);
+    SetString(dirEntry->FileExtension, shortExt, EXTENSION_LENGTH);
 
     time_t now = time(0);
     tm *ltm = localtime(&now);
@@ -230,14 +229,12 @@ bool FatImage::AddFile(const std::string &filename)
     dirEntry->FileSize = newFile.tellg();
     newFile.seekg(0, std::ios_base::beg);
 
-    int sectorSize = GetParamBlock()->SectorSize;
-    int bytesRemaining = dirEntry->FileSize;
-    char buf[sectorSize];
-
-    int firstCluster = -1;
+    int firstCluster = 0;
     int lastCluster = -1;
     int currCluster = 0;
     int numClusters = 0;
+
+    int bytesRemaining = dirEntry->FileSize;
 
     // TODO: alloc table/disk space bounds check
 
@@ -264,20 +261,14 @@ bool FatImage::AddFile(const std::string &filename)
         currCluster++;
     }
 
-    SetClusterTableValue(lastCluster, -1);
+    if (lastCluster > 2) {
+        SetClusterTableValue(lastCluster, -1);
+    }
     dirEntry->Cluster = firstCluster;
 
-    std::string fatName = GetString(dirEntry->FileName, FILENAME_LENGTH);
-    std::string fatExt = GetString(dirEntry->FileExtension, EXTENSION_LENGTH);
-    if (!fatExt.empty()) {
-        fatName += "." + fatExt;
-    }
-
-    int clusterSize = sectorSize * GetParamBlock()->SectorsPerCluster;
     int clustersInUse = ceil(dirEntry->FileSize, clusterSize);
-
-    Info("%s: size = %d, size on disk = %d, clusters = %d\n",
-        fatName.c_str(),
+    PrintInfo("%s: size = %d, size on disk = %d, clusters = %d\n",
+        GetShortFileName(dirEntry).c_str(),
         dirEntry->FileSize,
         clustersInUse * clusterSize,
         clustersInUse);
@@ -525,7 +516,55 @@ bool FatImage::ZeroData()
     return true;
 }
 
-std::string FatImage::GetString(char *src, int length) const
+std::string FatImage::ConvertToShortName(const std::string &name) const
+{
+    std::string s = get_basename(trim(upper(name)));
+    s.erase(std::remove_if(s.begin(), s.end(), FatImage::IsValidShortNameChar), s.end());
+    if (s.length() > FILENAME_LENGTH) {
+        s = s.substr(0, 6) + "~1";
+    }
+
+    return s;
+}
+
+std::string FatImage::ConvertToShortExtension(const std::string &name) const
+{
+    std::string s = get_extension(trim(upper(name)));
+    s.erase(std::remove_if(s.begin(), s.end(), IsValidShortNameChar), s.end());
+    return s.substr(0, EXTENSION_LENGTH);
+}
+
+bool FatImage::IsValidShortNameChar(char c)
+{
+    static const std::string BadChars(
+        "\x00\x01\x02\x03\x04\x05\x06\x07"
+        "\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F"
+        "\x10\x11\x12\x13\x14\x15\x16\x17"
+        "\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
+        "\x7F\"\\*/:<>?|+,.;=[]", 49);
+    return BadChars.find(c) != std::string::npos;
+}
+
+std::string FatImage::GetShortFileName(const DirectoryEntry *dirEntry) const
+{
+    std::string name = trim(GetString(dirEntry->FileName, FILENAME_LENGTH));
+    std::string ext = trim(GetString(dirEntry->FileExtension, EXTENSION_LENGTH));
+
+    std::string shortName = name;
+    if (!ext.empty()) {
+        name += "." + ext;
+    }
+
+    return name;
+}
+
+std::string FatImage::GetLongFileName(const DirectoryEntry *dirEntry) const
+{
+    // TODO
+    return "";
+}
+
+std::string FatImage::GetString(const char *src, int length) const
 {
     std::string s(src, length);
     return rtrim(s);
@@ -538,7 +577,7 @@ void FatImage::SetString(char *dest, const std::string &src, int length)
     strncpy(dest, s.c_str(), length);
 }
 
-void FatImage::Info(const char *fmt, ...) const
+void FatImage::PrintInfo(const char *fmt, ...) const
 {
     va_list args;
     va_start(args, fmt);
