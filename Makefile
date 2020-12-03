@@ -42,16 +42,20 @@ export TREE			:=
 export TOPDIR		:= $(CURDIR)
 export BINDIR		:= $(TOPDIR)/bin
 export OBJDIR		:= $(TOPDIR)/obj
+export IMGDIR		:= $(BINDIR)/img
+export IMGFILE		:= $(IMGDIR)/niobium.img
 
-.PHONY: all wipe tools clean-tools fatfs boot
+.PHONY: all wipe tools clean-tools img fatfs boot
 
-all: boot tools
+all: img
 
-wipe: clean clean-tools
-
-clean-tools:
-	@$(RM) -r tools/bin
-	@$(RM) -r tools/obj
+img: boot tools
+	@$(MKDIR) -p $(IMGDIR)
+	@fatfs $(IMGFILE) create
+	@fatfs $(IMGFILE) add $(BINDIR)/init.sys
+	@fatfs $(IMGFILE) add $(BINDIR)/kernel.sys
+	@dd if=$(BINDIR)/bootsect of=$(IMGFILE) conv=notrunc status=none
+	@echo 'OUT $(subst $(TOPDIR)/,,$(IMGFILE))'
 
 boot: dirs
 	@$(MAKE) -C boot
@@ -61,5 +65,11 @@ tools: dirs
 
 fatfs: dirs
 	@$(MAKE) -C tools fatfs
+
+wipe: clean clean-tools
+
+clean-tools:
+	@$(RM) -r tools/bin
+	@$(RM) -r tools/obj
 
 include $(TOPDIR)/include/Rules.mk
