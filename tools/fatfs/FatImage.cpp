@@ -198,10 +198,6 @@ bool FatImage::Load(const std::string &path)
 
 bool FatImage::AddFile(const std::string &srcPath)
 {
-    int sectorSize = GetParamBlock()->SectorSize;
-    int clusterSize = sectorSize * GetParamBlock()->SectorsPerCluster;
-    char buf[sectorSize];
-
     std::fstream newFile;
     auto mode = std::ios_base::in | std::ios_base::out | std::ios_base::binary;
 
@@ -240,38 +236,32 @@ bool FatImage::AddFile(const std::string &srcPath)
         return false;
     }
 
+    InitDirEntry(dirEntry, "");
     SetString(dirEntry->Name, shortName, FILENAME_LENGTH);
     SetString(dirEntry->Extension, shortExt, EXTENSION_LENGTH);
-
-    time_t now = time(0);
-    SetDate(dirEntry->CreationDate, now);
-    SetTime(dirEntry->CreationTime, now);
-    SetDate(dirEntry->ModifiedDate, now);
-    SetTime(dirEntry->ModifiedTime, now);
-    SetDate(dirEntry->LastAccessDate, now);
-
     dirEntry->Attributes = ATTR_AR;
-    dirEntry->_Reserved1 = 0;
-    dirEntry->_Reserved2 = 0;
-    dirEntry->_Reserved3 = 0;
 
     newFile.seekg(0, std::ios_base::end);
     dirEntry->FileSize = newFile.tellg();
     newFile.seekg(0, std::ios_base::beg);
 
-    int firstCluster = 0;
+    int firstCluster = -1;
     int lastCluster = -1;
-    int currCluster = 0;
+    int currCluster = -1;
     int numClusters = 0;
-
     int bytesRemaining = dirEntry->FileSize;
 
-    // TODO: alloc table/disk space bounds check
+    int clustSize = GetClusterSize();
+    char clustBuf[clustSize];
 
     while (bytesRemaining > 0) {
-        while (GetClusterTableValue(currCluster) != 0) {
-            currCluster++;
+        currCluster = FindNextFreeCluster();
+        if (currCluster == -1) {
+            ERROR("disk is full!\n");
+            return false;
         }
+
+        SetClusterTableValue(currCluster, 0x001);   // in use, not yet written
         if (lastCluster > 0) {
             SetClusterTableValue(lastCluster, currCluster);
         }
@@ -279,16 +269,15 @@ bool FatImage::AddFile(const std::string &srcPath)
             firstCluster = currCluster;
         }
 
-        memset(buf, 0, sectorSize);
-        newFile.read(buf, std::min(sectorSize, bytesRemaining));
+        memset(clustBuf, 0, clustSize);
+        newFile.read(clustBuf, std::min(clustSize, bytesRemaining));
         RIF_MF(newFile.good(), "failed to read '%s'\n", filename.c_str());
 
         bytesRemaining -= newFile.gcount();
-        WriteDataCluster(currCluster, buf);
+        WriteDataCluster(currCluster, clustBuf);
         numClusters++;
 
         lastCluster = currCluster;
-        currCluster++;
     }
 
     if (lastCluster > 2) {
@@ -296,12 +285,11 @@ bool FatImage::AddFile(const std::string &srcPath)
     }
     dirEntry->FirstCluster = firstCluster;
 
-    int clustersInUse = ceil(dirEntry->FileSize, clusterSize);
     PrintInfo("%s: size = %d, size on disk = %d, clusters = %d\n",
         GetShortFileName(dirEntry).c_str(),
         dirEntry->FileSize,
-        clustersInUse * clusterSize,
-        clustersInUse);
+        numClusters * clustSize,
+        numClusters);
 
     m_allocTableNeedsUpdate = true;
     m_rootDirNeedsUpdate = true;
@@ -331,10 +319,14 @@ bool FatImage::AddDirectory(const std::string &path)
         numEntries = GetClusterSize() / sizeof(DirectoryEntry);
     }
 
-    // TODO: check for existing
     bool foundSlot = false;
     DirectoryEntry *newDirEntry = nullptr;
     for (int i = 0; i < numEntries; i++) {
+        std::string existingDirName = GetString(parent[i].Name, FILENAME_LENGTH);
+        if (existingDirName.compare(newDirName) == 0) {
+            ERRORF("directory '%s' exists\n", newDirName.c_str());
+            return false;
+        }
         char c = parent[i].Name[0];
         if (c == 0x00 || c == 0xE5) {
             newDirEntry = &parent[i];
@@ -342,11 +334,11 @@ bool FatImage::AddDirectory(const std::string &path)
             break;
         }
     }
-
-    // TODO: add directory cluster if current one is full (and it's not the root)
-    RIT_MF(!foundSlot /*&& cluster == 0*/, "'%s' is full!\n", basePath.empty() ? "/" : basePath.c_str());
+    RIT_M(!foundSlot && parentClust == 0, "root directory is full\n");
 
     InitDirEntry(newDirEntry, newDirName);
+    newDirEntry->Attributes = ATTR_DIR;
+
     int nextFree = FindNextFreeCluster();
     if (nextFree == -1) {
         ERROR("disk is full!\n");
@@ -392,7 +384,6 @@ void FatImage::InitDirEntry(DirectoryEntry *dirEntry, const std::string &name)
     SetTime(dirEntry->ModifiedTime, now);
     SetDate(dirEntry->LastAccessDate, now);
 
-    dirEntry->Attributes = ATTR_DIR;
     dirEntry->FileSize = 0;
     dirEntry->FirstCluster = 0;
     dirEntry->_Reserved1 = 0;
@@ -632,9 +623,8 @@ bool FatImage::WriteRootDirectory()
 
 bool FatImage::ReadDataCluster(int num, char *data)
 {
-    int sectorSize = GetParamBlock()->SectorSize;
-    int sectorsPerCluster = GetParamBlock()->SectorsPerCluster;
-    int clusterSize = sectorSize * sectorsPerCluster;
+    int sectorSize = GetSectorSize();
+    int clusterSize = GetClusterSize();
 
     RIF_MF(num >= 2, "cannot read reserved cluster %d\n", num);
     RIF_MF(num < GetClusterCount() + 2, "invalid cluser %d\n", num);
@@ -650,9 +640,8 @@ bool FatImage::ReadDataCluster(int num, char *data)
 
 bool FatImage::WriteDataCluster(int num, char *data)
 {
-    int sectorSize = GetParamBlock()->SectorSize;
-    int sectorsPerCluster = GetParamBlock()->SectorsPerCluster;
-    int clusterSize = sectorSize * sectorsPerCluster;
+    int sectorSize = GetSectorSize();
+    int clusterSize = GetClusterSize();
 
     RIF_MF(num >= 2, "cannot write reserved cluster %d\n", num);
     RIF_MF(num < GetClusterCount() + 2, "invalid cluser %d\n", num);
