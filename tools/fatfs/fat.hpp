@@ -68,23 +68,36 @@ typedef struct
     uint16_t BootSignature;
 } BootSector;
 
-typedef struct {
+typedef struct
+{
     uint16_t Day       : 5;     // 1-31
     uint16_t Month     : 4;     // 1-12
     uint16_t Year      : 7;     // 0-127 (0 = 1980)
 } FatDate;
 
-typedef struct {
+typedef struct
+{
     uint16_t Seconds   : 5;     // 0-29 (secs/2)
     uint16_t Minutes   : 6;     // 0-59
     uint16_t Hours     : 5;     // 0-23
 } FatTime;
 
+enum FileAttrs : uint8_t
+{
+    ATTR_RO     = 0x01,     // Read Only
+    ATTR_HID    = 0x02,     // Hidden
+    ATTR_SYS    = 0x04,     // System File
+    ATTR_VL     = 0x08,     // Volume Label
+    ATTR_DIR    = 0x10,     // Directory
+    ATTR_AR     = 0x20,     // Archive
+    ATTR_DEV    = 0x40,     // Device File
+};
+
 typedef struct
 {
-    char FileName[FILENAME_LENGTH];
-    char FileExtension[EXTENSION_LENGTH];
-    uint8_t _Reserved0;     // TODO: file attributes
+    char Name[FILENAME_LENGTH];
+    char Extension[EXTENSION_LENGTH];
+    FileAttrs Attributes;
     uint8_t _Reserved1;     // varies by system, do not use
     uint8_t _Reserved2;     // TODO: fine creation time
     FatTime CreationTime;
@@ -93,7 +106,7 @@ typedef struct
     uint16_t _Reserved3;    // TODO: access rights bitmap
     FatTime ModifiedTime;
     FatDate ModifiedDate;
-    uint16_t Cluster;
+    uint16_t FirstCluster;
     uint32_t FileSize;
 } DirectoryEntry;
 

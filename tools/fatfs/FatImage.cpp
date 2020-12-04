@@ -55,6 +55,26 @@ FatImage::~FatImage()
     if (m_allocTable) delete[] m_allocTable;
 }
 
+int FatImage::GetSectorSize() const
+{
+    return GetParamBlock()->SectorSize;
+}
+
+int FatImage::GetClusterSize() const
+{
+    return GetSectorSize() * GetParamBlock()->SectorsPerCluster;
+}
+
+int FatImage::GetSectorCount() const
+{
+    return GetParamBlock()->SectorCount;
+}
+
+int FatImage::GetClusterCount() const
+{
+    return (GetSectorCount() - GetFirstDataSectorNumber()) / GetParamBlock()->SectorsPerCluster;
+}
+
 BiosParameterBlock * FatImage::GetParamBlock() const
 {
     return &m_bootSect->Params;
@@ -194,7 +214,7 @@ bool FatImage::AddFile(const std::string &srcPath)
 
     DirectoryEntry *dirEntry = nullptr;
     for (int i = 0; i < GetParamBlock()->MaxRootDirEntries; i++) {
-        char c = m_rootDir[i].FileName[0];
+        char c = m_rootDir[i].Name[0];
         if (c == 0x00 || c == 0xE5) {
             dirEntry = &m_rootDir[i];
             break;
@@ -212,10 +232,6 @@ bool FatImage::AddFile(const std::string &srcPath)
         extension = "";
     }
 
-    // TODO: .foo -> FOO~1
-    // If shortname != basename, append ~1
-    // Search directory for existing NAME~1 files and increment number if found
-
     std::string shortName = ConvertToShortName(basename);
     std::string shortExt = ConvertToShortExtension(extension);
 
@@ -224,22 +240,17 @@ bool FatImage::AddFile(const std::string &srcPath)
         return false;
     }
 
-    SetString(dirEntry->FileName, shortName, FILENAME_LENGTH);
-    SetString(dirEntry->FileExtension, shortExt, EXTENSION_LENGTH);
+    SetString(dirEntry->Name, shortName, FILENAME_LENGTH);
+    SetString(dirEntry->Extension, shortExt, EXTENSION_LENGTH);
 
     time_t now = time(0);
-    tm *ltm = localtime(&now);
-    dirEntry->CreationDate.Year = ltm->tm_year - 80;    // FAT year0 = 1980, tm year0 = 1900
-    dirEntry->CreationDate.Month = ltm->tm_mon + 1;     // FAT month: 1-12
-    dirEntry->CreationDate.Day = ltm->tm_mday ;         // FAT day: 1-31
-    dirEntry->CreationTime.Hours = ltm->tm_hour;        // FAT hour: 0-23
-    dirEntry->CreationTime.Minutes = ltm->tm_min;       // FAT min: 0-59
-    dirEntry->CreationTime.Seconds = ltm->tm_sec / 2;   // FAT sec: 0-29 (secs / 2)
-    dirEntry->ModifiedDate = dirEntry->CreationDate;
-    dirEntry->ModifiedTime = dirEntry->CreationTime;
-    dirEntry->LastAccessDate = dirEntry->CreationDate;
+    SetDate(dirEntry->CreationDate, now);
+    SetTime(dirEntry->CreationTime, now);
+    SetDate(dirEntry->ModifiedDate, now);
+    SetTime(dirEntry->ModifiedTime, now);
+    SetDate(dirEntry->LastAccessDate, now);
 
-    dirEntry->_Reserved0 = 0;
+    dirEntry->Attributes = ATTR_AR;
     dirEntry->_Reserved1 = 0;
     dirEntry->_Reserved2 = 0;
     dirEntry->_Reserved3 = 0;
@@ -281,9 +292,9 @@ bool FatImage::AddFile(const std::string &srcPath)
     }
 
     if (lastCluster > 2) {
-        SetClusterTableValue(lastCluster, -1);
+        SetClusterTableValue(lastCluster, GetEndOfClusterChainMarker());
     }
-    dirEntry->Cluster = firstCluster;
+    dirEntry->FirstCluster = firstCluster;
 
     int clustersInUse = ceil(dirEntry->FileSize, clusterSize);
     PrintInfo("%s: size = %d, size on disk = %d, clusters = %d\n",
@@ -292,8 +303,161 @@ bool FatImage::AddFile(const std::string &srcPath)
         clustersInUse * clusterSize,
         clustersInUse);
 
+    m_allocTableNeedsUpdate = true;
     m_rootDirNeedsUpdate = true;
     return true;
+}
+
+bool FatImage::AddDirectory(const std::string &path)
+{
+    char parentClustBuf[GetClusterSize()];   
+    std::string basePath = get_directory(path);
+    std::string newDirName = get_filename(path);
+
+    int numEntries = 0;
+    DirectoryEntry *parent = nullptr;
+
+    int parentClust = FindDirectory(path);
+    if (parentClust == -1) {
+        return false;
+    }
+    else if (parentClust == 0) {
+        parent = m_rootDir;
+        numEntries = GetParamBlock()->MaxRootDirEntries;
+    }
+    else {
+        RIF(ReadDataCluster(parentClust, parentClustBuf));
+        parent = (DirectoryEntry *) parentClustBuf;
+        numEntries = GetClusterSize() / sizeof(DirectoryEntry);
+    }
+
+    // TODO: check for existing
+    bool foundSlot = false;
+    DirectoryEntry *newDirEntry = nullptr;
+    for (int i = 0; i < numEntries; i++) {
+        char c = parent[i].Name[0];
+        if (c == 0x00 || c == 0xE5) {
+            newDirEntry = &parent[i];
+            foundSlot = true;
+            break;
+        }
+    }
+
+    // TODO: add directory cluster if current one is full (and it's not the root)
+    RIT_MF(!foundSlot /*&& cluster == 0*/, "'%s' is full!\n", basePath.empty() ? "/" : basePath.c_str());
+
+    InitDirEntry(newDirEntry, newDirName);
+    int nextFree = FindNextFreeCluster();
+    if (nextFree == -1) {
+        ERROR("disk is full!\n");
+        return false;
+    }
+    newDirEntry->FirstCluster = nextFree;
+
+    char clustBuf[GetClusterSize()] = { 0 };
+    DirectoryEntry *dotEntry = (DirectoryEntry *) &clustBuf;
+    dotEntry[0] = *newDirEntry;
+    SetString(dotEntry[0].Name, ".", FILENAME_LENGTH);
+    SetString(dotEntry[0].Extension, "", EXTENSION_LENGTH);
+
+    if (parent != m_rootDir) {
+        dotEntry[1] = *parent;
+    }
+    else {
+        dotEntry[1].Attributes = ATTR_DIR;
+    }
+    SetString(dotEntry[1].Name, "..", FILENAME_LENGTH);
+    SetString(dotEntry[1].Extension, "", EXTENSION_LENGTH);
+
+    RIF(WriteDataCluster(nextFree, clustBuf));
+    if (parentClust != 0) {
+        RIF(WriteDataCluster(parentClust, parentClustBuf));
+    }
+    SetClusterTableValue(nextFree, GetEndOfClusterChainMarker());
+    
+    m_rootDirNeedsUpdate = true;
+    m_allocTableNeedsUpdate = true;
+    return true;
+}
+
+void FatImage::InitDirEntry(DirectoryEntry *dirEntry, const std::string &name)
+{
+    SetString(dirEntry->Name, ConvertToShortName(name), FILENAME_LENGTH);
+    SetString(dirEntry->Extension, "", EXTENSION_LENGTH);
+
+    time_t now = time(0);
+    SetDate(dirEntry->CreationDate, now);
+    SetTime(dirEntry->CreationTime, now);
+    SetDate(dirEntry->ModifiedDate, now);
+    SetTime(dirEntry->ModifiedTime, now);
+    SetDate(dirEntry->LastAccessDate, now);
+
+    dirEntry->Attributes = ATTR_DIR;
+    dirEntry->FileSize = 0;
+    dirEntry->FirstCluster = 0;
+    dirEntry->_Reserved1 = 0;
+    dirEntry->_Reserved2 = 0;
+    dirEntry->_Reserved3 = 0;
+}
+
+int FatImage::FindDirectory(const std::string &path)
+{
+    char clustBuf[GetClusterSize()];
+    int curClust = 0;
+    int curDirSize = GetParamBlock()->MaxRootDirEntries;
+    std::string curDirName;
+    DirectoryEntry *curDir = m_rootDir;
+
+    std::string s = path;
+    size_t sep = 0;
+
+    while ((sep = s.find_first_of("/\\")) != std::string::npos) {
+        curDirName = ConvertToShortName(s.substr(0, sep));
+        s.erase(0, sep + 1);
+        
+    SearchDir:
+        bool found = false;
+        for (int i = 0; i < curDirSize; i++) {
+            if ((curDir[i].Attributes & ATTR_DIR) != ATTR_DIR) {
+                continue;
+            }
+            std::string name = GetString(curDir[i].Name, FILENAME_LENGTH);
+            if (name.compare(curDirName) != 0) {
+                continue;   
+            }
+
+            found = true;
+            curClust = curDir[i].FirstCluster;
+            if (!ReadDataCluster(curClust, clustBuf)) {
+                return -1;
+            }
+            curDir = (DirectoryEntry *) clustBuf;
+            curDirSize = GetClusterSize() / sizeof(DirectoryEntry);
+            break;
+        }
+
+        if (!found) {
+            if (curClust == 0) goto NotFound;
+            
+            int nextClust = GetClusterTableValue(curClust);
+            if (nextClust == GetEndOfClusterChainMarker()) {
+                goto NotFound;
+            }
+            curClust = nextClust;
+            if (!ReadDataCluster(curClust, clustBuf)) {
+                return -1;
+            }
+            curDir = (DirectoryEntry *) clustBuf;
+            curDirSize = GetClusterSize() / sizeof(DirectoryEntry);
+            goto SearchDir;
+        }
+    }
+
+    return curClust;
+
+NotFound:
+    ERRORF("directory not found '%s'\n", curDirName.c_str());
+    return -1;
 }
 
 void FatImage::CreateBootSector()
@@ -388,8 +552,8 @@ void FatImage::CreateFileAllocTable()
     size_t fatSize = GetParamBlock()->SectorsPerTable * GetParamBlock()->SectorSize;
     m_allocTable = new char[fatSize]();
 
-    SetClusterTableValue(0, 0xFF0);  // Reserved cluster: ??? (endianness marker?)
-    SetClusterTableValue(1, -1);     // Reserved cluster: End-of-chain marker value
+    SetClusterTableValue(0, 0xFF0); // Reserved cluster: ??? (endianness marker?)
+    SetClusterTableValue(1, 0xFFF); // Reserved cluster: End-of-chain marker value
 }
 
 bool FatImage::LoadFileAllocTable()
@@ -466,19 +630,37 @@ bool FatImage::WriteRootDirectory()
     return true;
 }
 
+bool FatImage::ReadDataCluster(int num, char *data)
+{
+    int sectorSize = GetParamBlock()->SectorSize;
+    int sectorsPerCluster = GetParamBlock()->SectorsPerCluster;
+    int clusterSize = sectorSize * sectorsPerCluster;
+
+    RIF_MF(num >= 2, "cannot read reserved cluster %d\n", num);
+    RIF_MF(num < GetClusterCount() + 2, "invalid cluser %d\n", num);
+    int actualNum = num - 2;    // Clusters 0 and 1 are reserved, data clusters actually begin at 2
+
+    long seekOffset = (GetFirstDataSectorNumber() * sectorSize) + (actualNum * clusterSize);
+    m_file.seekp(seekOffset, std::ios_base::beg);
+    m_file.read(data, clusterSize);
+    RIF_MF(m_file.good(), "failed to read cluster %d\n", num);
+
+    return true;
+}
+
 bool FatImage::WriteDataCluster(int num, char *data)
 {
     int sectorSize = GetParamBlock()->SectorSize;
     int sectorsPerCluster = GetParamBlock()->SectorsPerCluster;
     int clusterSize = sectorSize * sectorsPerCluster;
-    int clusterCount = GetParamBlock()->SectorCount / sectorsPerCluster;
 
-    RIF_MF(num >= 2 && num < clusterCount, "cannot write reserved cluster %d\n", num);
+    RIF_MF(num >= 2, "cannot write reserved cluster %d\n", num);
+    RIF_MF(num < GetClusterCount() + 2, "invalid cluser %d\n", num);
     int actualNum = num - 2;    // Clusters 0 and 1 are reserved, data clusters actually begin at 2
 
     long seekOffset = (GetFirstDataSectorNumber() * sectorSize) + (actualNum * clusterSize);
     m_file.seekp(seekOffset, std::ios_base::beg);
-    m_file.write(data, sectorSize);
+    m_file.write(data, clusterSize);
     RIF_MF(m_file.good(), "failed to write cluster %d\n", num);
 
     return true;
@@ -516,6 +698,21 @@ void FatImage::SetClusterTableValue(int num, uint16_t value)
 
     *(uint16_t *) &m_allocTable[index] = tableValue;
     m_allocTableNeedsUpdate = true;
+}
+
+int FatImage::FindNextFreeCluster() const
+{
+    for (int i = 2; i < GetClusterCount(); i++) {
+        if (GetClusterTableValue(i) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+uint16_t FatImage::GetEndOfClusterChainMarker() const
+{
+    return GetClusterTableValue(1);
 }
 
 bool FatImage::ZeroData()
@@ -559,14 +756,14 @@ bool FatImage::IsValidShortNameChar(char c)
         "\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F"
         "\x10\x11\x12\x13\x14\x15\x16\x17"
         "\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
-        "\x7F\"\\*/:<>?|+,.;=[]", 49);
+        "\x7F\xE5\"\\*/:<>?|+,.;=[]", 50);
     return BadChars.find(c) != std::string::npos;
 }
 
 std::string FatImage::GetShortFileName(const DirectoryEntry *dirEntry) const
 {
-    std::string name = trim(GetString(dirEntry->FileName, FILENAME_LENGTH));
-    std::string ext = trim(GetString(dirEntry->FileExtension, EXTENSION_LENGTH));
+    std::string name = trim(GetString(dirEntry->Name, FILENAME_LENGTH));
+    std::string ext = trim(GetString(dirEntry->Extension, EXTENSION_LENGTH));
 
     std::string shortName = name;
     if (!ext.empty()) {
@@ -576,10 +773,26 @@ std::string FatImage::GetShortFileName(const DirectoryEntry *dirEntry) const
     return name;
 }
 
-std::string FatImage::GetLongFileName(const DirectoryEntry *dirEntry) const
+// std::string FatImage::GetLongFileName(const DirectoryEntry *dirEntry) const
+// {
+//     // TODO
+//     return "";
+// }
+
+void FatImage::SetDate(FatDate &date, time_t t)
 {
-    // TODO
-    return "";
+    tm *ltm = localtime(&t);
+    date.Year = ltm->tm_year - 80;    // FAT year0 = 1980, tm year0 = 1900
+    date.Month = ltm->tm_mon + 1;     // FAT month: 1-12
+    date.Day = ltm->tm_mday ;         // FAT day: 1-31
+}
+
+void FatImage::SetTime(FatTime &time, time_t t)
+{
+    tm *ltm = localtime(&t);
+    time.Hours = ltm->tm_hour;        // FAT hour: 0-23
+    time.Minutes = ltm->tm_min;       // FAT min: 0-59
+    time.Seconds = ltm->tm_sec / 2;   // FAT sec: 0-29 (secs / 2)
 }
 
 std::string FatImage::GetString(const char *src, int length) const

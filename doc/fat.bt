@@ -39,7 +39,7 @@
 typedef struct {
     char short_file_name[8];
     char short_file_ext[3];
-    ubyte file_attrs <format=hex>;
+    ubyte file_attrs <format=binary>;
     ubyte _reserved;
     ubyte _reserved;
     struct {
@@ -148,6 +148,9 @@ struct {
 // Data clusters
 struct {
     struct {
-        byte cluster_data[cluster_size];
+        union {
+            dir_entry dir_entries[cluster_size / sizeof(dir_entry)];
+            byte file_data[cluster_size];
+        } cluster_data <open=true>;
     } cluster[data_clusters] <optimize=false>;
 } data;

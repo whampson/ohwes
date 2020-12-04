@@ -36,12 +36,12 @@ do {                                                    \
 } while (0)
 
 // Return If False
-#define RIF(x)          do { if (!(x)) return false } while (0)
+#define RIF(x)          do { if (!(x)) return false; } while (0)
 #define RIF_M(x,m)      do { if (!(x)) { ERROR(m); return false; } } while (0)
 #define RIF_MF(x,m,...) do { if (!(x)) { ERRORF(m, __VA_ARGS__); return false; } } while (0)
 
 // Return If True
-#define RIT(x)          do { if (x) return false } while (0)
+#define RIT(x)          do { if (x) return false; } while (0)
 #define RIT_M(x,m)      do { if (x) { ERROR(m); return false; } } while (0)
 #define RIT_MF(x,m,...) do { if (x) { ERRORF(m, __VA_ARGS__); return false; } } while (0)
 
@@ -85,6 +85,15 @@ inline std::string trim(const std::string &str)
     return ltrim(rtrim(str));
 }
 
+inline std::string get_directory(const std::string &path)
+{
+	int sep = path.find_last_of("/\\");
+	if (sep == std::string::npos) {
+		return "";
+	}
+    return path.substr(0, sep);
+}
+
 // Extract filename from path
 inline std::string get_filename(const std::string &path)
 {
@@ -96,7 +105,7 @@ inline std::string get_basename(const std::string &path)
 {
     std::string s = get_filename(path);
     int dotpos = s.find_last_of('.');
-    if (dotpos == -1) {
+    if (dotpos == std::string::npos) {
         return s;
     }
     return s.substr(0, dotpos);
@@ -107,7 +116,7 @@ inline std::string get_extension(const std::string &path)
 {
     std::string s = get_filename(path);
     int dotpos = s.find_last_of('.');
-    if (dotpos == -1) {
+    if (dotpos == std::string::npos) {
         return "";
     }
     return s.substr(dotpos + 1);

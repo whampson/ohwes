@@ -37,6 +37,8 @@ public:
     bool Load(const std::string &path);
 
     bool AddFile(const std::string &srcPath);
+    bool AddDirectory(const std::string &path);
+    bool ListFiles(const std::string &path);
     
     std::string GetVolumeLabel() const;
     void SetVolumeLabel(const std::string &label);
@@ -48,6 +50,10 @@ public:
     void SetFileSystemType(const std::string &name);
 
     BiosParameterBlock * GetParamBlock() const;
+    int GetSectorSize() const;
+    int GetClusterSize() const;
+    int GetSectorCount() const;
+    int GetClusterCount() const;
 
 private:
     std::fstream m_file;
@@ -74,17 +80,28 @@ private:
     bool WriteFileAllocTable();
     bool WriteRootDirectory();
 
+    void InitDirEntry(DirectoryEntry *dirEntry, const std::string &name);
+    int FindDirectory(const std::string &path);
+
     uint16_t GetClusterTableValue(int num) const;
     void SetClusterTableValue(int num, uint16_t value);
 
+    int FindNextFreeCluster() const;
+    uint16_t GetEndOfClusterChainMarker() const;
+
+    bool ReadDataCluster(int num, char *data);
     bool WriteDataCluster(int num, char *data);
+
     bool ZeroData();
 
     std::string ConvertToShortName(const std::string &basename) const;
     std::string ConvertToShortExtension(const std::string &extension) const;
 
     std::string GetShortFileName(const DirectoryEntry *dirEntry) const;
-    std::string GetLongFileName(const DirectoryEntry *dirEntry) const;
+    // std::string GetLongFileName(const DirectoryEntry *dirEntry) const;
+
+    void SetDate(FatDate &date, time_t t);
+    void SetTime(FatTime &time, time_t t);
 
     std::string GetString(const char *src, int length) const;
     void SetString(char *dest, const std::string &src, int length);

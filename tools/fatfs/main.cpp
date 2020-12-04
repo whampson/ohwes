@@ -43,12 +43,14 @@ struct command {
 static int add(int argc, char **argv);
 static int create(int argc, char **argv);
 static int info(int argc, char **argv);
+static int mkdir(int argc, char **argv);
 static int help(int argc, char **argv);
 
 static struct command cmds[] = {
     { "add", add },
     { "create", create },
     { "info", info },
+    { "mkdir", mkdir },
     { "help", help },
     { NULL, NULL },
 };
@@ -152,13 +154,23 @@ static int info(int argc, char **argv)
     return 0;
 }
 
+static int mkdir(int argc, char **argv)
+{
+    RIT_ARG_M(argc == 0, "missing directory name\n");
+    
+    RIF_IO(fs_image.Load(image_file));
+    RIF_IO(fs_image.AddDirectory(argv[0]));
+    
+    return 0;
+}
+
 static int help(int argc, char **argv)
 {
     // TODO: not done
-    
+
     if (argc == 0) {
         printf("fatfs - FAT file system disk image utility\n");
-        printf("Usage: fatfs [options] command [arguments]\n");
+        printf("Usage: fatfs [options] command args\n");
         printf("\n");
         printf("Options:\n");
         printf("    -i, --image     specifies the disk image to work with\n");
@@ -167,12 +179,13 @@ static int help(int argc, char **argv)
         printf("Commands:\n");
         printf("    add             add a new file or directory\n");
         printf("    create          create a new blank disk image\n");
-        printf("    extract         extract a file or directory\n");
-        printf("    info            gets information about the disk or a file\n");
+        // printf("    extract         extract a file or directory\n");
+        // printf("    info            gets information about the disk or a file\n");
+        // printf("    list            list the files in a directory\n");
         printf("    mkdir           create a new empty directory\n");
-        printf("    remove          remove a file or directory\n");
-        printf("    rename          renames a file or directory\n");
-        printf("    touch           update a file's access and modification times\n");
+        // printf("    remove          remove a file or directory\n");
+        // printf("    rename          renames a file or directory\n");
+        // printf("    touch           update a file's metadata\n");
         printf("\n");
         printf("Run 'fatfs help command' to get more information about a specific command.\n");
         return 0;
