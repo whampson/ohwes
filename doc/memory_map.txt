@@ -1,0 +1,60 @@
+                Real Mode Memory Map
+   0x00000  +===============================+
+            |   (Reserved for BIOS)         |   1.25 KiB
+            |                               |
+   0x00500  +-------------------------------+
+            |   Disk Data Structures        |   26.75 KiB
+            /                               /
+            /                               /
+            |                               |
+   0x07000  +-------------------------------+
+            |   Stack                       |   3 KiB
+            |                               |
+            |                               |
+   0x07C00  +-------------------------------+
+            |   Boot Sector                 |   512 B
+   0x07E00  +-------------------------------+
+            |   Extended Boot Sector        |   512 B
+   0x08000  +-------------------------------+
+            |   INIT.SYS                    |   32 KiB
+            /                               /
+            /                               /
+            |                               |
+   0x10000  +-------------------------------+
+            |   KERNEL.SYS                  |   64 KiB; 1 segment
+            /                               /     * Bootloader cannot handle multi-segment buffers (yet)
+            /                               /
+            |                               |
+   0x20000  +-------------------------------+
+            |   Free Space                  |   384 KiB
+            /                               /
+            /                               /
+            |                               |
+   0x80000  +-------------------------------+
+            |   (Reserved for Hardware)     |   512 KiB
+            /                               /   <-- TODO: Video Memory in here somewhere
+            /                               /
+            |                               |
+   0xFFFFF  +===============================+
+
+
+                Protected Mode Memory Map
+0x00000000  +===============================+
+            |   (Reserved for Hardware)     |   1 MiB
+            |                               |   <-- TODO: Video Memory in here somewhere
+            |                               |   <-- TODO: CPU structures in here (LDT, IDT, GDT, PGTBLs)
+            |                               |
+            +-------------------------------+
+            |                               |
+0x01000000  +-------------------------------+
+            |   Kernel Stack                |   4 MiB
+0x01400000  +-------------------------------+
+            |   Kernel Code                 |   12 MiB
+            /   Kernel Data                 /
+            /                               /
+0x02000000  +-------------------------------+
+            |   User-Space Program Area     |   (Remaining Memory)
+            /                               /
+            /                               /
+            |                               |
+0xFFFFFFFF  +===============================+
