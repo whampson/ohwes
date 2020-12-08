@@ -352,6 +352,6 @@ _print_done:
 first_data_sector:      .byte       -1
 s_init_file:            .ascii      "INIT    SYS"
 s_kern_file:            .ascii      "NBOS    SYS"
-s_error:                .asciz      "Bad disk"#"Invalid system disk.\r\n"
+s_error:                .asciz      "Bad system disk. Replace the disk then press any key...\r\n"
 pad:                    .space      0x1FE - (. - entry)
 boot_sig:               .short      0xAA55
