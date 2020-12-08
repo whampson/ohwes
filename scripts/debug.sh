@@ -21,7 +21,11 @@
 # QEMU debug attach.                                                           #
 #==============================================================================#
 
-gdb -ex 'target remote localhost:1234' \
+gdb ${NB_OBJDIR}/boot/fat.o \
+    -ex 'target remote localhost:1234' \
+    -ex 'set tdesc filename scripts/gdb_targets/i386-16bit.xml' \
     -ex 'set architecture i8086' \
     -ex 'break *0x7C00' \
+    -ex 'layout asm' \
+    -ex 'layout regs' \
     -ex 'continue'

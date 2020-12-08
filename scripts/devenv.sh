@@ -24,5 +24,8 @@
 
 export NB_TOPDIR=$(dirname $(dirname $(realpath ${BASH_SOURCE[0]})))
 export NB_BINDIR=${NB_TOPDIR}/bin
+export NB_OBJDIR=${NB_TOPDIR}/obj
+export NB_TOOLS=${NB_TOPDIR}/tools
+export NB_SCRIPTS=${NB_TOPDIR}/scripts
 
-export PATH=${NB_TOPDIR}/tools/bin:${NB_TOPDIR}/scripts:${PATH}
+export PATH=${NB_TOOLS}/bin:${NB_SCRIPTS}:${PATH}

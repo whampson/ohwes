@@ -28,8 +28,8 @@ if [ -z ${NB_BINDIR+x} ]; then
 fi
 
 qemu="qemu-system-i386"
-qemu_args+=" -boot a "
-qemu_args+=" -m 2G"
+qemu_args+=" -boot a"
+qemu_args+=" -m 128M"
 qemu_args+=" -drive file=${NB_BINDIR}/img/niobium.img,if=floppy,format=raw,index=0"
 
 if [ "$1" = "d" ] || [ "$1" = "debug" ]; then
