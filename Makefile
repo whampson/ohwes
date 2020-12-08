@@ -28,7 +28,7 @@
 #==============================================================================#
 
 export AS			:= i686-elf-as
-export ASFLAGS		:=
+export ASFLAGS		:= -g
 export CC			:= i686-elf-gcc
 export CFLAGS		:= -g
 export LD			:= i686-elf-ld
@@ -50,10 +50,12 @@ export IMGFILE		:= $(IMGDIR)/niobium.img
 all: img
 
 img: boot tools
+	@echo '> Creating floppy image...'
 	@$(MKDIR) -p $(IMGDIR)
-	@fatfs $(IMGFILE) create
-	@fatfs $(IMGFILE) add $(BINDIR)/init.sys
-	@fatfs $(IMGFILE) add $(BINDIR)/kernel.sys
+	@fatfs -i $(IMGFILE) create
+	@fatfs -i $(IMGFILE) add $(BINDIR)/init.sys
+	@fatfs -i $(IMGFILE) add $(BINDIR)/nbos.sys
+	@echo '> Writing boot sector...'
 	@dd if=$(BINDIR)/bootsect of=$(IMGFILE) conv=notrunc status=none
 	@echo 'OUT $(subst $(TOPDIR)/,,$(IMGFILE))'
 
