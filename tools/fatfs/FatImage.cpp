@@ -280,7 +280,7 @@ bool FatImage::AddFile(const std::string &srcPath)
         lastCluster = currCluster;
     }
 
-    if (lastCluster > 2) {
+    if (lastCluster >= 2) {
         SetClusterTableValue(lastCluster, GetEndOfClusterChainMarker());
     }
     dirEntry->FirstCluster = firstCluster;
@@ -449,6 +449,40 @@ int FatImage::FindDirectory(const std::string &path)
 NotFound:
     ERRORF("directory not found '%s'\n", curDirName.c_str());
     return -1;
+}
+
+DirectoryEntry * FatImage::FindFile(const std::string &path)
+{
+    char clustBuf[GetClusterSize()];
+    int parentClust = FindDirectory(path);
+    DirectoryEntry *parentDir = nullptr;
+    int numDirEntries = -1;
+    std::string fileName = get_filename(path);
+
+    if (parentClust == -1) {
+        return nullptr;
+    }
+    else if (parentClust == 0) {
+        parentDir = m_rootDir;
+        numDirEntries = GetParamBlock()->MaxRootDirEntries;
+    }
+    else {
+        if (!ReadDataCluster(parentClust, clustBuf)) {
+            return nullptr;
+        }
+        parentDir = (DirectoryEntry *) clustBuf;
+        numDirEntries = GetClusterSize() / sizeof(DirectoryEntry);
+    }
+
+    for (int i = 0; i < numDirEntries; i++) {
+        DirectoryEntry *e = &parentDir[i];
+        std::string n = GetShortFileName(e);
+        if (n.compare(fileName) == 0) {
+            return e;
+        }
+    }
+
+    return nullptr;
 }
 
 void FatImage::CreateBootSector()
@@ -773,7 +807,7 @@ void FatImage::SetDate(FatDate &date, time_t t)
     tm *ltm = localtime(&t);
     date.Year = ltm->tm_year - 80;    // FAT year0 = 1980, tm year0 = 1900
     date.Month = ltm->tm_mon + 1;     // FAT month: 1-12
-    date.Day = ltm->tm_mday ;         // FAT day: 1-31
+    date.Day = ltm->tm_mday;          // FAT day: 1-31
 }
 
 void FatImage::SetTime(FatTime &time, time_t t)
@@ -781,7 +815,43 @@ void FatImage::SetTime(FatTime &time, time_t t)
     tm *ltm = localtime(&t);
     time.Hours = ltm->tm_hour;        // FAT hour: 0-23
     time.Minutes = ltm->tm_min;       // FAT min: 0-59
-    time.Seconds = ltm->tm_sec / 2;   // FAT sec: 0-29 (secs / 2)
+    time.Seconds = ltm->tm_sec >> 1;  // FAT sec: 0-29 (secs / 2)
+}
+
+tm FatImage::GetCreation(DirectoryEntry *dirEntry)
+{
+    tm time;
+    time.tm_year = 80 + dirEntry->CreationDate.Year;
+    time.tm_mon = dirEntry->CreationDate.Month - 1;
+    time.tm_mday = dirEntry->CreationDate.Day;
+    time.tm_hour = dirEntry->CreationTime.Hours;
+    time.tm_min = dirEntry->CreationTime.Minutes;
+    time.tm_sec = dirEntry->CreationTime.Seconds << 1;
+    return time;
+}
+
+tm FatImage::GetModification(DirectoryEntry *dirEntry)
+{
+    tm time;
+    time.tm_year = 80 + dirEntry->ModifiedDate.Year;
+    time.tm_mon = dirEntry->ModifiedDate.Month - 1;
+    time.tm_mday = dirEntry->ModifiedDate.Day;
+    time.tm_hour = dirEntry->ModifiedTime.Hours;
+    time.tm_min = dirEntry->ModifiedTime.Minutes;
+    time.tm_sec = dirEntry->ModifiedTime.Seconds << 1;
+    return time;
+}
+
+tm FatImage::GetLastAccess(DirectoryEntry *dirEntry)
+{
+    tm time;
+    time.tm_year = 80 + dirEntry->LastAccessDate.Year;
+    time.tm_mon = dirEntry->LastAccessDate.Month - 1;
+    time.tm_mday = dirEntry->LastAccessDate.Day;
+    time.tm_hour = 0;
+    time.tm_min = 0;
+    time.tm_sec = 0;
+    return time;
 }
 
 std::string FatImage::GetString(const char *src, int length) const

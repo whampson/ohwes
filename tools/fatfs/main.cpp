@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <ctime>
 #include <getopt.h>
 #include "helpers.hpp"
 #include "fat.hpp"
@@ -150,6 +151,42 @@ static int info(int argc, char **argv)
     // printf("Extended Boot Sig:   %Xh\n", fs.GetParamBlock()->ExtendedBootSignature);
     // printf("File System Type:    %s\n", fs.GetFileSystemType().c_str());
     // printf("OEM Name:            %s\n", fs.GetOemName().c_str());
+
+    RIF_IO(fs_image.Load(image_file));
+    if (argc != 0) {
+        DirectoryEntry *dir_entry = fs_image.FindFile(argv[0]);
+        RIF_ARG_MF(dir_entry, "file '%s' not found\n", argv[0]);
+
+        printf("Base name: %.*s\n", FILENAME_LENGTH, dir_entry->Name);
+        printf("Extension: %.*s\n", EXTENSION_LENGTH, dir_entry->Extension);
+        printf("File size: %d\n", dir_entry->FileSize);
+        printf("Attributes: ");
+        if (dir_entry->Attributes & FileAttrs::ATTR_RO) printf("ReadOnly ");
+        if (dir_entry->Attributes & FileAttrs::ATTR_HID) printf("Hidden ");
+        if (dir_entry->Attributes & FileAttrs::ATTR_DIR) printf("Directory ");
+        if (dir_entry->Attributes & FileAttrs::ATTR_SYS) printf("System ");
+        if (dir_entry->Attributes & FileAttrs::ATTR_AR) printf("Archive ");
+        if (dir_entry->Attributes & FileAttrs::ATTR_VL) printf("VolumeLabel ");
+        if (dir_entry->Attributes & FileAttrs::ATTR_DEV) printf("Device ");
+        printf("\n");
+        char timeBuf[64];
+        tm create = fs_image.GetCreation(dir_entry);
+        tm modify = fs_image.GetModification(dir_entry);
+        tm access = fs_image.GetLastAccess(dir_entry);
+        std::strftime(timeBuf, 64, "%b %d, %Y %H:%M:%S", &create);
+        printf("Created: %s\n", timeBuf);
+        std::strftime(timeBuf, 64, "%b %d, %Y %H:%M:%S", &modify);
+        printf("Modified: %s\n", timeBuf);
+        std::strftime(timeBuf, 64, "%b %d, %Y", &access);
+        printf("Accessed: %s\n", timeBuf);
+        printf("Cluster Chain: ");
+        int currClust = dir_entry->FirstCluster;
+        while (currClust != 0xFFF) {
+            printf("%d ", currClust);
+            currClust = fs_image.GetClusterTableValue(currClust);
+        }
+        printf("\n");
+    }
 
     return 0;
 }

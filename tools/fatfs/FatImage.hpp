@@ -55,6 +55,15 @@ public:
     int GetSectorCount() const;
     int GetClusterCount() const;
 
+    uint16_t GetClusterTableValue(int num) const;
+    void SetClusterTableValue(int num, uint16_t value);
+
+    DirectoryEntry * FindFile(const std::string &path);
+
+    tm GetCreation(DirectoryEntry *dirEntry);
+    tm GetModification(DirectoryEntry *dirEntry);
+    tm GetLastAccess(DirectoryEntry *dirEntry);
+
 private:
     std::fstream m_file;
     BootSector *m_bootSect;
@@ -82,9 +91,6 @@ private:
 
     void InitDirEntry(DirectoryEntry *dirEntry, const std::string &name);
     int FindDirectory(const std::string &path);
-
-    uint16_t GetClusterTableValue(int num) const;
-    void SetClusterTableValue(int num, uint16_t value);
 
     int FindNextFreeCluster() const;
     uint16_t GetEndOfClusterChainMarker() const;
