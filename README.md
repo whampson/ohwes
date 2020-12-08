@@ -1,12 +1,12 @@
-# Niobium Operating System
-**Niobium** is a free operating system designed by Wes Hampson.
+# NbOS: Niobium Operating System
+The **Niobium Operating System**, or **NbOS** for short, is a free operating
+system for Intel 386-family CPUs designed by Wes Hampson.
 
 ## Design Goals
 - Keep it small; kernel and programs should fit on a 3.5in floppy (<1.44 MiB)
 - Separate user-space and kernel-space
 - Preemptive multitasking kernel
-- Disk I/O; Support a common file system like FAT or ext2
-- Target i386, add ARM support later on
+- Disk I/O; Support a common file system like FAT or ext2 (or both!)
 
 ## TODO List
 - [-] Boot Loader
