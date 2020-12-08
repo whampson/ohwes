@@ -80,6 +80,6 @@ _print_done:
     ret
 
 
-.space          0xF000
+//.space          0xF000
 error_msg:      .asciz  "Failed to get memory size."
 happy_msg:      .asciz  "Yay! You made it!\r\n"

@@ -198,6 +198,8 @@ _load_cluster:
     movw    0x1A(%di), %ax          # first cluster number for file data
     pushw   %ax                     # initial cluster
     pushw   %bx                     # initial address
+    pushw   %fs
+    popw    %es
 _load_cluster_loop:                 # load the next cluster in the chain
     movzbw  first_data_sector, %bx
     movzbw  sectors_per_cluster, %cx
@@ -206,8 +208,6 @@ _load_cluster_loop:                 # load the next cluster in the chain
     imulw   %cx, %ax                #   cluster numbers 0 and 1 are reserved and do not exist on the disk
     addw    %bx, %ax
     popw    %bx                     # addr
-    pushw   %fs
-    popw    %es
     call    read_sectors
     pushw   %bx                     # addr + cluster size
 _find_next_cluster:
@@ -239,20 +239,15 @@ _load_file_done:
 ####
 # Reads a contiguous line of sectors from the boot disk.
 #
-# NOTE: Maximum file size: 64 KiB. This function cannot store
-# data in a buffer that crosses segment boundaries.
-#       TODO: get rid of this restriction.
-#
-# NOTE: For floppies, reading multiple sectors may stop after
-# the last sector is read on a given track.
-#       TODO: detect this?
+# NOTE: For floppies, a multi-sector read may stop after the last sector of a
+# track is read.
 #
 #   Inputs: ax - linear sector number
 #           cx - number of sectors
-#           es:bx - destination buffer address
+#           es:bx - destination buffer address, should be 512-byte aligned
 #  Outputs: Sector contents in memory at original es:bx address
 #           es:bx - incremented to end of buffer (ready for next read)
-# Clobbers: ax, bx, cx, dx
+# Clobbers: ax, bx, cx, dx, es
 ####
 read_sectors:
     pushw   %bp
@@ -261,6 +256,11 @@ read_sectors:
 _read_sectors_loop:
     call    read_sector
     addw    bytes_per_sector, %bx
+    jnc     _read_sectors_next
+    movw    %es, %dx
+    addw    $0x1000, %dx
+    movw    %dx, %es
+_read_sectors_next:
     incw    %ax
     decw    -2(%bp)
     jnz     _read_sectors_loop
@@ -329,7 +329,7 @@ lba2chs:
 ####
 # Prints a zero-terminated string.
 #
-#   Inputs: si - address of string
+#   Inputs: ds:si - address of string
 #  Outputs: (none)
 # Clobbers: ax, bx, si
 ####

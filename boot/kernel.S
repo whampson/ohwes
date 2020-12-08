@@ -6,9 +6,10 @@
 kmain:
     pushw   %cs
     popw    %ax
+    addw    $0x1000, %ax
     movw    %ax, %ds
     movw    %ax, %es
-    leaw    msg, %si
+    movw    $0, %si
     call    print
 
 retry_boot:
@@ -33,5 +34,5 @@ _print_loop:
 _print_done:
     ret
 
-//.space      0xF000
+.org 0x10000, 0xA5
 msg:        .asciz          "You've entered the dummy kernel!\r\n"
