@@ -31,7 +31,7 @@ STAGE1_OBJ		:= $(addprefix $(OBJDIR)/,$(STAGE1_SRC:.S=.o))
 STAGE1_BIN		:= $(BINDIR)/bootsect
 
 STAGE2_ENTRY	:= init
-STAGE2_OFFSET	:= 0x8000
+STAGE2_OFFSET	:= 0x0000
 STAGE2_SRC		:= init.S
 STAGE2_OBJ		:= $(addprefix $(OBJDIR)/,$(STAGE2_SRC:.S=.o))
 STAGE2_BIN		:= $(BINDIR)/init.sys
@@ -41,7 +41,7 @@ KERNEL_ENTRY	:= kmain
 KERNEL_OFFSET	:= 0x0000
 KERNEL_SRC		:= kernel.S
 KERNEL_OBJ		:= $(addprefix $(OBJDIR)/,$(KERNEL_SRC:.S=.o))
-KERNEL_BIN		:= $(BINDIR)/kernel.sys
+KERNEL_BIN		:= $(BINDIR)/nbos.sys
 
 BIN				:= $(STAGE1_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
 

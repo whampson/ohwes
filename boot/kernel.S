@@ -5,7 +5,9 @@
 .global kmain
 kmain:
     pushw   %cs
-    popw    %ds
+    popw    %ax
+    movw    %ax, %ds
+    movw    %ax, %es
     leaw    msg, %si
     call    print
 
@@ -31,4 +33,5 @@ _print_loop:
 _print_done:
     ret
 
+//.space      0xF000
 msg:        .asciz          "You've entered the dummy kernel!\r\n"

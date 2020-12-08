@@ -17,8 +17,24 @@
 # Created: November 22, 2020                                                   #
 #  Author: Wes Hampson                                                         #
 #------------------------------------------------------------------------------#
-# Boot sector for FAT12-formatted disks. This code is responsible for loading  #
-# INIT.SYS and KERNEL.SYS into memory and passing control over to INIT.SYS.    #
+# This is the boot sector for FAT12-formatted disks. This code is responsible  #
+# for loading INIT.SYS and NBOS.SYS into memory and passing control over to    #
+# INIT.SYS to continue the boot process.                                       #
+#                                                                              #
+# The code in this file is what I call "stage 1" of the boot loader. It begins #
+# by reading the File Allocation Table and Root Directory from the disk and    #
+# placing them in low memory. The FAT and Root Directory are only used in this #
+# stage for locating INIT.SYS (stage 2 of the boot loader) and NBOS.SYS (the   #
+# kernel). In fact, they are later overwritten by the kernel! Once those are   #
+# in, we jump over to stage 2 to continue initializing the system.             #
+#                                                                              #
+# INIT.SYS is placed at 0x90000 and the kernel at 0x10000 initially. This      #
+# effectively limits the kernel size to 512 KiB since we can't use the memory  #
+# above 0x9FFFF in real mode (it's reserved for the hardware and BIOS). This   #
+# should be no problem though, becuase I don't expect the kernel to get that   #
+# big, but we'll see. :) In stage 2, the kernel is moved down to 0x00000,      #
+# leaving us a nice hole between 0x80000 and 0x9FFFF, plenty of room for the   #
+# kernel stack.                                                                #
 #==============================================================================#
 
 .code16
@@ -31,7 +47,8 @@ entry:
 # -----------------------------------------------------------------------------
 # --------------------------- BIOS Parameter Block ----------------------------
 # -----------------------------------------------------------------------------
-oem_name:               .ascii      "NBOS 0.1"
+# These are parameters for a 1440 KiB floppy disk (known as "1.44 MB")
+oem_name:               .ascii      "NIOBIUM "
 bytes_per_sector:       .short      512
 sectors_per_cluster:    .byte       1
 reserved_sectors:       .short      1
@@ -51,29 +68,31 @@ volume_id:              .int        0xCA55E77E
 label:                  .ascii      "SYSTEM DISK"
 file_system_type:       .ascii      "FAT12   "
 
-# --------------------------------------------------------------------------
-# -------------------------------- Constants -------------------------------
-# --------------------------------------------------------------------------
-INIT_SEGMENT                        = 0x0000
-INIT_ENTRY                          = 0x8000
-KERNEL_SEGMENT                      = 0x1000
-KERNEL_ENTRY                        = 0x0000
-FAT_ADDR                            = 0x0500
-ROOT_DIR_ADDR                       = 0x2000
-SIZEOF_DIR_ENTRY                    = 32
-FILE_NAME_LENGTH                    = 11
+# -----------------------------------------------------------------------------
+# ------------------------- Useful Memory Addresses ---------------------------
+# -----------------------------------------------------------------------------
+BOOTSEG                             = 0x0000
+INITSEG                             = 0x9000
+KERNSEG                             = 0x1000
+FAT                                 = 0x0500
+ROOTDIR                             = 0x1700
+STACK                               = 0x7C00
 
 # -----------------------------------------------------------------------------
 # --------------------------------- Boot Code ---------------------------------
 # -----------------------------------------------------------------------------
 boot_code:
     cli
-    xorw    %ax, %ax
+    ljmpw   $BOOTSEG, $continue     # ensure cs is correct
+
+continue:
+    push    %cs
+    popw    %ax
     movw    %ax, %ds
     movw    %ax, %es
     movw    %ax, %fs
     movw    %ax, %ss
-    movl    $0x7C00, %esp
+    movw    $STACK, %sp
 
 reset_disk:
     sti
@@ -81,169 +100,185 @@ reset_disk:
     jc      error
 
 load_fat:
-    movw    reserved_sectors, %ax   # start of FAT = sector following reserved area
-    addw    sectors_per_table, %cx  # sector count
-    movw    $FAT_ADDR, %bx
+    movw    reserved_sectors, %ax   # FAT begins in sector following reserved area
+    addw    sectors_per_table, %cx
+    movw    $FAT, %bx
     call    read_sectors
 
 load_root_dir:
     movw    root_dir_entries, %dx
-    bsfw    bytes_per_sector, %cx   # assumes power of 2
+    bsfw    bytes_per_sector, %cx
     shlw    $5, %dx                 # size_bytes = root_dir_entries * sizeof(root_dir_entry)
     shrw    %cl, %dx                # num_sects  = size_bytes / bytes_per_sector
     xchgw   %dx, %cx
     movzbw  table_count, %dx
     movw    reserved_sectors, %ax
-_load_root_dir_find_sector:
-    addw    sectors_per_table, %ax
+_find_sector:
+    addw    sectors_per_table, %ax  # root dir begins immediately following the FATs
     decw    %dx
-    jz      _load_root_dir_load
-    jmp     _load_root_dir_find_sector
-_load_root_dir_load:
+    jz      _do_load
+    jmp     _find_sector
+_do_load:
     movw    %cx, %dx
     addw    %ax, %dx
-    movb    %dl, first_data_sector  # store first data sector for later use
-    movw    $ROOT_DIR_ADDR, %bx
+    movb    %dl, first_data_sector  # store first data sector number for later use
+    movw    $ROOTDIR, %bx
     call    read_sectors
 
-load_init_sys:
-    movw    init_seg, %fs
-    movw    $INIT_ENTRY, %bx
-    leaw    init_file, %di
-    call    read_file
+load_stage2:
+    movw    $INITSEG, %ax           # INIT.SYS gets loaded at 0x90000
+    leaw    s_init_file, %di
+    call    load_sys_file
 
-load_kernel_sys:
-    movw    kernel_seg, %fs
-    movw    $KERNEL_ENTRY, %bx
-    leaw    kernel_file, %di
-    call    read_file
+load_kernel:
+    movw    $KERNSEG, %ax           # NBOS.SYS gets loaded at 0x10000
+    leaw    s_kern_file, %di
+    call    load_sys_file
 
-go2init:
-    # Off to stage 2!
-    ljmp    $INIT_SEGMENT, $INIT_ENTRY
+go_to_stage2:
+    ljmpw   $INITSEG, $0x0000       # and off we go!
+    # we never return...
 
 error:
-    leaw    disk_error_msg, %si
+    leaw    s_error, %si
     call    print
-_retry_boot:
+retry_boot:
     xorb    %ah, %ah
     int     $0x16                   # Int 16h 00h: Wait for Next Keystroke
     int     $0x19                   # Int 19h 00h: Invoke Boot Loader
 
 
-# ----------------------------------------------------------------------------
-# ------------------------------- Subroutines --------------------------------
 # -----------------------------------------------------------------------------
-####
-# Reads a file from disk.
+# ------------------------------- Subroutines ---------------------------------
+# -----------------------------------------------------------------------------
+###
+# Loads a system file into memory.
 #
-#   Inputs: es:di - file name
-#           fs:bx - dest address
-#  Outputs: File contents at fs:bx.
-# Clobbers: bx, cx, dx, si
-####
-read_file:
-    movw    root_dir_entries, %ax
-    movw    $ROOT_DIR_ADDR, %dx
-    pushw   %di
-    cld
-_find_file_loop:
-    movw    (%esp), %di
-    movw    %dx, %si
-    movw    $FILE_NAME_LENGTH, %cx
-    repz    cmpsb
-    jz      _load_cluster_init
-    addw    $SIZEOF_DIR_ENTRY, %dx
-    decw    %ax
-    jnz     _find_file_loop
-    jmp     error
-_load_cluster_init:
-    movw    %dx, %di                # dir entry ptr
-    movl    $FAT_ADDR, %esi         # FAT ptr
-    movw    0x1A(%di), %ax
-    pushw   %ax                     # starting cluster
-    pushw   %bx                     # starting address
-    xorl    %ebx, %ebx
-_load_cluster_loop:
-    movzbw  first_data_sector, %bx
-    movzbw  sectors_per_cluster, %cx
-    movw    2(%esp), %ax            # current cluster
-    subw    $2, %ax
-    imulw   %cx, %ax                # sector num = first data sector + (cluster num - 2) * cluster size
-    addw    %bx, %ax
-    popw    %bx                     # addr
-    call    read_sectors
-    pushw   %bx                     # addr + cluster size
-_find_next_cluster:
-    movw    2(%esp), %ax            # current cluster
-    movw    %ax, %bx
-    shrw    $1, %bx
-    addw    %ax, %bx                # FAT index = (cluster / 2) + cluster
-    movw    (%esi, %ebx), %ax       # FAT[index]
-    movw    %ax, %bx
-    andw    $0x01, %bx
-    jz      _even_cluster
-_odd_cluster:
-    andw    $0xFFF, %ax
-    jmp     _check_entry_value
-_even_cluster:
-    shrw    $4, %ax
-_check_entry_value:
-    movw    %ax, 2(%esp)
-    cmpw    $0xFF0, %ax
-    jb      _load_cluster_loop
-    je      _load_file_done
-    cmpw    $0xFF8, %ax
-    jae     _load_file_done
-    jmp     error
-_load_file_done:
-    popw    %bx
-    popw    %ax
-    popw    %di
+#   Inputs: ax - destination segment
+#           di - file name pointer
+#  Outputs: File contents at ax:0000.
+# Clobbers: ax, bx, cx, dx, si, es, fs
+###
+load_sys_file:
+    xorw    %bx, %bx
+    movw    %ax, %fs
+    pushw   %ds
+    popw    %es
+    call    read_file
     ret
 
 ####
-# Reads a contiguous line of sectors from disk.
+# Reads a file from the boot disk.
+#
+#   Inputs: es:di - file name pointer
+#           fs:bx - dest address
+#  Outputs: File contents at fs:bx.
+# Clobbers: ax, bx, cx, dx, si, es
+####
+read_file:
+    pushw   %bp
+    movw    %sp, %bp
+    pushw   %di
+    movw    root_dir_entries, %ax
+    movw    $ROOTDIR, %dx
+    cld
+_find_file_loop:                    # look for the file name in the root dir
+    movw    -2(%bp), %di
+    movw    %dx, %si
+    movw    $11, %cx                # filename length
+    repz    cmpsb
+    jz      _load_cluster
+    addw    $32, %dx                # dir entry size
+    decw    %ax
+    jnz     _find_file_loop
+    jmp     error                   # not found!
+_load_cluster:
+    movw    %dx, %di                # dir entry ptr
+    movw    $FAT, %si
+    movw    0x1A(%di), %ax          # first cluster number for file data
+    pushw   %ax                     # initial cluster
+    pushw   %bx                     # initial address
+_load_cluster_loop:                 # load the next cluster in the chain
+    movzbw  first_data_sector, %bx
+    movzbw  sectors_per_cluster, %cx
+    movw    -4(%bp), %ax            # current cluster
+    subw    $2, %ax                 # sector num = first data sector + (cluster num - 2) * cluster size
+    imulw   %cx, %ax                #   cluster numbers 0 and 1 are reserved and do not exist on the disk
+    addw    %bx, %ax
+    popw    %bx                     # addr
+    pushw   %fs
+    popw    %es
+    call    read_sectors
+    pushw   %bx                     # addr + cluster size
+_find_next_cluster:
+    movw    -4(%bp), %cx            # current cluster
+    movw    %cx, %bx
+    shrw    $1, %bx                 # index = (cluster / 2) + cluster
+    addw    %cx, %bx                #   entry is 12 bits (hence FAT12), so we multiply by 1.5 to get index
+    movw    (%bx,%si,1), %ax        # entry = FAT[index]
+    testw   $0x01, %cx
+    jnz      _odd_cluster
+_even_cluster:
+    andw    $0x0FFF, %ax            # even cluster number: mask-off upper 4 bits
+    jmp     _check_entry_value
+_odd_cluster:
+    shrw    $4, %ax                 # odd cluster number: simply shift out bottom 4 bits
+_check_entry_value:
+    movw    %ax, -4(%bp)            # store next cluster number
+    cmpw    $0xFF8, %ax             # check cluster number
+    jae     _load_file_done         #   0x000: free cluster, should not be in chain
+    cmpw    $0xFF0, %ax             #   0x001: reserved, should not be in chain
+    jae     error                   #   0x002-0xFEF: valid cluster number
+    cmpw    $0x002, %ax             #   0xFF0-0xFF7: reserved, should not be in chain
+    jae     _load_cluster_loop      #   0xFF8-0xFFF: end of chain marker
+    jmp     error
+_load_file_done:
+    leave
+    ret
+
+####
+# Reads a contiguous line of sectors from the boot disk.
 #
 # NOTE: Maximum file size: 64 KiB. This function cannot store
-# data in a buffer that crosses segment boundaries. 
+# data in a buffer that crosses segment boundaries.
+#       TODO: get rid of this restriction.
 #
 # NOTE: For floppies, reading multiple sectors may stop after
 # the last sector is read on a given track.
+#       TODO: detect this?
 #
 #   Inputs: ax - linear sector number
 #           cx - number of sectors
-#           fs:bx - dest address
-#  Outputs: Sector contents in memory at original fs:bx address
-#           fs:bx - incremented to end of buffer
-# Clobbers: ax, bx, dx
+#           es:bx - destination buffer address
+#  Outputs: Sector contents in memory at original es:bx address
+#           es:bx - incremented to end of buffer (ready for next read)
+# Clobbers: ax, bx, cx, dx
 ####
 read_sectors:
+    pushw   %bp
+    movw    %sp, %bp
     pushw   %cx
 _read_sectors_loop:
     call    read_sector
     addw    bytes_per_sector, %bx
     incw    %ax
-    decw    (%esp)
+    decw    -2(%bp)
     jnz     _read_sectors_loop
 _read_sectors_done:
-    popw    %cx
+    leave
     ret
 
 ####
-# Reads a single sector from disk.
+# Reads a single sector from the boot disk.
 #
 #   Inputs: ax - linear sector number
-#           fs:bx - dest address
-#  Outputs: Sector contents in memory at fs:bx.
-# Clobbers: cx, dx
+#           es:bx - destination buffer address
+#  Outputs: Sector contents in memory at es:bx.
+# Clobbers: cx, dx, es
 ####
 read_sector:
-    pushw   %es
     pushw   %ax
     pushw   %bx
-    pushw   %fs                     # using fs so we don't clobber es (used with cmpsb)
-    popw    %es
     call    lba2chs
     xchgb   %ch, %cl
     shlb    $6, %cl
@@ -256,7 +291,6 @@ read_sector:
     int     $0x13                   # Int 13h 02h: Read Sectors from Disk
     jc      error
     popw    %ax
-    popw    %es
     ret
 
 ####
@@ -275,7 +309,7 @@ lba2chs:
     imulw   heads, %bx
     xorw    %dx, %dx
     idivw   %bx
-    movw    %ax, tmp_cylinder
+    pushw   %ax                     # store cylinder for later
 
     # S = (LBA mod SPT) + 1
     # H = (LBA ÷ SPT) mod HPC
@@ -289,7 +323,7 @@ lba2chs:
 
     movb    %dl, %dh                # head
     movb    %cl, %dl                # sector
-    movw    tmp_cylinder, %cx       # cylinder
+    popw    %cx                     # cylinder
     ret
 
 ####
@@ -315,12 +349,9 @@ _print_done:
 # -----------------------------------------------------------------------------
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
-tmp_cylinder:           .short      -1
 first_data_sector:      .byte       -1
-init_file:              .ascii      "INIT    SYS"
-init_seg:               .short      INIT_SEGMENT
-kernel_file:            .ascii      "KERNEL  SYS"
-kernel_seg:             .short      KERNEL_SEGMENT
-disk_error_msg:         .asciz      "Invalid system disk. Press any key to retry.\r\n"
+s_init_file:            .ascii      "INIT    SYS"
+s_kern_file:            .ascii      "NBOS    SYS"
+s_error:                .asciz      "Bad disk"#"Invalid system disk.\r\n"
 pad:                    .space      0x1FE - (. - entry)
 boot_sig:               .short      0xAA55

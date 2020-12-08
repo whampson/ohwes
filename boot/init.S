@@ -22,12 +22,40 @@
 
 .global init
 init:
-    leaw    stage2_msg0, %si
+    pushw   %cs
+    popw    %ds
+//     clc
+// get_memory:
+//     xorw    %cx, %cx
+//     xorw    %dx, %dx
+//     movw    $0xE801, %ax
+//     int     $0x15
+//     cmpb    $0x86, %ah      # unsupported function
+//     je      error
+//     cmpb    $0x88, %ah      # invalid function
+//     je      error
+//     jcxz    get_memory_result
+//     movw    %cx, %ax
+//     movw    %dx, %bx
+
+// get_memory_result:
+//     # ax = number of contiguous KiB, 1M to 16M
+//     # bx = number of contiguous 64 MiB pages above 16M
+
+    leaw    happy_msg, %si
     call    print
-    leaw    stage2_msg1, %si
+    jmp     enter_kernel
+
+error:
+    leaw    error_msg, %si
     call    print
-    leaw    stage2_msg2, %si
-    call    print
+
+retry_boot:
+    xorb    %ah, %ah
+    int     $0x16
+    int     $0x19  
+
+
 
 enter_kernel:
     ljmp    $0x1000, $0x0000
@@ -51,9 +79,7 @@ _print_loop:
 _print_done:
     ret
 
-# Data spans multiple disk clusters
-stage2_msg0:        .asciz      "You made it to stage 2!\r\n"
-pad0:               .space      1024, 0xA5
-stage2_msg1:        .asciz      "You found the secret message!\r\n"
-pad1:               .space      1024, 0x5A
-stage2_msg2:        .asciz      "Wow, you found another secret message!\r\n"
+
+.space          0xF000
+error_msg:      .asciz  "Failed to get memory size."
+happy_msg:      .asciz  "Yay! You made it!\r\n"
