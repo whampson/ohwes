@@ -19,22 +19,21 @@
 #------------------------------------------------------------------------------#
 # This is the boot sector for FAT12-formatted disks. This code is responsible  #
 # for loading INIT.SYS and NBOS.SYS into memory and passing control over to    #
-# INIT.SYS to continue the boot process.                                       #
+# INIT.SYS to continue booting.                                                #
 #                                                                              #
 # The code in this file is what I call "stage 1" of the boot loader. It begins #
 # by reading the File Allocation Table and Root Directory from the disk and    #
 # placing them in low memory. The FAT and Root Directory are only used in this #
 # stage for locating INIT.SYS (stage 2 of the boot loader) and NBOS.SYS (the   #
 # kernel). In fact, they are later overwritten by the kernel! Once those are   #
-# in, we jump over to stage 2 to continue initializing the system.             #
+# in memory, we jump over to stage 2 to continue initializing the system.      #
 #                                                                              #
-# INIT.SYS is placed at 0x90000 and the kernel at 0x10000 initially. This      #
-# effectively limits the kernel size to 512 KiB since we can't use the memory  #
-# above 0x9FFFF in real mode (it's reserved for the hardware and BIOS). This   #
-# should be no problem though, becuase I don't expect the kernel to get that   #
-# big, but we'll see. :) In stage 2, the kernel is moved down to 0x00000,      #
-# leaving us a nice hole between 0x80000 and 0x9FFFF, plenty of room for the   #
-# kernel stack.                                                                #
+# INIT.SYS is placed at 0x90000 and the kernel at 0x10000. This effectively    #
+# limits the kernel size to 512 KiB since we can't use the memory above        #
+# 0x9FFFF in real mode (it's reserved for the hardware and BIOS). This         #
+# shouldn't be a problem becuase I don't expect the kernel to get that big,    #
+# but we'll see. :) After stage 2, the kernel stack is placed at 0xA0000 and   #
+# grows downward, overwriting INIT.SYS.                                        #
 #==============================================================================#
 
 .code16
@@ -83,6 +82,8 @@ STACK                               = 0x7C00
 # -----------------------------------------------------------------------------
 boot_code:
     cli
+    clc
+    cld
     ljmpw   $BOOTSEG, $continue     # ensure cs is correct
 
 continue:
@@ -98,6 +99,10 @@ reset_disk:
     sti
     int     $0x13                   # Int 13h 00h: Reset Drive
     jc      error
+
+greeting:
+    leaw    s_loading, %si
+    call    print
 
 load_fat:
     movw    reserved_sectors, %ax   # FAT begins in sector following reserved area
@@ -290,6 +295,10 @@ read_sector:
     movb    $0x02, %ah
     int     $0x13                   # Int 13h 02h: Read Sectors from Disk
     jc      error
+    movw    $0x07, %bx
+    movb    $0x0E, %ah
+    movb    $0x2E, %al              # print a dot for each sector read
+    int     $0x10                   # Int 10h 0Eh: Write Character as TTY
     popw    %ax
     ret
 
@@ -334,7 +343,7 @@ lba2chs:
 # Clobbers: ax, bx, si
 ####
 print:
-    movb    $0x0E, %ah      
+    movb    $0x0E, %ah
     movw    $0x07, %bx
 _print_loop:
     lodsb
@@ -352,6 +361,7 @@ _print_done:
 first_data_sector:      .byte       -1
 s_init_file:            .ascii      "INIT    SYS"
 s_kern_file:            .ascii      "NBOS    SYS"
-s_error:                .asciz      "Bad system disk. Replace the disk then press any key...\r\n"
+s_loading:              .asciz      "Loading NbOS"
+s_error:                .asciz      "\r\nInvalid system disk!\r\n"
 pad:                    .space      0x1FE - (. - entry)
 boot_sig:               .short      0xAA55
