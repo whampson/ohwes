@@ -94,6 +94,7 @@ continue:
     movw    %ax, %fs
     movw    %ax, %ss
     movw    $STACK, %sp
+    movb    %dl, drive_number
 
 reset_disk:
     sti
@@ -362,6 +363,6 @@ first_data_sector:      .byte       -1
 s_init_file:            .ascii      "INIT    SYS"
 s_kern_file:            .ascii      "NBOS    SYS"
 s_loading:              .asciz      "Loading NbOS"
-s_error:                .asciz      "\r\nInvalid system disk!\r\n"
+s_error:                .asciz      "\r\nBad boot disk!\r\n"
 pad:                    .space      0x1FE - (. - entry)
 boot_sig:               .short      0xAA55
