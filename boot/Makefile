@@ -36,14 +36,7 @@ STAGE2_SRC		:= init.S
 STAGE2_OBJ		:= $(addprefix $(OBJDIR)/,$(STAGE2_SRC:.S=.o))
 STAGE2_BIN		:= $(BINDIR)/init.sys
 
-# Dummy, will be removed soon...
-KERNEL_ENTRY	:= kmain
-KERNEL_OFFSET	:= 0x0000
-KERNEL_SRC		:= kernel.S
-KERNEL_OBJ		:= $(addprefix $(OBJDIR)/,$(KERNEL_SRC:.S=.o))
-KERNEL_BIN		:= $(BINDIR)/nbos.sys
-
-BIN				:= $(STAGE1_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
+BIN				:= $(STAGE1_BIN) $(STAGE2_BIN)
 
 include $(TOPDIR)/include/Rules.mk
 
@@ -52,6 +45,3 @@ $(STAGE1_BIN): $(STAGE1_OBJ)
 
 $(STAGE2_BIN): LDFLAGS := --oformat binary -Ttext $(STAGE2_OFFSET) -e $(STAGE2_ENTRY)
 $(STAGE2_BIN): $(STAGE2_OBJ)
-
-$(KERNEL_BIN): LDFLAGS := --oformat binary -Ttext $(KERNEL_OFFSET) -e $(KERNEL_ENTRY)
-$(KERNEL_BIN): $(KERNEL_OBJ)

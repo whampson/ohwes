@@ -23,17 +23,14 @@
 #                                                                              #
 # The code in this file is what I call "stage 1" of the boot loader. It begins #
 # by reading the File Allocation Table and Root Directory from the disk and    #
-# placing them in low memory. The FAT and Root Directory are only used in this #
-# stage for locating INIT.SYS (stage 2 of the boot loader) and NBOS.SYS (the   #
-# kernel). In fact, they are later overwritten by the kernel! Once those are   #
-# in memory, we jump over to stage 2 to continue initializing the system.      #
+# placing them in low memory. These are then used to locate INIT.SYS (stage 2) #
+# and NBOS.SYS (the kernel) on the disk before loading them into memory. Once  #
+# those are loaded, we jump over to stage 2 to continue initializing the       #
+# system.                                                                      #
 #                                                                              #
 # INIT.SYS is placed at 0x90000 and the kernel at 0x10000. This effectively    #
-# limits the kernel size to 512 KiB since we can't use the memory above        #
-# 0x9FFFF in real mode (it's reserved for the hardware and BIOS). This         #
-# shouldn't be a problem becuase I don't expect the kernel to get that big,    #
-# but we'll see. :) After stage 2, the kernel stack is placed at 0xA0000 and   #
-# grows downward, overwriting INIT.SYS.                                        #
+# limits the kernel code size to 512 KiB, which shouldn't be a problem becuase #
+# I don't expect it to get that big. :)                                        #
 #==============================================================================#
 
 .code16
@@ -71,10 +68,10 @@ file_system_type:       .ascii      "FAT12   "
 # ------------------------- Useful Memory Addresses ---------------------------
 # -----------------------------------------------------------------------------
 BOOTSEG                             = 0x0000
-INITSEG                             = 0x9000
+INITSEG                             = 0x0900
 KERNSEG                             = 0x1000
-FAT                                 = 0x0500
-ROOTDIR                             = 0x1700
+FAT                                 = 0x1000
+ROOTDIR                             = 0x2000
 STACK                               = 0x7C00
 
 # -----------------------------------------------------------------------------
@@ -142,7 +139,7 @@ load_kernel:
     call    load_sys_file
 
 go_to_stage2:
-    ljmpw   $INITSEG, $0x0000       # and off we go!
+    ljmpw   $INITSEG, $0            # and off we go!
     # we never return...
 
 error:
@@ -260,7 +257,9 @@ read_sectors:
     movw    %sp, %bp
     pushw   %cx
 _read_sectors_loop:
+    pushw   %bx
     call    read_sector
+    popw    %bx
     addw    bytes_per_sector, %bx
     jnc     _read_sectors_next
     movw    %es, %dx
@@ -362,7 +361,7 @@ _print_done:
 first_data_sector:      .byte       -1
 s_init_file:            .ascii      "INIT    SYS"
 s_kern_file:            .ascii      "NBOS    SYS"
-s_loading:              .asciz      "Loading NbOS"
-s_error:                .asciz      "\r\nBad boot disk!\r\n"
+s_loading:              .asciz      "Loading"
+s_error:                .asciz      "\r\nInvalid boot disk!\r\n"
 pad:                    .space      0x1FE - (. - entry)
 boot_sig:               .short      0xAA55
