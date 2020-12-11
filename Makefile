@@ -30,7 +30,8 @@
 export AS			:= i686-elf-as
 export ASFLAGS		:= -g
 export CC			:= i686-elf-gcc
-export CFLAGS		:= -g
+export CFLAGS		:= -g -ffreestanding -fno-exceptions -fno-unwind-tables \
+						-fno-asynchronous-unwind-tables 
 export LD			:= i686-elf-ld
 export LDFLAGS		:=
 export MAKEFLAGS	:= --no-print-directory
@@ -45,11 +46,13 @@ export OBJDIR		:= $(TOPDIR)/obj
 export IMGDIR		:= $(BINDIR)/img
 export IMGFILE		:= $(IMGDIR)/niobium.img
 
+export INCLUDE		:= $(TOPDIR)/include
+
 .PHONY: all wipe tools clean-tools img fatfs boot
 
 all: img
 
-img: boot tools
+img: boot fs kernel tools
 	@echo '> Creating floppy image...'
 	@$(MKDIR) -p $(IMGDIR)
 	@fatfs -i $(IMGFILE) create
@@ -61,6 +64,12 @@ img: boot tools
 
 boot: dirs
 	@$(MAKE) -C boot
+
+fs: dirs
+	@$(MAKE) -C fs
+
+kernel: dirs
+	@$(MAKE) -C kernel
 
 tools: dirs
 	@$(MAKE) -C tools

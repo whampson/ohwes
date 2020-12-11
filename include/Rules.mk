@@ -39,14 +39,14 @@ $(BIN): $(OBJ)
 
 $(OBJDIR)/%.o: %.c
 	@echo 'CC  $(join $(TREE),$<)'
-	@$(CC) $(CFLAGS) -MMD -c -o $@ $<
+	@$(CC) $(CFLAGS) -I$(INCLUDE) -MMD -c -o $@ $<
 
 $(OBJDIR)/%.o: %.cpp
 	@echo 'CXX $(join $(TREE),$<)'
-	@$(CXX) $(CXXFLAGS) -MMD -c -o $@ $<
+	@$(CXX) $(CXXFLAGS) -I$(INCLUDE) -MMD -c -o $@ $<
 
 $(OBJDIR)/%.o: %.S
 	@echo 'AS  $(join $(TREE),$<)'
-	@$(AS) $(ASFLAGS) -c -o $@ $<
+	@$(AS) $(ASFLAGS) -I$(INCLUDE) -c -o $@ $<
 
 -include $(DEP)
