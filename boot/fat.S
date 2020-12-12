@@ -18,22 +18,28 @@
 #  Author: Wes Hampson                                                         #
 #------------------------------------------------------------------------------#
 # This is the boot sector for FAT12-formatted disks. This code is responsible  #
-# for loading INIT.SYS and NBOS.SYS into memory and passing control over to    #
-# INIT.SYS to continue booting.                                                #
+# for loading INIT.SYS (stage 2) and NBOS.SYS (the kernel) into memory, then   #
+# passes control over to INIT.SYS to continue booting.                         #
 #                                                                              #
-# The code in this file is what I call "stage 1" of the boot loader. It begins #
-# by reading the File Allocation Table and Root Directory from the disk and    #
-# placing them in low memory. These are then used to locate INIT.SYS (stage 2) #
-# and NBOS.SYS (the kernel) on the disk before loading them into memory. Once  #
-# those are loaded, we jump over to stage 2 to continue initializing the       #
-# system.                                                                      #
-#                                                                              #
-# INIT.SYS is placed at 0x90000 and the kernel at 0x10000. This effectively    #
-# limits the kernel code size to 512 KiB, which shouldn't be a problem becuase #
-# I don't expect it to get that big. :)                                        #
+# INIT.SYS is placed at 0x09000 and the kernel at 0x10000. This effectively    #
+# limits the kernel code size to around 576 KiB because memory above 0x9FFFF   #
+# is unusable in Real Mode. This shouldn't be a problem  becuase I don't       #
+# expect the kernel ever to get that big. :)                                   #
 #==============================================================================#
 
+# TODO: this file is currently PACKED TO THE BRIM. We only have 512 bytes to
+# work with, and if you subtract the space needed for the BPB, that leaves us
+# with only 448 bytes of code/data to work with to load the rest of the system.
+# THAT'S NOT A LOT, and it would be nice to have some space left over for FAT16
+# support, or cool boot messages, or something else :)
+# This code can easily be optimized by removing unnecessary subroutines and
+# making more assumptions about the disk layout (e.g. sector size always 512B,
+# INIT.SYS and NBOS.SYS never fragmented, first data sector always 33, etc.),
+# after all, we /are/ in total control of the BIOS Parameter Block, and it's not
+# my problem if you write this bootsector onto the wrong kind of disk!
+
 .code16
+#include <nb/boot.h>
 
 .global entry
 entry:
@@ -67,12 +73,8 @@ file_system_type:       .ascii      "FAT12   "
 # -----------------------------------------------------------------------------
 # ------------------------- Useful Memory Addresses ---------------------------
 # -----------------------------------------------------------------------------
-BOOTSEG                             = 0x0000
-INITSEG                             = 0x0900
-KERNSEG                             = 0x1000
 FAT                                 = 0x1000
 ROOTDIR                             = 0x2000
-STACK                               = 0x7C00
 
 # -----------------------------------------------------------------------------
 # --------------------------------- Boot Code ---------------------------------
@@ -90,7 +92,7 @@ continue:
     movw    %ax, %es
     movw    %ax, %fs
     movw    %ax, %ss
-    movw    $STACK, %sp
+    movw    $BOOT_STACK, %sp
     movb    %dl, drive_number
 
 reset_disk:

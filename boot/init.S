@@ -19,62 +19,18 @@
 #------------------------------------------------------------------------------#
 # This is stage 2 of the bootloader. The role of stage 2 is to gather          #
 # information about the system's memory, enable the A20 address line, set up   #
-# the structures necessary to run the CPU in Protected Mode, and finally       #
-# switch into Protected Mode.                                                  #
+# the minimum structures necessary to run 32-bit code on the CPU in Protected  #
+# Mode, and finally, switch into Protected Mode and call the kernel.           #
 #==============================================================================#
 
-# Physical Memory Map:
-# 0x00000-0x0FFFF:  64 KiB
-#   Kernel Data Area
-#     0x0000-0x0FFF: Reserved (Real Mode IVT, BIOS)
-#     0x1000-0x1FFF: CPU Structures & Boot Data
-#     0x2000-0x2FFF: Memory Info
-#     0x3000-0x3FFF: Page Directory
-#     0x4000-0x4FFF: Page Table 0, 0-4 MiB (1024 4K pages)
-#     0x5000-0xEFFF: Additional space for page tables
-#     0xFFF0-0xFFFF: PID0 Stack
-# 0x10000-0x8FFFF:  512 KiB
-#   Kernel code area
-# 0x90000-0x9FFFF:  64 KiB
-#   (free)
-# 0xA0000-0xFFFFF:  384 KiB
-#   Reserved for Hardware/BIOS (do not use)
-# 0x100000-(EOM):   ??? KiB
-#   Available to user/kernel
-#   Be mindful of 15M-16M hole
-
-# -----------------------------------------------------------------------------
-# -------------------------- Useful Memory Addresses --------------------------
-# -----------------------------------------------------------------------------
-
-# 0x1000-0x1FFF: CPU Structures and Boot Data
-IDT_BASE                    = 0x1000        # Interrupt Descriptor Table
-GDT_BASE                    = 0x1800        # Global Descriptor Table
-IDT_PTR                     = 0x1900        # IDT base/limit descriptor
-GDT_PTR                     = 0x1908        # GDT base/limit descriptor
-CUR_ROW                     = 0x1A00        # Cursor Position (row)
-CUR_COL                     = 0x1A01        # Cursor Position (column)
-CUR_BEG                     = 0x1A02        # Cursor Shape (scan line begin)
-CUR_END                     = 0x1A03        # Cursor Shape (scan line end)
-
-# 0x2000-0x2FFF: Memory Info
-MEMINFO                     = 0x2000        # Memory Info Area (4K bytes)
-MEMINFO_1                   = 0x2010        # INT 0x15 AX=0xE820 result
-MEMINFO_2A                  = 0x2008        # INT 0x15 AX=0xE801 result 1
-MEMINFO_2B                  = 0x200A        # INT 0x15 AX=0xE801 result 2
-MEMINFO_3                   = 0x2000        # INT 0x15 AH=0x88 result
-
-# -----------------------------------------------------------------------------
-# ----------------------------- Stage 2 Boot Code -----------------------------
-# -----------------------------------------------------------------------------
-
 .code16
+#include <nb/init.h>
 
 .global init
 init:
     xorw    %ax, %ax
-    pushw   %cs                 # CS = 0x9000
-    popw    %ds                 # DS = 0x9000
+    pushw   %cs                 # CS = 0x0900
+    popw    %ds                 # DS = 0x0900
     movw    %ax, %es            # ES = 0x0000
 
     call    store_cursor
@@ -87,39 +43,41 @@ init:
     orl     $0x01, %eax         # enable Protected Mode
     movl    %eax, %cr0
 
-    ljmpl   $0x10, $0x10000     # jump to 32-bit code!
-
+    ljmpl   $KERNEL_CS, $KERNEL_ENTRY
 
 
 ####
 # Stores the current cursor position and shape.
 #
 #   Inputs: (none)
-#  Outputs: 0xA000 - current row
-#           0xA001 - current column
-#           0xA002 - cursor starting scan line
-#           0xA003 - cursor ending scan line
+#  Outputs: cursor row
+#           cursor column
+#           cursor starting scan line
+#           cursor ending scan line
 # Clobbers: ax, bx, cx, dx
 ####
 store_cursor:
    xorb     %bh, %bh
    movb     $0x03, %ah
    int      $0x10
-   movb     %dh, %es:CUR_ROW
-   movb     %dl, %es:CUR_COL
-   movb     %ch, %es:CUR_BEG
-   movb     %cl, %es:CUR_END
+   movb     %dh, %es:CURSOR_ROW
+   movb     %dl, %es:CURSOR_COL
+   movb     %ch, %es:CURSOR_BEG
+   movb     %cl, %es:CURSOR_END
    ret
 
 ####
-# Detects available memory on the system.
+# Detects available memory on the system using three separate BIOS calls.
+# Each subsequent call has wider support on existing systems. If the third
+# call fails, the system will halt as we have no way of knowing how much memory
+# we have!
 #
 #   Inputs: (none)
 #  Outputs: (various values in the Memory Info Area)
 # Clobbers: (all, probably)
 ####
 detect_memory:
-    movw    $0x400, %cx
+    movw    $PAGE_SIZE>>2, %cx
     movl    $MEMINFO, %edi
     xorl    %eax, %eax
     rep     stosl               # zero-out memory info region
@@ -132,12 +90,9 @@ detect_memory:
 # Gets a mapping of physical address space and stores the result in the Memory
 # Info Area.
 #
-# This function utilizes the ACPI function "Query System Address Map" available
-# on PCs since around 2002 to generate a table of usable and unusable physical
-# address ranges. The resulting table is stored in the Memory Info Area at
-# absolute address 0x1010. The table consists of a maximum of 170 entries, each
-# 6 DWORDs in length (24 bytes). The end of the table is marked by an entry
-# containing all zeros.
+# This function utilizes the ACPI function "Query System Address Map", available
+# on PCs since around 2002, to generate a table of usable and unusable physical
+# address ranges. Each table entry is 6 DWORDs in length (24 bytes).
 #
 # The table entry format is as follows:
 #   0x00: low base address
@@ -162,21 +117,25 @@ detect_memory:
 #  bit 3: hardware error logging area
 #
 #   Inputs: (none)
-#  Outputs: 0x1010 - physical address mapping table (24 bytes per entry)
-# Clobbers: eax, ebx, ecx, edx, %di
+#  Outputs: table describing physical address mapping (24 bytes per entry)
+# Clobbers: eax, ebx, ecx, edx, di
 ####
 detect_memory1:
     clc
-    movw    $MEMINFO_1, %di     # dest buffer
-    xorl    %ebx, %ebx          # continuation value (0 to begin)
+    movw    $MEMINFO_1, %di         # dest buffer
+    xorl    %ebx, %ebx              # continuation value (0 to begin)
 _detect_memory1_loop:
-    movl    $0x18, %ecx         # table entry size
-    movl    $0x534D4150, %edx   # 'SMAP'
-    movl    $0xE820, %eax       # ACPI Query System Address Map function
+    movl    $0x18, %ecx             # table entry size
+    movl    $0x534D4150, %edx       # 'SMAP'
+    movl    $0xE820, %eax           # ACPI Query System Address Map function
     int     $0x15
-    jc      _detect_memory1_done
+    jc      _detect_memory1_done    # error or end of table
+    cmpb    $0x80, %ah
+    je      _detect_memory1_done    # invalid command
+    cmpb    $0x86, %ah
+    je      _detect_memory1_done    # unsupported function
     testl   %ebx, %ebx
-    jz      _detect_memory1_done
+    jz      _detect_memory1_done    # end of table
     addw    $0x18, %di
     jmp     _detect_memory1_loop
 _detect_memory1_done:
@@ -192,8 +151,8 @@ _detect_memory1_done:
 # unchanged.
 #
 #   Inputs: (none)
-#  Outputs: 0x1008 - number of contiguous 1K blocks between 1M and 16M (2 bytes)
-#           0x100A - number of contiguous 64K blocks between 16M and 4G (2 bytes)
+#  Outputs: number of contiguous 1K blocks between 1M and 16M
+#           number of contiguous 64K blocks between 16M and 4G
 # Clobbers: ax, bx, cx, dx
 ####
 detect_memory2:
@@ -202,8 +161,11 @@ detect_memory2:
     xorw    %dx, %dx
     movw    $0xE801, %ax
     int     $0x15
-    jc      _detect_memory2_done
-    je      _detect_memory2_done
+    jc      _detect_memory2_done    # error
+    cmpb    $0x80, %ah
+    je      _detect_memory2_done    # invalid command
+    cmpb    $0x86, %ah
+    je      _detect_memory2_done    # unsupported function
     jcxz    _detect_memory2_store
     movw    %cx, %ax
     movw    %dx, %bx
@@ -217,21 +179,25 @@ _detect_memory2_done:
 # Gets the number of contiguous 1K blocks of memory above 1M and stores the
 # result in the Memory Info Area.
 #
-# This function is limited to detecting 64M, but is guaranteed to work on all
-# systems with a BIOS. If detection somehow fails, the boot process will halt
-# as we have no way of knowing how much memory the system has!
+# This function is limited to detecting 64M. It is intended as a last resort for
+# detecting memory; if it fails, it probably means your system is too old! For
+# that reason, a failure will halt the system with an error message.
 #
 #   Inputs: (none)
-#  Outputs: 0x1000 - number of contiguous 1K blocks between 1M and 64M (2 bytes)
+#  Outputs: number of contiguous 1K blocks between 1M and 64M
 # Clobbers: ax
 ####
 detect_memory3:
     clc
     movb    $0x88, %ah
     int     $0x15
-    jc      mem_error
+    jc      mem_error               # error
+    cmpb    $0x80, %ah
+    je      mem_error               # invalid command
+    cmpb    $0x86, %ah
+    je      mem_error               # unsupported function
     test    %ax, %ax
-    jz      mem_error
+    jz      mem_error               # no memory...
     movw    %ax, %es:MEMINFO_3      # contiguous 1K blocks above 1M (limit 64M)
     ret
 
@@ -239,11 +205,12 @@ detect_memory3:
 # Enables the A20 address line.
 #
 # This function attempts to enable the A20 line using three methods.
-# If all methods fail, the system is halted.
+# If all methods fail, the system is halted. Otherwise the system would have a
+# very annoying non-contiguous memory hole.
 #
 #   Inputs: (none)
-#   Output: (none)
-# Clobbers: (lots)
+#   Output: increased addressability!
+# Clobbers: ax
 ####
 enable_a20:
     call    test_a20
@@ -316,14 +283,15 @@ _a20_fast_done:
 ####
 # Tests whether the A20 line is enabled.
 #
-# This test is done by reading a value at a known address (the boot sector
-# signature in this case), then comparing that value with the value read at a
-# different address, but an address which would "wrap around" to the known
-# address if A20 is disabled. If the values are the same, then A20 is not
-# enabled.
-#       0000:7DFE = 0x007DFE
-#       FFFF:7E0E = 0x007DFE if A20 disabled
-#       FFFF:7E0E = 0x107DFE if A20 enabled
+# This test is done by reading a segment:offset with a known value (the boot
+# sector signature in this case), then comparing that value with the value read
+# at a different segment:offset such that the resulting address would 
+# "wrap around" to the first address if A20 is NOT enabled. In other words, if
+# A20 is NOT enabled, both addresses would read 0xAA55.
+#
+#       0000:7DFE -> 0x007DFE = 0xAA55  always
+#       FFFF:7E0E -> 0x007DFE = 0xAA55  if A20 disabled
+#       FFFF:7E0E -> 0x107DFE = ???     if A20 enabled
 #
 #   Inputs: (none)
 #  Outputs: CF set if A20 is not enabled
@@ -333,9 +301,9 @@ test_a20:
     clc
     movw    $0xFFFF, %ax
     movw    %ax, %fs
-    movw    %es:0x7DFE, %dx         # boot sector signature (0xAA55)
+    movw    %es:0x7DFE, %dx
     movw    %fs:0x7E0E, %ax
-    cmpw    %ax, %dx                # should not be equal if A20 enabled
+    cmpw    %ax, %dx
     je      _a20_not_set
     jmp     _test_a20_done
 _a20_not_set:
@@ -344,11 +312,13 @@ _test_a20_done:
     ret
 
 setup_gdt:
-    movl    $temp_gdt_base, %esi    # src
-    movl    $GDT_BASE, %edi         # dest
-    movzwl  gdt_r, %ecx             # count
+    movl    $temp_gdt, %esi
+    movl    $GDT_BASE, %edi
+    movl    $GDT_SIZE, %ecx
     rep     movsb
-    lgdtl   gdt_r
+    movw    $GDT_SIZE-1, GDT_PTR
+    movl    $GDT_BASE, GDT_PTR+2
+    lgdtl   GDT_PTR
     ret
 
 ####
@@ -394,23 +364,21 @@ retry_boot:
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
 
-# The GDT. Open up all of memory and use Paging for protection.
+# The Global Descriptor Table.
+# In this configuration, we open up all of memory and use Paging for protection.
+# This gets moved to a known location (GDT_BASE) during system initialization.
+# For a breakdown of these values, see <nb/x86_desc.h> or refer to
+# Intel IA-32 Software Developer's Manual, section 3.4.5 (Segment Descriptors).
 .align 16
-temp_gdt_base:
-    .quad   0x0000000000000000      # (not used)
+temp_gdt:
+    .quad   0x0000000000000000      # (not used, required by CPU)
     .quad   0x0000000000000000      # TSS_SEG   (initialized in kmain)
     .quad   0x00CF9A000000FFFF      # KERNEL_CS
     .quad   0x00CF92000000FFFF      # KERNEL_DS
     .quad   0x00CFF2000000FFFF      # USER_CS
     .quad   0x00CFF2000000FFFF      # USER_DS
     .quad   0x0000000000000000      # LDT_SEG   (initialized in kmain)
-temp_gdt_end:
+    .quad   0x0000000000000000      # (not used, padding)
 
-.align 4
-gdt_r:
-    .word   temp_gdt_end - temp_gdt_base  - 1
-    .long   GDT_BASE
-
-s_success:          .asciz      "\r\nSuccess!\r\n"
 s_error_mem:        .asciz      "\r\nError: failed to detect memory!\r\n"
 s_error_a20:        .asciz      "\r\nError: failed to enable A20!\r\n"

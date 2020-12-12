@@ -17,13 +17,16 @@
 # Created: December 9, 2020                                                    #
 #  Author: Wes Hampson                                                         #
 #------------------------------------------------------------------------------#
+# This is the kernel entry point. Stage 2 of the bootloader jumps here after   #
+# enabling Protected Mode.                                                     #
 #==============================================================================#
 
 .section .entry
+#include <nb/init.h>
 
 .global kentry
 kentry:
-    movw    $0x18, %ax
+    movw    $KERNEL_DS, %ax
     movw    %ax, %ds
     movw    %ax, %ss
     xorw    %ax, %ax
@@ -31,6 +34,8 @@ kentry:
     movw    %ax, %fs
     movw    %ax, %gs
 
+    movl    $KERNEL_STACK, %esp
+    movl    %esp, %ebp
     call    kmain
 
 die:

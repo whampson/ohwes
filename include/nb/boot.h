@@ -13,17 +13,17 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: kernel/main.c                                                     *
- * Created: December 9, 2020                                                  *
+ *    File: include/nb/boot.h                                                 *
+ * Created: December 11, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-void kmain(void)
-{
-    char *vid_mem = (char *) 0xb8000;
+#ifndef __BOOT_H
+#define __BOOT_H
 
-    vid_mem[160]++;
-    vid_mem[161] = 2;
+#define BOOTSEG     0x0000      /* boot ldr begins at 0000:7C00 = 0x07C00 */
+#define INITSEG     0x0900      /* INIT.SYS begins at 0900:0000 = 0x09000 */
+#define KERNSEG     0x1000      /* NBOS.SYS begins at 1000:0000 = 0x10000 */
+#define BOOT_STACK  0x7C00
 
-    // for (;;);
-}
+#endif /* __BOOT_H */

@@ -27,32 +27,35 @@
 # as they are not meant to be run on Niobium.                                  #
 #==============================================================================#
 
-export AS			:= i686-elf-as
-export ASFLAGS		:= -g
-export CC			:= i686-elf-gcc
-export CFLAGS		:= -g -ffreestanding -fno-exceptions -fno-unwind-tables \
-						-fno-asynchronous-unwind-tables 
-export LD			:= i686-elf-ld
-export LDFLAGS		:=
-export MAKEFLAGS	:= --no-print-directory
-
-export MKDIR		:= mkdir -p
-export RM			:= rm -f
-
 export TREE			:=
 export TOPDIR		:= $(CURDIR)
 export BINDIR		:= $(TOPDIR)/bin
 export OBJDIR		:= $(TOPDIR)/obj
 export IMGDIR		:= $(BINDIR)/img
 export IMGFILE		:= $(IMGDIR)/niobium.img
-
 export INCLUDE		:= $(TOPDIR)/include
+
+BINUTILS_PREFIX		:= i686-elf-
+GCC_WARNINGS		:= -Wall -Wextra -Wpedantic
+GCC_FLAGS			:= $(GCC_WARNINGS) -g
+
+export AS			:= $(BINUTILS_PREFIX)gcc
+export ASFLAGS		:= $(GCC_FLAGS) -D__ASSEMBLY__ -m32
+export CC			:= $(BINUTILS_PREFIX)gcc
+export CFLAGS		:= $(GCC_FLAGS) -ffreestanding -fno-exceptions \
+						-fno-unwind-tables -fno-asynchronous-unwind-tables 
+export LD			:= $(BINUTILS_PREFIX)ld
+export LDFLAGS		:=
+export MAKEFLAGS	:= --no-print-directory
+export MKDIR		:= mkdir -p
+export OBJCOPY		:= $(BINUTILS_PREFIX)objcopy
+export RM			:= rm -f
 
 .PHONY: all wipe tools clean-tools img fatfs boot
 
-all: img
+all: tools img
 
-img: boot fs kernel tools
+img: boot kernel
 	@echo '> Creating floppy image...'
 	@$(MKDIR) -p $(IMGDIR)
 	@fatfs -i $(IMGFILE) create
@@ -64,9 +67,6 @@ img: boot fs kernel tools
 
 boot: dirs
 	@$(MAKE) -C boot
-
-fs: dirs
-	@$(MAKE) -C fs
 
 kernel: dirs
 	@$(MAKE) -C kernel
