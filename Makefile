@@ -80,4 +80,4 @@ clean-tools:
 	@$(RM) -r tools/bin
 	@$(RM) -r tools/obj
 
-include $(TOPDIR)/include/Rules.mk
+include $(TOPDIR)/include/make/Rules.mk

@@ -13,44 +13,13 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER          #
 # DEALINGS IN THE SOFTWARE.                                                    #
 #==============================================================================#
-#    File: include/Rules.mk                                                    #
+#    File: include/make/Tree.mk                                                #
 # Created: November 27, 2020                                                   #
 #  Author: Wes Hampson                                                         #
 #                                                                              #
-# Makefile rules common to all parts of the build.                             #
+# Directory tree tracking for recursive Makefiles.                             #
 #==============================================================================#
 
-.PHONY: all clean dirs
-.PRECIOUS: $(BINDIR)/%.elf
-
-all: dirs $(BIN)
-
-clean:
-	@$(RM) -r $(BINDIR)
-	@$(RM) -r $(OBJDIR)
-
-dirs:
-	@$(MKDIR) $(BINDIR)
-	@$(MKDIR) $(OBJDIR)
-
-$(BINDIR)/%.bin: $(BINDIR)/%.elf
-	@echo 'OUT $(subst $(TOPDIR)/,,$@)'
-	@$(OBJCOPY) -O binary $< $@
-
-$(BINDIR)/%.sys: $(BINDIR)/%.elf
-	@echo 'OUT $(subst $(TOPDIR)/,,$@)'
-	@$(OBJCOPY) -O binary $< $@
-
-$(BINDIR)/%.elf: $(OBJ)
-	@echo 'LD  $(subst $(TOPDIR)/,,$^)'
-	@$(LD) $(LDFLAGS) -o $@ $^
-
-$(OBJDIR)/%.o: %.c
-	@echo 'CC  $(join $(TREE),$<)'
-	@$(CC) $(CFLAGS) -I$(INCLUDE) -MMD -c -o $@ $<
-
-$(OBJDIR)/%.o: %.S
-	@echo 'AS  $(join $(TREE),$<)'
-	@$(AS) $(ASFLAGS) -I$(INCLUDE) -c -o $@ $<
-
--include $(DEP)
+export DIRNAME		:= $(notdir $(CURDIR))
+export TREE			:= $(TREE)$(DIRNAME)/
+export OBJDIR		:= $(OBJDIR)/$(DIRNAME)

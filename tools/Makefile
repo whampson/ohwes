@@ -22,7 +22,7 @@ ifeq ($(MAKELEVEL), 0)
 $(error To build, please run 'make tools' from the top-level directory)
 endif
 
-include $(TOPDIR)/include/Tree.mk
+include $(TOPDIR)/include/make/Tree.mk
 
 export TOOLSDIR		:= $(CURDIR)
 export OBJDIR		:= $(CURDIR)/obj
@@ -41,4 +41,4 @@ all: fatfs
 fatfs: dirs
 	@$(MAKE) -C fatfs	
 
-include $(TOOLSDIR)/include/Rules.mk
+include $(TOOLSDIR)/include/make/Rules.mk

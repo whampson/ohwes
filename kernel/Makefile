@@ -22,7 +22,7 @@ ifeq ($(MAKELEVEL), 0)
 $(error To build, please run 'make' from the top-level directory)
 endif
 
-include $(TOPDIR)/include/Tree.mk
+include $(TOPDIR)/include/make/Tree.mk
 
 SRC_S	:= $(wildcard *.S)
 SRC_C	:= $(wildcard *.c)
@@ -32,7 +32,7 @@ OBJ	:= 	$(addprefix $(OBJDIR)/,$(SRC_S:.S=.o)) \
 DEP	:= 	$(OBJ:%.o=%.d)
 BIN := 	$(BINDIR)/nbos.sys
 
-include $(TOPDIR)/include/Rules.mk
+include $(TOPDIR)/include/make/Rules.mk
 
 $(BINDIR)/nbos.elf: LDFLAGS := -T kernel.ld
 $(BINDIR)/nbos.elf: $(OBJ)
