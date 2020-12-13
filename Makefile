@@ -29,11 +29,11 @@
 
 export TREE			:=
 export TOPDIR		:= $(CURDIR)
-export BINDIR		:= $(TOPDIR)/bin
-export OBJDIR		:= $(TOPDIR)/obj
+export BINDIR		:= bin
+export OBJDIR		:= obj
+export INCLUDE		:= include
 export IMGDIR		:= $(BINDIR)/img
 export IMGFILE		:= $(IMGDIR)/niobium.img
-export INCLUDE		:= $(TOPDIR)/include
 
 BINUTILS_PREFIX		:= i686-elf-
 GCC_WARNINGS		:= -Wall -Wextra -Wpedantic
@@ -43,7 +43,7 @@ export AS			:= $(BINUTILS_PREFIX)gcc
 export ASFLAGS		:= $(GCC_FLAGS) -D__ASSEMBLY__ -m32
 export CC			:= $(BINUTILS_PREFIX)gcc
 export CFLAGS		:= $(GCC_FLAGS) -ffreestanding -fno-exceptions \
-						-fno-unwind-tables -fno-asynchronous-unwind-tables 
+						-fno-unwind-tables -fno-asynchronous-unwind-tables
 export LD			:= $(BINUTILS_PREFIX)ld
 export LDFLAGS		:=
 export MAKEFLAGS	:= --no-print-directory
@@ -63,7 +63,7 @@ img: boot kernel
 	@fatfs -i $(IMGFILE) add $(BINDIR)/nbos.sys
 	@echo '> Writing boot sector...'
 	@dd if=$(BINDIR)/boot.bin of=$(IMGFILE) conv=notrunc status=none
-	@echo 'OUT $(subst $(TOPDIR)/,,$(IMGFILE))'
+	@echo 'OUT $(IMGFILE)'
 
 boot: dirs
 	@$(MAKE) -C boot

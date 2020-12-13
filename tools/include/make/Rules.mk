@@ -18,33 +18,13 @@
 #  Author: Wes Hampson                                                         #
 #==============================================================================#
 
-.PHONY: all clean dirs
-
-all: dirs $(BIN)
-
-clean:
-	@$(RM) -r $(BINDIR)
-	@$(RM) -r $(OBJDIR)
-
-dirs:
-	@$(MKDIR) $(BINDIR)
-	@$(MKDIR) $(OBJDIR)
+include $(TOPDIR)/include/make/Rules.mk
 
 $(BIN): $(OBJ)
-	@echo 'LD  $(subst $(TOPDIR)/,,$^)'
+	@echo 'LD  $(LDFLAGS) $(subst $(TOPDIR)/,,$(realpath $^))'
 	@$(LD) $(LDFLAGS) -o $@ $^
-	@echo 'OUT $(subst $(TOPDIR)/,,$@)'
-
-$(OBJDIR)/%.o: %.c
-	@echo 'CC  $(join $(TREE),$<)'
-	@$(CC) $(CFLAGS) -I$(INCLUDE) -MMD -c -o $@ $<
+	@echo 'OUT $(subst $(TOPDIR)/,,$(abspath $@))'
 
 $(OBJDIR)/%.o: %.cpp
-	@echo 'CXX $(join $(TREE),$<)'
-	@$(CXX) $(CXXFLAGS) -I$(INCLUDE) -MMD -c -o $@ $<
-
-$(OBJDIR)/%.o: %.S
-	@echo 'AS  $(join $(TREE),$<)'
-	@$(AS) $(ASFLAGS) -I$(INCLUDE) -c -o $@ $<
-
--include $(DEP)
+	@echo 'CXX $(CXXFLAGS) $(TREE)$<'
+	@$(CXX) $(CXXFLAGS) -MMD -MF $(@:.o=.d) -I$(INCLUDE) -c -o $@ $<

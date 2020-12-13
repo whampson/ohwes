@@ -25,9 +25,9 @@ endif
 include $(TOPDIR)/include/make/Tree.mk
 
 export TOOLSDIR		:= $(CURDIR)
-export OBJDIR		:= $(CURDIR)/obj
-export BINDIR		:= $(CURDIR)/bin
-export INCLUDE		:= $(CURDIR)/include
+export OBJDIR		:= obj
+export BINDIR		:= bin
+export INCLUDE		:= include
 
 export CXX			:= g++
 export CXXFLAGS		:= -g

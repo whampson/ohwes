@@ -22,4 +22,6 @@
 
 export DIRNAME		:= $(notdir $(CURDIR))
 export TREE			:= $(TREE)$(DIRNAME)/
-export OBJDIR		:= $(OBJDIR)/$(DIRNAME)
+export BINDIR		:= ../$(BINDIR)
+export OBJDIR		:= ../$(OBJDIR)/$(DIRNAME)
+export INCLUDE		:= ../$(INCLUDE)

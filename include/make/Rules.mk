@@ -34,23 +34,23 @@ dirs:
 	@$(MKDIR) $(OBJDIR)
 
 $(BINDIR)/%.bin: $(BINDIR)/%.elf
-	@echo 'OUT $(subst $(TOPDIR)/,,$@)'
 	@$(OBJCOPY) -O binary $< $@
+	@echo 'OUT $(subst $(TOPDIR)/,,$(abspath $@))'
 
 $(BINDIR)/%.sys: $(BINDIR)/%.elf
-	@echo 'OUT $(subst $(TOPDIR)/,,$@)'
 	@$(OBJCOPY) -O binary $< $@
+	@echo 'OUT $(subst $(TOPDIR)/,,$(abspath $@))'
 
 $(BINDIR)/%.elf: $(OBJ)
-	@echo 'LD  $(subst $(TOPDIR)/,,$^)'
+	@echo 'LD  $(LDFLAGS) $(subst $(TOPDIR)/,,$(realpath $^))'
 	@$(LD) $(LDFLAGS) -o $@ $^
 
 $(OBJDIR)/%.o: %.c
-	@echo 'CC  $(join $(TREE),$<)'
-	@$(CC) $(CFLAGS) -I$(INCLUDE) -MMD -c -o $@ $<
+	@echo 'CC  $(CFLAGS) $(TREE)$<'
+	@$(CC) $(CFLAGS) -MD -MF $(@:.o=.d) -I$(INCLUDE) -c -o $@ $<
 
 $(OBJDIR)/%.o: %.S
-	@echo 'AS  $(join $(TREE),$<)'
-	@$(AS) $(ASFLAGS) -I$(INCLUDE) -c -o $@ $<
+	@echo 'AS  $(ASFLAGS) $(TREE)$<'
+	@$(AS) $(ASFLAGS) -MD -MF $(@:.o=.d) -I$(INCLUDE) -c -o $@ $<
 
 -include $(DEP)
