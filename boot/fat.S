@@ -16,7 +16,7 @@
 #    File: boot/fat.S                                                          #
 # Created: November 22, 2020                                                   #
 #  Author: Wes Hampson                                                         #
-#------------------------------------------------------------------------------#
+#                                                                              #
 # This is the boot sector for FAT12-formatted disks. This code is responsible  #
 # for loading INIT.SYS (stage 2) and NBOS.SYS (the kernel) into memory, then   #
 # passes control over to INIT.SYS to continue booting.                         #

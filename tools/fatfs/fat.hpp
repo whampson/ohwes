@@ -16,7 +16,7 @@
  *    File: tools/fatfs/fat.hpp                                               *
  * Created: November 28, 2020                                                 *
  *  Author: Wes Hampson                                                       *
- *----------------------------------------------------------------------------*
+ *                                                                            *
  * Structure definitions for the FAT filesystem.                              *
  * FAT12 and FAT16 only; FAT32 is not supported.                              *
  *============================================================================*/

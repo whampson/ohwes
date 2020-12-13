@@ -16,7 +16,7 @@
 #    File: boot/init.S                                                         #
 # Created: November 25, 2020                                                   #
 #  Author: Wes Hampson                                                         #
-#------------------------------------------------------------------------------#
+#                                                                              #
 # This is stage 2 of the bootloader. The role of stage 2 is to gather          #
 # information about the system's memory, enable the A20 address line, set up   #
 # the minimum structures necessary to run 32-bit code on the CPU in Protected  #

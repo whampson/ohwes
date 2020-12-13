@@ -16,7 +16,7 @@
 #    File: kernel/entry.S                                                      #
 # Created: December 9, 2020                                                    #
 #  Author: Wes Hampson                                                         #
-#------------------------------------------------------------------------------#
+#                                                                              #
 # This is the kernel entry point. Stage 2 of the bootloader jumps here after   #
 # enabling Protected Mode.                                                     #
 #==============================================================================#

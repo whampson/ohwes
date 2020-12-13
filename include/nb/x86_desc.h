@@ -16,7 +16,7 @@
  *    File: include/nb/x86_desc.h                                             *
  * Created: December 12, 2020                                                 *
  *  Author: Wes Hampson                                                       *
- *----------------------------------------------------------------------------*
+ *                                                                            *
  * Structure and descriptor definitions for x86-family CPUs.                  *
  * See Intel IA-32 Software Developer's Manual, Volume 3 for more information *
  * on each structure.                                                         *

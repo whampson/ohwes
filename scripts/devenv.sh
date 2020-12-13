@@ -17,7 +17,7 @@
 #    File: scripts/devenv.sh                                                   #
 # Created: November 27, 2020                                                   #
 #  Author: Wes Hampson                                                         #
-#------------------------------------------------------------------------------#
+#                                                                              #
 # Initializes the Niobium development environment.                             #
 # To use, run `source devenv.sh` in your shell.                                #
 #==============================================================================#

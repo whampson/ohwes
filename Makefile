@@ -16,7 +16,7 @@
 #    File: Makefile                                                            #
 # Created: November 24, 2020                                                   #
 #  Author: Wes Hampson                                                         #
-#------------------------------------------------------------------------------#
+#                                                                              #
 # Master Makefile for the Niobium Operating System and associated tools.       #
 #                                                                              #
 # Niobium is currently built using GCC 7.1.0 and Binutils 2.28 configured for  #
