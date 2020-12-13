@@ -43,7 +43,7 @@ init:
     orl     $0x01, %eax         # enable Protected Mode
     movl    %eax, %cr0
 
-    ljmpl   $KERNEL_CS, $KERNEL_ENTRY
+    ljmpl   $0x08, $KERNEL_ENTRY
 
 
 ####
@@ -312,11 +312,13 @@ _test_a20_done:
     ret
 
 setup_gdt:
-    movl    $temp_gdt, %esi
-    movl    $GDT_BASE, %edi
-    movl    $GDT_SIZE, %ecx
+    leal    temp_gdt_base, %esi
+    leal    GDT_BASE, %edi
+    movl    temp_gdt_size, %edx
+    movl    %edx, %ecx
     rep     movsb
-    movw    $GDT_SIZE-1, GDT_PTR
+    decl    %edx
+    movw    %dx, GDT_PTR
     movl    $GDT_BASE, GDT_PTR+2
     lgdtl   GDT_PTR
     ret
@@ -364,21 +366,16 @@ retry_boot:
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
 
-# The Global Descriptor Table.
-# In this configuration, we open up all of memory and use Paging for protection.
-# This gets moved to a known location (GDT_BASE) during system initialization.
-# For a breakdown of these values, see <nb/x86_desc.h> or refer to
-# Intel IA-32 Software Developer's Manual, section 3.4.5 (Segment Descriptors).
+# The Global Descriptor Table (temporary)
 .align 16
-temp_gdt:
+temp_gdt_base:
     .quad   0x0000000000000000      # (not used, required by CPU)
-    .quad   0x0000000000000000      # TSS_SEG   (initialized in kmain)
-    .quad   0x00CF9A000000FFFF      # KERNEL_CS
-    .quad   0x00CF92000000FFFF      # KERNEL_DS
-    .quad   0x00CFF2000000FFFF      # USER_CS
-    .quad   0x00CFF2000000FFFF      # USER_DS
-    .quad   0x0000000000000000      # LDT_SEG   (initialized in kmain)
-    .quad   0x0000000000000000      # (not used, padding)
+    .quad   0x00CF9A000000FFFF      # code segment
+    .quad   0x00CF92000000FFFF      # data segment
+temp_gdt_end:
+
+temp_gdt_size:
+    .long   temp_gdt_end-temp_gdt_base
 
 s_error_mem:        .asciz      "\r\nError: failed to detect memory!\r\n"
 s_error_a20:        .asciz      "\r\nError: failed to enable A20!\r\n"

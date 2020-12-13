@@ -26,7 +26,7 @@
 
 .global kentry
 kentry:
-    movw    $KERNEL_DS, %ax
+    movw    $0x10, %ax
     movw    %ax, %ds
     movw    %ax, %ss
     xorw    %ax, %ax
