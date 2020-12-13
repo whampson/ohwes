@@ -51,7 +51,7 @@ export MKDIR		:= mkdir -p
 export OBJCOPY		:= $(BINUTILS_PREFIX)objcopy
 export RM			:= rm -f
 
-.PHONY: all wipe tools clean-tools img fatfs boot
+.PHONY: all img boot kernel tools wipe clean-tools
 
 all: tools img
 
@@ -62,7 +62,7 @@ img: boot kernel
 	@fatfs -i $(IMGFILE) add $(BINDIR)/init.sys
 	@fatfs -i $(IMGFILE) add $(BINDIR)/nbos.sys
 	@echo '> Writing boot sector...'
-	@dd if=$(BINDIR)/bootsect of=$(IMGFILE) conv=notrunc status=none
+	@dd if=$(BINDIR)/boot.bin of=$(IMGFILE) conv=notrunc status=none
 	@echo 'OUT $(subst $(TOPDIR)/,,$(IMGFILE))'
 
 boot: dirs
@@ -73,9 +73,6 @@ kernel: dirs
 
 tools: dirs
 	@$(MAKE) -C tools
-
-fatfs: dirs
-	@$(MAKE) -C tools fatfs
 
 wipe: clean clean-tools
 

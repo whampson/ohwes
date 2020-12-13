@@ -29,4 +29,4 @@ OBJ	:= $(addprefix $(OBJDIR)/,$(SRC:.cpp=.o))
 DEP	:= $(OBJ:%.o=%.d)
 BIN	:= $(BINDIR)/fatfs
 
-include $(TOPDIR)/include/Rules.mk
+include $(TOOLSDIR)/include/Rules.mk

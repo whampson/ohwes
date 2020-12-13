@@ -21,6 +21,7 @@
 #==============================================================================#
 
 .PHONY: all clean dirs
+.PRECIOUS: $(BINDIR)/%.elf
 
 all: dirs $(BIN)
 
@@ -32,18 +33,21 @@ dirs:
 	@$(MKDIR) $(BINDIR)
 	@$(MKDIR) $(OBJDIR)
 
-$(BIN): $(OBJ)
+$(BINDIR)/%.bin: $(BINDIR)/%.elf
+	@echo 'OUT $(subst $(TOPDIR)/,,$@)'
+	@$(OBJCOPY) -O binary $< $@
+
+$(BINDIR)/%.sys: $(BINDIR)/%.elf
+	@echo 'OUT $(subst $(TOPDIR)/,,$@)'
+	@$(OBJCOPY) -O binary $< $@
+
+$(BINDIR)/%.elf: $(OBJ)
 	@echo 'LD  $(subst $(TOPDIR)/,,$^)'
 	@$(LD) $(LDFLAGS) -o $@ $^
-	@echo 'OUT $(subst $(TOPDIR)/,,$@)'
 
 $(OBJDIR)/%.o: %.c
 	@echo 'CC  $(join $(TREE),$<)'
 	@$(CC) $(CFLAGS) -I$(INCLUDE) -MMD -c -o $@ $<
-
-$(OBJDIR)/%.o: %.cpp
-	@echo 'CXX $(join $(TREE),$<)'
-	@$(CXX) $(CXXFLAGS) -I$(INCLUDE) -MMD -c -o $@ $<
 
 $(OBJDIR)/%.o: %.S
 	@echo 'AS  $(join $(TREE),$<)'

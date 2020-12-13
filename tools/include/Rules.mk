@@ -13,26 +13,38 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER          #
 # DEALINGS IN THE SOFTWARE.                                                    #
 #==============================================================================#
-#    File: tools/fatfs/Makefile                                                #
-# Created: November 27, 2020                                                   #
+#    File: tools/include/Rules.mk                                              #
+# Created: Devember 12, 2020                                                   #
 #  Author: Wes Hampson                                                         #
 #==============================================================================#
 
-ifeq ($(MAKELEVEL), 0)
-$(error To build, please run 'make' from the top-level directory)
-endif
+.PHONY: all clean dirs
 
-include $(TOPDIR)/include/Tree.mk
+all: dirs $(BIN)
 
-SRC_S	:= $(wildcard *.S)
-SRC_C	:= $(wildcard *.c)
+clean:
+	@$(RM) -r $(BINDIR)
+	@$(RM) -r $(OBJDIR)
 
-OBJ	:= 	$(addprefix $(OBJDIR)/,$(SRC_S:.S=.o)) \
-		$(addprefix $(OBJDIR)/,$(SRC_C:.c=.o))
-DEP	:= 	$(OBJ:%.o=%.d)
-BIN := 	$(BINDIR)/nbos.sys
+dirs:
+	@$(MKDIR) $(BINDIR)
+	@$(MKDIR) $(OBJDIR)
 
-include $(TOPDIR)/include/Rules.mk
+$(BIN): $(OBJ)
+	@echo 'LD  $(subst $(TOPDIR)/,,$^)'
+	@$(LD) $(LDFLAGS) -o $@ $^
+	@echo 'OUT $(subst $(TOPDIR)/,,$@)'
 
-$(BINDIR)/nbos.elf: LDFLAGS := -T kernel.ld
-$(BINDIR)/nbos.elf: $(OBJ)
+$(OBJDIR)/%.o: %.c
+	@echo 'CC  $(join $(TREE),$<)'
+	@$(CC) $(CFLAGS) -I$(INCLUDE) -MMD -c -o $@ $<
+
+$(OBJDIR)/%.o: %.cpp
+	@echo 'CXX $(join $(TREE),$<)'
+	@$(CXX) $(CXXFLAGS) -I$(INCLUDE) -MMD -c -o $@ $<
+
+$(OBJDIR)/%.o: %.S
+	@echo 'AS  $(join $(TREE),$<)'
+	@$(AS) $(ASFLAGS) -I$(INCLUDE) -c -o $@ $<
+
+-include $(DEP)

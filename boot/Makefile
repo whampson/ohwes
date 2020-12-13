@@ -28,7 +28,7 @@ STAGE1_ENTRY	:= entry
 STAGE1_OFFSET	:= 0x7C00
 STAGE1_SRC		:= fat.S
 STAGE1_OBJ		:= $(addprefix $(OBJDIR)/,$(STAGE1_SRC:.S=.o))
-STAGE1_BIN		:= $(BINDIR)/bootsect
+STAGE1_BIN		:= $(BINDIR)/boot.bin
 
 STAGE2_ENTRY	:= init
 STAGE2_OFFSET	:= 0x0000
@@ -40,8 +40,8 @@ BIN				:= $(STAGE1_BIN) $(STAGE2_BIN)
 
 include $(TOPDIR)/include/Rules.mk
 
-$(STAGE1_BIN): LDFLAGS := --oformat binary -Ttext $(STAGE1_OFFSET) -e $(STAGE1_ENTRY)
-$(STAGE1_BIN): $(STAGE1_OBJ)
+$(BINDIR)/boot.elf: LDFLAGS := -Ttext $(STAGE1_OFFSET) -e $(STAGE1_ENTRY)
+$(BINDIR)/boot.elf: $(STAGE1_OBJ)
 
-$(STAGE2_BIN): LDFLAGS := --oformat binary -Ttext $(STAGE2_OFFSET) -e $(STAGE2_ENTRY)
-$(STAGE2_BIN): $(STAGE2_OBJ)
+$(BINDIR)/init.elf: LDFLAGS := -Ttext $(STAGE2_OFFSET) -e $(STAGE2_ENTRY)
+$(BINDIR)/init.elf: $(STAGE2_OBJ)

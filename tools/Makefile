@@ -24,8 +24,10 @@ endif
 
 include $(TOPDIR)/include/Tree.mk
 
+export TOOLSDIR		:= $(CURDIR)
 export OBJDIR		:= $(CURDIR)/obj
 export BINDIR		:= $(CURDIR)/bin
+export INCLUDE		:= $(CURDIR)/include
 
 export CXX			:= g++
 export CXXFLAGS		:= -g
@@ -39,4 +41,4 @@ all: fatfs
 fatfs: dirs
 	@$(MAKE) -C fatfs	
 
-include $(TOPDIR)/include/Rules.mk
+include $(TOOLSDIR)/include/Rules.mk
