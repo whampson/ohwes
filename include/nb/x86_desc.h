@@ -25,6 +25,8 @@
 #ifndef __X86_DESC_H
 #define __X86_DESC_H
 
+#include <string.h>
+
 /* System Segment Descriptor Types */
 #define SEGDESC_TYPE_TSS16      0x01    /* System; Task State Segment (16-bit) */
 #define SEGDESC_TYPE_LDT        0x02    /* System; Local Descriptor Table */
@@ -72,6 +74,8 @@ typedef union
     uint16_t _value;
 } segsel_t;
 
+_Static_assert(sizeof(segsel_t) == 2, "Invalid Segment Selector size!");
+
 /**
  * Segment Descriptor
  */
@@ -79,23 +83,23 @@ typedef union
 {
     struct
     {
-        uint64_t limit_lo   : 16;   /* Size (bits 15:0) */
-        uint64_t address_lo : 24;   /* Address (bits 23:0) */
+        uint64_t limit_lo   : 16;   /* Segment Limit (bits 15:0) */
+        uint64_t base_lo    : 24;   /* Segment Base (bits 23:0) */
         uint64_t type       : 4;    /* Segment/Gate Type */
         uint64_t s          : 1;    /* Descriptor Type; 0 = System, 1 = Code/Data */
         uint64_t dpl        : 2;    /* Descriptor Privilege Level */
         uint64_t p          : 1;    /* Present Bit */
-        uint64_t limit_hi   : 4;    /* Size (20:16) */
+        uint64_t limit_hi   : 4;    /* Segment Limit (bits 20:16) */
         uint64_t avl        : 1;    /* Available for Use */
-        uint64_t l          : 1;    /* 64-bit Code Segment */
-        uint64_t db         : 1;    /* Default Op/Stack size, Upper Bound */
+        uint64_t            : 1;    /* Reserved; Do Not Use */
+        uint64_t db         : 1;    /* 0 = 16 bit Code/Data, 1 = 32-bit Code/Data */
         uint64_t g          : 1;    /* Granularity; 0 = Byte, 1 = 4K Page */
-        uint64_t address_hi : 8;    /* Address (bits 31:24) */
+        uint64_t base_hi    : 8;    /* Segment Base (bits 31:24) */
     } gdt_ldt;
     struct
     {
         uint64_t limit_lo   : 16;
-        uint64_t address_lo : 24;
+        uint64_t base_lo    : 24;
         uint64_t type       : 4;
         uint64_t            : 1;
         uint64_t dpl        : 2;
@@ -105,7 +109,7 @@ typedef union
         uint64_t            : 1;
         uint64_t            : 1;
         uint64_t g          : 1;
-        uint64_t address_hi : 8;
+        uint64_t base_hi    : 8;
     } tss;
     struct
     {
@@ -152,8 +156,10 @@ typedef union
     uint64_t _value;
 } segdesc_t;
 
+_Static_assert(sizeof(segdesc_t) == 8, "Invalid Segment Descriptor size!");
+
 /**
- * Descriptor Register (GDTR/IDTR)
+ * Descriptor Register (for LGDT and LIDT instructions).
  */
 typedef union
 {
@@ -165,6 +171,8 @@ typedef union
     };
     uint64_t _value;
 } descreg_t;
+
+_Static_assert(sizeof(descreg_t) == 8, "Invalid Descriptor Register size");
 
 /**
  * Task State Segment
@@ -210,7 +218,10 @@ struct tss
     uint16_t debug_trap : 1;
     uint16_t _reserved11 : 15;
     uint16_t io_map_base;
+    uint32_t ssp;
 };
+
+_Static_assert(sizeof(struct tss) == 108, "Invalid TSS size!");
 
 /**
  * Gets a segment descriptor from a descriptor table.
@@ -221,10 +232,11 @@ struct tss
 #define get_segdesc(table,selector) (table + (selector / sizeof(segdesc_t)))
 
 /**
- * Sets the values in a GDT/LDT segment descriptor.
+ * Sets the values in a GDT or LDT segment descriptor.
  * 
  * @param table a pointer to the descriptor table
  * @param selector a segment selector
+ * @param base the segment base address
  * @param limit the segment limit (segment size in 4K pages - 1)
  * @param desc_type the segment descriptor type (one of SEGDESC_TYPE_*)
  * @param desc_priv the segment descriptor privilege level
@@ -232,18 +244,49 @@ struct tss
 #define set_segdesc(table,selector,base,limit,desc_type,desc_priv)  \
 do {                                                                \
     segdesc_t *desc = get_segdesc(table, selector);                 \
-    desc->gdt_ldt.address_lo = (base & 0x00FFFFFF);                 \
-    desc->gdt_ldt.address_hi = (base & 0xFF000000) >> 24;           \
-    desc->gdt_ldt.limit_lo = (limit & 0x0FFFF);                     \
-    desc->gdt_ldt.limit_hi = (limit & 0xF0000) >> 16;               \
+    desc->_value = 0;                                               \
+    desc->gdt_ldt.base_lo = ((base) & 0x00FFFFFF);                  \
+    desc->gdt_ldt.base_hi = ((base) & 0xFF000000) >> 24;            \
+    desc->gdt_ldt.limit_lo = ((limit) & 0x0FFFF);                   \
+    desc->gdt_ldt.limit_hi = ((limit) & 0xF0000) >> 16;             \
     desc->gdt_ldt.type = desc_type;                                 \
     desc->gdt_ldt.dpl = desc_priv;                                  \
     desc->gdt_ldt.g = 1;    /* 4K page granularity */               \
     desc->gdt_ldt.db = 1;   /* 32-bit segment */                    \
-    desc->gdt_ldt.l = 0;    /* not using 64-bit */                  \
     desc->gdt_ldt.avl = 0;  /* not available */                     \
     desc->gdt_ldt.p = 1;    /* present */                           \
     desc->gdt_ldt.s = 1;    /* code/data segment */                 \
+} while (0)
+
+#define set_segdesc_sys(table,selector,base,limit,desc_type)        \
+do {                                                                \
+    segdesc_t *desc = get_segdesc(table, selector);                 \
+    desc->_value = 0;                                               \
+    desc->gdt_ldt.base_lo = ((base) & 0x00FFFFFF);                  \
+    desc->gdt_ldt.base_hi = ((base) & 0xFF000000) >> 24;            \
+    desc->gdt_ldt.limit_lo = ((limit) & 0x0FFFF);                   \
+    desc->gdt_ldt.limit_hi = ((limit) & 0xF0000) >> 16;             \
+    desc->gdt_ldt.type = desc_type;                                 \
+    desc->gdt_ldt.dpl = 0;  /* ring 0 */                            \
+    desc->gdt_ldt.g = 0;    /* byte granularity */                  \
+    desc->gdt_ldt.db = 1;   /* 32-bit segment */                    \
+    desc->gdt_ldt.avl = 0;  /* not available */                     \
+    desc->gdt_ldt.p = 1;    /* present */                           \
+    desc->gdt_ldt.s = 0;    /* system segment */                    \
+} while (0)
+
+#define set_segdesc_tss(table,selector,base,limit)                  \
+do {                                                                \
+    segdesc_t *desc = get_segdesc(table, selector);                 \
+    desc->tss.base_lo = ((base) & 0x00FFFFFF);                      \
+    desc->tss.base_hi = ((base) & 0xFF000000) >> 24;                \
+    desc->tss.limit_lo = ((limit) & 0x0FFFF);                       \
+    desc->tss.limit_hi = ((limit) & 0xF0000) >> 16;                 \
+    desc->tss.type = SEGDESC_TYPE_TSS32;                            \
+    desc->tss.dpl = 0;  /* ring 0 */                                \
+    desc->tss.g = 0;    /* byte granularity */                      \
+    desc->tss.avl = 0;  /* not available */                         \
+    desc->tss.p = 1;    /* present */                               \
 } while (0)
 
 /**

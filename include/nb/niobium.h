@@ -9,4 +9,9 @@
 #define TSS_SEG                 0x30    /* TSS Segment */
 #define LDT_SEG                 0x38    /* LDT Segment */
 
+void gdt_init(void);
+void ldt_init(void);
+void idt_init(void);
+void tss_init(void);
+
 #endif /* __NIOBIUM_H */

@@ -26,16 +26,20 @@
 /* Page 0: Reserved for Real Mode IVT & BIOS */
 
 /* Page 1: CPU Tables and Console Info */
-#define CPUTABLES       0x1000
+#define CPUTABLES       0x1000              /* x86 Descriptor Area */
 #define IDT_BASE        (CPUTABLES)         /* Interrupt Descriptor Table */
-#define IDT_SIZE        (256*8)
+#define IDT_SIZE        (256*8)             /* 256 IDT entries */
 #define GDT_BASE        (IDT_BASE+IDT_SIZE) /* Global Descriptor Table */
-#define GDT_SIZE        (8*8)
-#define IDT_PTR         (GDT_BASE+GDT_SIZE) /* IDT base/limit (for LGDT) */
-#define GDT_PTR         (IDT_PTR+8)         /* GDT base/limit (for LIDT) */
-#define CONINFO         0x1C00
-#define CURSOR_ROW      (CONINFO+0)         /* Cursor position; column */
-#define CURSOR_COL      (CONINFO+1)         /* Cursor position; row */
+#define GDT_SIZE        (8*8)               /* 8 GDT entries */
+#define LDT_BASE        (GDT_BASE+GDT_SIZE) /* Local Descriptor Table */
+#define LDT_SIZE        (2*8)               /* 2 LDT entries */
+#define TSS_BASE        (LDT_BASE+LDT_SIZE) /* Task State Segment */
+#define TSS_SIZE        (108)               /* TSS size */
+#define IDT_REGPTR      (GDT_BASE+GDT_SIZE) /* IDT base/limit (for LGDT) */
+#define GDT_REGPTR      (IDT_REGPTR+8)      /* GDT base/limit (for LIDT) */
+#define CONINFO         0x1C00              /* Console Info Area */
+#define CURSOR_ROW      (CONINFO+0)         /* Cursor position; row */
+#define CURSOR_COL      (CONINFO+1)         /* Cursor position; column */
 #define CURSOR_BEG      (CONINFO+2)         /* Cursor shape; scan line begin */
 #define CURSOR_END      (CONINFO+3)         /* Cursur shape; scan line end */
 #if (GDT_PTR+8>CONINFO)

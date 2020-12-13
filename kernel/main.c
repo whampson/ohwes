@@ -19,14 +19,10 @@
  *============================================================================*/
 
 #include <string.h>
+#include <nb/boot.h>
 #include <nb/init.h>
 #include <nb/niobium.h>
 #include <nb/x86_desc.h>
-
-static void gdt_init(void);
-static void ldt_init(void);
-static void idt_init(void);
-static void tss_init(void);
 
 void kmain(void)
 {
@@ -35,27 +31,24 @@ void kmain(void)
     idt_init();
     tss_init();
 
-
     char *vid_mem = (char *) 0xb8000;
     vid_mem[160]++;
     vid_mem[161] = 2;
-
-    // for (;;);
 }
 
-static void gdt_init(void)
+void gdt_init(void)
 {
     segdesc_t *gdt = (segdesc_t *) GDT_BASE;
     memset(gdt, 0, GDT_SIZE);
 
     set_segdesc(gdt, KERNEL_CS, 0, 0xFFFFF, SEGDESC_TYPE_XR, 0);
     set_segdesc(gdt, KERNEL_DS, 0, 0xFFFFF, SEGDESC_TYPE_RW, 0);
-    set_segdesc(gdt, USER_CS, 3, 0xFFFFF, SEGDESC_TYPE_XR, 0);
-    set_segdesc(gdt, USER_DS, 3, 0xFFFFF, SEGDESC_TYPE_RW, 0);
-    // set_segdesc(gdt, LDT_SEG, 0, 0, SEGDESC_TYPE_LDT, 0);
-    // set_segdesc(gdt, TSS_SEG, 0, 0, SEGDESC_TYPE_TSS32, 0);
+    set_segdesc(gdt, USER_CS, 0, 0xFFFFF, SEGDESC_TYPE_XR, 3);
+    set_segdesc(gdt, USER_DS, 0, 0xFFFFF, SEGDESC_TYPE_RW, 3);
+    set_segdesc_sys(gdt, LDT_SEG, LDT_BASE, LDT_SIZE-1, SEGDESC_TYPE_LDT);
+    set_segdesc_tss(gdt, TSS_SEG, TSS_BASE, TSS_SIZE-1);
 
-    descreg_t *gdtr = (descreg_t *) GDT_PTR;
+    descreg_t *gdtr = (descreg_t *) GDT_REGPTR;
     gdtr->base = GDT_BASE;
     gdtr->limit = GDT_SIZE - 1;
     lgdt(*gdtr);
@@ -68,17 +61,25 @@ static void gdt_init(void)
     load_gs(NULL);
 }
 
-static void ldt_init(void)
+void ldt_init(void)
+{
+    segdesc_t *ldt = (segdesc_t *) LDT_BASE;
+    memset(ldt, 0, LDT_SIZE);   /* not using the LDT, so just zero it */
+
+    lldt(LDT_SEG);
+}
+
+void idt_init(void)
 {
 
 }
 
-static void idt_init(void)
+void tss_init(void)
 {
+    struct tss *tss = (struct tss *) TSS_BASE;
 
-}
-
-static void tss_init(void)
-{
-
+    tss->ldt_segsel = LDT_SEG;
+    tss->esp0 = KERN_STACK;
+    tss->ss0 = KERNEL_DS;
+    ltr(TSS_SEG);
 }

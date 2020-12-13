@@ -327,9 +327,9 @@ setup_gdt:
     movl    %edx, %ecx
     rep     movsb
     decl    %edx
-    movw    %dx, GDT_PTR
-    movl    $GDT_BASE, GDT_PTR+2
-    lgdtl   GDT_PTR
+    movw    %dx, GDT_REGPTR
+    movl    $GDT_BASE, GDT_REGPTR+2
+    lgdtl   GDT_REGPTR
     ret
 
 ####
