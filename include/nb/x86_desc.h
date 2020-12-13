@@ -25,14 +25,6 @@
 #ifndef __X86_DESC_H
 #define __X86_DESC_H
 
-/* Segment Selectors */
-#define KERNEL_CS               0x10    /* Kernel Code Segment */
-#define KERNEL_DS               0x18    /* Kernel Data Segment */
-#define USER_CS                 0x23    /* User-space Code Segment */
-#define USER_DS                 0x2B    /* User-space Data Segment */
-#define TSS_SEG                 0x30    /* TSS Segment */
-#define LDT_SEG                 0x38    /* LDT Segment */
-
 /* System Segment Descriptor Types */
 #define SEGDESC_TYPE_TSS16      0x01    /* System; Task State Segment (16-bit) */
 #define SEGDESC_TYPE_LDT        0x02    /* System; Local Descriptor Table */
@@ -69,38 +61,38 @@
 /**
  * Segment Selector
  */
-typedef union segsel
+typedef union
 {
-    struct fields
+    struct
     {
         uint16_t rpl    : 2;        /* requested privilege level */
         uint16_t ti     : 1;        /* table type; 0 = GDT, 1 = LDT */
         uint16_t index  : 13;       /* descriptor table index */
-    } fields;
-    uint16_t value;
-} seg_sel_t;
+    };
+    uint16_t _value;
+} segsel_t;
 
 /**
  * Segment Descriptor
  */
-typedef union segdesc
+typedef union
 {
-    struct gdt_ldt
+    struct
     {
-        uint64_t limit_lo   : 16;   /* Size (low bits) */
-        uint64_t address_lo : 24;   /* Address (low bits) */
+        uint64_t limit_lo   : 16;   /* Size (bits 15:0) */
+        uint64_t address_lo : 24;   /* Address (bits 23:0) */
         uint64_t type       : 4;    /* Segment/Gate Type */
         uint64_t s          : 1;    /* Descriptor Type; 0 = System, 1 = Code/Data */
         uint64_t dpl        : 2;    /* Descriptor Privilege Level */
         uint64_t p          : 1;    /* Present Bit */
-        uint64_t limit_hi   : 4;    /* Size (high bits) */
+        uint64_t limit_hi   : 4;    /* Size (20:16) */
         uint64_t avl        : 1;    /* Available for Use */
         uint64_t l          : 1;    /* 64-bit Code Segment */
         uint64_t db         : 1;    /* Default Op/Stack size, Upper Bound */
         uint64_t g          : 1;    /* Granularity; 0 = Byte, 1 = 4K Page */
-        uint64_t addesss_hi : 8;    /* Address (low bits) */
+        uint64_t address_hi : 8;    /* Address (bits 31:24) */
     } gdt_ldt;
-    struct tss
+    struct
     {
         uint64_t limit_lo   : 16;
         uint64_t address_lo : 24;
@@ -113,9 +105,9 @@ typedef union segdesc
         uint64_t            : 1;
         uint64_t            : 1;
         uint64_t g          : 1;
-        uint64_t addesss_hi : 8;
+        uint64_t address_hi : 8;
     } tss;
-    struct call_gate
+    struct
     {
         uint64_t offset_lo  : 16;
         uint64_t segsel     : 16;
@@ -127,7 +119,7 @@ typedef union segdesc
         uint64_t p          : 1;
         uint64_t offset_hi  : 16;
     } call_gate;
-    struct task_gate
+    struct
     {
         uint64_t            : 16;
         uint64_t tss_segsel : 16;
@@ -137,7 +129,7 @@ typedef union segdesc
         uint64_t p          : 1;
         uint64_t            : 16;
     } task_gate;
-    struct int_gate
+    struct
     {
         uint64_t offset_lo  : 16;
         uint64_t segsel     : 16;
@@ -147,7 +139,7 @@ typedef union segdesc
         uint64_t p          : 1;
         uint64_t offset_hi  : 16;
     } int_gate;
-    struct trap_gate
+    struct
     {
         uint64_t offset_lo  : 16;
         uint64_t segsel     : 16;
@@ -157,21 +149,21 @@ typedef union segdesc
         uint64_t p          : 1;
         uint64_t offset_hi  : 16;
     } trap_gate;
-    uint64_t value;
+    uint64_t _value;
 } segdesc_t;
 
 /**
  * Descriptor Register (GDTR/IDTR)
  */
-typedef union descreg
+typedef union
 {
-    struct fields
+    struct
     {
         uint64_t limit  : 16;
         uint64_t base   : 32;
         uint64_t        : 16;
-    } fields;
-    uint64_t value;
+    };
+    uint64_t _value;
 } descreg_t;
 
 /**
@@ -219,6 +211,40 @@ struct tss
     uint16_t _reserved11 : 15;
     uint16_t io_map_base;
 };
+
+/**
+ * Gets a segment descriptor from a descriptor table.
+ * 
+ * @param table the descriptor table
+ * @param selector the segment selector
+ */
+#define get_segdesc(table,selector) (table + (selector / sizeof(segdesc_t)))
+
+/**
+ * Sets the values in a GDT/LDT segment descriptor.
+ * 
+ * @param table a pointer to the descriptor table
+ * @param selector a segment selector
+ * @param limit the segment limit (segment size in 4K pages - 1)
+ * @param desc_type the segment descriptor type (one of SEGDESC_TYPE_*)
+ * @param desc_priv the segment descriptor privilege level
+ */
+#define set_segdesc(table,selector,base,limit,desc_type,desc_priv)  \
+do {                                                                \
+    segdesc_t *desc = get_segdesc(table, selector);                 \
+    desc->gdt_ldt.address_lo = (base & 0x00FFFFFF);                 \
+    desc->gdt_ldt.address_hi = (base & 0xFF000000) >> 24;           \
+    desc->gdt_ldt.limit_lo = (limit & 0x0FFFF);                     \
+    desc->gdt_ldt.limit_hi = (limit & 0xF0000) >> 16;               \
+    desc->gdt_ldt.type = desc_type;                                 \
+    desc->gdt_ldt.dpl = desc_priv;                                  \
+    desc->gdt_ldt.g = 1;    /* 4K page granularity */               \
+    desc->gdt_ldt.db = 1;   /* 32-bit segment */                    \
+    desc->gdt_ldt.l = 0;    /* not using 64-bit */                  \
+    desc->gdt_ldt.avl = 0;  /* not available */                     \
+    desc->gdt_ldt.p = 1;    /* present */                           \
+    desc->gdt_ldt.s = 1;    /* code/data segment */                 \
+} while (0)
 
 /**
  * Load the Global Descriptor Table Register.
@@ -271,6 +297,13 @@ __asm__ volatile (          \
     : "r"(selector)         \
     : "memory", "cc"        \
 );
+
+#define load_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs));
+#define load_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      : : "a"(ds));
+#define load_es(es) __asm__ volatile ("movw %%ax, %%es"      : : "a"(es));
+#define load_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      : : "a"(fs));
+#define load_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs));
+#define load_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss));
 
 #endif /* __ASSEMBLY__ */
 

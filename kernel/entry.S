@@ -22,19 +22,11 @@
 #==============================================================================#
 
 .section .entry
-#include <nb/init.h>
+#include <nb/boot.h>
 
 .global kentry
 kentry:
-    movw    $0x10, %ax
-    movw    %ax, %ds
-    movw    %ax, %ss
-    xorw    %ax, %ax
-    movw    %ax, %es
-    movw    %ax, %fs
-    movw    %ax, %gs
-
-    movl    $KERNEL_STACK, %esp
+    movl    $KERN_STACK, %esp
     movl    %esp, %ebp
     call    kmain
 

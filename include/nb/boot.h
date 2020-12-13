@@ -21,9 +21,19 @@
 #ifndef __BOOT_H
 #define __BOOT_H
 
-#define BOOTSEG     0x0000      /* boot ldr begins at 0000:7C00 = 0x07C00 */
-#define INITSEG     0x0900      /* INIT.SYS begins at 0900:0000 = 0x09000 */
-#define KERNSEG     0x1000      /* NBOS.SYS begins at 1000:0000 = 0x10000 */
-#define BOOT_STACK  0x7C00
+#define BOOT_SEG        0x0000      /* boot ldr begins at 0000:7C00 = 0x07C00 */
+#define INIT_SEG        0x0900      /* INIT.SYS begins at 0900:0000 = 0x09000 */
+#define KERN_SEG        0x1000      /* NBOS.SYS begins at 1000:0000 = 0x10000 */
+
+#define BOOT_BASE       0x7C00
+#define INIT_BASE       (INIT_SEG<<4)
+#define KERN_BASE       (KERN_SEG<<4)
+
+#define BOOT_STACK      (BOOT_BASE)
+#define KERN_STACK      (KERN_BASE)
+
+#define BOOT_ENTRY      (BOOT_BASE)
+#define INIT_ENTRY      (INIT_BASE)
+#define KERN_ENTRY      (KERN_BASE)
 
 #endif /* __BOOT_H */

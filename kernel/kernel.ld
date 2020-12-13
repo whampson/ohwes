@@ -24,7 +24,7 @@ ENTRY(kentry)
 
 SECTIONS
 {
-    . = 0x10000;        /* Should match KERNEL_BASE in <nb/init.h> */
+    . = 0x10000;        /* Should match KERN_BASE defined in <nb/boot.h> */
     .text       : {
         *(.entry)       /* Ensure the setup ASM code goes first. */
         *(.text) 

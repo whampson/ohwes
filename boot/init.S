@@ -24,6 +24,7 @@
 #==============================================================================#
 
 .code16
+#include <nb/boot.h>
 #include <nb/init.h>
 
 .global init
@@ -42,9 +43,17 @@ init:
     movl    %cr0, %eax
     orl     $0x01, %eax         # enable Protected Mode
     movl    %eax, %cr0
+    ljmpl   $0x08, $INIT_BASE+init32
 
-    ljmpl   $0x08, $KERNEL_ENTRY
+.code32
+init32:
+    movw    $0x10, %ax
+    movw    %ax, %ds
+    movw    %ax, %ss
+    pushl   $KERN_ENTRY
+    ret
 
+.code16
 
 ####
 # Stores the current cursor position and shape.

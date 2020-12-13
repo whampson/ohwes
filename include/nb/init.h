@@ -63,9 +63,4 @@
 #define PGTBL6          0xA000
 #define PGTBL7          0xB000
 
-/* Kernel */
-#define KERNEL_BASE     0x10000
-#define KERNEL_ENTRY    (KERNEL_BASE)   
-#define KERNEL_STACK    (KERNEL_BASE)   /* grows downward towards 0 */
-
 #endif  /* __INIT_H */

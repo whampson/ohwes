@@ -83,7 +83,7 @@ boot_code:
     cli
     clc
     cld
-    ljmpw   $BOOTSEG, $continue     # ensure cs is correct
+    ljmpw   $BOOT_SEG, $continue    # ensure cs is correct
 
 continue:
     push    %cs
@@ -131,18 +131,18 @@ _do_load:
     call    read_sectors
 
 load_stage2:
-    movw    $INITSEG, %ax           # INIT.SYS gets loaded at 0x90000
+    movw    $INIT_SEG, %ax          # INIT.SYS gets loaded at 0x9000
     leaw    s_init_file, %di
     call    load_sys_file
 
 load_kernel:
-    movw    $KERNSEG, %ax           # NBOS.SYS gets loaded at 0x10000
+    movw    $KERN_SEG, %ax          # NBOS.SYS gets loaded at 0x10000
     leaw    s_kern_file, %di
     call    load_sys_file
 
 go_to_stage2:
-    ljmpw   $INITSEG, $0            # and off we go!
-    # we never return...
+    ljmpw   $INIT_SEG, $0
+    # see ya!
 
 error:
     leaw    s_error, %si
