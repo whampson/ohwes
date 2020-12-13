@@ -63,14 +63,6 @@
 #define PGTBL6          0xA000
 #define PGTBL7          0xB000
 
-/* Segment Selectors */
-#define KERNEL_CS       0x10
-#define KERNEL_DS       0x18
-#define USER_CS         0x20
-#define USER_DS         0x28
-#define TSS_SEG         0x08
-#define LDT_SEG         0x30
-
 /* Kernel */
 #define KERNEL_BASE     0x10000
 #define KERNEL_ENTRY    (KERNEL_BASE)   
