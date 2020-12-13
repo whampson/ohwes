@@ -9,10 +9,10 @@ system for Intel 386-family CPUs designed by Wes Hampson.
 - Disk I/O; Support a common file system like FAT or ext2 (or both!)
 
 ## TODO List
-- [-] Boot Loader
+- [x] Boot Loader
     - [x] Basic FS driver
     - [x] Load kernel into memory
-    - [ ] Enter protected mode and call kernel
+    - [x] Enter protected mode and call kernel
 - [ ] Interrupt & Exception handling
 - [ ] Terminal I/O
     - [ ] Keyboard driver
