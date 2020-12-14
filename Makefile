@@ -31,6 +31,7 @@ export TREE		:=
 export TOPDIR		:= $(CURDIR)
 export BINDIR		:= bin
 export OBJDIR		:= obj
+export OBJBASE		:= $(OBJDIR)
 export INCLUDE		:= include
 export IMGDIR		:= $(BINDIR)/img
 export IMGFILE		:= $(IMGDIR)/niobium.img
@@ -55,7 +56,7 @@ export RM		:= rm -f
 
 all: tools img
 
-img: boot drivers kernel
+img: boot kernel
 	@echo '> Creating floppy image...'
 	@$(MKDIR) -p $(IMGDIR)
 	@fatfs -i $(IMGFILE) create
@@ -71,7 +72,7 @@ boot: dirs
 drivers: dirs
 	@$(MAKE) -C drivers
 
-kernel: dirs
+kernel: dirs drivers
 	@$(MAKE) -C kernel
 
 tools: dirs

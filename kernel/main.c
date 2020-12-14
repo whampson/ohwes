@@ -21,7 +21,10 @@
 #include <nb/boot.h>
 #include <nb/init.h>
 #include <nb/kernel.h>
+#include <nb/console.h>
 #include <nb/x86_desc.h>
+
+#include <drivers/vga.h>
 
 void kmain(void)
 {
@@ -31,7 +34,16 @@ void kmain(void)
     tss_init();
     con_init();
 
-    panic("foo");
+    char *framebuf = (char *) VGA_FRAMEBUF_COLOR;
+    framebuf[160] = '!';
+    framebuf[161] = 2;
+    framebuf[162] = '?';
+    framebuf[163] = 5;
+
+    uint16_t pos = get_cursor_pos();
+    framebuf[pos * 2] = 'X';
+    set_cursor_pos(++pos);
+    set_cursor_shape(0, 15);
 }
 
 void gdt_init(void)

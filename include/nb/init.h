@@ -37,14 +37,6 @@
 #define TSS_SIZE        (108)               /* TSS size */
 #define IDT_REGPTR      (GDT_BASE+GDT_SIZE) /* IDT base/limit (for LGDT) */
 #define GDT_REGPTR      (IDT_REGPTR+8)      /* GDT base/limit (for LIDT) */
-#define CONINFO         0x1C00              /* Console Info Area */
-#define CURSOR_ROW      (CONINFO+0)         /* Cursor position; row */
-#define CURSOR_COL      (CONINFO+1)         /* Cursor position; column */
-#define CURSOR_BEG      (CONINFO+2)         /* Cursor shape; scan line begin */
-#define CURSOR_END      (CONINFO+3)         /* Cursur shape; scan line end */
-#if (GDT_PTR+8>CONINFO)
-#error "CPU Tables conflict with Console Info!"
-#endif
 
 /* Page 2: Memory Info */
 #define MEMINFO         0x2000

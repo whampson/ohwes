@@ -39,9 +39,6 @@ void gdt_init(void);
 void ldt_init(void);
 void idt_init(void);
 void tss_init(void);
-
-/* console.c */
-void con_init(void);
 void printk(const char *format, ...);
 
 #endif /* __KERNEL_H */

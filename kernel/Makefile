@@ -26,9 +26,9 @@ include $(TOPDIR)/include/make/Tree.mk
 
 SRC_S	:= $(wildcard *.S)
 SRC_C	:= $(wildcard *.c)
-
 OBJ	:= $(addprefix $(OBJDIR)/,$(SRC_S:.S=.o)) \
-	$(addprefix $(OBJDIR)/,$(SRC_C:.c=.o))
+	$(addprefix $(OBJDIR)/,$(SRC_C:.c=.o)) \
+	$(shell find '$(OBJBASE)/' -type f -name '*.o' -not -path '$(OBJBASE)/boot/*')
 DEP	:= $(OBJ:%.o=%.d)
 BIN 	:= $(BINDIR)/nbos.sys
 

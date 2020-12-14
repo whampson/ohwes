@@ -13,75 +13,64 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: drivers/vga/vga.c                                                 *
+ *    File: include/nb/interrupt.h                                            *
  * Created: December 14, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#include <drivers/vga.h>
-#include <nb/interrupt.h>
-#include <nb/io.h>
+#ifndef __INTERRUPT_H
+#define __INTERRUPT_H
 
-void vga_init(void)
-{
-    /* ensure Color Text Mode ports are being used by setting IOAS */
-    outb(VGA_PORT_EXTL_MO_W, inb(VGA_PORT_EXTL_MO_R) | VGA_FLD_EXTL_MO_IOAS);
-}
+/**
+ * Clears the interrupt flag.
+ */
+#define cli()               \
+__asm__ volatile (          \
+    "cli"                   \
+    :                       \
+    :                       \
+    : "memory", "cc"        \
+)
 
-uint8_t vga_crtc_read(uint8_t reg)
-{
-    /* TODO: delay? */
+/**
+ * Sets the interrupt flag.
+ */
+#define sti()               \
+__asm__ volatile (          \
+    "sti"                   \
+    :                       \
+    :                       \
+    : "memory", "cc"        \
+)
 
-    int flags;
-    uint8_t data;
+/**
+ * Backs up the EFLAGS register, then clears the interrupt flag.
+ */
+#define cli_save(flags)     \
+__asm__ volatile (          \
+    "                       \n\
+    pushfl                  \n\
+    popl %0                 \n\
+    cli                     \n\
+    "                       \
+    : "=r"(flags)           \
+    :                       \
+    : "memory", "cc"        \
+)
 
-    cli_save(flags);
-    outb(VGA_PORT_CRTC_ADDR, reg);
-    data = inb(VGA_PORT_CRTC_DATA);
-    restore_flags(flags);
+/**
+ * Restores EFLAGS register. If interrupts were previously enabled, this will
+ * also restore interrupts.
+ */
+#define restore_flags(flags)\
+__asm__ volatile (          \
+    "                       \n\
+    push %0                 \n\
+    popfl                   \n\
+    "                       \
+    :                       \
+    : "r"(flags)            \
+    : "memory", "cc"        \
+)
 
-    return data;
-}
-
-void vga_crtc_write(uint8_t reg, uint8_t data)
-{
-    /* TODO: delay? */
-
-    int flags;
-
-    cli_save(flags);
-    outb(VGA_PORT_CRTC_ADDR, reg);
-    outb(VGA_PORT_CRTC_DATA, data);
-    restore_flags(flags);
-}
-
-uint8_t vga_attr_read(uint8_t reg)
-{
-    /* TODO: delay? */
-
-    int flags;
-    uint8_t addr = reg & VGA_FLD_ATTR_ADDR_ADDR;
-    uint8_t data;
-    
-    cli_save(flags);
-    (void) inb(VGA_PORT_EXTL_IS1);
-    outb(VGA_PORT_ATTR_ADDR, VGA_FLD_ATTR_ADDR_PAS | addr);
-    data = inb(VGA_PORT_ATTR_DATA_R);
-    restore_flags(flags);
-
-    return data;
-}
-
-void vga_attr_write(uint8_t reg, uint8_t data)
-{
-    /* TODO: delay? */
-
-    int flags;
-    uint8_t addr = reg & VGA_FLD_ATTR_ADDR_ADDR;
-    
-    cli_save(flags);
-    (void) inb(VGA_PORT_EXTL_IS1);
-    outb(VGA_PORT_ATTR_ADDR, VGA_FLD_ATTR_ADDR_PAS | addr);
-    outb(VGA_PORT_ATTR_DATA_W, data);
-    restore_flags(flags);
-}
+#endif /* __INTERRUPT _H */

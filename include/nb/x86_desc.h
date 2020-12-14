@@ -232,10 +232,10 @@ _Static_assert(sizeof(struct tss) == 108, "Invalid TSS size!");
 #define get_segdesc(table,selector) (table + (selector / sizeof(segdesc_t)))
 
 /**
- * Sets the values in a GDT or LDT segment descriptor.
+ * Sets the values in a GDT or LDT code/data segment descriptor.
  * 
  * @param table a pointer to the descriptor table
- * @param selector a segment selector
+ * @param selector a segment selector (offset in table)
  * @param base the segment base address
  * @param limit the segment limit (segment size in 4K pages - 1)
  * @param desc_type the segment descriptor type (one of SEGDESC_TYPE_*)
@@ -258,6 +258,15 @@ do {                                                                \
     desc->gdt_ldt.s = 1;    /* code/data segment */                 \
 } while (0)
 
+/**
+ * Sets the values in a GDT or LDT system segment descriptor.
+ * 
+ * @param table a pointer to the descriptor table
+ * @param selector a segment selector  (offset in table)
+ * @param base the segment base address
+ * @param limit the segment limit (segment size in 4K pages - 1)
+ * @param desc_type the segment descriptor type (one of SEGDESC_TYPE_*)
+ */
 #define set_segdesc_sys(table,selector,base,limit,desc_type)        \
 do {                                                                \
     segdesc_t *desc = get_segdesc(table, selector);                 \
@@ -275,9 +284,18 @@ do {                                                                \
     desc->gdt_ldt.s = 0;    /* system segment */                    \
 } while (0)
 
+/**
+ * Sets the values in a segment descriptor for a TSS.
+ * 
+ * @param table a pointer to the descriptor table
+ * @param selector a segment selector (offset in table)
+ * @param base the TSS base address
+ * @param limit the TSS limit (TSS size in bytes - 1)
+ */
 #define set_segdesc_tss(table,selector,base,limit)                  \
 do {                                                                \
     segdesc_t *desc = get_segdesc(table, selector);                 \
+    desc->_value = 0;                                               \
     desc->tss.base_lo = ((base) & 0x00FFFFFF);                      \
     desc->tss.base_hi = ((base) & 0xFF000000) >> 24;                \
     desc->tss.limit_lo = ((limit) & 0x0FFFF);                       \
@@ -290,7 +308,7 @@ do {                                                                \
 } while (0)
 
 /**
- * Load the Global Descriptor Table Register.
+ * Loads the Global Descriptor Table Register.
  *
  * @param descreg a descreg_t containing the GDT base and limit
  */
@@ -300,10 +318,10 @@ __asm__ volatile (          \
     :                       \
     : "m"(descreg)          \
     : "memory", "cc"        \
-);
+)
 
 /**
- * Load the Interrupt Descriptor Table Register.
+ * Loads the Interrupt Descriptor Table Register.
  *
  * @param descreg a descreg_t containing the IDT base and limit
  */
@@ -313,10 +331,10 @@ __asm__ volatile (          \
     :                       \
     : "m"(descreg)          \
     : "memory", "cc"        \
-);
+)
 
 /**
- * Load the Local Descriptor Table Register.
+ * Loads the Local Descriptor Table Register.
  *
  * @param selector segment selector for the LDT
  */
@@ -326,10 +344,10 @@ __asm__ volatile (          \
     :                       \
     : "r"(selector)         \
     : "memory", "cc"        \
-);
+)
 
 /**
- * Load the Task Register.
+ * Loads the Task Register.
  *
  * @param selector segment selector for the TSS
  */
@@ -339,14 +357,14 @@ __asm__ volatile (          \
     :                       \
     : "r"(selector)         \
     : "memory", "cc"        \
-);
+)
 
-#define load_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs));
-#define load_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      : : "a"(ds));
-#define load_es(es) __asm__ volatile ("movw %%ax, %%es"      : : "a"(es));
-#define load_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      : : "a"(fs));
-#define load_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs));
-#define load_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss));
+#define load_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs))
+#define load_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      : : "a"(ds))
+#define load_es(es) __asm__ volatile ("movw %%ax, %%es"      : : "a"(es))
+#define load_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      : : "a"(fs))
+#define load_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs))
+#define load_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss))
 
 #endif /* __ASSEMBLY__ */
 

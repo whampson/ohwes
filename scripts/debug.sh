@@ -21,8 +21,8 @@
 # QEMU debug attach.                                                           #
 #==============================================================================#
 
-if [ "$1" = "bootsect" ]; then
-    gdb ${NB_OBJDIR}/boot/fat.o \
+if [ "$1" = "boot" ]; then
+    gdb ${NB_BINDIR}/boot.elf \
         -ex 'target remote localhost:1234' \
         -ex 'set tdesc filename scripts/gdb_targets/i386-16bit.xml' \
         -ex 'set architecture i8086' \
@@ -31,11 +31,19 @@ if [ "$1" = "bootsect" ]; then
         -ex 'layout regs' \
         -ex 'continue'
 elif [ "$1" = "init" ]; then
-    gdb ${NB_OBJDIR}/boot/init.o \
+    gdb ${NB_BINDIR}/init.elf \
         -ex 'target remote localhost:1234' \
         -ex 'set tdesc filename scripts/gdb_targets/i386-16bit.xml' \
         -ex 'set architecture i8086' \
-        -ex 'break *0x90000' \
+        -ex 'break *0x9000' \
+        -ex 'layout src' \
+        -ex 'layout regs' \
+        -ex 'continue'
+else
+    gdb ${NB_BINDIR}/nbos.elf \
+        -ex 'target remote localhost:1234' \
+        -ex 'set architecture i386' \
+        -ex 'break kmain' \
         -ex 'layout src' \
         -ex 'layout regs' \
         -ex 'continue'

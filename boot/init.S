@@ -34,7 +34,6 @@ init:
     popw    %ds                 # DS = 0x0900
     movw    %ax, %es            # ES = 0x0000
 
-    call    store_cursor
     call    detect_memory
     call    enable_a20
     call    setup_gdt
@@ -54,26 +53,6 @@ init32:
     ret
 
 .code16
-
-####
-# Stores the current cursor position and shape.
-#
-#   Inputs: (none)
-#  Outputs: cursor row
-#           cursor column
-#           cursor starting scan line
-#           cursor ending scan line
-# Clobbers: ax, bx, cx, dx
-####
-store_cursor:
-   xorb     %bh, %bh
-   movb     $0x03, %ah
-   int      $0x10
-   movb     %dh, %es:CURSOR_ROW
-   movb     %dl, %es:CURSOR_COL
-   movb     %ch, %es:CURSOR_BEG
-   movb     %cl, %es:CURSOR_END
-   ret
 
 ####
 # Detects available memory on the system using three separate BIOS calls.
