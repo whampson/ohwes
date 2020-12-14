@@ -18,12 +18,9 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#include <stddef.h>
-#include <stdbool.h>
-#include <string.h>
 #include <nb/boot.h>
 #include <nb/init.h>
-#include <nb/niobium.h>
+#include <nb/kernel.h>
 #include <nb/x86_desc.h>
 
 void kmain(void)
@@ -32,17 +29,9 @@ void kmain(void)
     ldt_init();
     idt_init();
     tss_init();
+    con_init();
 
-    char *vid_mem = (char *) 0xb8000;
-
-    bool b = false;
-    if (!b) 
-    {
-
-    }
-
-    vid_mem[160]++;
-    vid_mem[161] = 2;
+    panic("foo");
 }
 
 void gdt_init(void)

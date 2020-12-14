@@ -20,6 +20,8 @@
  * Implementation of stdbool.h from the C11 Standard Library.                 *
  *============================================================================*/
 
+/* Completion Status: DONE */
+
 #ifndef __STDBOOL_H
 #define __STDBOOL_H
 

@@ -20,6 +20,8 @@
  * Implementation of stdint.h from the C11 Standard Library.                  *
  *============================================================================*/
 
+/* Completion Status: INCOMPLETE */
+
 /**
  * TODO:
  * SIG_ATOMIC_MIN

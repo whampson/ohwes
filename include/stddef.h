@@ -20,6 +20,8 @@
  * Implementation of stddef.h from the C11 Standard Library.                  *
  *============================================================================*/
 
+/* Completion Status: DONE */
+
 #ifndef __STDDEF_H
 #define __STDDEF_H
 

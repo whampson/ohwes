@@ -17,27 +17,29 @@
  * Created: December 13, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *                                                                            *
- * Implementation of stdarg.h from the C11 Standard Library.                  *
+ * Implementation of stdio.h from the C11 Standard Library.                   *
  *============================================================================*/
 
-/* Completion Status: DONE */
+/* Completion Status: INCOMPLETE */
 
-#ifndef __STDARG_H
-#define __STDARG_H
+#ifndef __STDIO_H
+#define __STDIO_H
 
-typedef char * va_list;
+#ifndef __SIZE_T_DEFINED
+#define __SIZE_T_DEFINED
+typedef uint32_t size_t;
+#endif
 
-#define va_start(ap,paramN)                 \
-    (ap = (va_list) ((char *) &paramN + sizeof(paramN)))
+#ifndef __NULL_DEFINED
+#define __NULL_DEFINED
+#define NULL ((void *) 0)
+#endif
 
-#define va_arg(ap,type)                     \
-    (ap = (va_list) (ap + sizeof(type)),    \
-    ((type *) ap)[-1])
+#define BUFSIZ  1024
 
-#define va_end(ap)                          \
-    (ap = (void *) 0)
+// TODO
+int putchar(int ch);
+int puts(const char *str);
+int printf(const char *format, ...);
 
-#define va_copy(dest,src)                   \
-    (dest = src)
-
-#endif /* __STDARG_H */
+#endif /* __STDIO_H */

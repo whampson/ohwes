@@ -13,31 +13,48 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/stdarg.h                                                  *
+ *    File: include/nb/io.h                                                   *
  * Created: December 13, 2020                                                 *
  *  Author: Wes Hampson                                                       *
- *                                                                            *
- * Implementation of stdarg.h from the C11 Standard Library.                  *
  *============================================================================*/
 
-/* Completion Status: DONE */
+#ifndef __IO_H
+#define __IO_H
 
-#ifndef __STDARG_H
-#define __STDARG_H
+#include <stdint.h>
 
-typedef char * va_list;
+/**
+ * Reads a byte from an I/O port.
+ *
+ * @param port the port to read from
+ * @return the byte read
+ */
+static inline uint8_t inb(uint16_t port)
+{
+    uint8_t data;
+    __asm__ volatile (
+        "inb %w1, %b0"
+        : "=a"(data)
+        : "d"(port)
+        : "memory", "cc"
+    );
+    return data;
+}
 
-#define va_start(ap,paramN)                 \
-    (ap = (va_list) ((char *) &paramN + sizeof(paramN)))
+/**
+ * Writes a byte to an I/O port.
+ *
+ * @param port the port to write to
+ * @param data the byte to write
+ */
+static inline void outb(uint16_t port, uint8_t data)
+{
+    __asm__ volatile (
+        "outb %b0, %w1"
+        :
+        : "a"(data), "d"(port)
+        : "memory", "cc"
+    );
+}
 
-#define va_arg(ap,type)                     \
-    (ap = (va_list) (ap + sizeof(type)),    \
-    ((type *) ap)[-1])
-
-#define va_end(ap)                          \
-    (ap = (void *) 0)
-
-#define va_copy(dest,src)                   \
-    (dest = src)
-
-#endif /* __STDARG_H */
+#endif /* __IO_H */

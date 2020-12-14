@@ -13,31 +13,35 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/stdarg.h                                                  *
+ *    File: include/nb/kernel.h                                               *
  * Created: December 13, 2020                                                 *
  *  Author: Wes Hampson                                                       *
- *                                                                            *
- * Implementation of stdarg.h from the C11 Standard Library.                  *
  *============================================================================*/
 
-/* Completion Status: DONE */
+#ifndef __KERNEL_H
+#define __KERNEL_H
 
-#ifndef __STDARG_H
-#define __STDARG_H
+#define KERNEL_CS               0x10    /* Kernel Code Segment */
+#define KERNEL_DS               0x18    /* Kernel Data Segment */
+#define USER_CS                 0x23    /* User-space Code Segment */
+#define USER_DS                 0x2B    /* User-space Data Segment */
+#define TSS_SEG                 0x30    /* TSS Segment */
+#define LDT_SEG                 0x38    /* LDT Segment */
 
-typedef char * va_list;
+#define panic(x)                \
+do {                            \
+    printk("Kernel panic: " x); \
+    for (;;);                   \
+} while (0)
 
-#define va_start(ap,paramN)                 \
-    (ap = (va_list) ((char *) &paramN + sizeof(paramN)))
+/* main.c */
+void gdt_init(void);
+void ldt_init(void);
+void idt_init(void);
+void tss_init(void);
 
-#define va_arg(ap,type)                     \
-    (ap = (va_list) (ap + sizeof(type)),    \
-    ((type *) ap)[-1])
+/* console.c */
+void con_init(void);
+void printk(const char *format, ...);
 
-#define va_end(ap)                          \
-    (ap = (void *) 0)
-
-#define va_copy(dest,src)                   \
-    (dest = src)
-
-#endif /* __STDARG_H */
+#endif /* __KERNEL_H */
