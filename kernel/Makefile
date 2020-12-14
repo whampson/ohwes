@@ -13,8 +13,8 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER          #
 # DEALINGS IN THE SOFTWARE.                                                    #
 #==============================================================================#
-#    File: tools/fatfs/Makefile                                                #
-# Created: November 27, 2020                                                   #
+#    File: kernel/Makefile                                                     #
+# Created: December 9, 2020                                                    #
 #  Author: Wes Hampson                                                         #
 #==============================================================================#
 
@@ -27,10 +27,10 @@ include $(TOPDIR)/include/make/Tree.mk
 SRC_S	:= $(wildcard *.S)
 SRC_C	:= $(wildcard *.c)
 
-OBJ	:= 	$(addprefix $(OBJDIR)/,$(SRC_S:.S=.o)) \
-		$(addprefix $(OBJDIR)/,$(SRC_C:.c=.o))
-DEP	:= 	$(OBJ:%.o=%.d)
-BIN := 	$(BINDIR)/nbos.sys
+OBJ	:= $(addprefix $(OBJDIR)/,$(SRC_S:.S=.o)) \
+	$(addprefix $(OBJDIR)/,$(SRC_C:.c=.o))
+DEP	:= $(OBJ:%.o=%.d)
+BIN 	:= $(BINDIR)/nbos.sys
 
 include $(TOPDIR)/include/make/Rules.mk
 

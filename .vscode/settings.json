@@ -1,4 +1,8 @@
 {
+    "[makefile]":{
+        "editor.insertSpaces": false,
+        "editor.tabSize": 8
+    },
     "files.associations": {
         "*.tcc": "cpp",
         "array": "cpp",

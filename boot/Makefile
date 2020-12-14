@@ -26,17 +26,17 @@ include $(TOPDIR)/include/make/Tree.mk
 
 STAGE1_ENTRY	:= entry
 STAGE1_OFFSET	:= 0x7C00
-STAGE1_SRC		:= fat.S
-STAGE1_OBJ		:= $(addprefix $(OBJDIR)/,$(STAGE1_SRC:.S=.o))
-STAGE1_BIN		:= $(BINDIR)/boot.bin
+STAGE1_SRC	:= fat.S
+STAGE1_OBJ	:= $(addprefix $(OBJDIR)/,$(STAGE1_SRC:.S=.o))
+STAGE1_BIN	:= $(BINDIR)/boot.bin
 
 STAGE2_ENTRY	:= init
 STAGE2_OFFSET	:= 0x0000
-STAGE2_SRC		:= init.S
-STAGE2_OBJ		:= $(addprefix $(OBJDIR)/,$(STAGE2_SRC:.S=.o))
-STAGE2_BIN		:= $(BINDIR)/init.sys
+STAGE2_SRC	:= init.S
+STAGE2_OBJ	:= $(addprefix $(OBJDIR)/,$(STAGE2_SRC:.S=.o))
+STAGE2_BIN	:= $(BINDIR)/init.sys
 
-BIN				:= $(STAGE1_BIN) $(STAGE2_BIN)
+BIN		:= $(STAGE1_BIN) $(STAGE2_BIN)
 
 include $(TOPDIR)/include/make/Rules.mk
 

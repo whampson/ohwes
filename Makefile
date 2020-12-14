@@ -27,7 +27,7 @@
 # as they are not meant to be run on Niobium.                                  #
 #==============================================================================#
 
-export TREE			:=
+export TREE		:=
 export TOPDIR		:= $(CURDIR)
 export BINDIR		:= bin
 export OBJDIR		:= obj
@@ -37,25 +37,25 @@ export IMGFILE		:= $(IMGDIR)/niobium.img
 
 BINUTILS_PREFIX		:= i686-elf-
 GCC_WARNINGS		:= -Wall -Wextra -Wpedantic
-GCC_FLAGS			:= $(GCC_WARNINGS) -g
+GCC_FLAGS		:= $(GCC_WARNINGS) -g
 
-export AS			:= $(BINUTILS_PREFIX)gcc
+export AS		:= $(BINUTILS_PREFIX)gcc
 export ASFLAGS		:= $(GCC_FLAGS) -D__ASSEMBLY__ -m32
-export CC			:= $(BINUTILS_PREFIX)gcc
+export CC		:= $(BINUTILS_PREFIX)gcc
 export CFLAGS		:= $(GCC_FLAGS) -ffreestanding -fno-exceptions \
-						-fno-unwind-tables -fno-asynchronous-unwind-tables
-export LD			:= $(BINUTILS_PREFIX)ld
+			-fno-unwind-tables -fno-asynchronous-unwind-tables
+export LD		:= $(BINUTILS_PREFIX)ld
 export LDFLAGS		:=
 export MAKEFLAGS	:= --no-print-directory
 export MKDIR		:= mkdir -p
 export OBJCOPY		:= $(BINUTILS_PREFIX)objcopy
-export RM			:= rm -f
+export RM		:= rm -f
 
-.PHONY: all img boot kernel tools wipe clean-tools
+.PHONY: all img boot drivers kernel tools wipe clean-tools
 
 all: tools img
 
-img: boot kernel
+img: boot drivers kernel
 	@echo '> Creating floppy image...'
 	@$(MKDIR) -p $(IMGDIR)
 	@fatfs -i $(IMGFILE) create
@@ -67,6 +67,9 @@ img: boot kernel
 
 boot: dirs
 	@$(MAKE) -C boot
+
+drivers: dirs
+	@$(MAKE) -C drivers
 
 kernel: dirs
 	@$(MAKE) -C kernel

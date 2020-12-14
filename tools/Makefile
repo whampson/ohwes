@@ -29,9 +29,9 @@ export OBJDIR		:= obj
 export BINDIR		:= bin
 export INCLUDE		:= include
 
-export CXX			:= g++
+export CXX		:= g++
 export CXXFLAGS		:= -g
-export LD			:= g++
+export LD		:= g++
 export LDFLAGS		:=
 
 .PHONY: all fatfs
