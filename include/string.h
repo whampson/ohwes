@@ -3,14 +3,14 @@
 
 #include <stdint.h>
 
-#ifndef __NULL_DEFINED
-#define __NULL_DEFINED
-#define NULL    ((void *) 0)
-#endif
-
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
 typedef uint32_t size_t;
+#endif
+
+#ifndef __NULL_DEFINED
+#define __NULL_DEFINED
+#define NULL ((void *) 0)
 #endif
 
 static inline void * memset(void *dest, int c, size_t n)

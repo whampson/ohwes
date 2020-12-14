@@ -18,6 +18,8 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
+#include <stddef.h>
+#include <stdbool.h>
 #include <string.h>
 #include <nb/boot.h>
 #include <nb/init.h>
@@ -32,6 +34,13 @@ void kmain(void)
     tss_init();
 
     char *vid_mem = (char *) 0xb8000;
+
+    bool b = false;
+    if (!b) 
+    {
+
+    }
+
     vid_mem[160]++;
     vid_mem[161] = 2;
 }

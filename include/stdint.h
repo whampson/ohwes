@@ -17,8 +17,18 @@
  * Created: December 11, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *                                                                            *
- * Implementation of stdint.h from the C Standard Library.                    *
+ * Implementation of stdint.h from the C11 Standard Library.                  *
  *============================================================================*/
+
+/**
+ * TODO:
+ * SIG_ATOMIC_MIN
+ * SIG_ATOMIC_MAX
+ * WCHAR_MIN
+ * WCHAR_MAX
+ * WINT_MIN
+ * WINT_MAX
+ */
 
 #ifndef __STDINT_H
 #define __STDINT_H
@@ -67,6 +77,7 @@ typedef uint32_t                        uintptr_t;
 #define INT_LEAST64_MIN                 INT64_MIN
 #define INTPTR_MIN                      INT32_MIN
 #define INTMAX_MIN                      INT64_MIN
+#define PTRDIFF_MIN                     INT32_MIN
 
 #define INT8_MAX                        0x7F
 #define INT16_MAX                       0x7FFF
@@ -82,6 +93,7 @@ typedef uint32_t                        uintptr_t;
 #define INT_LEAST64_MAX                 INT64_MIN
 #define INTPTR_MAX                      INT32_MAX
 #define INTMAX_MAX                      INT64_MAX
+#define PTRDIFF_MAX                     INT32_MAX
 
 #define UINT8_MAX                       0xFF
 #define UINT16_MAX                      0xFFFF
@@ -97,6 +109,7 @@ typedef uint32_t                        uintptr_t;
 #define UINT_LEAST64_MAX                UINT64_MAX
 #define UINTPTR_MAX                     UINT32_MAX
 #define UINTMAX_MAX                     UINT64_MAX
+#define SIZE_MAX                        UINT32_MAX
 
 #define INT8_C(c)                       (c)
 #define INT16_C(c)                      (c)
@@ -118,7 +131,6 @@ _Static_assert(sizeof(int_least8_t)     >= 1, "sizeof(int_least8_t)");
 _Static_assert(sizeof(int_least_16_t)   >= 2, "sizeof(int_least_16_t)");
 _Static_assert(sizeof(int_least_32_t)   >= 4, "sizeof(int_least_32_t)");
 _Static_assert(sizeof(int_least_64_t)   >= 8, "sizeof(int_least_64_t)");
-
 _Static_assert(sizeof(uint8_t)          == 1, "sizeof(uint8_t)");
 _Static_assert(sizeof(uint16_t)         == 2, "sizeof(uint16_t)");
 _Static_assert(sizeof(uint32_t)         == 4, "sizeof(uint32_t)");
