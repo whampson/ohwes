@@ -34,8 +34,12 @@ void kmain(void)
     tss_init();
     con_init();
 
-    const char *str = ""
-        "The quick brown fox jumps over the lazy dog.\r\nNew line!\b\b";
+    const char *str = "\r\n"
+        "Message here.\r\n"
+        "\r\n"
+        "Another here."
+        "\eI\eI\rNothing"
+        "\r\eB\eB\eB";
     while (*str != '\0') {
         con_write(*(str++));
     }

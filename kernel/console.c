@@ -18,6 +18,7 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
+#include <ctype.h>
 #include <string.h>
 #include <drivers/vga.h>
 #include <nb/console.h>
@@ -36,17 +37,25 @@
 #define m_disp          (consoles[curr_con].disp)
 #define m_attr          (consoles[curr_con].attr)
 #define m_cursor        (consoles[curr_con].cursor)
+#define m_state         (consoles[curr_con].state)
 
 static struct console consoles[NUM_CONSOLES] = { 0 };
 static int curr_con = 0;
 
 static void defaults(struct console *con);
+static void esc(char c);
 static void bs(void);
 static void cr(void);
 static void lf(void);
+static void r_lf(void);
 static void scroll(int n);
 static void set_vga_attr(struct vga_attr *a);
 static void update_vga_attr(int pos);
+static void cursor_up(int n);
+static void cursor_down(int n);
+static void cursor_left(int n);
+static void cursor_right(int n);
+static void cursor_home(void);
 static void update_cursor(void);
 static void pos2xy(int pos, int *x, int *y);
 static int xy2pos(int x, int y);
@@ -58,9 +67,19 @@ void con_init(void)
     curr_con = 0;
     defaults(&consoles[curr_con]);
     m_cursor.shape = vga_get_cursor_shape();
-    //pos2xy(vga_get_cursor_pos(), &m_cursor.x, &m_cursor.y);
-    update_cursor();
+    pos2xy(vga_get_cursor_pos(), &m_cursor.x, &m_cursor.y);
     m_initialized = true;
+}
+
+static void defaults(struct console *con)
+{
+    memset(con, 0, sizeof(struct console));
+    con->cols = VGA_TEXT_COLS;
+    con->rows = VGA_TEXT_ROWS;
+    con->framebuf = (char *) VGA_FRAMEBUF_COLOR;
+    con->attr.bg = DEFAULT_BG;
+    con->attr.fg = DEFAULT_FG;
+    con->cursor.shape = CURSOR_DEFAULT;
 }
 
 void con_write(char c)
@@ -71,31 +90,52 @@ void con_write(char c)
     bool update_curs = true;
     bool needs_crlf = false;
 
-    switch (c) {
-        case ASCII_BS:  /* backspace */
-            if (m_cursor.x > 0) {
-                pos--;
-            }
-            bs();
-            c = BLANK_CHAR;
-            update_char = true;
-            update_attr = true;
+    if (iscntrl(c)) {
+        goto cntrl;
+    }
+
+    switch (m_state)
+    {
+        case S_ESC:
+            esc(c);
             break;
-        case ASCII_LF:  /* line feed */
-        case ASCII_VT:  /* vertical tab */
-        case ASCII_FF:  /* form feed */
-            lf();
-            break;
-        case ASCII_CR:  /* carriage return */
-            cr();
-            break;
+        
+        // case S_CSI:
+        //     csi(c);
+        //     break;
+    
+    cntrl:
         default:
-            update_char = true;
-            update_attr = true;
-            if (++m_cursor.x >= m_cols) {
-                needs_crlf = true;
+            switch (c)
+            {
+                case ASCII_ESC:
+                    m_state = S_ESC;
+                    return;
+                case ASCII_BS:      /* backspace */
+                    if (m_cursor.x > 0) {
+                        pos--;
+                    }
+                    bs();
+                    c = BLANK_CHAR;
+                    update_char = true;
+                    update_attr = true;
+                    break;
+                case ASCII_LF:      /* line feed */
+                case ASCII_VT:      /* vertical tab */
+                case ASCII_FF:      /* form feed */
+                    lf();
+                    break;
+                case ASCII_CR:      /* carriage return */
+                    cr();
+                    break;
+                default:
+                    update_char = true;
+                    update_attr = true;
+                    if (++m_cursor.x >= m_cols) {
+                        needs_crlf = true;
+                    }
+                    break;
             }
-            break;
     }
 
     if (update_char) {
@@ -112,17 +152,42 @@ void con_write(char c)
     }
 }
 
-static void defaults(struct console *con)
+static void esc(char c)
 {
-    memset(con, 0, sizeof(struct console));
-    con->cols = VGA_TEXT_COLS;
-    con->rows = VGA_TEXT_ROWS;
-    con->framebuf = (char *) VGA_FRAMEBUF_COLOR;
-    con->attr.bg = DEFAULT_BG;
-    con->attr.fg = DEFAULT_FG;
-    con->cursor.shape = CURSOR_DEFAULT;
-    con->cursor.x = 0;
-    con->cursor.y = VGA_TEXT_ROWS - 1;
+    /* Some VT52/VT100/Linux escape sequences, not 100% compliant */
+    /* TODO: difference between line feed and cursor down? */
+
+    switch (c) {
+        case 'A':   /* cursor up */
+            cursor_up(1);
+            break;
+        case 'B':   /* cursor down */
+            cursor_down(1);
+            break;
+        case 'C':   /* cursor right */
+            cursor_right(1);
+            break;
+        case 'D':   /* cursor left */
+            cursor_left(1);
+            break;
+        case 'E':   /* CRLF */
+            cr(); lf();
+            break;
+        case 'H':   /* cursor 0,0 */
+            cursor_home();
+            break;
+        case 'I':   /* reverse line feed */
+            r_lf();
+            break;
+        // case 'J':   /* erase to end of screen */
+        // case 'K':   /* erase to end of line */
+        // case 'c':   /* reset console */
+        /* TODO: more? can even come up with my own! :D */
+        default:
+            break;
+    }
+
+    m_state = S_NORM;
 }
 
 static void bs(void)
@@ -130,6 +195,11 @@ static void bs(void)
     if (--m_cursor.x < 0) {
         m_cursor.x = 0;
     }
+}
+
+static void cr(void)
+{
+    m_cursor.x = 0;
 }
 
 static void lf(void)
@@ -140,9 +210,12 @@ static void lf(void)
     }
 }
 
-static void cr(void)
+static void r_lf(void)
 {
-    m_cursor.x = 0;
+    if (--m_cursor.y < 0) {
+        scroll(-1);
+        m_cursor.y++;
+    }
 }
 
 static void scroll(int n)
@@ -206,6 +279,44 @@ static void set_vga_attr(struct vga_attr *a)
     if (m_attr.blink && m_disp.blink_on) {
         a->blink = 1;
     }
+}
+
+static void cursor_up(int n)
+{
+    m_cursor.y -= n;
+    if (m_cursor.y < 0) {
+        m_cursor.y = 0;
+    }
+}
+
+static void cursor_down(int n)
+{
+    m_cursor.y += n;
+    if (m_cursor.y >= m_rows) {
+        m_cursor.y = m_rows - 1;
+    }
+}
+
+static void cursor_left(int n)
+{
+    m_cursor.x -= n;
+    if (m_cursor.x < 0) {
+        m_cursor.x = 0;
+    }
+}
+
+static void cursor_right(int n)
+{
+    m_cursor.x += n;
+    if (m_cursor.x >= m_cols) {
+        m_cursor.x = m_cols - 1;
+    }
+}
+
+static void cursor_home(void)
+{
+    m_cursor.x = 0;
+    m_cursor.y = 0;
 }
 
 static void update_cursor(void)

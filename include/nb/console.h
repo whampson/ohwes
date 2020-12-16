@@ -52,6 +52,10 @@ struct console
         int shape;          /*   shape */
         bool hidden;        /*   visibility */
     } cursor;
+    enum console_state {    /* console states */
+        S_NORM,             /*   normal */
+        S_ESC               /*   escape sequence */
+    } state;
 };
 
 /**
