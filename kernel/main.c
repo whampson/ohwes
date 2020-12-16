@@ -34,12 +34,8 @@ void kmain(void)
     tss_init();
     con_init();
 
-    const char *str = "\r\n"
-        "Message here.\r\n"
-        "\r\n"
-        "Another here."
-        "\eI\eI\rNothing"
-        "\r\eB\eB\eB";
+    /* Red bg, white fg, flashing "Hello, world!" in top-left, no cursor */
+    const char *str = "\033H\033[37;41m\033[2J\0335\0334\033[1;5mHello, world!";
     while (*str != '\0') {
         con_write(*(str++));
     }

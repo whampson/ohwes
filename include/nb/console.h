@@ -26,6 +26,7 @@
 #include <drivers/vga.h>
 
 #define NUM_CONSOLES        8
+#define MAX_CSIPARAMS       8
 
 /**
  * System Console
@@ -37,8 +38,6 @@ struct console
     char *framebuf;         /* frame buffer */
     struct disp_attr {      /* display attributes */
         bool blink_on;      /*   character blinking enabled */
-        bool invert;        /*   colors are inverted */
-        bool conceal;       /*   screen is blanked */
     } disp;
     struct char_attr {      /* character attributes */
         int bg, fg;         /*   background, foreground colors */
@@ -46,16 +45,28 @@ struct console
         bool faint;         /*   use dim foreground */
         bool underline;     /*   show underline */
         bool blink;         /*   blink character (if enabled) */
+        bool invert;        /*   swap background and foreground colors */
     } attr;
     struct cursor {         /* cursor parameters */
         int x, y;           /*   position */
         int shape;          /*   shape */
         bool hidden;        /*   visibility */
     } cursor;
-    enum console_state {    /* console states */
+    struct save_state {     /* saved parameters */
+        struct char_attr attr;
+        struct cursor cursor;
+    } saved;
+    struct default_state {  /* default parameters */
+        struct char_attr attr;
+        struct cursor cursor;
+    } defaults;
+    enum console_state {    /* console control state */
         S_NORM,             /*   normal */
-        S_ESC               /*   escape sequence */
+        S_ESC,              /*   escape sequence */
+        S_CSI               /*   control sequence */
     } state;
+    char csiparam[MAX_CSIPARAMS];
+    int paramidx;
 };
 
 /**
