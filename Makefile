@@ -32,7 +32,7 @@ export TOPDIR		:= $(CURDIR)
 export BINDIR		:= bin
 export OBJDIR		:= obj
 export OBJBASE		:= $(OBJDIR)
-export INCLUDE		:= include
+export INCLUDE		:= $(TOPDIR)/include
 export IMGDIR		:= $(BINDIR)/img
 export IMGFILE		:= $(IMGDIR)/niobium.img
 

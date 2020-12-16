@@ -21,70 +21,50 @@
 #ifndef __CONSOLE_H
 #define __CONSOLE_H
 
+#include <stdbool.h>
 #include <stdint.h>
+#include <drivers/vga.h>
+
+#define NUM_CONSOLES        8
 
 /**
- * Initializes the console.
+ * System Console
+ */
+struct console
+{
+    bool initialized;       /* console initalized? */
+    int cols, rows;         /* screen dimensions */
+    char *framebuf;         /* frame buffer */
+    struct disp_attr {      /* display attributes */
+        bool blink_on;      /*   character blinking enabled */
+        bool invert;        /*   colors are inverted */
+        bool conceal;       /*   screen is blanked */
+    } disp;
+    struct char_attr {      /* character attributes */
+        int bg, fg;         /*   background, foreground colors */
+        bool bright;        /*   use bright foreground */
+        bool faint;         /*   use dim foreground */
+        bool underline;     /*   show underline */
+        bool blink;         /*   blink character (if enabled) */
+    } attr;
+    struct cursor {         /* cursor parameters */
+        int x, y;           /*   position */
+        int shape;          /*   shape */
+        bool hidden;        /*   visibility */
+    } cursor;
+};
+
+/**
+ * Initializes the console driver.
  */
 void con_init(void);
 
 /**
- * Disables the cursor blink effect.
- */
-void blink_off(void);
-
-/**
- * Enables the cursor blink effect.
- */
-void blink_on(void);
-
-/**
- * Disables the cursor.
- */
-void hide_cursor(void);
-
-/**
- * Enables the cursor.
- */
-void show_cursor(void);
-
-/**
- * Gets the current linear cursor position. 
- * A value of 0 represents the top left corner of the display area.
+ * Writes a character to the console at the current cursor position, then 
+ * advances the cursor to the next position.
  * 
- * @return the cursor position
+ * @param c the character to write
  */
-uint16_t get_cursor_pos(void);
-
-/**
- * Sets the current linear cursor position. 
- * A value of 0 represents the top left corner of the display area.
- * 
- * @param pos the new linear cursor position
- */
-void set_cursor_pos(uint16_t pos);
-
-/**
- * Gets the current cursor shape. 
- * The cursor shape is defined as the area between two scan lines. A scan line 
- * value of 0 represents the top of the current row. The maximum scan line is 
- * determined by the character height (usually 15).
- * 
- * @return the cursor shape, represented as a packed scan line tuple where the
- *         low byte contains the starting scan line and the high byte contains
- *         the ending scan line
- */
-uint16_t get_cursor_shape(void);
-
-/**
- * Sets the cursor shape.
- * The cursor shape is defined as the area between two scan lines. A scan line 
- * value of 0 represents the top of the current row. The maximum scan line is 
- * determined by the character height (usually 15).
- *
- * @param start the scan line at which to begin drawing the cursor
- * @param end the scan line at which to stop drawing the cursor
- */
-void set_cursor_shape(uint8_t start, uint8_t end);
+void con_write( char c);
 
 #endif /* __CONSOLE_H */

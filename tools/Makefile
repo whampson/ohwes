@@ -27,7 +27,7 @@ include $(TOPDIR)/include/make/Tree.mk
 export TOOLSDIR		:= $(CURDIR)
 export OBJDIR		:= obj
 export BINDIR		:= bin
-export INCLUDE		:= include
+export INCLUDE		:= $(TOOLSDIR)/include
 
 export CXX		:= g++
 export CXXFLAGS		:= -g

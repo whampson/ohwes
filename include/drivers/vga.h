@@ -27,6 +27,12 @@
 #include <stdint.h>
 
 /**
+ * Screen Dimensions
+ */
+#define VGA_TEXT_COLS               80      /* Text Mode Columns */
+#define VGA_TEXT_ROWS               25      /* Text Mode Rows */
+
+/**
  * Frame Buffer Addresses
  */
 #define VGA_FRAMEBUF_GRAPHIC        0xA0000 /* Graphic Mode Frame Buffer */
@@ -180,6 +186,56 @@
 #define VGA_FLD_EXTL_MO_VSYNCP      0x80    /* Vertical Sync Polarity Field */
 
 /**
+ * Default Text Mode colors.
+ */
+enum vga_color
+{
+    VGA_BLK,    /* Black */
+    VGA_BLU,    /* Blue */
+    VGA_GRN,    /* Green */
+    VGA_CYN,    /* Cyan */
+    VGA_RED,    /* Red */
+    VGA_MGT,    /* Magenta */
+    VGA_BRN,    /* Brown */
+    VGA_WHT,    /* White */
+};
+
+/**
+ * Text Mode character attribute.
+ */
+struct vga_attr
+{
+    union {
+        struct {
+            uint8_t color_fg : 3;
+            uint8_t bright   : 1;
+            uint8_t color_bg : 3;
+            uint8_t blink    : 1;
+        };
+        struct {
+            uint8_t fg : 4;
+            uint8_t bg : 4;
+        };
+    };
+};
+_Static_assert(sizeof(struct vga_attr) == 1, "sizeof(struct vga_attr)");
+
+/**
+ * Text Mode character cell.
+ */
+struct vga_cell
+{
+    union {
+        struct {
+            char ch;
+            struct vga_attr attr;
+        };
+        uint16_t _value;
+    };
+};
+_Static_assert(sizeof(struct vga_cell) == 2, "sizeof(struct vga_cell)");
+
+/**
  * Initializes the VGA device.
  */
 void vga_init(void);
@@ -215,5 +271,64 @@ uint8_t vga_attr_read(uint8_t reg);
  * @param data the value to write
  */
 void vga_attr_write(uint8_t reg, uint8_t data);
+
+/**
+ * Disables the cursor blink effect.
+ */
+void vga_disable_blink(void);
+
+/**
+ * Enables the cursor blink effect.
+ */
+void vga_enable_blink(void);
+
+/**
+ * Disables the cursor.
+ */
+void vga_hide_cursor(void);
+
+/**
+ * Enables the cursor.
+ */
+void vga_show_cursor(void);
+
+/**
+ * Gets the current linear cursor position. 
+ * A value of 0 represents the top left corner of the display area.
+ * 
+ * @return the cursor position
+ */
+uint16_t vga_get_cursor_pos(void);
+
+/**
+ * Sets the current linear cursor position. 
+ * A value of 0 represents the top left corner of the display area.
+ * 
+ * @param pos the new linear cursor position
+ */
+void vga_set_cursor_pos(uint16_t pos);
+
+/**
+ * Gets the current cursor shape. 
+ * The cursor shape is defined as the area between two scan lines. A scan line 
+ * value of 0 represents the top of the current row. The maximum scan line is 
+ * determined by the character height (usually 15).
+ * 
+ * @return the cursor shape, represented as a packed scan line tuple where the
+ *         low byte contains the starting scan line and the high byte contains
+ *         the ending scan line
+ */
+uint16_t vga_get_cursor_shape(void);
+
+/**
+ * Sets the cursor shape.
+ * The cursor shape is defined as the area between two scan lines. A scan line 
+ * value of 0 represents the top of the current row. The maximum scan line is 
+ * determined by the character height (usually 15).
+ *
+ * @param start the scan line at which to begin drawing the cursor
+ * @param end the scan line at which to stop drawing the cursor
+ */
+void vga_set_cursor_shape(uint8_t start, uint8_t end);
 
 #endif /* __VGA_H */

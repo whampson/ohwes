@@ -34,16 +34,11 @@ void kmain(void)
     tss_init();
     con_init();
 
-    char *framebuf = (char *) VGA_FRAMEBUF_COLOR;
-    framebuf[160] = '!';
-    framebuf[161] = 2;
-    framebuf[162] = '?';
-    framebuf[163] = 5;
-
-    uint16_t pos = get_cursor_pos();
-    framebuf[pos * 2] = 'X';
-    set_cursor_pos(++pos);
-    set_cursor_shape(0, 15);
+    const char *str = ""
+        "The quick brown fox jumps over the lazy dog.\r\nNew line!\b\b";
+    while (*str != '\0') {
+        con_write(*(str++));
+    }
 }
 
 void gdt_init(void)

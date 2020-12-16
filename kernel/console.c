@@ -1,67 +1,225 @@
+/*============================================================================*
+ * Copyright (C) 2020 Wes Hampson. All Rights Reserved.                       *
+ *                                                                            *
+ * This file is part of the Niobium Operating System.                         *
+ * Niobium is free software; you may redistribute it and/or modify it under   *
+ * the terms of the license agreement provided with this software.            *
+ *                                                                            *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
+ * DEALINGS IN THE SOFTWARE.                                                  *
+ *============================================================================*
+ *    File: kernel/console.c                                                  *
+ * Created: December 13, 2020                                                 *
+ *  Author: Wes Hampson                                                       *
+ *============================================================================*/
+
+#include <string.h>
 #include <drivers/vga.h>
 #include <nb/console.h>
+#include <nb/input.h>
+
+#define DEFAULT_FG          VGA_WHT
+#define DEFAULT_BG          VGA_BLK
+#define CURSOR_DEFAULT      0x0E0D
+#define CURSOR_BLOCK        0x0F00
+#define BLANK_CHAR          ' '
+
+#define m_initialized   (consoles[curr_con].initialized)
+#define m_cols          (consoles[curr_con].cols)
+#define m_rows          (consoles[curr_con].rows)
+#define m_framebuf      ((struct vga_cell *) consoles[curr_con].framebuf)
+#define m_disp          (consoles[curr_con].disp)
+#define m_attr          (consoles[curr_con].attr)
+#define m_cursor        (consoles[curr_con].cursor)
+
+static struct console consoles[NUM_CONSOLES] = { 0 };
+static int curr_con = 0;
+
+static void defaults(struct console *con);
+static void bs(void);
+static void cr(void);
+static void lf(void);
+static void scroll(int n);
+static void set_vga_attr(struct vga_attr *a);
+static void update_vga_attr(int pos);
+static void update_cursor(void);
+static void pos2xy(int pos, int *x, int *y);
+static int xy2pos(int x, int y);
 
 void con_init(void)
 {
     vga_init();
+
+    curr_con = 0;
+    defaults(&consoles[curr_con]);
+    m_cursor.shape = vga_get_cursor_shape();
+    //pos2xy(vga_get_cursor_pos(), &m_cursor.x, &m_cursor.y);
+    update_cursor();
+    m_initialized = true;
 }
 
-void blink_off(void)
+void con_write(char c)
 {
-    uint8_t modectl;
-    modectl = vga_attr_read(VGA_REG_ATTR_MODE);
-    modectl &= ~VGA_FLD_ATTR_MODE_BLINK;
-    vga_attr_write(VGA_REG_ATTR_MODE, modectl);
+    int pos = xy2pos(m_cursor.x, m_cursor.y);
+    bool update_char = false;
+    bool update_attr = false;
+    bool update_curs = true;
+    bool needs_crlf = false;
+
+    switch (c) {
+        case ASCII_BS:  /* backspace */
+            if (m_cursor.x > 0) {
+                pos--;
+            }
+            bs();
+            c = BLANK_CHAR;
+            update_char = true;
+            update_attr = true;
+            break;
+        case ASCII_LF:  /* line feed */
+        case ASCII_VT:  /* vertical tab */
+        case ASCII_FF:  /* form feed */
+            lf();
+            break;
+        case ASCII_CR:  /* carriage return */
+            cr();
+            break;
+        default:
+            update_char = true;
+            update_attr = true;
+            if (++m_cursor.x >= m_cols) {
+                needs_crlf = true;
+            }
+            break;
+    }
+
+    if (update_char) {
+        m_framebuf[pos].ch = c;
+    }
+    if (update_attr) {
+        update_vga_attr(pos);
+    }
+    if (needs_crlf) {
+        cr(); lf();
+    }
+    if (update_curs) {
+        update_cursor();
+    }
 }
 
-void blink_on(void)
+static void defaults(struct console *con)
 {
-    uint8_t modectl;
-    modectl = vga_attr_read(VGA_REG_ATTR_MODE);
-    modectl |= VGA_FLD_ATTR_MODE_BLINK;
-    vga_attr_write(VGA_REG_ATTR_MODE, modectl);
+    memset(con, 0, sizeof(struct console));
+    con->cols = VGA_TEXT_COLS;
+    con->rows = VGA_TEXT_ROWS;
+    con->framebuf = (char *) VGA_FRAMEBUF_COLOR;
+    con->attr.bg = DEFAULT_BG;
+    con->attr.fg = DEFAULT_FG;
+    con->cursor.shape = CURSOR_DEFAULT;
+    con->cursor.x = 0;
+    con->cursor.y = VGA_TEXT_ROWS - 1;
 }
 
-void hide_cursor(void)
+static void bs(void)
 {
-    uint8_t css;
-    css = vga_crtc_read(VGA_REG_CRTC_CSS);
-    css |= VGA_FLD_CRTC_CSS_CD;
-    vga_crtc_write(VGA_REG_CRTC_CSS, css);
+    if (--m_cursor.x < 0) {
+        m_cursor.x = 0;
+    }
 }
 
-void show_cursor(void)
+static void lf(void)
 {
-    uint8_t css;
-    css = vga_crtc_read(VGA_REG_CRTC_CSS);
-    css &= ~VGA_FLD_CRTC_CSS_CD;
-    vga_crtc_write(VGA_REG_CRTC_CSS, css);
+    if (++m_cursor.y >= m_rows) {
+        scroll(1);
+        m_cursor.y--;
+    }
 }
 
-uint16_t get_cursor_pos(void)
+static void cr(void)
 {
-    uint8_t poshi, poslo;
-    poshi = vga_crtc_read(VGA_REG_CRTC_CL_HI);
-    poslo = vga_crtc_read(VGA_REG_CRTC_CL_LO);
-    return (poshi << 8) | poslo;
+    m_cursor.x = 0;
 }
 
-void set_cursor_pos(uint16_t pos)
+static void scroll(int n)
 {
-    vga_crtc_write(VGA_REG_CRTC_CL_HI, pos >> 8);
-    vga_crtc_write(VGA_REG_CRTC_CL_LO, pos & 0xFF);
+    int n_cells;
+    int n_blank;
+    int n_bytes;
+    bool reverse;
+    struct vga_cell cell;
+    void *src;
+    void *dst;
+    int i;
+
+    reverse = (n < 0);
+    if (reverse) {
+        n = -n;
+    }
+    if (n > m_rows) {
+        n = m_rows;
+    }
+    if (n == 0) {
+        return;
+    }
+
+    n_blank = n * m_cols;
+    n_cells = (m_rows * m_cols) - n_blank;
+    n_bytes = n_cells * sizeof(struct vga_cell);
+    
+    src = (reverse) ? m_framebuf : &(m_framebuf[n_blank]);
+    dst = (reverse) ? &(m_framebuf[n_blank]) : m_framebuf;
+    memmove(dst, src, n_bytes);
+
+    cell.ch = BLANK_CHAR;
+    set_vga_attr(&cell.attr);
+    for (i = 0; i < n_blank; i++) {
+        m_framebuf[(reverse)? i: n_cells+i] = cell;
+    }
 }
 
-uint16_t get_cursor_shape(void)
+static void update_vga_attr(int pos)
 {
-    uint8_t shapehi, shapelo;
-    shapelo = vga_crtc_read(VGA_REG_CRTC_CSS) & VGA_FLD_CRTC_CSS_CSS;
-    shapehi = vga_crtc_read(VGA_REG_CRTC_CSE) & VGA_FLD_CRTC_CSE_CSE;
-    return (shapehi << 8) | shapelo;
+    set_vga_attr(&m_framebuf[pos].attr);
 }
 
-void set_cursor_shape(uint8_t start, uint8_t end)
+static void set_vga_attr(struct vga_attr *a)
 {
-    vga_crtc_write(VGA_REG_CRTC_CSS, start & VGA_FLD_CRTC_CSS_CSS);
-    vga_crtc_write(VGA_REG_CRTC_CSE, end   & VGA_FLD_CRTC_CSE_CSE);
+    a->bg = m_attr.bg;
+    a->fg = m_attr.fg;
+    
+    if (m_attr.bright) {
+        a->bright = 1;
+    }
+    if (m_attr.faint) {
+        a->fg = VGA_BLK;    /* emulate with dark gray */
+        a->bright = 1;
+    }
+    if (m_attr.underline) {
+        a->fg = VGA_CYN;    /* emulate with bright cyan */
+        a->bright = 1;
+    }
+    if (m_attr.blink && m_disp.blink_on) {
+        a->blink = 1;
+    }
+}
+
+static void update_cursor(void)
+{
+    vga_set_cursor_pos(xy2pos(m_cursor.x, m_cursor.y));
+}
+
+static inline void pos2xy(int pos, int *x, int *y)
+{
+    *x = pos % m_cols;
+    *y = pos / m_cols;
+}
+
+static inline int xy2pos(int x, int y)
+{
+    return y * m_cols + x;
 }
