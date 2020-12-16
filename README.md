@@ -41,6 +41,7 @@ Niobium on a real PC!
 - [ ] Program loader
     - [ ] ELF binaries
 - [ ] Memory Manager
+    - [ ] Enable Paging
     - [ ] Process memory virtualization & protection
     - [ ] Dynamic memory allocation
 - [ ] Scheduler
