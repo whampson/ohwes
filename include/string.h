@@ -37,9 +37,57 @@ typedef uint32_t size_t;
 #define NULL ((void *) 0)
 #endif
 
+static inline void * memcpy(void *dest, const void *src, size_t n)
+{
+    __asm__ volatile (
+        "                               \n\
+        movw    %%ds, %%dx              \n\
+        movw    %%dx, %%es              \n\
+        cld                             \n\
+        cmpl    %%edi, %%esi            \n\
+        jae     .memmove_start%=        \n\
+        leal    -1(%%esi, %%ecx), %%esi \n\
+        leal    -1(%%edi, %%ecx), %%edi \n\
+        std                             \n\
+    .memmove_start%=:                   \n\
+        rep     movsb                   \n\
+        "
+        :
+        : "D"(dest), "S"(src), "c"(n)
+        : "edx", "cc", "memory"
+    );
+
+    return dest;
+}
+
+static inline void * memmove(void *dest, const void *src, size_t n)
+{
+    return memcpy(dest, src, n);
+}
+
+// static inline char * strcpy(char *dest, const char *src) { }
+// static inline char * strncpy(char *dest, const char *src, size_t n) { }
+
+// static inline char * strcat(char *dst, const char *src) { }
+// static inline char * strncat(char *dst, const char *src, size_t n) { }
+
+// static inline int memcmp(const void *ptr1, const void *ptr2, size_t n) { }
+// static inline int strcmp(const char *str1, const char *str2) { }
+// static inline int strncmp(const char *str1, const char *str2, size_t n) { }
+// static inline int strcoll(const char *str1, const char *str2) { }
+// static inline int strxfrm(char *dest, const char *src, size_t n) { }
+
+// static inline void * memchr(const void *ptr, int value, size_t n) { }
+// static inline char * strchr(const char *str, int ch) { }
+// static inline char * strrchr(const char *str, int ch) { }
+// static inline size_t strspn(const char *str1, const char *str2) { }
+// static inline size_t strcspn(const char *str1, const char *str2) { }
+// static inline char * strpbrk(const char *str1, const char *str2) { }
+// static inline char * strstr(const char *str1, const char *str2) { }
+// static inline char * strtok(char *str, const char *delim) { }
+
 static inline void * memset(void *dest, int c, size_t n)
 {
-    // TODO: TEST!!!
     unsigned char ch;
     ch = (unsigned char) c;
 
@@ -77,28 +125,7 @@ static inline void * memset(void *dest, int c, size_t n)
     return dest;
 }
 
-static inline void * memmove(void *dest, const void *src, size_t n)
-{
-    // TODO: TEST!!!
-    __asm__ volatile (
-        "                               \n\
-        movw    %%ds, %%dx              \n\
-        movw    %%dx, %%es              \n\
-        cld                             \n\
-        cmpl    %%edi, %%esi            \n\
-        jae     .memmove_start%=        \n\
-        leal    -1(%%esi, %%ecx), %%esi \n\
-        leal    -1(%%edi, %%ecx), %%edi \n\
-        std                             \n\
-    .memmove_start%=:                   \n\
-        rep     movsb                   \n\
-        "
-        :
-        : "D"(dest), "S"(src), "c"(n)
-        : "edx", "cc", "memory"
-    );
-
-    return dest;
-}
+// static inline size_t strlen(const char *str) { }
+// static inline char * strerror(int errnum) { }
 
 #endif /* __STRING_H */
