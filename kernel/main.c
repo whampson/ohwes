@@ -23,8 +23,9 @@
 #include <nb/kernel.h>
 #include <nb/console.h>
 #include <nb/x86_desc.h>
+#include <nb/nb.h>
 
-#include <drivers/vga.h>
+#include <string.h>
 
 void kmain(void)
 {
@@ -34,10 +35,21 @@ void kmain(void)
     tss_init();
     con_init();
 
-    /* Red bg, white fg, flashing "Hello, world!" in top-left, no cursor */
-    const char *str = "\033H\033[37;41m\033[2J\0335\0334\033[1;5mHello, world!";
-    while (*str != '\0') {
-        con_write(*(str++));
+    char *ptr;
+    int r = strcmp("abcd", "abcd");
+    if (r > 0) {
+        ptr = "buf2 is less than buf1";
+    }
+    else if (r < 0) {
+        ptr = "buf1 is less than buf2";
+    }
+    else {
+        ptr = "buf1 is equal to buf2";
+    }
+
+
+    while (*ptr != '\0') {
+        con_write(*(ptr++));
     }
 }
 
@@ -61,7 +73,7 @@ void gdt_init(void)
     load_cs(KERNEL_CS);
     load_ds(KERNEL_DS);
     load_ss(KERNEL_DS);
-    load_es(NULL);
+    load_es(KERNEL_DS);
     load_fs(NULL);
     load_gs(NULL);
 }
