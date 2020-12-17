@@ -36,7 +36,7 @@ static inline uint8_t inb(uint16_t port)
         "inb %w1, %b0"
         : "=a"(data)
         : "d"(port)
-        : "memory", "cc"
+        :
     );
     return data;
 }
@@ -53,7 +53,7 @@ static inline void outb(uint16_t port, uint8_t data)
         "outb %b0, %w1"
         :
         : "a"(data), "d"(port)
-        : "memory", "cc"
+        :
     );
 }
 

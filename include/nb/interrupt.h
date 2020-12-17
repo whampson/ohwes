@@ -29,7 +29,7 @@ __asm__ volatile (          \
     "cli"                   \
     :                       \
     :                       \
-    : "memory", "cc"        \
+    : "cc"                  \
 )
 
 /**
@@ -40,7 +40,7 @@ __asm__ volatile (          \
     "sti"                   \
     :                       \
     :                       \
-    : "memory", "cc"        \
+    : "cc"                  \
 )
 
 /**

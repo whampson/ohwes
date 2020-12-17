@@ -317,7 +317,7 @@ __asm__ volatile (          \
     "lgdt %0"               \
     :                       \
     : "m"(descreg)          \
-    : "memory", "cc"        \
+    :                       \
 )
 
 /**
@@ -330,7 +330,7 @@ __asm__ volatile (          \
     "lidt %0"               \
     :                       \
     : "m"(descreg)          \
-    : "memory", "cc"        \
+    :                       \
 )
 
 /**
@@ -343,7 +343,7 @@ __asm__ volatile (          \
     "lldt %w0"              \
     :                       \
     : "r"(selector)         \
-    : "memory", "cc"        \
+    :                       \
 )
 
 /**
@@ -356,7 +356,7 @@ __asm__ volatile (          \
     "ltr %w0"               \
     :                       \
     : "r"(selector)         \
-    : "memory", "cc"        \
+    :                       \
 )
 
 #define load_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs))
