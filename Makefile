@@ -37,7 +37,7 @@ export IMGDIR		:= $(BINDIR)/img
 export IMGFILE		:= $(IMGDIR)/niobium.img
 
 BINUTILS_PREFIX		:= i686-elf-
-GCC_WARNINGS		:= -Wall -Wextra -Wpedantic
+GCC_WARNINGS		:= -Wall -Wextra -Werror -Wpedantic
 GCC_FLAGS		:= $(GCC_WARNINGS) -g
 
 export AS		:= $(BINUTILS_PREFIX)gcc
