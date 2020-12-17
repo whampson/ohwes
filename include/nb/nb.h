@@ -17,43 +17,18 @@
  * Created: December 16, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *                                                                            *
- * Useful non-standard macros safe for use across the entire system.          *
+ * Useful macros and functions.                                               *
  *============================================================================*/
 
 #ifndef __NB_H
 #define __NB_H
 
-/**
- * Returns the greater value.
- * Adapted from https://stackoverflow.com/a/3437484.
- */
-#define max(a,b)            \
-do {                        \
-    __typeof__(a) _a = (a); \
-    __typeof__(b) _b = (b); \
-    _a > _b ? _a : _b;      \
-} while (0)
+#include <stdint.h>
 
 /**
- * Returns the smaller value.
- * Adapted from https://stackoverflow.com/a/3437484.
+ * Case statement fall-through hint (GCC).
  */
-#define min(a,b)            \
-do {                        \
-    __typeof__(a) _a = (a); \
-    __typeof__(b) _b = (b); \
-    _a < _b ? _a : _b;      \
-} while (0)
-
-/**
- * Exchanges two values.
- */
-#define swap(a,b)           \
-do {                        \
-    a ^= b;                 \
-    b ^= a;                 \
-    a ^= b;                 \
-} while(0)
+#define __fallthrough   __attribute__((fallthrough))
 
 /**
  * Checks whether a bit or bitmask is set in a value.
@@ -64,8 +39,29 @@ do {                        \
 #define has_flag(x,f) (((x)&(f))==(f))
 
 /**
- * Case statement fall-through hint (GCC).
+ * Exchanges two values.
  */
-#define __fallthrough   __attribute__((fallthrough))
+#define swap(a,b)           \
+do {                        \
+    (a) ^= (b);             \
+    (b) ^= (a);             \
+    (a) ^= (b);             \
+} while(0)
+
+static inline int64_t minb(int8_t a, int8_t b)      { return a < b ? a : b; }
+static inline int64_t mins(int16_t a, int16_t b)    { return a < b ? a : b; }
+static inline int32_t mini(int32_t a, int32_t b)    { return a < b ? a : b; }
+static inline int64_t minl(int64_t a, int64_t b)    { return a < b ? a : b; }
+static inline float minf(float a, float b)          { return a < b ? a : b; }
+static inline double mind(double a, double b)       { return a < b ? a : b; }
+#define min mini
+
+static inline int64_t maxb(int8_t a, int8_t b)      { return a > b ? a : b; }
+static inline int64_t maxs(int16_t a, int16_t b)    { return a > b ? a : b; }
+static inline int32_t maxi(int32_t a, int32_t b)    { return a > b ? a : b; }
+static inline int64_t maxl(int64_t a, int64_t b)    { return a > b ? a : b; }
+static inline float maxf(float a, float b)          { return a > b ? a : b; }
+static inline double maxd(double a, double b)       { return a > b ? a : b; }
+#define max maxi
 
 #endif /* __NB_H */
