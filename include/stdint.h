@@ -17,7 +17,7 @@
  * Created: December 11, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *                                                                            *
- * Implementation of stdint.h from the C11 Standard Library.                  *
+ * Implementation of stdint.h from the C Standard Library.                    *
  *============================================================================*/
 
 /* Completion Status: INCOMPLETE */

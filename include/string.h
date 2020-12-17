@@ -17,7 +17,7 @@
  * Created: December 13, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *                                                                            *
- * Implementation of string.h from the C11 Standard Library.                  *
+ * Implementation of string.h from the C Standard Library.                    *
  *============================================================================*/
 
 /* Completion Status: INCOMPLETE */

@@ -16,6 +16,8 @@
  *    File: include/ctype.h                                                   *
  * Created: December 14, 2020                                                 *
  *  Author: Wes Hampson                                                       *
+ *                                                                            *
+ * Implementation of ctype.h from the C Standard Library.                     *
  *============================================================================*/
 
 /* Completion Status: DONE */
