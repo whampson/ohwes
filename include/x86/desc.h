@@ -13,7 +13,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/nb/x86_desc.h                                             *
+ *    File: include/x86/desc.h                                                *
  * Created: December 12, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *                                                                            *
@@ -63,116 +63,111 @@
 /**
  * Segment Selector
  */
-typedef union
+struct segsel
 {
-    struct
-    {
-        uint16_t rpl    : 2;        /* requested privilege level */
-        uint16_t ti     : 1;        /* table type; 0 = GDT, 1 = LDT */
-        uint16_t index  : 13;       /* descriptor table index */
+    union {
+        struct {
+            uint16_t rpl    : 2;        /* requested privilege level */
+            uint16_t ti     : 1;        /* table type; 0 = GDT, 1 = LDT */
+            uint16_t index  : 13;       /* descriptor table index */
+        };
+        uint16_t _value;
     };
-    uint16_t _value;
-} segsel_t;
-
-_Static_assert(sizeof(segsel_t) == 2, "Invalid Segment Selector size!");
+};
+_Static_assert(sizeof(struct segsel) == 2, "sizeof(struct segsel)");
 
 /**
  * Segment Descriptor
  */
-typedef union
+struct segdesc
 {
-    struct
-    {
-        uint64_t limit_lo   : 16;   /* Segment Limit (bits 15:0) */
-        uint64_t base_lo    : 24;   /* Segment Base (bits 23:0) */
-        uint64_t type       : 4;    /* Segment/Gate Type */
-        uint64_t s          : 1;    /* Descriptor Type; 0 = System, 1 = Code/Data */
-        uint64_t dpl        : 2;    /* Descriptor Privilege Level */
-        uint64_t p          : 1;    /* Present Bit */
-        uint64_t limit_hi   : 4;    /* Segment Limit (bits 20:16) */
-        uint64_t avl        : 1;    /* Available for Use */
-        uint64_t            : 1;    /* Reserved; Do Not Use */
-        uint64_t db         : 1;    /* 0 = 16 bit Code/Data, 1 = 32-bit Code/Data */
-        uint64_t g          : 1;    /* Granularity; 0 = Byte, 1 = 4K Page */
-        uint64_t base_hi    : 8;    /* Segment Base (bits 31:24) */
-    } gdt_ldt;
-    struct
-    {
-        uint64_t limit_lo   : 16;
-        uint64_t base_lo    : 24;
-        uint64_t type       : 4;
-        uint64_t            : 1;
-        uint64_t dpl        : 2;
-        uint64_t p          : 1;
-        uint64_t limit_hi   : 4;
-        uint64_t avl        : 1;
-        uint64_t            : 1;
-        uint64_t            : 1;
-        uint64_t g          : 1;
-        uint64_t base_hi    : 8;
-    } tss;
-    struct
-    {
-        uint64_t offset_lo  : 16;
-        uint64_t segsel     : 16;
-        uint64_t param_count: 5;
-        uint64_t            : 3;
-        uint64_t type       : 4;
-        uint64_t            : 1;
-        uint64_t dpl        : 2;
-        uint64_t p          : 1;
-        uint64_t offset_hi  : 16;
-    } call_gate;
-    struct
-    {
-        uint64_t            : 16;
-        uint64_t tss_segsel : 16;
-        uint64_t            : 8;
-        uint64_t type       : 4;
-        uint64_t dpl        : 2;
-        uint64_t p          : 1;
-        uint64_t            : 16;
-    } task_gate;
-    struct
-    {
-        uint64_t offset_lo  : 16;
-        uint64_t segsel     : 16;
-        uint64_t            : 8;
-        uint64_t type       : 4;
-        uint64_t dpl        : 2;
-        uint64_t p          : 1;
-        uint64_t offset_hi  : 16;
-    } int_gate;
-    struct
-    {
-        uint64_t offset_lo  : 16;
-        uint64_t segsel     : 16;
-        uint64_t            : 8;
-        uint64_t type       : 4;
-        uint64_t dpl        : 2;
-        uint64_t p          : 1;
-        uint64_t offset_hi  : 16;
-    } trap_gate;
-    uint64_t _value;
-} segdesc_t;
-
-_Static_assert(sizeof(segdesc_t) == 8, "Invalid Segment Descriptor size!");
+    union {
+        struct {
+            uint64_t limit_lo   : 16;   /* Segment Limit (bits 15:0) */
+            uint64_t base_lo    : 24;   /* Segment Base (bits 23:0) */
+            uint64_t type       : 4;    /* Segment/Gate Type */
+            uint64_t s          : 1;    /* Descriptor Type; 0 = System, 1 = Code/Data */
+            uint64_t dpl        : 2;    /* Descriptor Privilege Level */
+            uint64_t p          : 1;    /* Present Bit */
+            uint64_t limit_hi   : 4;    /* Segment Limit (bits 20:16) */
+            uint64_t avl        : 1;    /* Available for Use */
+            uint64_t            : 1;    /* Reserved; Do Not Use */
+            uint64_t db         : 1;    /* 0 = 16 bit Code/Data, 1 = 32-bit Code/Data */
+            uint64_t g          : 1;    /* Granularity; 0 = Byte, 1 = 4K Page */
+            uint64_t base_hi    : 8;    /* Segment Base (bits 31:24) */
+        } gdt_ldt;
+        struct {
+            uint64_t limit_lo   : 16;
+            uint64_t base_lo    : 24;
+            uint64_t type       : 4;
+            uint64_t            : 1;
+            uint64_t dpl        : 2;
+            uint64_t p          : 1;
+            uint64_t limit_hi   : 4;
+            uint64_t avl        : 1;
+            uint64_t            : 1;
+            uint64_t            : 1;
+            uint64_t g          : 1;
+            uint64_t base_hi    : 8;
+        } tss;
+        struct {
+            uint64_t offset_lo  : 16;
+            uint64_t segsel     : 16;
+            uint64_t param_count: 5;
+            uint64_t            : 3;
+            uint64_t type       : 4;
+            uint64_t            : 1;
+            uint64_t dpl        : 2;
+            uint64_t p          : 1;
+            uint64_t offset_hi  : 16;
+        } call_gate;
+        struct {
+            uint64_t            : 16;
+            uint64_t tss_segsel : 16;
+            uint64_t            : 8;
+            uint64_t type       : 4;
+            uint64_t dpl        : 2;
+            uint64_t p          : 1;
+            uint64_t            : 16;
+        } task_gate;
+        struct {
+            uint64_t offset_lo  : 16;
+            uint64_t segsel     : 16;
+            uint64_t            : 8;
+            uint64_t type       : 4;
+            uint64_t dpl        : 2;
+            uint64_t p          : 1;
+            uint64_t offset_hi  : 16;
+        } int_gate;
+        struct {
+            uint64_t offset_lo  : 16;
+            uint64_t segsel     : 16;
+            uint64_t            : 8;
+            uint64_t type       : 4;
+            uint64_t dpl        : 2;
+            uint64_t p          : 1;
+            uint64_t offset_hi  : 16;
+        } trap_gate;
+        uint64_t _value;
+    };
+};
+_Static_assert(sizeof(struct segdesc) == 8, "sizeof(struct segdesc)");
 
 /**
  * Descriptor Register (for LGDT and LIDT instructions).
  */
-typedef union
+struct descreg
 {
-    struct
-    {
-        uint64_t limit  : 16;
-        uint64_t base   : 32;
-        uint64_t        : 16;
+    union {
+        struct {
+            uint64_t limit  : 16;
+            uint64_t base   : 32;
+            uint64_t        : 16;
+        };
+        uint64_t _value;
     };
-    uint64_t _value;
-} descreg_t;
-
-_Static_assert(sizeof(descreg_t) == 8, "Invalid Descriptor Register size");
+};
+_Static_assert(sizeof(struct descreg) == 8, "sizeof(struct descreg)");
 
 /**
  * Task State Segment
@@ -220,7 +215,6 @@ struct tss
     uint16_t io_map_base;
     uint32_t ssp;
 };
-
 _Static_assert(sizeof(struct tss) == 108, "Invalid TSS size!");
 
 /**
@@ -229,7 +223,8 @@ _Static_assert(sizeof(struct tss) == 108, "Invalid TSS size!");
  * @param table the descriptor table
  * @param selector the segment selector
  */
-#define get_segdesc(table,selector) (table + (selector / sizeof(segdesc_t)))
+#define get_segdesc(table,selector) \
+    (table + (selector / sizeof(struct segdesc)))
 
 /**
  * Sets the values in a GDT or LDT code/data segment descriptor.
@@ -243,7 +238,7 @@ _Static_assert(sizeof(struct tss) == 108, "Invalid TSS size!");
  */
 #define set_segdesc(table,selector,base,limit,desc_type,desc_priv)  \
 do {                                                                \
-    segdesc_t *desc = get_segdesc(table, selector);                 \
+    struct segdesc *desc = get_segdesc(table, selector);            \
     desc->_value = 0;                                               \
     desc->gdt_ldt.base_lo = ((base) & 0x00FFFFFF);                  \
     desc->gdt_ldt.base_hi = ((base) & 0xFF000000) >> 24;            \
@@ -269,7 +264,7 @@ do {                                                                \
  */
 #define set_segdesc_sys(table,selector,base,limit,desc_type)        \
 do {                                                                \
-    segdesc_t *desc = get_segdesc(table, selector);                 \
+    struct segdesc *desc = get_segdesc(table, selector);            \
     desc->_value = 0;                                               \
     desc->gdt_ldt.base_lo = ((base) & 0x00FFFFFF);                  \
     desc->gdt_ldt.base_hi = ((base) & 0xFF000000) >> 24;            \
@@ -294,17 +289,17 @@ do {                                                                \
  */
 #define set_segdesc_tss(table,selector,base,limit)                  \
 do {                                                                \
-    segdesc_t *desc = get_segdesc(table, selector);                 \
+    struct segdesc *desc = get_segdesc(table, selector);            \
     desc->_value = 0;                                               \
     desc->tss.base_lo = ((base) & 0x00FFFFFF);                      \
     desc->tss.base_hi = ((base) & 0xFF000000) >> 24;                \
     desc->tss.limit_lo = ((limit) & 0x0FFFF);                       \
     desc->tss.limit_hi = ((limit) & 0xF0000) >> 16;                 \
     desc->tss.type = SEGDESC_TYPE_TSS32;                            \
-    desc->tss.dpl = 0;  /* ring 0 */                                \
-    desc->tss.g = 0;    /* byte granularity */                      \
-    desc->tss.avl = 0;  /* not available */                         \
-    desc->tss.p = 1;    /* present */                               \
+    desc->tss.dpl = 0;      /* ring 0 */                            \
+    desc->tss.g = 0;        /* byte granularity */                  \
+    desc->tss.avl = 0;      /* not available */                     \
+    desc->tss.p = 1;        /* present */                           \
 } while (0)
 
 /**
