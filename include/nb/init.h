@@ -21,8 +21,6 @@
 #ifndef __INIT_H
 #define __INIT_H
 
-#define PAGE_SIZE       4096
-
 /* Page 0: Reserved for Real Mode IVT & BIOS */
 
 /* Page 1: CPU Tables and Console Info */
@@ -40,10 +38,10 @@
 
 /* Page 2: Memory Info */
 #define MEMINFO         0x2000
-#define MEMINFO_1       (MEMINFO+0x10)  /* INT 15h AX=E820h result */
-#define MEMINFO_2A      (MEMINFO+0x08)  /* INT 15h AX=E801h result 1 */
-#define MEMINFO_2B      (MEMINFO+0x0A)  /* INT 15h AX=E801h result 2 */
-#define MEMINFO_3       (MEMINFO+0x00)  /* INT 15h AH=88h result */
+#define MEMINFO_SMAP    (MEMINFO+0x10)  /* INT 15h AX=E820h result */
+#define MEMINFO_E801A   (MEMINFO+0x08)  /* INT 15h AX=E801h result 1 */
+#define MEMINFO_E801B   (MEMINFO+0x0A)  /* INT 15h AX=E801h result 2 */
+#define MEMINFO_88      (MEMINFO+0x00)  /* INT 15h AH=88h result */
 
 /* Page 3: Page Directory */
 #define PGDIR           0x3000

@@ -13,50 +13,52 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/nb/kernel.h                                               *
- * Created: December 13, 2020                                                 *
+ *    File: include/nb/acpi.h                                                 *
+ * Created: December 20, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#ifndef __KERNEL_H
-#define __KERNEL_H
+#ifndef __ACPI_H
+#define __ACPI_H
 
-#include <stdio.h>
-
-#define KERNEL_CS               0x10    /* Kernel Code Segment */
-#define KERNEL_DS               0x18    /* Kernel Data Segment */
-#define USER_CS                 0x23    /* User-space Code Segment */
-#define USER_DS                 0x2B    /* User-space Data Segment */
-#define TSS_SEG                 0x30    /* TSS Segment */
-#define LDT_SEG                 0x38    /* LDT Segment */
+#include <stdint.h>
 
 /**
- * Prints a message to the kernel console.
+ * System Address Map Types
  */
-#define printk(...) printf(__VA_ARGS__)
+enum smap_type
+{
+    SMAP_TYPE_INVALID,  /* (invalid entry) */
+    SMAP_TYPE_FREE,     /* Free to use */
+    SMAP_TYPE_RESERVED, /* Reserved, do not use */
+    SMAP_TYPE_ACPI,     /* ACPI tables, do not use */
+    SMAP_TYPE_NV,       /* Non-volatile, do not use */
+    SMAP_TYPE_BAD,      /* Bad RAM, do not use */
+    SMAP_TYPE_DISABLED  /* Disabled, do not use */
+};
 
 /**
- * Uh oh, something bad happened!
- * Prints a message then halts the system.
+ * System Address Map Entry
  */
-#define panic(x)                \
-do {                            \
-    printk("KERNEL PANIC: " x); \
-    for (;;);                   \
-} while (0)
+struct smap_entry
+{
+    union {
+        struct {
+            uint32_t addr_lo;
+            uint32_t addr_hi;
+        };
+        uint64_t addr;
+    };
+    union {
+        struct {
+            uint32_t limit_lo;
+            uint32_t limit_hi;
+        };
+        uint64_t limit;
+    };
+    uint32_t type;
+    uint32_t extra;
+};
+_Static_assert(sizeof(struct smap_entry) == 0x18, "sizeof(struct smap_entry)");
 
-/* main.c */
-void gdt_init(void);
-void ldt_init(void);
-void tss_init(void);
-
-/* console.c */
-void con_init(void);
-
-/* memory.c */
-void mem_init(void);
-
-/* interrupt.c */
-void idt_init(void);
-
-#endif /* __KERNEL_H */
+#endif /* __ACPI_H */

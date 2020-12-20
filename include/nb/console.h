@@ -70,16 +70,11 @@ struct console
 };
 
 /**
- * Initializes the console driver.
- */
-void con_init(void);
-
-/**
  * Writes a character to the console at the current cursor position, then 
  * advances the cursor to the next position.
  * 
  * @param c the character to write
  */
-void con_write( char c);
+void con_write(char c);
 
 #endif /* __CONSOLE_H */

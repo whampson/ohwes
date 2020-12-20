@@ -22,6 +22,7 @@
 #include <string.h>
 #include <drivers/vga.h>
 #include <nb/console.h>
+#include <nb/kernel.h>
 #include <nb/input.h>
 #include <nb/nb.h>
 
@@ -125,6 +126,11 @@ void con_write(char c)
     bool update_attr = false;
     bool update_curs = true;
     bool needs_crlf = false;
+
+    /* CRNL conversion */
+    /* TODO: move this elsewhere, along with other output formatting */
+    if (c == '\r') return;
+    if (c == '\n') cr();
 
     if (iscntrl(c)) {
         goto cntrl;

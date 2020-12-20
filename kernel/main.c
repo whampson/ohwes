@@ -18,13 +18,17 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <nb/boot.h>
 #include <nb/init.h>
 #include <nb/kernel.h>
 #include <nb/console.h>
-#include <nb/x86_desc.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <nb/memory.h>
+#include <x86/desc.h>
+#include <x86/cntrl.h>
+
+#include <drivers/vga.h>
 
 void kmain(void)
 {
@@ -33,19 +37,27 @@ void kmain(void)
     idt_init();
     tss_init();
     con_init();
+    printk("\033[H\033[2JOHWES\n\n");
+    mem_init();
 
-    printf("\r\n");
-    printf("'%c'\r\n", 'c');
-    printf("'%8c'\r\n", 'c');
-    printf("'%08c'\r\n", 'c');
-    printf("'%-08c'\r\n", 'c');
-    printf("'%.8c'\r\n", 'c');
-    printf("'%.c'\r\n", 'c');
+    uint8_t grfx_misc = vga_grfx_read(VGA_REG_GRFX_MISC);
+    grfx_misc &= ~VGA_FLD_GRFX_MISC_MMAP;
+    grfx_misc |= (VGA_ENUM_GRFX_MISC_MMAP_32K_LO) << 2;
+    vga_grfx_write(VGA_REG_GRFX_MISC, grfx_misc);
+
+    char *test = (char *) 0xB0000;
+
+    for (int i = 0; i < 15; i++) {
+        test[0] = 'a' + i;
+        test += 0x1000;
+    }
+
+    printk("\033[41mThe quick brown fox jumps over the lazy dog\033[0m\n");
 }
 
 void gdt_init(void)
 {
-    segdesc_t *gdt = (segdesc_t *) GDT_BASE;
+    struct segdesc *gdt = (struct segdesc *) GDT_BASE;
     memset(gdt, 0, GDT_SIZE);
 
     set_segdesc(gdt, KERNEL_CS, 0, 0xFFFFF, SEGDESC_TYPE_XR, 0);
@@ -55,7 +67,7 @@ void gdt_init(void)
     set_segdesc_sys(gdt, LDT_SEG, LDT_BASE, LDT_SIZE-1, SEGDESC_TYPE_LDT);
     set_segdesc_tss(gdt, TSS_SEG, TSS_BASE, TSS_SIZE-1);
 
-    descreg_t *gdtr = (descreg_t *) GDT_REGPTR;
+    struct descreg *gdtr = (struct descreg *) GDT_REGPTR;
     gdtr->base = GDT_BASE;
     gdtr->limit = GDT_SIZE - 1;
     lgdt(*gdtr);
@@ -70,21 +82,14 @@ void gdt_init(void)
 
 void ldt_init(void)
 {
-    segdesc_t *ldt = (segdesc_t *) LDT_BASE;
+    struct segdesc *ldt = (struct segdesc *) LDT_BASE;
     memset(ldt, 0, LDT_SIZE);   /* not using the LDT, so just zero it */
-
     lldt(LDT_SEG);
-}
-
-void idt_init(void)
-{
-
 }
 
 void tss_init(void)
 {
     struct tss *tss = (struct tss *) TSS_BASE;
-
     tss->ldt_segsel = LDT_SEG;
     tss->esp0 = KERN_STACK;
     tss->ss0 = KERNEL_DS;

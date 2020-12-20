@@ -26,6 +26,7 @@
 .code16
 #include <nb/boot.h>
 #include <nb/init.h>
+#include <nb/memory.h>
 
 .global init
 init:
@@ -110,7 +111,7 @@ detect_memory:
 ####
 detect_memory1:
     clc
-    movw    $MEMINFO_1, %di         # dest buffer
+    movw    $MEMINFO_SMAP, %di      # dest buffer
     xorl    %ebx, %ebx              # continuation value (0 to begin)
 _detect_memory1_loop:
     movl    $0x18, %ecx             # table entry size
@@ -158,8 +159,8 @@ detect_memory2:
     movw    %cx, %ax
     movw    %dx, %bx
 _detect_memory2_store:
-    movw    %ax, %es:MEMINFO_2A     # contiguous 1K blocks 1M to 16M
-    movw    %bx, %es:MEMINFO_2B     # contiguous 64K blocks above 16M
+    movw    %ax, %es:MEMINFO_E801A  # contiguous 1K blocks 1M to 16M
+    movw    %bx, %es:MEMINFO_E801B  # contiguous 64K blocks above 16M
 _detect_memory2_done:
     ret
 
@@ -186,7 +187,7 @@ detect_memory3:
     je      mem_error               # unsupported function
     test    %ax, %ax
     jz      mem_error               # no memory...
-    movw    %ax, %es:MEMINFO_3      # contiguous 1K blocks above 1M (limit 64M)
+    movw    %ax, %es:MEMINFO_88     # contiguous 1K blocks above 1M (limit 64M)
     ret
 
 ####
