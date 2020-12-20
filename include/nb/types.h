@@ -13,30 +13,23 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/stdarg.h                                                  *
- * Created: December 13, 2020                                                 *
+ *    File: include/nb/types.h                                                *
+ * Created: December 17, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *                                                                            *
- * Implementation of stdarg.h from the C Standard Library.                    *
+ * Useful non-standard types.                                                 *
  *============================================================================*/
 
-/* Completion Status: DONE */
+#ifndef __TYPES_H
+#define __TYPES_H
 
-#ifndef __STDARG_H
-#define __STDARG_H
+#include <stdint.h>
 
-typedef void *va_list;
+#ifndef __SIZE_T_DEFINED
+#define __SIZE_T_DEFINED
+typedef uint32_t size_t;
+#endif
 
-#define va_start(list,param)    \
-    (void) ((list) = ((char *) &(param) + sizeof(param)))
+typedef int32_t ssize_t;        // POSIX
 
-#define va_arg(list,type)       \
-    ((type *) ((list) = ((char *) (list) + sizeof(type))))[-1]
-
-#define va_end(list)            \
-    (list = (void *) 0)
-
-#define va_copy(dest,src)       \
-    (dest = src)
-
-#endif /* __STDARG_H */
+#endif /* __TYPES_H */

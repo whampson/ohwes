@@ -13,30 +13,21 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/stdarg.h                                                  *
- * Created: December 13, 2020                                                 *
+ *    File: lib/stdio.c                                                       *
+ * Created: December 16, 2020                                                 *
  *  Author: Wes Hampson                                                       *
- *                                                                            *
- * Implementation of stdarg.h from the C Standard Library.                    *
  *============================================================================*/
 
-/* Completion Status: DONE */
+#include <string.h>
+#include <stdio.h>
+#include <nb/io.h>
 
-#ifndef __STDARG_H
-#define __STDARG_H
+int putchar(int ch)
+{
+    return write(STDOUT_FILENO, &ch, 1);
+}
 
-typedef void *va_list;
-
-#define va_start(list,param)    \
-    (void) ((list) = ((char *) &(param) + sizeof(param)))
-
-#define va_arg(list,type)       \
-    ((type *) ((list) = ((char *) (list) + sizeof(type))))[-1]
-
-#define va_end(list)            \
-    (list = (void *) 0)
-
-#define va_copy(dest,src)       \
-    (dest = src)
-
-#endif /* __STDARG_H */
+int puts(const char *str)
+{
+    return write(STDOUT_FILENO, str, strlen(str));
+}

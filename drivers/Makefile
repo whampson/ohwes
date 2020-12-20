@@ -29,6 +29,6 @@ include $(TOPDIR)/include/make/Tree.mk
 all: vga
 
 vga: dirs
-	@$(MAKE) -C vga	
+	@$(MAKE) -C vga
 
 include $(TOPDIR)/include/make/Rules.mk

@@ -1,3 +1,4 @@
+
 /*============================================================================*
  * Copyright (C) 2020 Wes Hampson. All Rights Reserved.                       *
  *                                                                            *
@@ -13,30 +14,23 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/stdarg.h                                                  *
- * Created: December 13, 2020                                                 *
+ *    File: kernel/io.c                                                       *
+ * Created: December 16, 2020                                                 *
  *  Author: Wes Hampson                                                       *
- *                                                                            *
- * Implementation of stdarg.h from the C Standard Library.                    *
  *============================================================================*/
 
-/* Completion Status: DONE */
+#include <nb/console.h>
+#include <nb/io.h>
 
-#ifndef __STDARG_H
-#define __STDARG_H
+ssize_t write(int fd, const void *buf, size_t n)
+{
+    /* TODO: actually implement this */
+    (void) fd;
 
-typedef void *va_list;
+    char *ptr = (char *) buf;
+    for (size_t i = 0; i < n; i++) {
+        con_write(ptr[i]);
+    }
 
-#define va_start(list,param)    \
-    (void) ((list) = ((char *) &(param) + sizeof(param)))
-
-#define va_arg(list,type)       \
-    ((type *) ((list) = ((char *) (list) + sizeof(type))))[-1]
-
-#define va_end(list)            \
-    (list = (void *) 0)
-
-#define va_copy(dest,src)       \
-    (dest = src)
-
-#endif /* __STDARG_H */
+    return (ssize_t) n;
+}

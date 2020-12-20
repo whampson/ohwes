@@ -29,9 +29,9 @@
 
 export TREE		:=
 export TOPDIR		:= $(CURDIR)
-export BINDIR		:= bin
 export OBJDIR		:= obj
-export OBJBASE		:= $(OBJDIR)
+export OBJBASE		:= $(TOPDIR)/$(OBJDIR)
+export BINDIR		:= $(TOPDIR)/bin
 export INCLUDE		:= $(TOPDIR)/include
 export IMGDIR		:= $(BINDIR)/img
 export IMGFILE		:= $(IMGDIR)/niobium.img
@@ -52,7 +52,7 @@ export MKDIR		:= mkdir -p
 export OBJCOPY		:= $(BINUTILS_PREFIX)objcopy
 export RM		:= rm -f
 
-.PHONY: all img boot drivers kernel tools wipe clean-tools
+.PHONY: all img boot drivers kernel lib tools wipe clean-tools
 
 all: tools img
 
@@ -64,16 +64,19 @@ img: boot kernel
 	@fatfs -i $(IMGFILE) add $(BINDIR)/nbos.sys
 	@echo '> Writing boot sector...'
 	@dd if=$(BINDIR)/boot.bin of=$(IMGFILE) conv=notrunc status=none
-	@echo 'OUT $(IMGFILE)'
+	@echo 'OUT $(subst $(TOPDIR)/,,$(abspath $(IMGFILE)))'
 
 boot: dirs
 	@$(MAKE) -C boot
 
+kernel: dirs lib drivers
+	@$(MAKE) -C kernel
+
 drivers: dirs
 	@$(MAKE) -C drivers
 
-kernel: dirs drivers
-	@$(MAKE) -C kernel
+lib: dirs
+	@$(MAKE) -C lib
 
 tools: dirs
 	@$(MAKE) -C tools

@@ -28,7 +28,9 @@ SRC_S	:= $(wildcard *.S)
 SRC_C	:= $(wildcard *.c)
 OBJ	:= $(addprefix $(OBJDIR)/,$(SRC_S:.S=.o)) \
 	$(addprefix $(OBJDIR)/,$(SRC_C:.c=.o)) \
-	$(shell find '$(OBJBASE)/' -type f -name '*.o' -not -path '$(OBJBASE)/boot/*')
+	$(shell find '$(OBJBASE)/' -type f -name '*.o' \
+		-not -path '$(OBJBASE)/boot/*' \
+		-not -path '$(OBJBASE)/kernel/*')
 DEP	:= $(OBJ:%.o=%.d)
 BIN 	:= $(BINDIR)/nbos.sys
 

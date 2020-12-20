@@ -23,9 +23,8 @@
 #include <nb/kernel.h>
 #include <nb/console.h>
 #include <nb/x86_desc.h>
-#include <nb/nb.h>
-
-#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 void kmain(void)
 {
@@ -35,22 +34,13 @@ void kmain(void)
     tss_init();
     con_init();
 
-    char *ptr;
-    int r = strcmp("abcd", "abcd");
-    if (r > 0) {
-        ptr = "buf2 is less than buf1";
-    }
-    else if (r < 0) {
-        ptr = "buf1 is less than buf2";
-    }
-    else {
-        ptr = "buf1 is equal to buf2";
-    }
-
-
-    while (*ptr != '\0') {
-        con_write(*(ptr++));
-    }
+    printf("\r\n");
+    printf("'%c'\r\n", 'c');
+    printf("'%8c'\r\n", 'c');
+    printf("'%08c'\r\n", 'c');
+    printf("'%-08c'\r\n", 'c');
+    printf("'%.8c'\r\n", 'c');
+    printf("'%.c'\r\n", 'c');
 }
 
 void gdt_init(void)

@@ -21,7 +21,9 @@
 #ifndef __IO_H
 #define __IO_H
 
-#include <stdint.h>
+#include <nb/types.h>
+
+ssize_t write(int fd, const void *buf, size_t n);
 
 /**
  * Reads a byte from an I/O port.

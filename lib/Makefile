@@ -13,13 +13,23 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER          #
 # DEALINGS IN THE SOFTWARE.                                                    #
 #==============================================================================#
-#    File: include/make/Tree.mk                                                #
-# Created: November 27, 2020                                                   #
+#    File: drivers/lib/Makefile                                                #
+# Created: December 17, 2020                                                   #
 #  Author: Wes Hampson                                                         #
-#                                                                              #
-# Directory tree tracking for recursive Makefiles.                             #
 #==============================================================================#
 
-export DIRNAME		:= $(notdir $(CURDIR))
-export TREE		:= $(TREE)$(DIRNAME)/
-export OBJDIR		:= ../$(OBJDIR)/$(DIRNAME)
+ifeq ($(MAKELEVEL), 0)
+$(error To build, please run 'make' from the top-level directory)
+endif
+
+include $(TOPDIR)/include/make/Tree.mk
+
+SRC	:= $(wildcard *.c)
+OBJ	:= $(addprefix $(OBJDIR)/,$(SRC:.c=.o))
+DEP	:= $(OBJ:%.o=%.d)
+
+.PHONY: all
+
+all: dirs $(OBJ)
+
+include $(TOPDIR)/include/make/Rules.mk

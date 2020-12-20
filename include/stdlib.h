@@ -13,30 +13,75 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/stdarg.h                                                  *
- * Created: December 13, 2020                                                 *
+ *    File: include/stdlib.h                                                  *
+ * Created: December 18, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *                                                                            *
- * Implementation of stdarg.h from the C Standard Library.                    *
+ * Implementation of stdlib.h from the C Standard Library.                    *
  *============================================================================*/
 
-/* Completion Status: DONE */
+/* Completion Status: INCOMPLETE */
 
-#ifndef __STDARG_H
-#define __STDARG_H
+#ifndef __STDLIB_H
+#define __STDLIB_H
 
-typedef void *va_list;
+#include <stdint.h>
 
-#define va_start(list,param)    \
-    (void) ((list) = ((char *) &(param) + sizeof(param)))
+#ifndef __SIZE_T_DEFINED
+#define __SIZE_T_DEFINED
+typedef uint32_t size_t;
+#endif
 
-#define va_arg(list,type)       \
-    ((type *) ((list) = ((char *) (list) + sizeof(type))))[-1]
+#ifndef __NULL_DEFINED
+#define __NULL_DEFINED
+#define NULL ((void *) 0)
+#endif
 
-#define va_end(list)            \
-    (list = (void *) 0)
+static inline char * itoa(int value, char *str, int base)   /* Non-standard */
+{
+    static char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+    char tmp[33];
+    char *ptr;
+    int i, len;
+    unsigned int uval;
 
-#define va_copy(dest,src)       \
-    (dest = src)
+    if (base < 2 || base > 36) {
+        str[0] = '\0';
+        return str;
+    }
+    if (value == 0) {
+        str[0] = '0';
+        str[1] = '\0';
+        return str;
+    }
 
-#endif /* __STDARG_H */
+    int sign = (base == 10 && value < 0);
+    if (sign) {
+        value = -value;
+    }
+
+    ptr = tmp;
+    uval = (unsigned int) value;
+    while (uval > 0) {
+        i = (int) (uval % base);
+        *ptr = digits[i];
+        ptr++;
+        uval /= base;
+    }
+    if (sign) {
+        *(ptr++) = '-';
+    }
+    *ptr = '\0';
+
+    i = 0;
+    len = ptr - tmp;
+    while (i < len) {
+        str[i] = tmp[len - i - 1];
+        i++;
+    }
+    str[i] = '\0';
+
+    return str;
+}
+
+#endif /* __STDLIB_H */

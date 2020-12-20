@@ -80,6 +80,69 @@ typedef uint64_t fpos_t;
 // void setbuf(FILE *stream, char *buf);
 // int setvbuf(FILE *stream, char *buf, int mode, size_t size);
 
+/**
+ * printf()-family functions.
+ * 
+ *     %[flags][width][.precision][length]specifier
+ * 
+ * Specifier    Output                                      Support
+ * -----------------------------------------------------------------------------
+ * d or i       signed decimal integer                      SUPPORTED
+ * u            unsigned decimal integer                    SUPPORTED
+ * o            unsigned octal                              SUPPORTED
+ * x            unsigned hexadecimal integer                SUPPORTED
+ * X            unsigned hexadecimal integer, uppercase     SUPPORTED
+ * f            decimal floating-point, lowercase           NOT IMPLEMENTED
+ * F            decimal floating-point, uppercase           NOT IMPLEMENTED
+ * e            scientific notation, lowercase              NOT SUPPORTED
+ * E            scientific notation, uppercase              NOT SUPPORTED
+ * g            use the shortest representation: %e or %f   NOT SUPPORTED
+ * G            use the shortest representation: %E or %F   NOT SUPPORTED
+ * a            hexadecimal floating-point, lowercase       NOT SUPPORTED
+ * A            hexadecimal floating-point, uppercase       NOT SUPPORTED
+ * c            character                                   SUPPORTED
+ * s            string of characters                        SUPPORTED
+ * p            pointer address                             SUPPORTED
+ * n            write chars printed to address              NOT SUPPORTED
+ * %            writes a '%' character                      SUPPORTED
+ * 
+ * 
+ * Flag         Description                                 Support
+ * -----------------------------------------------------------------------------
+ * -            left-justify within the given width         SUPPORTED
+ * +            always print a sign                         SUPPORTED
+ * (space)      write blank space if no sign to be printed  SUPPORTED
+ * #            always print hex prefix or decimal dot      SUPPORTED
+ * 0            left-pad with zeros                         SUPPORTED
+ * 
+ * 
+ * Width        Description                                 Support
+ * -----------------------------------------------------------------------------
+ * (number)     minimum number of characters                SUPPORTED
+ * *            width specified in argument list            SUPPORTED
+ * 
+ * 
+ * Precision    Description                                 Support
+ * -----------------------------------------------------------------------------
+ * .(number)    diouxX: minimum number of digits            SUPPORTED
+ *              fF:     minumum number of decimal places    NOT IMPLEMENTED
+ *              s:      maximum number of characters        SUPPORTED
+ * .*           precision specified in argument list        SUPPORTED
+ * 
+ * 
+ * Length   di          uoxX        fFeEgGaAa   c           s           p
+ * -----------------------------------------------------------------------------
+ * (none)   int         u int       not impl    int         char*       void*
+ * hh       char        u char      n/a         n/a         n/a         n/a
+ * h        s int       us int      n/a         n/a         n/a         n/a
+ * l        l int       ul int      n/a         no support  no support  n/a
+ * ll       not impl    not impl    n/a         n/a         n/a         n/a
+ * j        not impl    not impl    n/a         n/a         n/a         n/a
+ * z        size_t      size_t      n/a         n/a         n/a         n/a
+ * t        ptrdiff_t   ptrdiff_t   n/a         n/a         n/a         n/a
+ * L        n/a         n/a         no support  n/a         n/a         n/a
+ */
+
 int printf(const char *fmt, ...);
 // int scanf(const char *fmt, ...);
 // int sscanf(const char *str, const char *fmt, ...);
@@ -91,7 +154,7 @@ int vprintf(const char *fmt, va_list args);
 // int vscanf(const char *fmt, va_list args);
 // int vsscanf(const char *str, const char *fmt, va_list args);
 int vsprintf(char *str, const char *fmt, va_list args);
-// int vsnprintf(char *str, size_t n, const char *fmt, va_list args);
+int vsnprintf(char *str, size_t n, const char *fmt, va_list args);
 // int vfprintf(FILE *stream, const char *fmt, va_list args);
 // int vfscanf(FILE *stream, const char *fmt, va_list args);
 
