@@ -24,8 +24,12 @@ Niobium on a real PC!
 - [x] Boot Loader
     - [x] Basic FS driver
     - [x] Load Kernel
+- [x] System Initialization
     - [x] Enter Protected Mode
+    - [x] Enable Paging
+    - [x] Setup GDT/LDT/TSS
 - [ ] Interrupt & Exception handling
+    - [ ] Setup IDT
     - [ ] Set up 8259A PIC
     - [ ] Set up handlers for Intel exceptions
     - [ ] Enable Keyboard interrupts
