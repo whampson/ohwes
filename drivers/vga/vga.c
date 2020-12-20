@@ -32,7 +32,7 @@ void vga_init(void)
     vga_show_cursor();
 }
 
-/* TODO: color, external, sqeuencer, graphics registers */
+/* TODO: color, external, sequencer registers */
 
 uint8_t vga_crtc_read(uint8_t reg)
 {
@@ -54,6 +54,29 @@ void vga_crtc_write(uint8_t reg, uint8_t data)
     cli_save(flags);
     outb(VGA_PORT_CRTC_ADDR, reg);
     outb(VGA_PORT_CRTC_DATA, data);
+    restore_flags(flags);
+}
+
+uint8_t vga_grfx_read(uint8_t reg)
+{
+    int flags;
+    uint8_t data;
+
+    cli_save(flags);
+    outb(VGA_PORT_GRFX_ADDR, reg);
+    data = inb(VGA_PORT_GRFX_DATA);
+    restore_flags(flags);
+
+    return data;
+}
+
+void vga_grfx_write(uint8_t reg, uint8_t data)
+{
+    int flags;
+
+    cli_save(flags);
+    outb(VGA_PORT_GRFX_ADDR, reg);
+    outb(VGA_PORT_GRFX_DATA, data);
     restore_flags(flags);
 }
 

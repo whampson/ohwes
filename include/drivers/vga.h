@@ -102,7 +102,7 @@
 #define VGA_ENUM_GRFX_MISC_MMAP_128K    0x00    /* 0xA0000-0xBFFFF */
 #define VGA_ENUM_GRFX_MISC_MMAP_64K     0x01    /* 0xB0000-0xBFFFF */
 #define VGA_ENUM_GRFX_MISC_MMAP_32K_LO  0x02    /* 0xB0000-0xB7FFF */
-#define VGA_ENUM_GRFX_MISC_MMAP_64K_HI  0x03    /* 0xB8000-0xBFFFF */
+#define VGA_ENUM_GRFX_MISC_MMAP_32K_HI  0x03    /* 0xB8000-0xBFFFF */
 
 /**
  * Attribute Controller Registers
@@ -255,6 +255,22 @@ uint8_t vga_crtc_read(uint8_t reg);
  * @param data the value to write
  */
 void vga_crtc_write(uint8_t reg, uint8_t data);
+
+/**
+ * Reads a Graphics register.
+ * 
+ * @param reg one of VGA_REG_GRFX_*
+ * @return the register value
+ */
+uint8_t vga_grfx_read(uint8_t reg);
+
+/**
+ * Writes a Graphics register.
+ * 
+ * @param reg one of VGA_REG_GRFX_*
+ * @param data the value to write
+ */
+void vga_grfx_write(uint8_t reg, uint8_t data);
 
 /**
  * Reads an Attribute register.
