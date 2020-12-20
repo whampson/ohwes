@@ -99,6 +99,7 @@ static int fmt_string(struct printf_params *p);
 static int pad(struct printf_params *p, int n, char c);
 static int write_string(struct printf_params *p, char *str, size_t len);
 static int write_char(struct printf_params *p, char c);
+static void reset_fmt_params(struct printf_params *p);
 
 int printf(const char *fmt, ...)
 {
@@ -174,6 +175,20 @@ int vsnprintf(char *str, size_t n, const char *fmt, va_list args)
     return _printf(&p);
 }
 
+static void reset_fmt_params(struct printf_params *p)
+{
+    p->parsing = true;
+    p->field = S_FLAGS;
+    p->flags = F_NONE;
+    p->width = DEFAULT_WIDTH;
+    p->precision = DEFAULT_PRECISION;
+    p->length = L_NONE;
+    p->int_pointer = false;
+    p->int_radix = 10;
+    p->int_signed = true;
+    p->int_upper = false;
+}
+
 static int _printf(struct printf_params *p)
 {
     char *f = (char *) p->fmt;
@@ -185,12 +200,7 @@ static int _printf(struct printf_params *p)
         {
             case '%':   /* begin parsing */
                 if (!p->parsing) {
-                    p->parsing = true;
-                    p->field = S_FLAGS;
-                    p->flags = F_NONE;
-                    p->width = DEFAULT_WIDTH;
-                    p->precision = DEFAULT_PRECISION;
-                    p->length = L_NONE;
+                    reset_fmt_params(p);
                     continue;
                 }
                 goto sendchar;
