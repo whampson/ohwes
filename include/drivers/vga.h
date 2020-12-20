@@ -241,54 +241,6 @@ _Static_assert(sizeof(struct vga_cell) == 2, "sizeof(struct vga_cell)");
 void vga_init(void);
 
 /**
- * Reads a CRT Controller register.
- * 
- * @param reg one of VGA_REG_CRTC_*
- * @return the register value
- */
-uint8_t vga_crtc_read(uint8_t reg);
-
-/**
- * Writes a CRT Controller register.
- * 
- * @param reg one of VGA_REG_CRTC_*
- * @param data the value to write
- */
-void vga_crtc_write(uint8_t reg, uint8_t data);
-
-/**
- * Reads a Graphics register.
- * 
- * @param reg one of VGA_REG_GRFX_*
- * @return the register value
- */
-uint8_t vga_grfx_read(uint8_t reg);
-
-/**
- * Writes a Graphics register.
- * 
- * @param reg one of VGA_REG_GRFX_*
- * @param data the value to write
- */
-void vga_grfx_write(uint8_t reg, uint8_t data);
-
-/**
- * Reads an Attribute register.
- * 
- * @param reg one of VGA_REG_ATTR_*
- * @return the register value
- */
-uint8_t vga_attr_read(uint8_t reg);
-
-/**
- * Writes an Attribute register.
- * 
- * @param reg one of VGA_REG_ATTR_*
- * @param data the value to write
- */
-void vga_attr_write(uint8_t reg, uint8_t data);
-
-/**
  * Disables the cursor blink effect.
  */
 void vga_disable_blink(void);
@@ -346,5 +298,85 @@ uint16_t vga_get_cursor_shape(void);
  * @param end the scan line at which to stop drawing the cursor
  */
 void vga_set_cursor_shape(uint8_t start, uint8_t end);
+
+/**
+ * Reads a CRT Controller register.
+ * 
+ * @param reg one of VGA_REG_CRTC_*
+ * @return the register value
+ */
+uint8_t vga_crtc_read(uint8_t reg);
+
+/**
+ * Writes a CRT Controller register.
+ * 
+ * @param reg one of VGA_REG_CRTC_*
+ * @param data the value to write
+ */
+void vga_crtc_write(uint8_t reg, uint8_t data);
+
+/**
+ * Reads a Graphics register.
+ * 
+ * @param reg one of VGA_REG_GRFX_*
+ * @return the register value
+ */
+uint8_t vga_grfx_read(uint8_t reg);
+
+/**
+ * Writes a Graphics register.
+ * 
+ * @param reg one of VGA_REG_GRFX_*
+ * @param data the value to write
+ */
+void vga_grfx_write(uint8_t reg, uint8_t data);
+
+/**
+ * Reads a Sequencer register.
+ * 
+ * @param reg one of VGA_REG_SEQR_*
+ * @return the register value
+ */
+uint8_t vga_seqr_read(uint8_t reg);
+
+/**
+ * Writes a Sequencer register.
+ * 
+ * @param reg one of VGA_REG_SEQR_*
+ * @param data the value to write
+ */
+void vga_seqr_write(uint8_t reg, uint8_t data);
+
+/**
+ * Reads an Attribute register.
+ * 
+ * @param reg one of VGA_REG_ATTR_*
+ * @return the register value
+ */
+uint8_t vga_attr_read(uint8_t reg);
+
+/**
+ * Writes an Attribute register.
+ * 
+ * @param reg one of VGA_REG_ATTR_*
+ * @param data the value to write
+ */
+void vga_attr_write(uint8_t reg, uint8_t data);
+
+/**
+ * Reads an External register.
+ * 
+ * @param port one of VGA_PORT_EXTL_*
+ * @return the register value
+ */
+uint8_t vga_extl_read(uint16_t port);
+
+/**
+ * Writes an External register.
+ * 
+ * @param port one of VGA_PORT_EXTL_*
+ * @param data the value to write
+ */
+void vga_extl_write(uint16_t port, uint8_t data);
 
 #endif /* __VGA_H */
