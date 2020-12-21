@@ -28,7 +28,7 @@ Niobium on a real PC!
     - [x] Enter Protected Mode
     - [x] Enable Paging
     - [x] Setup GDT/LDT/TSS
-- [ ] Interrupt & Exception handling
+- [ ] Interrupt & Exception Handling
     - [ ] Setup IDT
     - [ ] Set up 8259A PIC
     - [ ] Set up handlers for Intel exceptions
@@ -39,13 +39,15 @@ Niobium on a real PC!
     - [x] ANSI escape sequences
     - [ ] Input/Output buffering
     - [ ] RS232 support
+- [ ] Disk I/O
+    - [ ] Floppy Disk Driver
+    - [ ] Hard Disk Driver
 - [ ] File System
     - [ ] FAT
     - [ ] ext2
 - [ ] Program loader
     - [ ] ELF binaries
 - [ ] Memory Manager
-    - [ ] Enable Paging
     - [ ] Process memory virtualization & protection
     - [ ] Dynamic memory allocation
 - [ ] Scheduler
