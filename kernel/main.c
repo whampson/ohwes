@@ -25,6 +25,7 @@
 #include <nb/kernel.h>
 #include <nb/console.h>
 #include <nb/memory.h>
+#include <nb/interrupt.h>
 #include <x86/desc.h>
 #include <x86/cntrl.h>
 
@@ -46,10 +47,10 @@ void gdt_init(void)
     struct segdesc *gdt = (struct segdesc *) GDT_BASE;
     memset(gdt, 0, GDT_SIZE);
 
-    set_segdesc(gdt, KERNEL_CS, 0, 0xFFFFF, SEGDESC_TYPE_XR, 0);
-    set_segdesc(gdt, KERNEL_DS, 0, 0xFFFFF, SEGDESC_TYPE_RW, 0);
-    set_segdesc(gdt, USER_CS, 0, 0xFFFFF, SEGDESC_TYPE_XR, 3);
-    set_segdesc(gdt, USER_DS, 0, 0xFFFFF, SEGDESC_TYPE_RW, 3);
+    set_segdesc(gdt, KERNEL_CS, 0, 0xFFFFF, SEGDESC_TYPE_XR, KERNEL_PL);
+    set_segdesc(gdt, KERNEL_DS, 0, 0xFFFFF, SEGDESC_TYPE_RW, KERNEL_PL);
+    set_segdesc(gdt, USER_CS, 0, 0xFFFFF, SEGDESC_TYPE_XR, USER_PL);
+    set_segdesc(gdt, USER_DS, 0, 0xFFFFF, SEGDESC_TYPE_RW, USER_PL);
     set_segdesc_sys(gdt, LDT_SEG, LDT_BASE, LDT_SIZE-1, SEGDESC_TYPE_LDT);
     set_segdesc_tss(gdt, TSS_SEG, TSS_BASE, TSS_SIZE-1);
 

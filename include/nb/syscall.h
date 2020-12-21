@@ -13,53 +13,14 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/nb/kernel.h                                               *
- * Created: December 13, 2020                                                 *
+ *    File: include/nb/syscall.h                                              *
+ * Created: December 21, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#ifndef __KERNEL_H
-#define __KERNEL_H
+#ifndef __SYSCALL_H
+#define __SYSCALL_H
 
-#include <stdio.h>
+#define SYSCALL_VECTOR      0x80
 
-#define KERNEL_PL   0                       /* Kernel Privilege Level */
-#define USER_PL     3                       /* User Privilege Level */
-
-#define KERNEL_CS   (0x10|KERNEL_PL)        /* Kernel Code Segment */
-#define KERNEL_DS   (0x18|KERNEL_PL)        /* Kernel Data Segment */
-#define USER_CS     (0x20|USER_PL)          /* User-space Code Segment */
-#define USER_DS     (0x28|USER_PL)          /* User-space Data Segment */
-#define TSS_SEG     (0x30|KERNEL_PL)        /* TSS Segment */
-#define LDT_SEG     (0x38|KERNEL_PL)        /* LDT Segment */
-
-/**
- * Prints a message to the kernel console.
- */
-#define printk(...) printf(__VA_ARGS__)
-
-/**
- * Uh oh, something bad happened!
- * Prints a message then halts the system.
- */
-#define panic(x)                \
-do {                            \
-    printk("KERNEL PANIC: " x); \
-    for (;;);                   \
-} while (0)
-
-/* main.c */
-void gdt_init(void);
-void ldt_init(void);
-void tss_init(void);
-
-/* console.c */
-void con_init(void);
-
-/* memory.c */
-void mem_init(void);
-
-/* interrupt.c */
-void idt_init(void);
-
-#endif /* __KERNEL_H */
+#endif /* __SYSCALL_H */

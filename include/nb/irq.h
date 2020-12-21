@@ -13,53 +13,22 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/nb/kernel.h                                               *
- * Created: December 13, 2020                                                 *
+ *    File: include/nb/irq.h                                                  *
+ * Created: December 21, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#ifndef __KERNEL_H
-#define __KERNEL_H
+#ifndef __IRQ_H
+#define __IRQ_H
 
-#include <stdio.h>
+#define NUM_IRQ         16
+#define IRQ_KEYBOARD    1
 
-#define KERNEL_PL   0                       /* Kernel Privilege Level */
-#define USER_PL     3                       /* User Privilege Level */
+#ifndef __ASSEMBLY__
+#include <nb/nb.h>
 
-#define KERNEL_CS   (0x10|KERNEL_PL)        /* Kernel Code Segment */
-#define KERNEL_DS   (0x18|KERNEL_PL)        /* Kernel Data Segment */
-#define USER_CS     (0x20|USER_PL)          /* User-space Code Segment */
-#define USER_DS     (0x28|USER_PL)          /* User-space Data Segment */
-#define TSS_SEG     (0x30|KERNEL_PL)        /* TSS Segment */
-#define LDT_SEG     (0x38|KERNEL_PL)        /* LDT Segment */
+__fastcall void handle_irq(void);
 
-/**
- * Prints a message to the kernel console.
- */
-#define printk(...) printf(__VA_ARGS__)
+#endif /* __ASSEMBLY__ */
 
-/**
- * Uh oh, something bad happened!
- * Prints a message then halts the system.
- */
-#define panic(x)                \
-do {                            \
-    printk("KERNEL PANIC: " x); \
-    for (;;);                   \
-} while (0)
-
-/* main.c */
-void gdt_init(void);
-void ldt_init(void);
-void tss_init(void);
-
-/* console.c */
-void con_init(void);
-
-/* memory.c */
-void mem_init(void);
-
-/* interrupt.c */
-void idt_init(void);
-
-#endif /* __KERNEL_H */
+#endif /* __IRQ_H */

@@ -13,53 +13,34 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/nb/kernel.h                                               *
- * Created: December 13, 2020                                                 *
+ *    File: include/nb/exception.h                                            *
+ * Created: December 21, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#ifndef __KERNEL_H
-#define __KERNEL_H
+#ifndef __EXCEPTION_H
+#define __EXCEPTION_H
 
-#include <stdio.h>
+#define NUM_EXCEPT  32
+#define EXCEPT_DE   0x00    /* Divide Error */
+#define EXCEPT_DB   0x01    /* Debug */
+#define EXCEPT_NMI  0x02    /* Non-Maskable Interrupt */
+#define EXCEPT_BP   0x03    /* Breakpoint */
+#define EXCEPT_OF   0x04    /* Overflow */
+#define EXCEPT_BR   0x05    /* BOUND Range Exceeded */
+#define EXCEPT_UD   0x06    /* Invalid Opcode */
+#define EXCEPT_NM   0x07    /* Device Not Available */
+#define EXCEPT_DF   0x08    /* Double Fault */
+#define EXCEPT_TS   0x0A    /* Invalid TSS */
+#define EXCEPT_NP   0x0B    /* Segment Not Present */
+#define EXCEPT_SS   0x0C    /* Stack Fault */
+#define EXCEPT_GP   0x0D    /* General Protection Fault */
+#define EXCEPT_PF   0x0E    /* Page Fault */
+#define EXCEPT_MF   0x10    /* x87 FPU Foating-Point Error */
+#define EXCEPT_AC   0x11    /* Alignment Check Exception */
+#define EXCEPT_MC   0x12    /* Machine Check Exception */
+#define EXCEPT_XM   0x13    /* SIMD Floating-Point Exception */
+#define EXCEPT_VE   0x14    /* Virtualization Exception */
+#define EXCEPT_CP   0x15    /* Control Protection Exception */
 
-#define KERNEL_PL   0                       /* Kernel Privilege Level */
-#define USER_PL     3                       /* User Privilege Level */
-
-#define KERNEL_CS   (0x10|KERNEL_PL)        /* Kernel Code Segment */
-#define KERNEL_DS   (0x18|KERNEL_PL)        /* Kernel Data Segment */
-#define USER_CS     (0x20|USER_PL)          /* User-space Code Segment */
-#define USER_DS     (0x28|USER_PL)          /* User-space Data Segment */
-#define TSS_SEG     (0x30|KERNEL_PL)        /* TSS Segment */
-#define LDT_SEG     (0x38|KERNEL_PL)        /* LDT Segment */
-
-/**
- * Prints a message to the kernel console.
- */
-#define printk(...) printf(__VA_ARGS__)
-
-/**
- * Uh oh, something bad happened!
- * Prints a message then halts the system.
- */
-#define panic(x)                \
-do {                            \
-    printk("KERNEL PANIC: " x); \
-    for (;;);                   \
-} while (0)
-
-/* main.c */
-void gdt_init(void);
-void ldt_init(void);
-void tss_init(void);
-
-/* console.c */
-void con_init(void);
-
-/* memory.c */
-void mem_init(void);
-
-/* interrupt.c */
-void idt_init(void);
-
-#endif /* __KERNEL_H */
+#endif /* __EXCEPTION_H */

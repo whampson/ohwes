@@ -31,6 +31,11 @@
 #define __fallthrough   __attribute__((fallthrough))
 
 /**
+ * 'fastcall' calling convention hint (GCC).
+ */
+#define __fastcall      __attribute__((fastcall))
+
+/**
  * Checks whether a bit or bitmask is set in a value.
  * 
  * @param x the value to check

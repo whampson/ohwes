@@ -21,6 +21,47 @@
 #ifndef __INTERRUPT_H
 #define __INTERRUPT_H
 
+#define E_BASE_VECTOR       0x00
+#define I_BASE_VECTOR       0x20
+#define SYSCALL_VECTOR      0x80
+
+#ifndef __ASSEMBLY__
+#include <stdint.h>
+
+/**
+ * The stack frame upon entry to an interrupt handler.
+ */
+struct interrupt_frame
+{
+    /* Interrupted process state.
+       Pushed by common interrupt entry point. */
+    uint32_t edi;
+    uint32_t esi;
+    uint32_t ebp;
+    uint32_t edx;
+    uint32_t ecx;
+    uint32_t ebx;
+    uint32_t eax;
+
+    /* Interrupt vector number.
+       Exception number when an exception raised.
+       One's Compliment of IRQ number when device IRQ raised.
+       0x80 when executing system call. */
+    uint32_t vec_num;
+
+    /* Error code when an exception raised.
+       Should be set to -1 when error code does not apply. */
+    int32_t err_code;
+
+    /* Hardware context.
+       Pushed automatically by CPU when interrupt raised. */
+    uint32_t eip;
+    uint32_t cs;
+    uint32_t eflags;
+    uint32_t esp;   /* ESP and SS are only present when */
+    uint32_t ss;    /* an interrupt causes a privilege level change. */
+};
+
 /**
  * Clears the interrupt flag.
  */
@@ -59,8 +100,8 @@ __asm__ volatile (          \
 )
 
 /**
- * Restores EFLAGS register. If interrupts were previously enabled, this will
- * also restore interrupts.
+ * Restores the EFLAGS register.
+ * If interrupts were previously enabled, this will also restore interrupts.
  */
 #define restore_flags(flags)\
 __asm__ volatile (          \
@@ -72,5 +113,7 @@ __asm__ volatile (          \
     : "r"(flags)            \
     : "memory", "cc"        \
 )
+
+#endif /* __ASSEMBLY__ */
 
 #endif /* __INTERRUPT _H */
