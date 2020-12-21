@@ -13,9 +13,11 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: kernel/main.c                                                     *
+ *    File: kernel/kernel.ld                                                  *
  * Created: December 9, 2020                                                  *
  *  Author: Wes Hampson                                                       *
+ *                                                                            *
+ * Linker script for the kernel binary.                                       *
  *============================================================================*/
 
 OUTPUT_FORMAT("elf32-i386")
@@ -24,18 +26,20 @@ ENTRY(kentry)
 
 SECTIONS
 {
-    . = 0x10000;        /* Should match KERN_BASE defined in <nb/boot.h> */
+    /* Kernel base address; should match KERN_BASE defined in <nb/boot.h> */
+    . = 0x10000;
+
+    /* ELF sections */
     .text       : {
         *(.entry)       /* Ensure the setup ASM code goes first. */
         *(.text) 
     }
     .data       : { *(.data) }
     .bss        : { *(.bss) }
-    .rodata     : { *(.rodata*) }
-    /* Others? */
+    .rodata     : { *(.rodata) }
     _end = .;
 
-    . = ASSERT(_end <= 0x9C000, "Kernel is too big!");
-    /* Some systems report reserved memory near 0x9FFFF, so limit the kernel
-       to 0x9C000 just to be safe. */
+    /* Don't allow the kernel to grow beyond 0x80000;
+       this is where we keep the TTY input/output buffers. */
+    . = ASSERT(_end <= 0x80000, "Kernel is too big!");
 }
