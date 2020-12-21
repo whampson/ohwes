@@ -96,6 +96,7 @@ void con_init(void)
     m_cursor.shape = vga_get_cursor_shape();
     pos2xy(vga_get_cursor_pos(), &m_cursor.x, &m_cursor.y);
     m_initialized = true;
+    cr(); lf();
 }
 
 static void reset(void)

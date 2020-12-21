@@ -25,6 +25,16 @@
 #ifndef __X86_CTRNL_H
 #define __X86_CTRNL_H
 
+#define CR0_PE      (1 << 0)        /* Protected Mode Enable */
+#define CR0_PG      (1 << 31)       /* Paging Enable */
+#define CR3_PWT     (1 << 3)        /* Page-level Write-Through (Page Directory) */
+#define CR3_PCD     (1 << 4)        /* Page-level Cache Disable (Page Directory) */
+#define CR3_PDB     (1 << 12)       /* Page Directory Base Address */
+#define CR4_PSE     (1 << 4)        /* Page Size Enable */
+#define CR4_PAE     (1 << 5)        /* Physical Address Extension Enable */
+#define CR4_PGE     (1 << 7)        /* Page Global-bit Enable */
+
+#ifndef __ASSEMBLY__
 #include <stdint.h>
 
 /**
@@ -202,5 +212,7 @@ __asm__ volatile (          \
     : "a"(cr4)              \
     :                       \
 )
+
+#endif /* __ASSEMBLY__ */
 
 #endif /* __X86_CTRNL_H */

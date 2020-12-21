@@ -27,13 +27,17 @@
 #include <nb/boot.h>
 #include <nb/init.h>
 #include <nb/memory.h>
+#include <x86/cntrl.h>
+
+DUMMY_CS    = 0x08
+DUMMY_DS    = 0x10
 
 .global init
 init:
+    pushw   %cs
+    popw    %ds
     xorw    %ax, %ax
-    pushw   %cs                 # CS = 0x0900
-    popw    %ds                 # DS = 0x0900
-    movw    %ax, %es            # ES = 0x0000
+    movw    %ax, %es
 
     call    detect_memory
     call    enable_a20
@@ -41,13 +45,13 @@ init:
 
     cli
     movl    %cr0, %eax
-    orl     $0x01, %eax         # enable Protected Mode
+    orl     $CR0_PE, %eax       # enable Protected Mode
     movl    %eax, %cr0
-    ljmpl   $0x08, $INIT_BASE+init32
+    ljmpl   $DUMMY_CS, $INIT_BASE+init32
 
 .code32
 init32:
-    movw    $0x10, %ax
+    movw    $DUMMY_DS, %ax
     movw    %ax, %ds
     movw    %ax, %ss
     pushl   $KERN_ENTRY
@@ -66,9 +70,10 @@ init32:
 # Clobbers: (all, probably)
 ####
 detect_memory:
-    movw    $PAGE_SIZE>>2, %cx
+    movl    $PAGE_SIZE>>2, %ecx
     movl    $MEMINFO, %edi
     xorl    %eax, %eax
+    cld
     rep     stosl               # zero-out memory info region
     call    detect_memory1
     call    detect_memory2
@@ -359,8 +364,8 @@ retry_boot:
 .align 16
 temp_gdt_base:
     .quad   0x0000000000000000      # (not used, required by CPU)
-    .quad   0x00CF9A000000FFFF      # code segment
-    .quad   0x00CF92000000FFFF      # data segment
+    .quad   0x00CF9A000000FFFF      # code segment (DUMMY_CS)
+    .quad   0x00CF92000000FFFF      # data segment (DUMMY_DS)
 temp_gdt_end:
 
 temp_gdt_size:

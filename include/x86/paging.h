@@ -25,10 +25,32 @@
 #ifndef __X86_PAGING_H
 #define __X86_PAGING_H
 
-#include <stdint.h>
+/* Page Directory Entry Bits */
+#define PDE_P       (1 << 0)        /* Present */
+#define PDE_RW      (1 << 1)        /* Read/Write */
+#define PDE_US      (1 << 2)        /* User/Supervisor */
+#define PDE_PWT     (1 << 3)        /* Page-level Write Through */
+#define PDE_PCD     (1 << 4)        /* Page-level Cache Disable */
+#define PDE_A       (1 << 5)        /* Accessed */
+#define PDE_D       (1 << 6)        /* Dirty */
+#define PDE_PS      (1 << 7)        /* Page Size */
+#define PDE_G       (1 << 8)        /* Page Global */
+#define PDE_PTB     (1 << 12)       /* Page Table Base Address (when PS = 0) */
+#define PDE_PFB     (1 << 22)       /* Page Frame Base Address (when PS = 1) */
 
-#define PG_BIT      (1 << 31)   /* CR0 - enable paging */
-#define PSE_BIT     (1 << 4)    /* CR4 - allow for 4 MiB pages */
+/* Page Table Entry Bits */
+#define PTE_P       (1 << 0)        /* Present */
+#define PTE_RW      (1 << 1)        /* Read/Write */
+#define PTE_US      (1 << 2)        /* User/Supervisor */
+#define PTE_PWT     (1 << 3)        /* Page-level Write Through */
+#define PTE_PCD     (1 << 4)        /* Page-level Cache Disable */
+#define PTE_A       (1 << 5)        /* Accessed */
+#define PTE_D       (1 << 6)        /* Dirty */
+#define PTE_G       (1 << 8)        /* Page Global */
+#define PTE_PFB     (1 << 12)       /* Page Frame Base Address */
+
+#ifndef __ASSEMBLY__
+#include <stdint.h>
 
 struct pgdir_entry
 {
@@ -58,7 +80,7 @@ struct pgdir_entry
             uint32_t        : 3;    /* (ignored) */
             uint32_t pat    : 1;    /* Physical Address Translation */
             uint32_t        : 9;    /* reserved, set to 0 (PAE bits) */
-            uint32_t base   : 10;   /* 4 MiB page base */
+            uint32_t base   : 10;   /* 4 MiB Page Frame Base Address */
         } pde4m;
         uint32_t _value;
     };
@@ -79,7 +101,7 @@ struct pgtbl_entry
             uint32_t pat    : 1;    /* Physical Address Translation */
             uint32_t g      : 1;    /* Global */
             uint32_t        : 3;    /* (ignored) */
-            uint32_t base   : 20;   /* 4 KiB page base */
+            uint32_t base   : 20;   /* 4 KiB Page Frame Base Address */
         };
         uint32_t _value;
     };
@@ -93,5 +115,7 @@ __asm__ volatile (                  \
     movl    %eax, %cr3              \n\
     "                               \
 )
+
+#endif /* __ASSEMBLY__ */
 
 #endif /* __X86_PAGING_H */

@@ -31,34 +31,39 @@
 
 #define p64(x) (uint32_t)((x) >> 32), (uint32_t)((x) & 0xFFFFFFFF)
 
+#define MIN_KB  4096
+
 struct pgdir_entry *g_pgdir   = (struct pgdir_entry *) PGDIR;
 struct pgtbl_entry *g_pgtbl0  = (struct pgtbl_entry *) PGTBL0;
+size_t g_tom;
 
 void mem_init(void)
 {
+    /* TODO: check for/handle 15-16M hole */
+    
     uint16_t above1M;           /* 1K blocks */
     uint16_t above1M_e801;      /* 1K blocks */
     uint16_t above16M;          /* 64K blocks */
     struct smap_entry *smap;    /* a nice table */
     bool has_smap;
     int kb_free;
-    int pages_free;
 
     above1M = *((uint16_t *) MEMINFO_88);
     above1M_e801 = *((uint16_t *) MEMINFO_E801A);
     above16M = *((uint16_t *) MEMINFO_E801B);
 
+    kb_free = 640;
+    g_tom = 1*MB;
     if (above1M_e801 != 0) {
-        kb_free = above1M_e801;
+        kb_free += above1M_e801;
         kb_free += (above16M << 6);
+        g_tom += (above1M_e801 << KB_SHIFT);
+        g_tom += (above16M << (KB_SHIFT+6));
     }
     else {
-        kb_free = above1M;
+        kb_free += above1M;
+        g_tom += (above1M << KB_SHIFT);
     }
-    pages_free = (kb_free >> (PAGE_SHIFT-KB_SHIFT));
-
-    printk("%u KiB free\n", kb_free);
-    printk("%u pages free\n", pages_free);
 
     smap = (struct smap_entry *) MEMINFO_SMAP;
     if (smap->limit != 0 && smap->type != SMAP_TYPE_INVALID) {
@@ -66,64 +71,26 @@ void mem_init(void)
     }
 
     if (has_smap) {
+        kb_free = 0;
+        g_tom = 0;
         while (smap->limit != 0) {
             int kb = (uint32_t) (smap->limit >> 10);
-            printk("%p%p %p%p %d %-2d %6d KiB\n",
-                p64(smap->addr),
-                p64(smap->addr+smap->limit-1),
-                smap->type, smap->extra,
-                kb);
-            
-            /* TODO: read SMAP */
+            uint64_t end = smap->addr+smap->limit;
+            if (smap->type == SMAP_TYPE_FREE) {
+                kb_free += kb;
+                if (end > g_tom) {
+                    g_tom = end;
+                }
+            }
+            printk("%p%p %p%p %d %-2d\n",
+                p64(smap->addr), p64(end-1),
+                smap->type, smap->extra);
             smap++;
         }
     }
 
-    memset(g_pgdir, 0, 4*KB);
-    memset(g_pgtbl0, 0, 4*KB);
-
-    /* Open 0-4MiB to kernel as 4K pages */
-    g_pgdir[0].pde4k.base = ((uint32_t)g_pgtbl0) >> PAGE_SHIFT;
-    g_pgdir[0].pde4k.rw = 1;
-    g_pgdir[0].pde4k.us = 0;
-    g_pgdir[0].pde4k.ps = 0;
-    g_pgdir[0].pde4k.p = 1;
-
-    /* Mark all 4K pages in 0-4M region as present,
-       except for pages in the hardware-mapped area (0x9FC00-0xFFFFF),
-       but keep video memory accessible. */
-    for (int i = 0; i < 1024; i++) {
-        uint32_t pg_addr = (i << PAGE_SHIFT);
-        g_pgtbl0[i].base = i;
-        g_pgtbl0[i].rw = 1;
-        g_pgtbl0[i].us = 0;
-        g_pgtbl0[i].g = 1;
-        g_pgtbl0[i].p = 1;
-        if (pg_addr >= 0x9FC00 && pg_addr < 0x100000) {
-            g_pgtbl0[i].p = 0;
-        }
-        if (pg_addr >= 0xB0000 && pg_addr < 0xC0000) {
-            g_pgtbl0[i].p = 1;
-        }
+    printf("%d KiB free\n", kb_free);
+    if (kb_free < MIN_KB) {
+        panic("Not enough memory!");
     }
-
-    /* Enable paging */
-    struct cr0 cr0;
-    struct cr3 cr3;
-    struct cr4 cr4;
-    rdcr0(cr0._value);
-    rdcr3(cr3._value);
-    rdcr4(cr4._value);
-
-    cr3.pgdir_base = ((uint32_t) g_pgdir) >> PAGE_SHIFT;
-    cr3.pcd = 0;
-    cr3.pwt = 0;
-    wrcr3(cr3._value);
-
-    cr0.pg = 1;
-    wrcr0(cr0._value);
-
-    cr4.pse = 1;
-    cr4.pae = 0;
-    wrcr4(cr4._value);
 }

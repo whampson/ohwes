@@ -28,8 +28,6 @@
 #include <x86/desc.h>
 #include <x86/cntrl.h>
 
-#include <drivers/vga.h>
-
 void kmain(void)
 {
     gdt_init();
@@ -37,22 +35,10 @@ void kmain(void)
     idt_init();
     tss_init();
     con_init();
-    printk("\033[H\033[2JOHWES\n\n");
     mem_init();
 
-    uint8_t grfx_misc = vga_grfx_read(VGA_REG_GRFX_MISC);
-    grfx_misc &= ~VGA_FLD_GRFX_MISC_MMAP;
-    grfx_misc |= (VGA_ENUM_GRFX_MISC_MMAP_32K_LO) << 2;
-    vga_grfx_write(VGA_REG_GRFX_MISC, grfx_misc);
-
-    char *test = (char *) 0xB0000;
-
-    for (int i = 0; i < 15; i++) {
-        test[0] = 'a' + i;
-        test += 0x1000;
-    }
-
-    printk("\033[41mThe quick brown fox jumps over the lazy dog\033[0m\n");
+    printk("\nOHWES 0.1\n");
+    printk("Copyright (C) 2020 Wes Hampson\n\n");
 }
 
 void gdt_init(void)
