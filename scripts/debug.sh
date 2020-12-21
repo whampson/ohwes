@@ -43,7 +43,7 @@ else
     gdb ${NB_BINDIR}/nbos.elf \
         -ex 'target remote localhost:1234' \
         -ex 'set architecture i386' \
-        -ex 'break kmain' \
+        -ex 'break kentry' \
         -ex 'layout src' \
         -ex 'layout regs' \
         -ex 'continue'
