@@ -36,10 +36,19 @@ void kmain(void)
     idt_init();
     tss_init();
     con_init();
+
+    printk("Into TheKernel!!!\n\n");
+
     mem_init();
 
     printk("\nOHWES 0.1\n");
     printk("Copyright (C) 2020 Wes Hampson\n\n");
+
+    __asm__ volatile ("int $0x80");
+    printf("System Call 1\n");
+
+    __asm__ volatile ("int $0x80");
+    printf("System Call 2\n");
 }
 
 void gdt_init(void)

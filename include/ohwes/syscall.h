@@ -21,6 +21,13 @@
 #ifndef __SYSCALL_H
 #define __SYSCALL_H
 
-#define SYSCALL_VECTOR      0x80
+#define SYSCALL         0x80
+
+#ifndef __ASSEMBLY__
+#include <ohwes/ohwes.h>
+
+__fastcall void handle_syscall(void);
+
+#endif /* __ASSEMBLY__ */
 
 #endif /* __SYSCALL_H */

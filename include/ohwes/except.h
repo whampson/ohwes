@@ -13,13 +13,13 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/ohwes/exception.h                                         *
+ *    File: include/ohwes/except.h                                            *
  * Created: December 21, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#ifndef __EXCEPTION_H
-#define __EXCEPTION_H
+#ifndef __EXCEPT_H
+#define __EXCEPT_H
 
 #define NUM_EXCEPT  32
 #define EXCEPT_DE   0x00    /* Divide Error */
@@ -43,4 +43,11 @@
 #define EXCEPT_VE   0x14    /* Virtualization Exception */
 #define EXCEPT_CP   0x15    /* Control Protection Exception */
 
-#endif /* __EXCEPTION_H */
+#ifndef __ASSEMBLY__
+#include <ohwes/ohwes.h>
+
+__fastcall void handle_except(void);
+
+#endif /* __ASSEMBLY__ */
+
+#endif /* __EXCEPT_H */

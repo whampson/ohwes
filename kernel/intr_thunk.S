@@ -13,21 +13,27 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER          #
 # DEALINGS IN THE SOFTWARE.                                                    #
 #==============================================================================#
-#    File: kernel/intr.S                                                       #
+#    File: kernel/intr_thunk.S                                                 #
 # Created: December 21,2020                                                    #
 #  Author: Wes Hampson                                                         #
 #                                                                              #
-# Interrupt handling routines. Every interrupt is funnelled into a common      #
-# handler, which saves the process context, then calls the proper handling     #
-# routine depending on the type of interrupt raised.                           #
+# Interrupt handling thunk routines. Every interrupt is funnelled into a       #
+# common handler, which saves the process context, then calls the proper       #
+# handling routine depending on the type of interrupt raised.                  #
 #==============================================================================#
 
-#include <ohwes/irq.h>
-#include <ohwes/exception.h>
+#include <ohwes/except.h>
 #include <ohwes/interrupt.h>
+#include <ohwes/irq.h>
+#include <ohwes/syscall.h>
 
 common_handler:
+    pushl   $s_msg
+    call    printf
+    addl    $12, %esp
     iret
+
+s_msg:  .asciz  "Interrupt %d!!\n"
 
 /* Below are small thunk functions for linking entries in the IDT to the common
    interrupt handler defined above. There exists one of these thunk functions
@@ -57,7 +63,7 @@ thunk_name:                                                 \
 .globl thunk_name;                                          \
 thunk_name:                                                 \
     pushl   $-1;                                            \
-    pushl   $SYSCALL_VECTOR;                                \
+    pushl   $SYSCALL;                                       \
     jmp     common_handler
 
 EXCEPT_THUNK                (thunk_except_00, EXCEPT_DE)

@@ -21,9 +21,8 @@
 #ifndef __INTERRUPT_H
 #define __INTERRUPT_H
 
-#define E_BASE_VECTOR       0x00
-#define I_BASE_VECTOR       0x20
-#define SYSCALL_VECTOR      0x80
+#define EXCEPT_BASE         0x00    /* Exception Base Vector */
+#define IRQ_BASE            0x20    /* Device Interrupt Base Vector */
 
 #ifndef __ASSEMBLY__
 #include <stdint.h>
