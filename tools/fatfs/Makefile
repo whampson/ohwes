@@ -22,11 +22,11 @@ ifeq ($(MAKELEVEL), 0)
 $(error To build, please run 'make fatfs' from the top-level directory)
 endif
 
-include $(TOPDIR)/include/make/Tree.mk
+include $(TOPDIR)/Tree.mk
 
 SRC	:= $(wildcard *.cpp)
 OBJ	:= $(addprefix $(OBJDIR)/,$(SRC:.cpp=.o))
 DEP	:= $(OBJ:%.o=%.d)
 BIN	:= $(BINDIR)/fatfs
 
-include $(TOOLSDIR)/include/make/Rules.mk
+include $(TOOLSDIR)/Rules.mk

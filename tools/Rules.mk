@@ -18,7 +18,7 @@
 #  Author: Wes Hampson                                                         #
 #==============================================================================#
 
-include $(TOPDIR)/include/make/Rules.mk
+include $(TOPDIR)/Rules.mk
 
 $(BIN): $(OBJ)
 	@echo 'LD  $(LDFLAGS) $(subst $(TOPDIR)/,,$(realpath $^))'

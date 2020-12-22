@@ -22,7 +22,7 @@ ifeq ($(MAKELEVEL), 0)
 $(error To build, please run 'make boot' from the top-level directory)
 endif
 
-include $(TOPDIR)/include/make/Tree.mk
+include $(TOPDIR)/Tree.mk
 
 STAGE1_ENTRY	:= entry
 STAGE1_OFFSET	:= 0x7C00
@@ -38,7 +38,7 @@ STAGE2_BIN	:= $(BINDIR)/init.sys
 
 BIN		:= $(STAGE1_BIN) $(STAGE2_BIN)
 
-include $(TOPDIR)/include/make/Rules.mk
+include $(TOPDIR)/Rules.mk
 
 $(BINDIR)/boot.elf: LDFLAGS := -Ttext $(STAGE1_OFFSET) -e $(STAGE1_ENTRY)
 $(BINDIR)/boot.elf: $(STAGE1_OBJ)

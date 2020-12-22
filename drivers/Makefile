@@ -22,7 +22,7 @@ ifeq ($(MAKELEVEL), 0)
 $(error To build, please run 'make tools' from the top-level directory)
 endif
 
-include $(TOPDIR)/include/make/Tree.mk
+include $(TOPDIR)/Tree.mk
 
 .PHONY: all vga
 
@@ -31,4 +31,4 @@ all: vga
 vga: dirs
 	@$(MAKE) -C vga
 
-include $(TOPDIR)/include/make/Rules.mk
+include $(TOPDIR)/Rules.mk
