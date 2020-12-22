@@ -1,9 +1,9 @@
 /*============================================================================*
  * Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                  *
  *                                                                            *
- * This file is part of the Niobium Operating System.                         *
- * Niobium is free software; you may redistribute it and/or modify it under   *
- * the terms of the license agreement provided with this software.            *
+ * This file is part of the OHWES Operating System.                           *
+ * OHWES is free software; you may redistribute it and/or modify it under the *
+ * terms of the license agreement provided with this software.                *
  *                                                                            *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
@@ -21,10 +21,10 @@
 #include <ctype.h>
 #include <string.h>
 #include <drivers/vga.h>
-#include <nb/console.h>
-#include <nb/kernel.h>
-#include <nb/input.h>
-#include <nb/nb.h>
+#include <ohwes/console.h>
+#include <ohwes/kernel.h>
+#include <ohwes/input.h>
+#include <ohwes/ohwes.h>
 
 #define DEFAULT_FG          VGA_WHT
 #define DEFAULT_BG          VGA_BLK

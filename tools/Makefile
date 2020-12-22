@@ -1,9 +1,9 @@
 #==============================================================================#
 # Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                    #
 #                                                                              #
-# This file is part of the Niobium Operating System.                           #
-# Niobium is free software; you may redistribute it and/or modify it under     #
-# the terms of the license agreement provided with this software.              #
+# This file is part of the OHWES Operating System.                             #
+# OHWES is free software; you may redistribute it and/or modify it under the   #
+# terms of the license agreement provided with this software.                  #
 #                                                                              #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR   #
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,     #
@@ -26,7 +26,7 @@ include $(TOPDIR)/include/make/Tree.mk
 
 export TOOLSDIR		:= $(CURDIR)
 export OBJDIR		:= obj
-export BINDIR		:= bin
+export BINDIR		:= $(TOOLSDIR)/bin
 export INCLUDE		:= $(TOOLSDIR)/include
 
 export CXX		:= g++

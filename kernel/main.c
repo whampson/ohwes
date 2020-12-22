@@ -1,9 +1,9 @@
 /*============================================================================*
  * Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                  *
  *                                                                            *
- * This file is part of the Niobium Operating System.                         *
- * Niobium is free software; you may redistribute it and/or modify it under   *
- * the terms of the license agreement provided with this software.            *
+ * This file is part of the OHWES Operating System.                           *
+ * OHWES is free software; you may redistribute it and/or modify it under the *
+ * terms of the license agreement provided with this software.                *
  *                                                                            *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
@@ -20,12 +20,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <nb/boot.h>
-#include <nb/init.h>
-#include <nb/kernel.h>
-#include <nb/console.h>
-#include <nb/memory.h>
-#include <nb/interrupt.h>
+#include <ohwes/boot.h>
+#include <ohwes/init.h>
+#include <ohwes/kernel.h>
+#include <ohwes/console.h>
+#include <ohwes/memory.h>
+#include <ohwes/interrupt.h>
 #include <x86/desc.h>
 #include <x86/cntrl.h>
 

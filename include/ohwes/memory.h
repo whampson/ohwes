@@ -1,9 +1,9 @@
 /*============================================================================*
  * Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                  *
  *                                                                            *
- * This file is part of the Niobium Operating System.                         *
- * Niobium is free software; you may redistribute it and/or modify it under   *
- * the terms of the license agreement provided with this software.            *
+ * This file is part of the OHWES Operating System.                           *
+ * OHWES is free software; you may redistribute it and/or modify it under the *
+ * terms of the license agreement provided with this software.                *
  *                                                                            *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
@@ -13,50 +13,25 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/nb/io.h                                                   *
- * Created: December 13, 2020                                                 *
+ *    File: include/ohwes/memory.h                                            *
+ * Created: December 19, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#ifndef __IO_H
-#define __IO_H
+#ifndef __MEMORY_H
+#define __MEMORY_H
 
-#include <nb/types.h>
+#define KB              1024
+#define MB              (1024*KB)
+#define GB              (1024*MB)
+#define KB_SHIFT        10
+#define MB_SHIFT        20
+#define GB_SHIFT        30
 
-ssize_t write(int fd, const void *buf, size_t n);
+#define PAGE_SHIFT      12
+#define PAGE_SIZE       (1<<PAGE_SHIFT)
 
-/**
- * Reads a byte from an I/O port.
- *
- * @param port the port to read from
- * @return the byte read
- */
-static inline uint8_t inb(uint16_t port)
-{
-    uint8_t data;
-    __asm__ volatile (
-        "inb %w1, %b0"
-        : "=a"(data)
-        : "d"(port)
-        :
-    );
-    return data;
-}
+#define LG_PAGE_SHIFT   22
+#define LG_PAGE_SIZE    (1<<LG_PAGE_SHIFT)
 
-/**
- * Writes a byte to an I/O port.
- *
- * @param port the port to write to
- * @param data the byte to write
- */
-static inline void outb(uint16_t port, uint8_t data)
-{
-    __asm__ volatile (
-        "outb %b0, %w1"
-        :
-        : "a"(data), "d"(port)
-        :
-    );
-}
-
-#endif /* __IO_H */
+#endif /* __MEMROY_H */

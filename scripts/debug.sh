@@ -2,9 +2,9 @@
 #==============================================================================#
 # Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                    #
 #                                                                              #
-# This file is part of the Niobium Operating System.                           #
-# Niobium is free software; you may redistribute it and/or modify it under     #
-# the terms of the license agreement provided with this software.              #
+# This file is part of the OHWES Operating System.                             #
+# OHWES is free software; you may redistribute it and/or modify it under the   #
+# terms of the license agreement provided with this software.                  #
 #                                                                              #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR   #
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,     #
@@ -22,7 +22,7 @@
 #==============================================================================#
 
 if [ "$1" = "boot" ]; then
-    gdb ${NB_BINDIR}/boot.elf \
+    gdb ${OHWES_BINDIR}/boot.elf \
         -ex 'target remote localhost:1234' \
         -ex 'set tdesc filename scripts/gdb_targets/i386-16bit.xml' \
         -ex 'set architecture i8086' \
@@ -31,7 +31,7 @@ if [ "$1" = "boot" ]; then
         -ex 'layout regs' \
         -ex 'continue'
 elif [ "$1" = "init" ]; then
-    gdb ${NB_BINDIR}/init.elf \
+    gdb ${OHWES_BINDIR}/init.elf \
         -ex 'target remote localhost:1234' \
         -ex 'set tdesc filename scripts/gdb_targets/i386-16bit.xml' \
         -ex 'set architecture i8086' \
@@ -40,7 +40,7 @@ elif [ "$1" = "init" ]; then
         -ex 'layout regs' \
         -ex 'continue'
 else
-    gdb ${NB_BINDIR}/nbos.elf \
+    gdb ${OHWES_BINDIR}/ohwes.elf \
         -ex 'target remote localhost:1234' \
         -ex 'set architecture i386' \
         -ex 'break kentry' \

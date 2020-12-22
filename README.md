@@ -1,38 +1,35 @@
-# Niobium Operating System
-The **Niobium Operating System** (**NbOS**) is a small multi-tasking operating
-system for Intel 386-family CPUs designed by Wes Hampson.
+# OHWES
+**OHWES** is a small multi-tasking operating system for Intel 386-family CPUs
+designed by Wes Hampson.
 
 ## Design Goals
-- Keep it small; kernel and programs should fit on a 3.5in floppy (<1.44 MiB)
+- Keep it small; kernel and programs should fit on a floppy disk
 - Separate user-space and kernel-space
-- Preemptive multitasking kernel
-- Disk I/O; Support a common file system like FAT or ext2 (or both!)
+- Create a pre-emptive multi-tasking kernel
+- Disk I/O; support a common file system like FAT or ext2 (or both!)
 
 ## Building & Running
-To build Niobium, first we need to set up the build environment, then we build
-using `make`.  
-First, switch to the Niobium base directory, then run the following:
+To build **OHWES**, first set up the build environment, then build using `make`.
 ```
 $ source scripts/devenv.sh
 $ make
 ```
-This will generate a floppy disk image at `bin/img/niobium.img`. You can use
-this image to boot Niobium on an emulator, or write it to a floppy disk and boot
-Niobium on a real PC!
+This will generate a floppy disk image at `bin/ohwes.img`. You can then boot
+**OHWES** on an i386 emulator, or write the image to a floppy disk and boot
+**OHWES** on a real PC!
 
 ## TODO List
 - [x] Boot Loader
-    - [x] Basic FS driver
-    - [x] Load Kernel
+    - [x] Basic filesystem driver
+    - [x] Load the kernel into memory
 - [x] System Initialization
     - [x] Enter Protected Mode
     - [x] Enable Paging
     - [x] Setup GDT/LDT/TSS
 - [ ] Interrupt & Exception Handling
-    - [ ] Setup IDT
-    - [ ] Set up 8259A PIC
-    - [ ] Set up handlers for Intel exceptions
-    - [ ] Enable Keyboard interrupts
+    - [x] Setup IDT
+    - [ ] Setup 8259A PIC
+    - [ ] Setup handlers for Intel exceptions
 - [ ] Terminal I/O
     - [ ] Keyboard driver
     - [x] VGA driver

@@ -1,9 +1,11 @@
 {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4,
+    "files.associations": {
+        "*.h": "c"
+    },
     "[makefile]":{
         "editor.insertSpaces": false,
         "editor.tabSize": 8
-    },
-    "files.associations": {
-        "*.h": "c"
     }
 }

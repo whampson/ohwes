@@ -1,7 +1,7 @@
 {
     "configurations": [
         {
-            "name": "Niobium OS",
+            "name": "OHWES",
             "includePath": [
                 "${workspaceFolder}/**"
             ],
@@ -15,7 +15,7 @@
             ]
         },
         {
-            "name": "Niobium Tools (MinGW)",
+            "name": "OHWES Tools (MinGW)",
             "includePath": [
                 "${workspaceFolder}/**"
             ],

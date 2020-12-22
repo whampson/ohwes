@@ -1,9 +1,9 @@
 /*============================================================================*
  * Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                  *
  *                                                                            *
- * This file is part of the Niobium Operating System.                         *
- * Niobium is free software; you may redistribute it and/or modify it under   *
- * the terms of the license agreement provided with this software.            *
+ * This file is part of the OHWES Operating System.                           *
+ * OHWES is free software; you may redistribute it and/or modify it under the *
+ * terms of the license agreement provided with this software.                *
  *                                                                            *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
@@ -18,11 +18,11 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#include <nb/init.h>
-#include <nb/interrupt.h>
-#include <nb/irq.h>
-#include <nb/exception.h>
-#include <nb/kernel.h>
+#include <ohwes/init.h>
+#include <ohwes/interrupt.h>
+#include <ohwes/irq.h>
+#include <ohwes/exception.h>
+#include <ohwes/kernel.h>
 #include <x86/desc.h>
 
 #define THUNK_PROTOTYPE(thunk_name) \

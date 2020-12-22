@@ -1,9 +1,9 @@
 #==============================================================================#
 # Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                    #
 #                                                                              #
-# This file is part of the Niobium Operating System.                           #
-# Niobium is free software; you may redistribute it and/or modify it under     #
-# the terms of the license agreement provided with this software.              #
+# This file is part of the OHWES Operating System.                             #
+# OHWES is free software; you may redistribute it and/or modify it under the   #
+# terms of the license agreement provided with this software.                  #
 #                                                                              #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR   #
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,     #
@@ -18,7 +18,7 @@
 #  Author: Wes Hampson                                                         #
 #                                                                              #
 # This is the boot sector for FAT12-formatted disks. This code is responsible  #
-# for loading INIT.SYS (stage 2) and NBOS.SYS (the kernel) into memory, then   #
+# for loading INIT.SYS (stage 2) and OHWES.SYS (the kernel) into memory, then  #
 # passes control over to INIT.SYS to continue booting.                         #
 #                                                                              #
 # INIT.SYS is placed at 0x09000 and the kernel at 0x10000. This effectively    #
@@ -34,12 +34,12 @@
 # support, or cool boot messages, or something else :)
 # This code can easily be optimized by removing unnecessary subroutines and
 # making more assumptions about the disk layout (e.g. sector size always 512B,
-# INIT.SYS and NBOS.SYS never fragmented, first data sector always 33, etc.),
+# INIT.SYS and OHWES.SYS never fragmented, first data sector always 33, etc.),
 # after all, we /are/ in total control of the BIOS Parameter Block, and it's not
 # my problem if you write this bootsector onto the wrong kind of disk!
 
 .code16
-#include <nb/boot.h>
+#include <ohwes/boot.h>
 
 .global entry
 entry:
@@ -136,7 +136,7 @@ load_stage2:
     call    load_sys_file
 
 load_kernel:
-    movw    $KERN_SEG, %ax          # NBOS.SYS gets loaded at 0x10000
+    movw    $KERN_SEG, %ax          # OHWES.SYS gets loaded at 0x10000
     leaw    s_kern_file, %di
     call    load_sys_file
 
@@ -362,7 +362,7 @@ _print_done:
 # -----------------------------------------------------------------------------
 first_data_sector:      .byte       -1
 s_init_file:            .ascii      "INIT    SYS"
-s_kern_file:            .ascii      "NBOS    SYS"
+s_kern_file:            .ascii      "OHWES   SYS"
 s_loading:              .asciz      "Loading"
 s_error:                .asciz      "\r\nInvalid boot disk!\r\n"
 pad:                    .space      0x1FE - (. - entry)

@@ -1,9 +1,9 @@
 /*============================================================================*
  * Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                  *
  *                                                                            *
- * This file is part of the Niobium Operating System.                         *
- * Niobium is free software; you may redistribute it and/or modify it under   *
- * the terms of the license agreement provided with this software.            *
+ * This file is part of the OHWES Operating System.                           *
+ * OHWES is free software; you may redistribute it and/or modify it under the *
+ * terms of the license agreement provided with this software.                *
  *                                                                            *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
@@ -13,22 +13,23 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/nb/irq.h                                                  *
- * Created: December 21, 2020                                                 *
+ *    File: include/ohwes/types.h                                             *
+ * Created: December 17, 2020                                                 *
  *  Author: Wes Hampson                                                       *
+ *                                                                            *
+ * Useful non-standard types.                                                 *
  *============================================================================*/
 
-#ifndef __IRQ_H
-#define __IRQ_H
+#ifndef __TYPES_H
+#define __TYPES_H
 
-#define NUM_IRQ         16
-#define IRQ_KEYBOARD    1
+#include <stdint.h>
 
-#ifndef __ASSEMBLY__
-#include <nb/nb.h>
+#ifndef __SIZE_T_DEFINED
+#define __SIZE_T_DEFINED
+typedef uint32_t size_t;
+#endif
 
-__fastcall void handle_irq(void);
+typedef int32_t ssize_t;        // POSIX
 
-#endif /* __ASSEMBLY__ */
-
-#endif /* __IRQ_H */
+#endif /* __TYPES_H */

@@ -2,9 +2,9 @@
 #==============================================================================#
 # Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                    #
 #                                                                              #
-# This file is part of the Niobium Operating System.                           #
-# Niobium is free software; you may redistribute it and/or modify it under     #
-# the terms of the license agreement provided with this software.              #
+# This file is part of the OHWES Operating System.                             #
+# OHWES is free software; you may redistribute it and/or modify it under the   #
+# terms of the license agreement provided with this software.                  #
 #                                                                              #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR   #
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,     #
@@ -18,14 +18,14 @@
 # Created: November 27, 2020                                                   #
 #  Author: Wes Hampson                                                         #
 #                                                                              #
-# Initializes the Niobium development environment.                             #
+# Initializes the OHWES development environment.                               #
 # To use, run `source devenv.sh` in your shell.                                #
 #==============================================================================#
 
-export NB_TOPDIR=$(dirname $(dirname $(realpath ${BASH_SOURCE[0]})))
-export NB_BINDIR=${NB_TOPDIR}/bin
-export NB_OBJDIR=${NB_TOPDIR}/obj
-export NB_TOOLS=${NB_TOPDIR}/tools
-export NB_SCRIPTS=${NB_TOPDIR}/scripts
+export OHWES_TOPDIR=$(dirname $(dirname $(realpath ${BASH_SOURCE[0]})))
+export OHWES_BINDIR=${OHWES_TOPDIR}/bin
+export OHWES_OBJDIR=${OHWES_TOPDIR}/obj
+export OHWES_TOOLS=${OHWES_TOPDIR}/tools
+export OHWES_SCRIPTS=${OHWES_TOPDIR}/scripts
 
-export PATH=${NB_TOOLS}/bin:${NB_SCRIPTS}:${PATH}
+export PATH=${OHWES_TOOLS}/bin:${OHWES_SCRIPTS}:${PATH}
