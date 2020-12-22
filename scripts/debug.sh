@@ -39,11 +39,19 @@ elif [ "$1" = "init" ]; then
         -ex 'layout src' \
         -ex 'layout regs' \
         -ex 'continue'
-else
+elif [ "$1" = "early_kernel" ]; then
     gdb ${OHWES_BINDIR}/ohwes.elf \
         -ex 'target remote localhost:1234' \
         -ex 'set architecture i386' \
         -ex 'break kentry' \
+        -ex 'layout src' \
+        -ex 'layout regs' \
+        -ex 'continue'
+else
+    gdb ${OHWES_BINDIR}/ohwes.elf \
+        -ex 'target remote localhost:1234' \
+        -ex 'set architecture i386' \
+        -ex 'break kmain' \
         -ex 'layout src' \
         -ex 'layout regs' \
         -ex 'continue'
