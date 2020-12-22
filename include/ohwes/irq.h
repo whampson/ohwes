@@ -24,11 +24,4 @@
 #define NUM_IRQ         16
 #define IRQ_KEYBOARD    1
 
-#ifndef __ASSEMBLY__
-#include <ohwes/ohwes.h>
-
-__fastcall void handle_irq(void);
-
-#endif /* __ASSEMBLY__ */
-
 #endif /* __IRQ_H */

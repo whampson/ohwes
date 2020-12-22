@@ -43,11 +43,4 @@
 #define EXCEPT_VE   0x14    /* Virtualization Exception */
 #define EXCEPT_CP   0x15    /* Control Protection Exception */
 
-#ifndef __ASSEMBLY__
-#include <ohwes/ohwes.h>
-
-__fastcall void handle_except(void);
-
-#endif /* __ASSEMBLY__ */
-
 #endif /* __EXCEPT_H */

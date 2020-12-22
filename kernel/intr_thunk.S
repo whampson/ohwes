@@ -27,13 +27,63 @@
 #include <ohwes/irq.h>
 #include <ohwes/syscall.h>
 
-common_handler:
-    pushl   $s_msg
-    call    printf
-    addl    $12, %esp
+IFRAME_EDI          = 0x00
+IFRAME_ESI          = 0x04
+IFRAME_EBP          = 0x08
+IFRAME_EBX          = 0x0C
+IFRAME_EDX          = 0x10
+IFRAME_ECX          = 0x14
+IFRAME_EAX          = 0x18
+IFRAME_VEC_NUM      = 0x1C
+IFRAME_ERR_CODE     = 0x20
+IFRAME_EIP          = 0x24
+IFRAME_CS           = 0x28
+IFRAME_EFLAGS       = 0x2C
+IFRAME_ESP          = 0x30
+IFRAME_SS           = 0x34
+
+common_intr_handler:
+    subl    $0x1C, %esp
+    movl    %edi, IFRAME_EDI(%esp)
+    movl    %esi, IFRAME_ESI(%esp)
+    movl    %ebp, IFRAME_EBP(%esp)
+    movl    %ebx, IFRAME_EBX(%esp)
+    movl    %edx, IFRAME_EDX(%esp)
+    movl    %ecx, IFRAME_ECX(%esp)
+    movl    %eax, IFRAME_EAX(%esp)
+
+    movl    %esp, %ecx
+    movl    IFRAME_VEC_NUM(%esp), %eax
+
+    cmpl    $SYSCALL, %eax
+    je      do_syscall
+    cmpl    $0, %eax
+    js      do_irq
+    jmp     do_except
+
+do_except:
+    call    handle_except
+    jmp     handler_return
+
+do_irq:
+    call    handle_irq
+    jmp     handler_return
+
+do_syscall:
+    call    handle_syscall
+    jmp     handler_return
+
+handler_return:
+    movl    IFRAME_EDI(%esp), %edi
+    movl    IFRAME_ESI(%esp), %esi
+    movl    IFRAME_EBP(%esp), %ebp
+    movl    IFRAME_EBX(%esp), %ebx
+    movl    IFRAME_EDX(%esp), %edx
+    movl    IFRAME_ECX(%esp), %ecx
+    movl    IFRAME_EAX(%esp), %eax
+    addl    $0x24, %esp
     iret
 
-s_msg:  .asciz  "Interrupt %d!!\n"
 
 /* Below are small thunk functions for linking entries in the IDT to the common
    interrupt handler defined above. There exists one of these thunk functions
@@ -44,27 +94,27 @@ s_msg:  .asciz  "Interrupt %d!!\n"
 thunk_name:                                                 \
     pushl   $-1;                                            \
     pushl   $vec_num;                                       \
-    jmp     common_handler
+    jmp     common_intr_handler
 
 #define EXCEPT_THUNK_WITH_ERRORCODE(thunk_name, vec_num)    \
 .globl thunk_name;                                          \
 thunk_name:                                                 \
     pushl   $vec_num;                                       \
-    jmp     common_handler
+    jmp     common_intr_handler
 
 #define IRQ_THUNK(thunk_name, irq_num)                      \
 .globl thunk_name;                                          \
 thunk_name:                                                 \
     pushl   $-1;                                            \
     pushl   $~irq_num;                                      \
-    jmp     common_handler
+    jmp     common_intr_handler
 
 #define SYSCALL_THUNK(thunk_name)                           \
 .globl thunk_name;                                          \
 thunk_name:                                                 \
     pushl   $-1;                                            \
     pushl   $SYSCALL;                                       \
-    jmp     common_handler
+    jmp     common_intr_handler
 
 EXCEPT_THUNK                (thunk_except_00, EXCEPT_DE)
 EXCEPT_THUNK                (thunk_except_01, EXCEPT_DB)

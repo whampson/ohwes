@@ -42,13 +42,12 @@ void kmain(void)
     mem_init();
 
     printk("\nOHWES 0.1\n");
-    printk("Copyright (C) 2020 Wes Hampson\n\n");
+    printk("Copyright (C) 2020-2021 Wes Hampson\n\n");
 
     __asm__ volatile ("int $0x80");
-    printf("System Call 1\n");
-
     __asm__ volatile ("int $0x80");
-    printf("System Call 2\n");
+    __asm__ volatile ("int $0x23");
+    __asm__ volatile ("int $0x03");
 }
 
 void gdt_init(void)

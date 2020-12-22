@@ -26,20 +26,21 @@
 
 #ifndef __ASSEMBLY__
 #include <stdint.h>
+#include <ohwes/ohwes.h>
 
 /**
  * The stack frame upon entry to an interrupt handler.
  */
-struct interrupt_frame
+struct iframe
 {
     /* Interrupted process state.
        Pushed by common interrupt entry point. */
     uint32_t edi;
     uint32_t esi;
     uint32_t ebp;
+    uint32_t ebx;
     uint32_t edx;
     uint32_t ecx;
-    uint32_t ebx;
     uint32_t eax;
 
     /* Interrupt vector number.
@@ -112,6 +113,10 @@ __asm__ volatile (          \
     : "r"(flags)            \
     : "memory", "cc"        \
 )
+
+__fastcall void handle_except(struct iframe *regs);
+__fastcall void handle_irq(struct iframe *regs);
+__fastcall void handle_syscall(struct iframe *regs);
 
 #endif /* __ASSEMBLY__ */
 

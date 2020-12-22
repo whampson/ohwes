@@ -40,15 +40,18 @@ void idt_init(void)
     memset(idt, 0, IDT_SIZE);
 
     count = IDT_SIZE / sizeof(struct x86_desc);
-    for (int i = 0; i < count; i++) {
-        desc = idt + i;
-        if (i >= EXCEPT_BASE && i + EXCEPT_BASE < NUM_EXCEPT) {
-            set_trap_desc(desc, KERNEL_CS, KERNEL_PL, thunk_except[i]);
+    for (int idx = 0, e_num = 0, i_num = 0; idx < count; idx++) {
+        e_num = idx - EXCEPT_BASE;
+        i_num = idx - IRQ_BASE;
+        desc = idt + idx;
+
+        if (idx >= EXCEPT_BASE && e_num < NUM_EXCEPT) {
+            set_trap_desc(desc, KERNEL_CS, KERNEL_PL, thunk_except[e_num]);
         }
-        if (i >= IRQ_BASE && i + IRQ_BASE < NUM_IRQ) {
-            set_intr_desc(desc, KERNEL_CS, KERNEL_PL, thunk_irq[i]);
+        if (idx >= IRQ_BASE && i_num < NUM_IRQ) {
+            set_intr_desc(desc, KERNEL_CS, KERNEL_PL, thunk_irq[i_num]);
         }
-        if (i == SYSCALL) {
+        if (idx == SYSCALL) {
             set_trap_desc(desc, KERNEL_CS, USER_PL, thunk_syscall);
         }
     }
@@ -78,3 +81,24 @@ static const ivt_thunk thunk_irq[NUM_IRQ] =
     thunk_irq_08,       thunk_irq_09,       thunk_irq_10,       thunk_irq_11,
     thunk_irq_12,       thunk_irq_13,       thunk_irq_14,       thunk_irq_15
 };
+
+__fastcall void handle_except(struct iframe *regs)
+{
+    printk("Exception 0x%02X!\n", regs->vec_num);
+    printk("EAX=%p EBX=%p ECX=%p EDX=%p\n", regs->eax, regs->ebx, regs->ecx, regs->edx);
+    printk("ESI=%p EDI=%p EBP=%p ESP=%p\n", regs->esi, regs->edi, regs->ebp, regs->esp);
+    printk("EIP=%p EFLAGS=%p CS=%p SS=%p\n", regs->eip, regs->eflags, regs->cs, regs->ss);
+    printk("Error Code: %p\n", regs->err_code);
+    for (;;);
+}
+
+__fastcall void handle_irq(struct iframe *regs)
+{
+    printk("Device IRQ %d!\n", ~regs->vec_num);
+}
+
+__fastcall void handle_syscall(struct iframe *regs)
+{
+    (void) regs;
+    printk("System Call!\n");
+}
