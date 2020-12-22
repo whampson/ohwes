@@ -3,7 +3,8 @@
         {
             "name": "OHWES",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/*",
+                "${workspaceFolder}/include/*"
             ],
             "defines": [],
             "compilerPath": "C:\\i686-elf-tools\\bin\\i686-elf-gcc",
