@@ -21,7 +21,7 @@
 #ifndef __IRQ_H
 #define __IRQ_H
 
-#define NUM_IRQ         16
 #define IRQ_KEYBOARD    1
+#define NUM_IRQ         16
 
 #endif /* __IRQ_H */

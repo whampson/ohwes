@@ -21,7 +21,6 @@
 #ifndef __EXCEPT_H
 #define __EXCEPT_H
 
-#define NUM_EXCEPT  32
 #define EXCEPT_DE   0x00    /* Divide Error */
 #define EXCEPT_DB   0x01    /* Debug */
 #define EXCEPT_NMI  0x02    /* Non-Maskable Interrupt */
@@ -42,5 +41,6 @@
 #define EXCEPT_XM   0x13    /* SIMD Floating-Point Exception */
 #define EXCEPT_VE   0x14    /* Virtualization Exception */
 #define EXCEPT_CP   0x15    /* Control Protection Exception */
+#define NUM_EXCEPT  32
 
 #endif /* __EXCEPT_H */
