@@ -19,10 +19,31 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
+#include <errno.h>
 #include <ohwes/console.h>
 #include <ohwes/io.h>
+#include <ohwes/syscall.h>
+#include <ohwes/ohwes.h>
 
-ssize_t write(int fd, const void *buf, size_t n)
+__fastcall ssize_t sys_read(int fd, void *buf, size_t n)
+{
+    (void) fd;
+    (void) buf;
+    (void) n;
+
+    return -ENOSYS;
+}
+
+__fastcall ssize_t sys_write(int fd, const void *buf, size_t n)
+{
+    (void) fd;
+    (void) buf;
+    (void) n;
+
+    return -ENOSYS;
+}
+
+/*__fastcall*/ ssize_t /*sys_write*/write(int fd, const void *buf, size_t n)
 {
     /* TODO: actually implement this */
     (void) fd;

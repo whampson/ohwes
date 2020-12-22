@@ -21,8 +21,9 @@
 #ifndef __INTERRUPT_H
 #define __INTERRUPT_H
 
-#define EXCEPT_BASE         0x00    /* Exception Base Vector */
-#define IRQ_BASE            0x20    /* Device Interrupt Base Vector */
+#define INT_EXCEPT          0x00
+#define INT_IRQ             0x20
+#define INT_SYSCALL         0x80
 
 #ifndef __ASSEMBLY__
 #include <stdint.h>
@@ -35,13 +36,13 @@ struct iframe
 {
     /* Interrupted process state.
        Pushed by common interrupt entry point. */
-    uint32_t edi;
-    uint32_t esi;
-    uint32_t ebp;
     uint32_t ebx;
-    uint32_t edx;
     uint32_t ecx;
+    uint32_t edx;
+    uint32_t esi;
+    uint32_t edi;
     uint32_t eax;
+    uint32_t ebp;
 
     /* Interrupt vector number.
        Exception number when an exception raised.
@@ -116,7 +117,6 @@ __asm__ volatile (          \
 
 __fastcall void handle_except(struct iframe *regs);
 __fastcall void handle_irq(struct iframe *regs);
-__fastcall void handle_syscall(struct iframe *regs);
 
 #endif /* __ASSEMBLY__ */
 

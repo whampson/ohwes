@@ -26,6 +26,8 @@
 #include <ohwes/irq.h>
 #include <ohwes/thunk.h>
 #include <x86/desc.h>
+#include <x86/cntrl.h>
+#include <x86/flags.h>
 
 static const ivt_thunk thunk_except[NUM_EXCEPT];
 static const ivt_thunk thunk_irq[NUM_IRQ];
@@ -41,17 +43,17 @@ void idt_init(void)
 
     count = IDT_SIZE / sizeof(struct x86_desc);
     for (int idx = 0, e_num = 0, i_num = 0; idx < count; idx++) {
-        e_num = idx - EXCEPT_BASE;
-        i_num = idx - IRQ_BASE;
+        e_num = idx - INT_EXCEPT;
+        i_num = idx - INT_IRQ;
         desc = idt + idx;
 
-        if (idx >= EXCEPT_BASE && e_num < NUM_EXCEPT) {
+        if (idx >= INT_EXCEPT && e_num < NUM_EXCEPT) {
             set_trap_desc(desc, KERNEL_CS, KERNEL_PL, thunk_except[e_num]);
         }
-        if (idx >= IRQ_BASE && i_num < NUM_IRQ) {
+        if (idx >= INT_IRQ && i_num < NUM_IRQ) {
             set_intr_desc(desc, KERNEL_CS, KERNEL_PL, thunk_irq[i_num]);
         }
-        if (idx == SYSCALL) {
+        if (idx == INT_SYSCALL) {
             set_trap_desc(desc, KERNEL_CS, USER_PL, thunk_syscall);
         }
     }
@@ -84,21 +86,31 @@ static const ivt_thunk thunk_irq[NUM_IRQ] =
 
 __fastcall void handle_except(struct iframe *regs)
 {
+    uint32_t cr0, cr2, cr3, cr4;
+    struct eflags *eflags;
+
+    rdcr0(cr0); rdcr2(cr2); rdcr3(cr3); rdcr4(cr4);
+    eflags = (struct eflags *) &regs->eflags;
+
     printk("Exception 0x%02X!\n", regs->vec_num);
-    printk("EAX=%p EBX=%p ECX=%p EDX=%p\n", regs->eax, regs->ebx, regs->ecx, regs->edx);
-    printk("ESI=%p EDI=%p EBP=%p ESP=%p\n", regs->esi, regs->edi, regs->ebp, regs->esp);
-    printk("EIP=%p EFLAGS=%p CS=%p SS=%p\n", regs->eip, regs->eflags, regs->cs, regs->ss);
     printk("Error Code: %p\n", regs->err_code);
-    for (;;);
+    printk("EAX=%p EBX=%p ECX=%p EDX=%p\n", regs->eax, regs->ebx, regs->ecx, regs->edx);
+    printk("ESI=%p EDI=%p EBP=%p EIP=%p\n", regs->esi, regs->edi, regs->ebp, regs->eip);
+    printk("CR0=%p CR2=%p CR3=%p CR4=%p\n", cr0, cr2, cr3, cr4);
+    printk("CS=%02x IOPL=%d EFLAGS=%p [ ", regs->cs, eflags->iopl, eflags->_value);
+    if (eflags->cf) printk("CF "); if (eflags->pf) printk("PF ");
+    if (eflags->af) printk("AF "); if (eflags->zf) printk("ZF ");
+    if (eflags->sf) printk("SF "); if (eflags->tf) printk("TF ");
+    if (eflags->if_) printk("IF "); if (eflags->df) printk("DF ");
+    if (eflags->of) printk("OF "); if (eflags->nt) printk("NT ");
+    if (eflags->rf) printk("RF "); if (eflags->vm) printk("VM ");
+    if (eflags->ac) printk("AC "); if (eflags->vif) printk("VIF ");
+    if (eflags->vip) printk("VIP "); if (eflags->zf) printk("ID ");
+    printk("]\n\n");
+    panic("You done goofed!");
 }
 
 __fastcall void handle_irq(struct iframe *regs)
 {
     printk("Device IRQ %d!\n", ~regs->vec_num);
-}
-
-__fastcall void handle_syscall(struct iframe *regs)
-{
-    (void) regs;
-    printk("System Call!\n");
 }
