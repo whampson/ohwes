@@ -22,8 +22,8 @@
  * on each structure.                                                         *
  *============================================================================*/
 
-#ifndef __X86_CTRNL_H
-#define __X86_CTRNL_H
+#ifndef __X86_CNTRL_H
+#define __X86_CNTRL_H
 
 #define CR0_PE      (1 << 0)        /* Protected Mode Enable */
 #define CR0_PG      (1 << 31)       /* Paging Enable */
@@ -215,4 +215,4 @@ __asm__ volatile (          \
 
 #endif /* __ASSEMBLY__ */
 
-#endif /* __X86_CTRNL_H */
+#endif /* __X86_CNTRL_H */

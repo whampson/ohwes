@@ -20,8 +20,8 @@
  * Useful macros and functions.                                               *
  *============================================================================*/
 
-#ifndef __NB_H
-#define __NB_H
+#ifndef __OHWES_H
+#define __OHWES_H
 
 #include <stdint.h>
 
@@ -69,4 +69,4 @@ static inline float maxf(float a, float b)          { return a > b ? a : b; }
 static inline double maxd(double a, double b)       { return a > b ? a : b; }
 #define max maxi
 
-#endif /* __NB_H */
+#endif /* __OHWES_H */
