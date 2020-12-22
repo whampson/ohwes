@@ -182,6 +182,6 @@ int puts(const char *str);
 // void clearerr(FILE *stream);
 // int feof(FILE *stream);
 // int ferror(FILE *stream);
-// void perror(const char *str);
+void perror(const char *msg);
 
 #endif /* __STDIO_H */
