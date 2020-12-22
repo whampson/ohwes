@@ -1,5 +1,5 @@
 #==============================================================================#
-# Copyright (C) 2020 Wes Hampson. All Rights Reserved.                         #
+# Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                    #
 #                                                                              #
 # This file is part of the Niobium Operating System.                           #
 # Niobium is free software; you may redistribute it and/or modify it under     #
@@ -50,7 +50,7 @@ entry:
 # --------------------------- BIOS Parameter Block ----------------------------
 # -----------------------------------------------------------------------------
 # These are parameters for a 1440 KiB floppy disk (known as "1.44 MB")
-oem_name:               .ascii      "NIOBIUM "
+oem_name:               .ascii      "OHWES0.1"
 bytes_per_sector:       .short      512
 sectors_per_cluster:    .byte       1
 reserved_sectors:       .short      1
