@@ -137,6 +137,7 @@ struct x86_desc
             uint64_t segsel     : 16;   /* Code Segment Selector */
             uint64_t            : 8;    /* Reserved; Set to 0 */
             uint64_t type       : 4;    /* Descriptor Type; DESC_TYPE_SYS_INT* */
+            uint64_t            : 1;    /* Reserved; Set to 0 */
             uint64_t dpl        : 2;    /* Descriptor Privilege Level */
             uint64_t p          : 1;    /* Present */
             uint64_t offset_hi  : 16;   /* Entry Point (bits 31:16) */
@@ -146,6 +147,7 @@ struct x86_desc
             uint64_t segsel     : 16;   /* Code Segment Selector */
             uint64_t            : 8;    /* Reserved; Set to 0 */
             uint64_t type       : 4;    /* Descriptor Type; DESC_TYPE_SYS_INT* */
+            uint64_t            : 1;    /* Reserved; Set to 0 */
             uint64_t dpl        : 2;    /* Descriptor Privilege Level */
             uint64_t p          : 1;    /* Present */
             uint64_t offset_hi  : 16;   /* Entry Point (bits 31:16) */
