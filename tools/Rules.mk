@@ -13,7 +13,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER          #
 # DEALINGS IN THE SOFTWARE.                                                    #
 #==============================================================================#
-#    File: tools/include/Rules.mk                                              #
+#    File: tools/Rules.mk                                                      #
 # Created: Devember 12, 2020                                                   #
 #  Author: Wes Hampson                                                         #
 #==============================================================================#
