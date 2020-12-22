@@ -17,7 +17,7 @@
  * Created: December 12, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *                                                                            *
- * Structure and descriptor definitions for x86-family CPUs.                  *
+ * Descriptor definitions for x86-family CPUs.                                *
  * See Intel IA-32 Software Developer's Manual, Volume 3 for more information *
  * on each structure.                                                         *
  *============================================================================*/
@@ -25,152 +25,174 @@
 #ifndef __X86_DESC_H
 #define __X86_DESC_H
 
+#include <stdint.h>
 #include <string.h>
 
-/* System Segment Descriptor Types */
-#define SEGDESC_TYPE_TSS16      0x01    /* System; Task State Segment (16-bit) */
-#define SEGDESC_TYPE_LDT        0x02    /* System; Local Descriptor Table */
-#define SEGDESC_TYPE_CALL16     0x04    /* System; Call Gate (16-bit) */
-#define SEGDESC_TYPE_TASK       0x05    /* System; Task Gate */
-#define SEGDESC_TYPE_INT16      0x06    /* System; Interrupt Gate (16-bit) */
-#define SEGDESC_TYPE_TRAP16     0x07    /* System; Trap Gate (16-bit) */
-#define SEGDESC_TYPE_TSS32      0x09    /* System; Task State Segment (32-bit) */
-#define SEGDESC_TYPE_CALL32     0x0C    /* System; Call Gate (32-bit) */
-#define SEGDESC_TYPE_INT32      0x0E    /* System; Interrupt Gate (32-bit) */
-#define SEGDESC_TYPE_TRAP32     0x0F    /* System; Trap Gate (32-bit) */
+/* System Descriptor Types */
+#define DESC_TYPE_SYS_TSS16     0x01    /* Task State Segment (16-bit) */
+#define DESC_TYPE_SYS_LDT       0x02    /* Local Descriptor Table */
+#define DESC_TYPE_SYS_CALL16    0x04    /* Call Gate (16-bit) */
+#define DESC_TYPE_SYS_TASK      0x05    /* Task Gate */
+#define DESC_TYPE_SYS_INTR16    0x06    /* Interrupt Gate (16-bit) */
+#define DESC_TYPE_SYS_TRAP16    0x07    /* Trap Gate (16-bit) */
+#define DESC_TYPE_SYS_TSS32     0x09    /* Task State Segment (32-bit) */
+#define DESC_TYPE_SYS_CALL32    0x0C    /* Call Gate (32-bit) */
+#define DESC_TYPE_SYS_INTR32    0x0E    /* Interrupt Gate (32-bit) */
+#define DESC_TYPE_SYS_TRAP32    0x0F    /* Trap Gate (32-bit) */
 
 /* Code- and Data-Segment Descriptor Types */
-#define SEGDESC_TYPE_R          0x00    /* Data; Read-Only */
-#define SEGDESC_TYPE_RA         0x01    /* Data; Read-Only, Accessed */
-#define SEGDESC_TYPE_RW         0x02    /* Data; Read/Write */
-#define SEGDESC_TYPE_RWA        0x03    /* Data; Read/Write, Accessed */
-#define SEGDESC_TYPE_RE         0x04    /* Data; Read-Only, Expand-Down */
-#define SEGDESC_TYPE_REA        0x05    /* Data; Read-Only, Expand-Down, Accessed */
-#define SEGDESC_TYPE_RWE        0x06    /* Data; Read/Write, Expand-Down */
-#define SEGDESC_TYPE_RWEA       0x07    /* Data; Read/Write, Expand-Down, Accessed */
-#define SEGDESC_TYPE_X          0x08    /* Code; Execute-Only */
-#define SEGDESC_TYPE_XA         0x09    /* Code; Execute-Only, Accessed */
-#define SEGDESC_TYPE_XR         0x0A    /* Code; Execute/Read */
-#define SEGDESC_TYPE_XRA        0x0B    /* Code; Execute/Read, Accessed */
-#define SEGDESC_TYPE_XC         0x0C    /* Code; Execute-Only, Conforming */
-#define SEGDESC_TYPE_XCA        0x0D    /* Code; Execute-Only, Conforming, Accessed */
-#define SEGDESC_TYPE_XRC        0x0E    /* Code; Execute/Read, Conforming */
-#define SEGDESC_TYPE_XRCA       0x0F    /* Code; Execute/Read, Conforming */
+#define DESC_TYPE_DATA_R        0x00    /* Read-Only */
+#define DESC_TYPE_DATA_RA       0x01    /* Read-Only, Accessed */
+#define DESC_TYPE_DATA_RW       0x02    /* Read/Write */
+#define DESC_TYPE_DATA_RWA      0x03    /* Read/Write, Accessed */
+#define DESC_TYPE_DATA_RE       0x04    /* Read-Only, Expand-Down */
+#define DESC_TYPE_DATA_REA      0x05    /* Read-Only, Expand-Down, Accessed */
+#define DESC_TYPE_DATA_RWE      0x06    /* Read/Write, Expand-Down */
+#define DESC_TYPE_DATA_RWEA     0x07    /* Read/Write, Expand-Down, Accessed */
+#define DESC_TYPE_CODE_X        0x08    /* Execute-Only */
+#define DESC_TYPE_CODE_XA       0x09    /* Execute-Only, Accessed */
+#define DESC_TYPE_CODE_XR       0x0A    /* Execute/Read */
+#define DESC_TYPE_CODE_XRA      0x0B    /* Execute/Read, Accessed */
+#define DESC_TYPE_CODE_XC       0x0C    /* Execute-Only, Conforming */
+#define DESC_TYPE_CODE_XCA      0x0D    /* Execute-Only, Conforming, Accessed */
+#define DESC_TYPE_CODE_XRC      0x0E    /* Execute/Read, Conforming */
+#define DESC_TYPE_CODE_XRCA     0x0F    /* Execute/Read, Conforming */
 
-#ifndef __ASSEMBLY__
-#include <stdint.h>
+#define LIMIT_MAX               0xFFFFF /* Maximum Segment Descriptor Limit */
+
+/**
+ * x86 Descriptor Structure
+ * A Descriptor is a data structure that provides the CPU with access control,
+ * status, and location/size information about a code or data segment,
+ * interrupt handler, system task, or program control transfer between
+ * different privilege levels.
+ * 
+ * - Segment Descriptor: Defines access control, status, location, and size
+ *      information for a code or data segment, or a Local Descriptor Table.
+ * - TSS Descriptor: Defines access control, status, location, and size
+ *      information for a Task State Segment.
+ * - Task Gate Descriptor: Provides an indirect, protected reference to a task.
+ * - Call Gate Descriptor: Facilitates controlled transfers of program control
+ *      between different privilege levels.
+ * - Interrupt Gate Descriptor: Contains a far-pointer to an interrupt or
+ *      exception handler. The IF flag is cleared when using an Interrupt Gate,
+ *      effectively disabling interrupts for the duration of handler execution.
+ * - Trap Gate Descriptor: Contains a far-pointer to an interrupt or exception
+ *      handler. The IF flag remains unchanged when using a Trap Gate.
+ */
+struct x86_desc
+{
+    union
+    {
+        struct seg_desc {       /* Segment Descriptor */
+            uint64_t limit_lo   : 16;   /* Segment Limit (bits 15:0) */
+            uint64_t base_lo    : 24;   /* Segment Base (bits 23:0) */
+            uint64_t type       : 4;    /* Descriptor Type */
+            uint64_t s          : 1;    /* Descriptor Class; 0 = System, 1 = Code/Data */
+            uint64_t dpl        : 2;    /* Descriptor Privilege Level */
+            uint64_t p          : 1;    /* Present */
+            uint64_t limit_hi   : 4;    /* Segment Limit (bits 19:16) */
+            uint64_t avl        : 1;    /* Available for Software to Use */
+            uint64_t            : 1;    /* Reserved; Set to 0 */
+            uint64_t db         : 1;    /* 0 = 16 bit, 1 = 32-bit */
+            uint64_t g          : 1;    /* Granularity; 0 = Byte, 1 = 4K Page */
+            uint64_t base_hi    : 8;    /* Segment Base (bits 31:24) */
+        } seg;
+        struct tss_desc {       /* TSS Descriptor */
+            uint64_t limit_lo   : 16;   /* TSS Limit (bits 15:0) */
+            uint64_t base_lo    : 24;   /* TSS Base (bits 23:0) */
+            uint64_t type       : 4;    /* Descriptor Type; DESC_TYPE_SYS_TSS* */
+            uint64_t            : 1;    /* Reserved; Set to 0 */
+            uint64_t dpl        : 2;    /* Descriptor Privilege Level */
+            uint64_t p          : 1;    /* Present */
+            uint64_t limit_hi   : 4;    /* TSS Limit (bits 19:16) */
+            uint64_t avl        : 1;    /* Available for Software to Use */
+            uint64_t            : 1;    /* Reserved; Set to 0 */
+            uint64_t            : 1;    /* Reserved; Set to 0 */
+            uint64_t g          : 1;    /* Granularity; 0 = Byte, 1 = 4K Page */
+            uint64_t base_hi    : 8;    /* TSS Base (bits 31:24) */
+        } tss;
+        struct task_desc {      /* Task Gate Descriptor */
+            uint64_t            : 16;   /* Reserved; Set to 0 */
+            uint64_t tss_segsel : 16;   /* TSS Segment Selector */
+            uint64_t            : 8;    /* Reserved; Set to 0 */
+            uint64_t type       : 4;    /* Descriptor Type; DESC_TYPE_SYS_TASK */
+            uint64_t dpl        : 2;    /* Descriptor Privilege Level */
+            uint64_t p          : 1;    /* Present */
+            uint64_t            : 16;   /* Reserved; Set to 0 */
+        } task;
+        struct call_desc {      /* Call Gate Descriptor */
+            uint64_t offset_lo  : 16;   /* Entry Point (bits 15:0) */
+            uint64_t segsel     : 16;   /* Code Segment Selector */
+            uint64_t param_count: 5;    /* Number of Stack Parameters */
+            uint64_t            : 3;    /* Reserved; Set to 0 */
+            uint64_t type       : 4;    /* Descriptor Type; DESC_TYPE_SYS_CALL* */
+            uint64_t            : 1;    /* Reserved; Set to 0 */
+            uint64_t dpl        : 2;    /* Descriptor Privilege Level */
+            uint64_t p          : 1;    /* Present */
+            uint64_t offset_hi  : 16;   /* Entry Point (bits 31:16) */
+        } call;
+        struct intr_desc {      /* Interrupt Gate Descriptor */
+            uint64_t offset_lo  : 16;   /* Entry Point (bis 15:0) */
+            uint64_t segsel     : 16;   /* Code Segment Selector */
+            uint64_t            : 8;    /* Reserved; Set to 0 */
+            uint64_t type       : 4;    /* Descriptor Type; DESC_TYPE_SYS_INT* */
+            uint64_t dpl        : 2;    /* Descriptor Privilege Level */
+            uint64_t p          : 1;    /* Present */
+            uint64_t offset_hi  : 16;   /* Entry Point (bits 31:16) */
+        } intr;
+        struct trap_desc {      /* Trap Gate Descriptor */
+            uint64_t offset_lo  : 16;   /* Entry Point (bis 15:0) */
+            uint64_t segsel     : 16;   /* Code Segment Selector */
+            uint64_t            : 8;    /* Reserved; Set to 0 */
+            uint64_t type       : 4;    /* Descriptor Type; DESC_TYPE_SYS_INT* */
+            uint64_t dpl        : 2;    /* Descriptor Privilege Level */
+            uint64_t p          : 1;    /* Present */
+            uint64_t offset_hi  : 16;   /* Entry Point (bits 31:16) */
+        } trap;
+        uint64_t _value;                /* Aggregate value */
+    };
+};
+_Static_assert(sizeof(struct x86_desc) == 8, "sizeof(struct x86_desc)");
 
 /**
  * Segment Selector
+ * Points to a Segment Descriptor that defines a segment.
  */
 struct segsel
 {
     union {
         struct {
-            uint16_t rpl    : 2;        /* requested privilege level */
-            uint16_t ti     : 1;        /* table type; 0 = GDT, 1 = LDT */
-            uint16_t index  : 13;       /* descriptor table index */
+            uint16_t rpl    : 2;        /* Requested Privilege Level */
+            uint16_t ti     : 1;        /* Table Type; 0 = GDT, 1 = LDT */
+            uint16_t index  : 13;       /* Descriptor Table Index */
         };
-        uint16_t _value;
+        uint16_t _value;                /* Aggregate Value */
     };
 };
 _Static_assert(sizeof(struct segsel) == 2, "sizeof(struct segsel)");
 
 /**
- * Segment Descriptor
- */
-struct segdesc
-{
-    union {
-        struct {
-            uint64_t limit_lo   : 16;   /* Segment Limit (bits 15:0) */
-            uint64_t base_lo    : 24;   /* Segment Base (bits 23:0) */
-            uint64_t type       : 4;    /* Segment/Gate Type */
-            uint64_t s          : 1;    /* Descriptor Type; 0 = System, 1 = Code/Data */
-            uint64_t dpl        : 2;    /* Descriptor Privilege Level */
-            uint64_t p          : 1;    /* Present Bit */
-            uint64_t limit_hi   : 4;    /* Segment Limit (bits 20:16) */
-            uint64_t avl        : 1;    /* Available for Use */
-            uint64_t            : 1;    /* Reserved; Do Not Use */
-            uint64_t db         : 1;    /* 0 = 16 bit Code/Data, 1 = 32-bit Code/Data */
-            uint64_t g          : 1;    /* Granularity; 0 = Byte, 1 = 4K Page */
-            uint64_t base_hi    : 8;    /* Segment Base (bits 31:24) */
-        } gdt_ldt;
-        struct {
-            uint64_t limit_lo   : 16;
-            uint64_t base_lo    : 24;
-            uint64_t type       : 4;
-            uint64_t            : 1;
-            uint64_t dpl        : 2;
-            uint64_t p          : 1;
-            uint64_t limit_hi   : 4;
-            uint64_t avl        : 1;
-            uint64_t            : 1;
-            uint64_t            : 1;
-            uint64_t g          : 1;
-            uint64_t base_hi    : 8;
-        } tss;
-        struct {
-            uint64_t offset_lo  : 16;
-            uint64_t segsel     : 16;
-            uint64_t param_count: 5;
-            uint64_t            : 3;
-            uint64_t type       : 4;
-            uint64_t            : 1;
-            uint64_t dpl        : 2;
-            uint64_t p          : 1;
-            uint64_t offset_hi  : 16;
-        } call_gate;
-        struct {
-            uint64_t            : 16;
-            uint64_t tss_segsel : 16;
-            uint64_t            : 8;
-            uint64_t type       : 4;
-            uint64_t dpl        : 2;
-            uint64_t p          : 1;
-            uint64_t            : 16;
-        } task_gate;
-        struct {
-            uint64_t offset_lo  : 16;
-            uint64_t segsel     : 16;
-            uint64_t            : 8;
-            uint64_t type       : 4;
-            uint64_t dpl        : 2;
-            uint64_t p          : 1;
-            uint64_t offset_hi  : 16;
-        } int_gate;
-        struct {
-            uint64_t offset_lo  : 16;
-            uint64_t segsel     : 16;
-            uint64_t            : 8;
-            uint64_t type       : 4;
-            uint64_t dpl        : 2;
-            uint64_t p          : 1;
-            uint64_t offset_hi  : 16;
-        } trap_gate;
-        uint64_t _value;
-    };
-};
-_Static_assert(sizeof(struct segdesc) == 8, "sizeof(struct segdesc)");
-
-/**
- * Descriptor Register (for LGDT and LIDT instructions).
+ * Descriptor Register
+ * Represents the data structure supplied in the LGDT and LIDT instructions
+ * specifying the location and size of the GDT and IDT respectively.
  */
 struct descreg
 {
     union {
         struct {
-            uint64_t limit  : 16;
-            uint64_t base   : 32;
-            uint64_t        : 16;
+            uint64_t limit  : 16;   /* Descriptor Table Limit */
+            uint64_t base   : 32;   /* Descriptor Table Base */
+            uint64_t        : 16;   /* (padding) */
         };
-        uint64_t _value;
+        uint64_t _value;            /* Aggregate Value */
     };
 };
 _Static_assert(sizeof(struct descreg) == 8, "sizeof(struct descreg)");
 
 /**
  * Task State Segment
+ * Processor state information needed to save and restore a task.
  */
 struct tss
 {
@@ -215,97 +237,153 @@ struct tss
     uint16_t io_map_base;
     uint32_t ssp;
 };
-_Static_assert(sizeof(struct tss) == 108, "Invalid TSS size!");
+_Static_assert(sizeof(struct tss) == 108, "sizeof(struct tss)");
 
 /**
- * Gets a segment descriptor from a descriptor table.
- * 
- * @param table the descriptor table
- * @param selector the segment selector
- */
-#define get_segdesc(table,selector) \
-    (table + (selector / sizeof(struct segdesc)))
-
-/**
- * Sets the values in a GDT or LDT code/data segment descriptor.
+ * Gets a pointer to a Segment Descriptor from a descriptor table.
  * 
  * @param table a pointer to the descriptor table
- * @param selector a segment selector (offset in table)
- * @param base the segment base address
- * @param limit the segment limit (segment size in 4K pages - 1)
- * @param desc_type the segment descriptor type (one of SEGDESC_TYPE_*)
- * @param desc_priv the segment descriptor privilege level
+ * @param sel the segment selector
+ * @return a pointer to the segment descriptor specified by the segment selector
  */
-#define set_segdesc(table,selector,base,limit,desc_type,desc_priv)  \
-do {                                                                \
-    struct segdesc *desc = get_segdesc(table, selector);            \
-    desc->_value = 0;                                               \
-    desc->gdt_ldt.base_lo = ((base) & 0x00FFFFFF);                  \
-    desc->gdt_ldt.base_hi = ((base) & 0xFF000000) >> 24;            \
-    desc->gdt_ldt.limit_lo = ((limit) & 0x0FFFF);                   \
-    desc->gdt_ldt.limit_hi = ((limit) & 0xF0000) >> 16;             \
-    desc->gdt_ldt.type = desc_type;                                 \
-    desc->gdt_ldt.dpl = desc_priv;                                  \
-    desc->gdt_ldt.g = 1;    /* 4K page granularity */               \
-    desc->gdt_ldt.db = 1;   /* 32-bit segment */                    \
-    desc->gdt_ldt.avl = 0;  /* not available */                     \
-    desc->gdt_ldt.p = 1;    /* present */                           \
-    desc->gdt_ldt.s = 1;    /* code/data segment */                 \
+#define get_seg_desc(table,sel) \
+    ((struct x86_desc *) table + ((uint32_t) sel / sizeof(struct x86_desc)))
+
+/**
+ * Configures a Segment Descriptor as a 32-bit Code or Data Segment.
+ * 
+ * @param desc a pointer to an x86_desc
+ * @param pl segment privilege level
+ * @param en descriptor enable bit (0 = disable, 1 = enable)
+ * @param base segment base address
+ * @param lim segment limit (size - 1)
+ * @param gr segment granularity (0 = byte, 1 = 4K page)
+ * @param typ segment type (one of DESC_TYPE_CODE_* or DESC_TYPE_DATA_*)
+ * 
+ */
+#define set_seg_desc(desc,pl,en,base,lim,gr,typ)                            \
+do {                                                                        \
+    desc->_value = 0;                                                       \
+    desc->seg.type = typ;                                                   \
+    desc->seg.dpl = pl;                                                     \
+    desc->seg.s = 1;                                                        \
+    desc->seg.db = 1;                                                       \
+    desc->seg.base_lo = ((base) & 0x00FFFFFF);                              \
+    desc->seg.base_hi = ((base) & 0xFF000000) >> 24;                        \
+    desc->seg.limit_lo = ((lim) & 0x0FFFF);                                 \
+    desc->seg.limit_hi = ((lim) & 0xF0000) >> 16;                           \
+    desc->seg.g = gr;                                                       \
+    desc->seg.p = en;                                                       \
 } while (0)
 
 /**
- * Sets the values in a GDT or LDT system segment descriptor.
+ * Configures a Segment Descriptor as a 32-bit LDT Segment.
  * 
- * @param table a pointer to the descriptor table
- * @param selector a segment selector  (offset in table)
- * @param base the segment base address
- * @param limit the segment limit (segment size in 4K pages - 1)
- * @param desc_type the segment descriptor type (one of SEGDESC_TYPE_*)
+ * @param desc a pointer to an x86_desc
+ * @param pl LDT privilege level
+ * @param en descriptor enable bit (0 = disable, 1 = enable)
+ * @param base LDT base address
+ * @param lim LDT limit (size - 1)
+ * @param gr LDT granularity (0 = byte, 1 = 4K page)
+ * 
  */
-#define set_segdesc_sys(table,selector,base,limit,desc_type)        \
-do {                                                                \
-    struct segdesc *desc = get_segdesc(table, selector);            \
-    desc->_value = 0;                                               \
-    desc->gdt_ldt.base_lo = ((base) & 0x00FFFFFF);                  \
-    desc->gdt_ldt.base_hi = ((base) & 0xFF000000) >> 24;            \
-    desc->gdt_ldt.limit_lo = ((limit) & 0x0FFFF);                   \
-    desc->gdt_ldt.limit_hi = ((limit) & 0xF0000) >> 16;             \
-    desc->gdt_ldt.type = desc_type;                                 \
-    desc->gdt_ldt.dpl = 0;  /* ring 0 */                            \
-    desc->gdt_ldt.g = 0;    /* byte granularity */                  \
-    desc->gdt_ldt.db = 1;   /* 32-bit segment */                    \
-    desc->gdt_ldt.avl = 0;  /* not available */                     \
-    desc->gdt_ldt.p = 1;    /* present */                           \
-    desc->gdt_ldt.s = 0;    /* system segment */                    \
+#define set_ldt_desc(desc,pl,en,base,lim,gr)                                \
+do {                                                                        \
+    desc->_value = 0;                                                       \
+    desc->seg.type = DESC_TYPE_SYS_LDT;                                     \
+    desc->seg.dpl = pl;                                                     \
+    desc->seg.s = 0;                                                        \
+    desc->seg.db = 1;                                                       \
+    desc->seg.base_lo = ((base) & 0x00FFFFFF);                              \
+    desc->seg.base_hi = ((base) & 0xFF000000) >> 24;                        \
+    desc->seg.limit_lo = ((lim) & 0x0FFFF);                                 \
+    desc->seg.limit_hi = ((lim) & 0xF0000) >> 16;                           \
+    desc->seg.g = gr;                                                       \
+    desc->seg.p = en;                                                       \
 } while (0)
 
 /**
- * Sets the values in a segment descriptor for a TSS.
+ * Configures a Segment Descriptor as a 32-bit TSS Descriptor.
  * 
- * @param table a pointer to the descriptor table
- * @param selector a segment selector (offset in table)
- * @param base the TSS base address
- * @param limit the TSS limit (TSS size in bytes - 1)
+ * @param desc a pointer to an x86_desc
+ * @param pl TSS privilege level
+ * @param en descriptor enable bit (0 = disable, 1 = enable)
+ * @param base TSS base address
+ * @param lim TSS limit (size - 1)
+ * @param gr TSS granularity (0 = byte, 1 = 4K page)
  */
-#define set_segdesc_tss(table,selector,base,limit)                  \
-do {                                                                \
-    struct segdesc *desc = get_segdesc(table, selector);            \
-    desc->_value = 0;                                               \
-    desc->tss.base_lo = ((base) & 0x00FFFFFF);                      \
-    desc->tss.base_hi = ((base) & 0xFF000000) >> 24;                \
-    desc->tss.limit_lo = ((limit) & 0x0FFFF);                       \
-    desc->tss.limit_hi = ((limit) & 0xF0000) >> 16;                 \
-    desc->tss.type = SEGDESC_TYPE_TSS32;                            \
-    desc->tss.dpl = 0;      /* ring 0 */                            \
-    desc->tss.g = 0;        /* byte granularity */                  \
-    desc->tss.avl = 0;      /* not available */                     \
-    desc->tss.p = 1;        /* present */                           \
+#define set_tss_desc(desc,pl,en,base,lim,gr)                                \
+do {                                                                        \
+    desc->_value = 0;                                                       \
+    desc->tss.type = DESC_TYPE_SYS_TSS32;                                   \
+    desc->tss.dpl = pl;                                                     \
+    desc->tss.base_lo = ((base) & 0x00FFFFFF);                              \
+    desc->tss.base_hi = ((base) & 0xFF000000) >> 24;                        \
+    desc->tss.limit_lo = ((lim) & 0x0FFFF);                                 \
+    desc->tss.limit_hi = ((lim) & 0xF0000) >> 16;                           \
+    desc->tss.g = gr;                                                       \
+    desc->tss.p = en;                                                       \
+} while (0)
+
+/**
+ * Configures a Segment Descriptor as a Task Gate.
+ * 
+ * @param desc a pointer to an x86_desc
+ * @param sel TSS Segment Selector
+ * @param pl task gate privilege level
+ * @param en descriptor enable bit (0 = disable, 1 = enable)
+ */
+#define set_task_desc(desc,sel,pl,en)                                       \
+do {                                                                        \
+    desc->_value = 0;                                                       \
+    desc->task.type = DESC_TYPE_SYS_TASK;                                   \
+    desc->task.tss_segsel = sel;                                            \
+    desc->task.dpl = pl;                                                    \
+    desc->task.p = en;                                                      \
+} while (0)
+
+/**
+ * Configures a Segment Descriptor as a 32-bit Interrupt Gate.
+ * 
+ * @param desc a pointer to an x86_desc
+ * @param sel interrupt handler code segment selector
+ * @param pl interrupt handler privilege level
+ * @param handler a pointer to the interrupt handler function
+ */
+#define set_intr_desc(desc,sel,pl,handler)                                  \
+do {                                                                        \
+    desc->_value = 0;                                                       \
+    desc->intr.type = DESC_TYPE_SYS_INTR32;                                 \
+    desc->intr.segsel = sel;                                                \
+    desc->intr.dpl = pl;                                                    \
+    desc->intr.offset_lo = ((uint32_t) handler) & 0xFFFF;                   \
+    desc->intr.offset_hi = ((uint32_t) handler) >> 16;                      \
+    desc->intr.p = handler != NULL;                                         \
+} while (0)
+
+/**
+ * Configures a Segment Descriptor as a 32-bit Trap Gate.
+ * 
+ * @param desc a pointer to an x86_desc
+ * @param sel trap handler code segment selector
+ * @param pl trap handler privilege level
+ * @param handler a pointer to the trap handler function
+ */
+#define set_trap_desc(desc,sel,pl,handler)                                  \
+do {                                                                        \
+    desc->_value = 0;                                                       \
+    desc->trap.type = DESC_TYPE_SYS_TRAP32;                                 \
+    desc->trap.segsel = sel;                                                \
+    desc->trap.dpl = pl;                                                    \
+    desc->trap.offset_lo = ((uint32_t) handler) & 0xFFFF;                   \
+    desc->trap.offset_hi = ((uint32_t) handler) >> 16;                      \
+    desc->trap.p = handler != NULL;                                         \
 } while (0)
 
 /**
  * Loads the Global Descriptor Table Register.
  *
- * @param descreg a descreg_t containing the GDT base and limit
+ * @param descreg a descreg structure containing the GDT base and limit
  */
 #define lgdt(descreg)       \
 __asm__ volatile (          \
@@ -318,7 +396,7 @@ __asm__ volatile (          \
 /**
  * Loads the Interrupt Descriptor Table Register.
  *
- * @param descreg a descreg_t containing the IDT base and limit
+ * @param descreg a descreg structure containing the IDT base and limit
  */
 #define lidt(descreg)       \
 __asm__ volatile (          \
@@ -360,7 +438,5 @@ __asm__ volatile (          \
 #define load_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      : : "a"(fs))
 #define load_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs))
 #define load_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss))
-
-#endif /* __ASSEMBLY__ */
 
 #endif /* __X86_DESC_H */

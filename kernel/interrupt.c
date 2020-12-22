@@ -66,24 +66,24 @@ static const handler_thunk I_THUNKS[NUM_IRQ];
 
 void idt_init(void)
 {
-    struct segdesc *idt;
-    struct segdesc *desc;
+    struct x86_desc *idt;
+    struct x86_desc *desc;
     int count;
 
-    idt = (struct segdesc *) IDT_BASE;
+    idt = (struct x86_desc *) IDT_BASE;
     memset(idt, 0, IDT_SIZE);
 
-    count = IDT_SIZE / sizeof(struct segdesc);
+    count = IDT_SIZE / sizeof(struct x86_desc);
     for (int i = 0; i < count; i++) {
         desc = idt + i;
         if (i >= E_BASE_VECTOR && i + E_BASE_VECTOR < NUM_EXCEPT) {
-            set_segdesc_except(desc, E_THUNKS[i]);
+            set_trap_desc(desc, KERNEL_CS, KERNEL_PL, E_THUNKS[i]);
         }
         if (i >= I_BASE_VECTOR && i + I_BASE_VECTOR < NUM_IRQ) {
-            set_segdesc_irq(desc, I_THUNKS[i]);
+            set_intr_desc(desc, KERNEL_CS, KERNEL_PL, I_THUNKS[i]);
         }
         if (i == SYSCALL_VECTOR) {
-            set_segdesc_syscall(desc, thunk_syscall);
+            set_trap_desc(desc, KERNEL_CS, USER_PL, thunk_syscall);
         }
     }
 

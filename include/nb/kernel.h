@@ -23,15 +23,17 @@
 
 #include <stdio.h>
 
+/* Privilege Levels */
 #define KERNEL_PL   0                       /* Kernel Privilege Level */
 #define USER_PL     3                       /* User Privilege Level */
 
+/* Segment Selectors */
 #define KERNEL_CS   (0x10|KERNEL_PL)        /* Kernel Code Segment */
 #define KERNEL_DS   (0x18|KERNEL_PL)        /* Kernel Data Segment */
 #define USER_CS     (0x20|USER_PL)          /* User-space Code Segment */
 #define USER_DS     (0x28|USER_PL)          /* User-space Data Segment */
-#define TSS_SEG     (0x30|KERNEL_PL)        /* TSS Segment */
-#define LDT_SEG     (0x38|KERNEL_PL)        /* LDT Segment */
+#define LDT         (0x30|KERNEL_PL)        /* LDT Segment */
+#define TSS         (0x38|KERNEL_PL)        /* TSS Segment */
 
 /**
  * Prints a message to the kernel console.

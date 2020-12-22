@@ -44,15 +44,26 @@ void kmain(void)
 
 void gdt_init(void)
 {
-    struct segdesc *gdt = (struct segdesc *) GDT_BASE;
+    struct x86_desc *gdt;
+    struct x86_desc *kcs, *kds, *ucs, *uds, *ldt, *tss;
+
+    gdt = (struct x86_desc *) GDT_BASE;
     memset(gdt, 0, GDT_SIZE);
 
-    set_segdesc(gdt, KERNEL_CS, 0, 0xFFFFF, SEGDESC_TYPE_XR, KERNEL_PL);
-    set_segdesc(gdt, KERNEL_DS, 0, 0xFFFFF, SEGDESC_TYPE_RW, KERNEL_PL);
-    set_segdesc(gdt, USER_CS, 0, 0xFFFFF, SEGDESC_TYPE_XR, USER_PL);
-    set_segdesc(gdt, USER_DS, 0, 0xFFFFF, SEGDESC_TYPE_RW, USER_PL);
-    set_segdesc_sys(gdt, LDT_SEG, LDT_BASE, LDT_SIZE-1, SEGDESC_TYPE_LDT);
-    set_segdesc_tss(gdt, TSS_SEG, TSS_BASE, TSS_SIZE-1);
+    kcs = get_seg_desc(gdt, KERNEL_CS);
+    kds = get_seg_desc(gdt, KERNEL_DS);
+    ucs = get_seg_desc(gdt, USER_CS);
+    uds = get_seg_desc(gdt, USER_DS);
+    ldt = get_seg_desc(gdt, LDT);
+    tss = get_seg_desc(gdt, TSS);
+
+    set_seg_desc(kcs, KERNEL_PL, 1, 0x00000000, LIMIT_MAX, 1, DESC_TYPE_CODE_XR);
+    set_seg_desc(kds, KERNEL_PL, 1, 0x00000000, LIMIT_MAX, 1, DESC_TYPE_DATA_RW);
+    set_seg_desc(ucs, USER_PL,   1, 0x00000000, LIMIT_MAX, 1, DESC_TYPE_CODE_XR);
+    set_seg_desc(uds, USER_PL,   1, 0x00000000, LIMIT_MAX, 1, DESC_TYPE_DATA_RW);
+    set_ldt_desc(ldt, KERNEL_PL, 1, LDT_BASE,   LDT_SIZE-1,0);
+    set_tss_desc(tss, KERNEL_PL, 1, TSS_BASE,   TSS_SIZE-1,0);
+    /* TODO: stack segment? */
 
     struct descreg *gdtr = (struct descreg *) GDT_REGPTR;
     gdtr->base = GDT_BASE;
@@ -70,15 +81,20 @@ void gdt_init(void)
 void ldt_init(void)
 {
     struct segdesc *ldt = (struct segdesc *) LDT_BASE;
-    memset(ldt, 0, LDT_SIZE);   /* not using the LDT, so just zero it */
-    lldt(LDT_SEG);
+    memset(ldt, 0, LDT_SIZE);
+
+    /* we're not using LDTs, so just load an empty one */
+    lldt(LDT);
 }
 
 void tss_init(void)
 {
     struct tss *tss = (struct tss *) TSS_BASE;
-    tss->ldt_segsel = LDT_SEG;
+    tss->ldt_segsel = LDT;
     tss->esp0 = KERN_STACK;
     tss->ss0 = KERNEL_DS;
-    ltr(TSS_SEG);
+
+    /* we're also not really using the TSS, so just set up the minimum
+       parameters to keep the CPU happy :) */
+    ltr(TSS);
 }
