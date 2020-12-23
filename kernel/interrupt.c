@@ -89,6 +89,7 @@ __fastcall void handle_except(struct iframe *regs)
     rdcr0(cr0); rdcr2(cr2); rdcr3(cr3); rdcr4(cr4);
     eflags = (struct eflags *) &regs->eflags;
 
+    cli();
     kprintf("Exception 0x%02X!\n", regs->vec_num);
     kprintf("Error Code: %p\n", regs->err_code);
     kprintf("EAX=%p EBX=%p ECX=%p EDX=%p\n", regs->eax, regs->ebx, regs->ecx, regs->edx);
@@ -109,5 +110,8 @@ __fastcall void handle_except(struct iframe *regs)
 
 __fastcall void handle_irq(struct iframe *regs)
 {
-    kprintf("Device IRQ %d!\n", ~regs->vec_num);
+    int irq_num = ~regs->vec_num;
+    kprintf("Device IRQ %d!\n", irq_num);
+
+    irq_eoi(irq_num);
 }

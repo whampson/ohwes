@@ -13,8 +13,8 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER          #
 # DEALINGS IN THE SOFTWARE.                                                    #
 #==============================================================================#
-#    File: drivers/Makefile                                                    #
-# Created: December 14, 2020                                                   #
+#    File: drivers/i8259/Makefile                                              #
+# Created: December 22, 2020                                                   #
 #  Author: Wes Hampson                                                         #
 #==============================================================================#
 
@@ -24,14 +24,12 @@ endif
 
 include $(TOPDIR)/Tree.mk
 
-.PHONY: all i8259 vga
+SRC	:= $(wildcard *.c)
+OBJ	:= $(addprefix $(OBJDIR)/,$(SRC:.c=.o))
+DEP	:= $(OBJ:%.o=%.d)
 
-all: i8259 vga
+.PHONY: all
 
-i8259: dirs
-	@$(MAKE) -C i8259
-
-vga: dirs
-	@$(MAKE) -C vga
+all: dirs $(OBJ)
 
 include $(TOPDIR)/Rules.mk

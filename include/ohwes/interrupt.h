@@ -16,6 +16,8 @@
  *    File: include/ohwes/interrupt.h                                         *
  * Created: December 14, 2020                                                 *
  *  Author: Wes Hampson                                                       *
+ *                                                                            *
+ * Generic interrupt handling.                                                *
  *============================================================================*/
 
 #ifndef __INTERRUPT_H
@@ -56,7 +58,7 @@ struct iframe
     uint32_t vec_num;
 
     /* Error code when an exception raised.
-       Should be set to -1 when error code does not apply. */
+       Should be set to 0 when error code does not apply. */
     int32_t err_code;
 
     /* Hardware context.
@@ -119,9 +121,6 @@ __asm__ volatile (          \
     : "r"(flags)            \
     : "memory", "cc"        \
 )
-
-__fastcall void handle_except(struct iframe *regs);
-__fastcall void handle_irq(struct iframe *regs);
 
 #endif /* __ASSEMBLY__ */
 

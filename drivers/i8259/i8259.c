@@ -13,26 +13,35 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/ohwes/irq.h                                               *
- * Created: December 21, 2020                                                 *
+ *    File: drivers/i8259/i8259.c                                             *
+ * Created: December 23, 2020                                                 *
  *  Author: Wes Hampson                                                       *
- *                                                                            *
- * Device interrupt requests handling.                                        *
  *============================================================================*/
 
-#ifndef __IRQ_H
-#define __IRQ_H
+#include <drivers/i8259.h>
+#include <ohwes/io.h>
 
-#define IRQ_KEYBOARD    1
-#define IRQ_SLAVE_PIC   2
-#define NUM_IRQ         16
+static uint16_t get_data_port(int pic_num)
+{
+    return (pic_num % 2) ? I8259_PORT_PIC1_DATA : I8259_PORT_PIC0_DATA;
+}
 
-#ifndef __ASSEMBLY__
+static uint16_t get_cmd_port(int pic_num)
+{
+    return (pic_num % 2) ? I8259_PORT_PIC1_CMD : I8259_PORT_PIC0_CMD;
+}
 
-void irq_mask(int irq_num);
-void irq_unmask(int irq_num);
-void irq_eoi(int irq_num);
+uint8_t i8259_data_read(int pic_num)
+{
+    return inb_p(get_data_port(pic_num));
+}
 
-#endif /* __ASSEMBLY */
+void i8259_data_write(int pic_num, uint8_t data)
+{
+    outb_p(get_data_port(pic_num), data);
+}
 
-#endif /* __IRQ_H */
+void i8259_cmd_write(int pic_num, uint8_t data)
+{
+    outb_p(get_cmd_port(pic_num), data);
+}

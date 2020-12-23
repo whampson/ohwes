@@ -19,7 +19,7 @@
 #==============================================================================#
 
 ifeq ($(MAKELEVEL), 0)
-$(error To build, please run 'make' from the top-level directory)
+$(error To build, please run 'make drivers' from the top-level directory)
 endif
 
 include $(TOPDIR)/Tree.mk

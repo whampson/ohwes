@@ -22,6 +22,7 @@
 #define __IO_H
 
 #include <ohwes/types.h>
+#include <ohwes/kernel.h>
 
 /**
  * Write to this port as a buffer to incur a short delay between I/O reads
@@ -48,6 +49,8 @@ static inline uint8_t inb(uint16_t port)
         : "=a"(data)
         : "d"(port)
     );
+
+    // kprintf("IN(0x%02X) = 0x%02X\n", port, data);
     return data;
 }
 
@@ -69,6 +72,8 @@ static inline uint8_t inb_p(uint16_t port)
         : "=a"(data)
         : "d"(port), "n"(PORT_IO_DELAY)
     );
+
+    kprintf("IN(0x%02X) = 0x%02X\n", port, data);
     return data;
 }
 
@@ -80,6 +85,7 @@ static inline uint8_t inb_p(uint16_t port)
  */
 static inline void outb(uint16_t port, uint8_t data)
 {
+    // kprintf("OUT(0x%02X) = 0x%02X\n", port, data);
     __asm__ volatile (
         "outb   %b0, %w1"
         :
@@ -88,18 +94,19 @@ static inline void outb(uint16_t port, uint8_t data)
 }
 
 /**
- * Writes a byte to an I/O port with a short delay before writing.
+ * Writes a byte to an I/O port with a short delay after writing.
  *
  * @param port the port to write to
  * @param data the byte to write
  */
 static inline void outb_p(uint16_t port, uint8_t data)
 {
+    kprintf("OUT(0x%02X) = 0x%02X\n", port, data);
     __asm__ volatile (
         "                   \n\
+        outb    %b0, %w1    \n\
         xorb    %b0, %b0    \n\
         outb    %b0, %w2    \n\
-        outb    %b0, %w1    \n\
         "
         :
         : "a"(data), "d"(port), "n"(PORT_IO_DELAY)

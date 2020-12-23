@@ -13,26 +13,24 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/ohwes/irq.h                                               *
- * Created: December 21, 2020                                                 *
+ *    File: include/drivers/i8259.c                                           *
+ * Created: December 22, 2020                                                 *
  *  Author: Wes Hampson                                                       *
- *                                                                            *
- * Device interrupt requests handling.                                        *
  *============================================================================*/
 
-#ifndef __IRQ_H
-#define __IRQ_H
+#ifndef __I8259_H
+#define __I8259_H
 
-#define IRQ_KEYBOARD    1
-#define IRQ_SLAVE_PIC   2
-#define NUM_IRQ         16
+#include <stdint.h>
 
-#ifndef __ASSEMBLY__
+/* I/O Ports */
+#define I8259_PORT_PIC0_CMD     0x20        /* Master PIC Command Port */
+#define I8259_PORT_PIC0_DATA    0x21        /* Master PIC Data Port */
+#define I8259_PORT_PIC1_CMD     0xA0        /* Slave PIC Command Port */
+#define I8259_PORT_PIC1_DATA    0xA1        /* Slave PIC Data Port */
 
-void irq_mask(int irq_num);
-void irq_unmask(int irq_num);
-void irq_eoi(int irq_num);
+uint8_t i8259_data_read(int pic_num);
+void i8259_data_write(int pic_num, uint8_t data);
+void i8259_cmd_write(int pic_num, uint8_t data);
 
-#endif /* __ASSEMBLY */
-
-#endif /* __IRQ_H */
+#endif /* __I8259_H */

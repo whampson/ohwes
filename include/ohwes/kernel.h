@@ -22,6 +22,7 @@
 #define __KERNEL_H
 
 #include <stdio.h>
+#include <ohwes/console.h>
 
 /* Privilege Levels */
 #define KERNEL_PL   0                       /* Kernel Privilege Level */
@@ -37,17 +38,20 @@
 
 /**
  * Prints a message to the kernel console.
+ * We use a separate function in case we want to
+ * divorce ourselves from printf() and log the
+ * kernel output one day.
  */
-#define kprintf(...) printf(__VA_ARGS__)
+#define kprintf(...)    printf(__VA_ARGS__)
 
 /**
  * Uh oh, something bad happened!
  * Prints a message then halts the system.
  */
-#define panic(x)                \
-do {                            \
-    kprintf("KERNEL PANIC: " x); \
-    for (;;);                   \
+#define panic(x)                            \
+do {                                        \
+    kprintf("KERNEL PANIC: " x);            \
+    for (;;);                               \
 } while (0)
 
 /* main.c */
@@ -63,5 +67,8 @@ void mem_init(void);
 
 /* interrupt.c */
 void idt_init(void);
+
+/* irq.c */
+void irq_init(void);
 
 #endif /* __KERNEL_H */
