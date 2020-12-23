@@ -32,7 +32,7 @@ SECTIONS
     /* ELF sections */
     .text       : {
         *(.entry)       /* Ensure the setup ASM code goes first. */
-        *(.text) 
+        *(.text)
     }
     .data       : { *(.data) }
     .bss        : { *(.bss) }

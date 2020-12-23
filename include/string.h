@@ -81,7 +81,7 @@ static inline char * strcpy(char *dest, const char *src)
         jmp     _strcpy_top%=           \n\
     _strcpy_done%=:                     \n\
         "
-        : 
+        :
         : "D"(dest), "S"(src)
         : "eax", "edx", "memory", "cc"
     );
@@ -113,7 +113,7 @@ static inline char * strncpy(char *dest, const char *src, size_t n)
         jmp     _strncpy_zero0%=        \n\
     _strncpy_done%=:                    \n\
         "
-        : 
+        :
         : "D"(dest), "S"(src), "c"(n)
         : "eax", "edx", "memory", "cc"
     );

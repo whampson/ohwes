@@ -41,7 +41,7 @@ struct printf_params
     char *buf;                  /* output buffer */
     size_t n;                   /* output buffer size */
     size_t pos;                 /* output buffer position */
-    
+
     /* format specifier optional fields */
     int flags;
     int width;
@@ -221,7 +221,7 @@ static int _printf(struct printf_params *p)
                     p->precision = va_arg(p->args, int);
                 }
                 continue;
-            
+
             /* flags */
             case '-':   /* left-justify flag */
                 if (!p->parsing) goto sendchar;
@@ -244,7 +244,7 @@ static int _printf(struct printf_params *p)
                 if (p->field == S_FLAGS) p->flags |= F_ZEROPAD;
                 if (p->field != S_FLAGS) goto digit;
                 continue;
-            
+
             /* length specifiers */
             case 'h':   /* half-word, half half-word */
                 if (!p->parsing) goto sendchar;
@@ -263,7 +263,7 @@ static int _printf(struct printf_params *p)
                 if (!p->parsing) goto sendchar;
                 p->length = L_T;
                 continue;
-            
+
             /* format specifiers */
             case 'd':
             case 'i':   /* signed decimal integer */
@@ -315,7 +315,7 @@ static int _printf(struct printf_params *p)
                 if (!p->parsing) goto sendchar;
                 nchars += fmt_string(p);
                 continue;
-            
+
             default:
                 if (!p->parsing) goto sendchar;
             digit:

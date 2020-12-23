@@ -95,7 +95,7 @@ detect_memory:
 #   0x0C: high limit
 #   0x10: type
 #   0x14: extended attributes
-# 
+#
 # The entry types are as follows:
 #      1: free to use
 #      2: reserved, do not use
@@ -279,7 +279,7 @@ _a20_fast_done:
 #
 # This test is done by reading a segment:offset with a known value (the boot
 # sector signature in this case), then comparing that value with the value read
-# at a different segment:offset such that the resulting address would 
+# at a different segment:offset such that the resulting address would
 # "wrap around" to the first address if A20 is NOT enabled. In other words, if
 # A20 is NOT enabled, both addresses would read 0xAA55.
 #
@@ -354,7 +354,7 @@ a20_error:
 retry_boot:
     xorb    %ah, %ah
     int     $0x16
-    int     $0x19  
+    int     $0x19
 
 # -----------------------------------------------------------------------------
 # ----------------------------------- Data ------------------------------------

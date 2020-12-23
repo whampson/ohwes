@@ -29,8 +29,25 @@
 #include <x86/cntrl.h>
 #include <x86/flags.h>
 
-static const ivt_thunk thunk_except[NUM_EXCEPT];
-static const ivt_thunk thunk_irq[NUM_IRQ];
+static const ivt_thunk thunk_except[NUM_EXCEPT] =
+{
+    thunk_except_00,    thunk_except_01,    thunk_except_02,    thunk_except_03,
+    thunk_except_04,    thunk_except_05,    thunk_except_06,    thunk_except_07,
+    thunk_except_08,    thunk_except_09,    thunk_except_10,    thunk_except_11,
+    thunk_except_12,    thunk_except_13,    thunk_except_14,    thunk_except_15,
+    thunk_except_16,    thunk_except_17,    thunk_except_18,    thunk_except_19,
+    thunk_except_20,    thunk_except_21,    thunk_except_22,    thunk_except_23,
+    thunk_except_24,    thunk_except_25,    thunk_except_26,    thunk_except_27,
+    thunk_except_28,    thunk_except_29,    thunk_except_30,    thunk_except_31
+};
+
+static const ivt_thunk thunk_irq[NUM_IRQ] =
+{
+    thunk_irq_00,       thunk_irq_01,       thunk_irq_02,       thunk_irq_03,
+    thunk_irq_04,       thunk_irq_05,       thunk_irq_06,       thunk_irq_07,
+    thunk_irq_08,       thunk_irq_09,       thunk_irq_10,       thunk_irq_11,
+    thunk_irq_12,       thunk_irq_13,       thunk_irq_14,       thunk_irq_15
+};
 
 void idt_init(void)
 {
@@ -63,26 +80,6 @@ void idt_init(void)
     idtr->limit = IDT_SIZE - 1;
     lidt(*idtr);
 }
-
-static const ivt_thunk thunk_except[NUM_EXCEPT] =
-{
-    thunk_except_00,    thunk_except_01,    thunk_except_02,    thunk_except_03,
-    thunk_except_04,    thunk_except_05,    thunk_except_06,    thunk_except_07,
-    thunk_except_08,    thunk_except_09,    thunk_except_10,    thunk_except_11,
-    thunk_except_12,    thunk_except_13,    thunk_except_14,    thunk_except_15,
-    thunk_except_16,    thunk_except_17,    thunk_except_18,    thunk_except_19,
-    thunk_except_20,    thunk_except_21,    thunk_except_22,    thunk_except_23,
-    thunk_except_24,    thunk_except_25,    thunk_except_26,    thunk_except_27,
-    thunk_except_28,    thunk_except_29,    thunk_except_30,    thunk_except_31
-};
-
-static const ivt_thunk thunk_irq[NUM_IRQ] =
-{
-    thunk_irq_00,       thunk_irq_01,       thunk_irq_02,       thunk_irq_03,
-    thunk_irq_04,       thunk_irq_05,       thunk_irq_06,       thunk_irq_07,
-    thunk_irq_08,       thunk_irq_09,       thunk_irq_10,       thunk_irq_11,
-    thunk_irq_12,       thunk_irq_13,       thunk_irq_14,       thunk_irq_15
-};
 
 __fastcall void handle_except(struct iframe *regs)
 {

@@ -70,9 +70,9 @@ struct console
 };
 
 /**
- * Writes a character to the console at the current cursor position, then 
+ * Writes a character to the console at the current cursor position, then
  * advances the cursor to the next position.
- * 
+ *
  * @param c the character to write
  */
 void con_write(char c);

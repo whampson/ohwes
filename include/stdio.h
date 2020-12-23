@@ -82,9 +82,9 @@ typedef uint64_t fpos_t;
 
 /**
  * printf()-family functions.
- * 
+ *
  *     %[flags][width][.precision][length]specifier
- * 
+ *
  * Specifier    Output                                      Support
  * -----------------------------------------------------------------------------
  * d or i       signed decimal integer                      SUPPORTED
@@ -105,8 +105,8 @@ typedef uint64_t fpos_t;
  * p            pointer address                             SUPPORTED
  * n            write chars printed to address              NOT SUPPORTED
  * %            writes a '%' character                      SUPPORTED
- * 
- * 
+ *
+ *
  * Flag         Description                                 Support
  * -----------------------------------------------------------------------------
  * -            left-justify within the given width         SUPPORTED
@@ -114,22 +114,22 @@ typedef uint64_t fpos_t;
  * (space)      write blank space if no sign to be printed  SUPPORTED
  * #            always print hex prefix or decimal dot      SUPPORTED
  * 0            left-pad with zeros                         SUPPORTED
- * 
- * 
+ *
+ *
  * Width        Description                                 Support
  * -----------------------------------------------------------------------------
  * (number)     minimum number of characters                SUPPORTED
  * *            width specified in argument list            SUPPORTED
- * 
- * 
+ *
+ *
  * Precision    Description                                 Support
  * -----------------------------------------------------------------------------
  * .(number)    diouxX: minimum number of digits            SUPPORTED
  *              fF:     minumum number of decimal places    NOT IMPLEMENTED
  *              s:      maximum number of characters        SUPPORTED
  * .*           precision specified in argument list        SUPPORTED
- * 
- * 
+ *
+ *
  * Length   di          uoxX        fFeEgGaAa   c           s           p
  * -----------------------------------------------------------------------------
  * (none)   int         u int       not impl    int         char*       void*

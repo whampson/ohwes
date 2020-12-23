@@ -142,11 +142,11 @@ void con_write(char c)
         case S_ESC:
             esc(c);
             break;
-        
+
         case S_CSI:
             csi(c);
             break;
-    
+
     cntrl:
         default:
             switch (c)
@@ -489,7 +489,7 @@ static void scroll(int n)
     n_blank = n * m_cols;
     n_cells = (m_rows * m_cols) - n_blank;
     n_bytes = n_cells * sizeof(struct vga_cell);
-    
+
     src = (reverse) ? m_framebuf : &(m_framebuf[n_blank]);
     dst = (reverse) ? &(m_framebuf[n_blank]) : m_framebuf;
     memmove(dst, src, n_bytes);
@@ -564,7 +564,7 @@ static void set_vga_attr(struct vga_attr *a)
 {
     a->bg = m_attr.bg;
     a->fg = m_attr.fg;
-    
+
     if (m_attr.bright) {
         a->bright = 1;
     }

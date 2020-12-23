@@ -13,7 +13,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER          #
 # DEALINGS IN THE SOFTWARE.                                                    #
 #==============================================================================#
-#    File: kernel/intr_thunk.S                                                 #
+#    File: kernel/interrupt_thunk.S                                            #
 # Created: December 21, 2020                                                   #
 #  Author: Wes Hampson                                                         #
 #                                                                              #

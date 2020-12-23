@@ -37,7 +37,7 @@
 
 /**
  * Checks whether a bit or bitmask is set in a value.
- * 
+ *
  * @param x the value to check
  * @param f the flag to check for
  */

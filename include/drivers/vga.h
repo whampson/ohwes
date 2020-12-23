@@ -78,8 +78,8 @@
 #define VGA_FLD_CRTC_CSS_CD         0x20    /* Cursor Disable Bit Field */
 
 /* Cursor Scan Line End Register Fields */
-#define VGA_FLD_CRTC_CSE_CSE        0x1F    /* Cursor Scan Line End Field */  
-#define VGA_FLD_CRTC_CSE_CS         0x60    /* Cursor Skew Field */      
+#define VGA_FLD_CRTC_CSE_CSE        0x1F    /* Cursor Scan Line End Field */
+#define VGA_FLD_CRTC_CSE_CS         0x60    /* Cursor Skew Field */
 
 /**
  * Graphics Registers
@@ -261,27 +261,27 @@ void vga_hide_cursor(void);
 void vga_show_cursor(void);
 
 /**
- * Gets the current linear cursor position. 
+ * Gets the current linear cursor position.
  * A value of 0 represents the top left corner of the display area.
- * 
+ *
  * @return the cursor position
  */
 uint16_t vga_get_cursor_pos(void);
 
 /**
- * Sets the current linear cursor position. 
+ * Sets the current linear cursor position.
  * A value of 0 represents the top left corner of the display area.
- * 
+ *
  * @param pos the new linear cursor position
  */
 void vga_set_cursor_pos(uint16_t pos);
 
 /**
- * Gets the current cursor shape. 
- * The cursor shape is defined as the area between two scan lines. A scan line 
- * value of 0 represents the top of the current row. The maximum scan line is 
+ * Gets the current cursor shape.
+ * The cursor shape is defined as the area between two scan lines. A scan line
+ * value of 0 represents the top of the current row. The maximum scan line is
  * determined by the character height (usually 15).
- * 
+ *
  * @return the cursor shape, represented as a packed scan line tuple where the
  *         low byte contains the starting scan line and the high byte contains
  *         the ending scan line
@@ -290,8 +290,8 @@ uint16_t vga_get_cursor_shape(void);
 
 /**
  * Sets the cursor shape.
- * The cursor shape is defined as the area between two scan lines. A scan line 
- * value of 0 represents the top of the current row. The maximum scan line is 
+ * The cursor shape is defined as the area between two scan lines. A scan line
+ * value of 0 represents the top of the current row. The maximum scan line is
  * determined by the character height (usually 15).
  *
  * @param start the scan line at which to begin drawing the cursor
@@ -301,7 +301,7 @@ void vga_set_cursor_shape(uint8_t start, uint8_t end);
 
 /**
  * Reads a CRT Controller register.
- * 
+ *
  * @param reg one of VGA_REG_CRTC_*
  * @return the register value
  */
@@ -309,7 +309,7 @@ uint8_t vga_crtc_read(uint8_t reg);
 
 /**
  * Writes a CRT Controller register.
- * 
+ *
  * @param reg one of VGA_REG_CRTC_*
  * @param data the value to write
  */
@@ -317,7 +317,7 @@ void vga_crtc_write(uint8_t reg, uint8_t data);
 
 /**
  * Reads a Graphics register.
- * 
+ *
  * @param reg one of VGA_REG_GRFX_*
  * @return the register value
  */
@@ -325,7 +325,7 @@ uint8_t vga_grfx_read(uint8_t reg);
 
 /**
  * Writes a Graphics register.
- * 
+ *
  * @param reg one of VGA_REG_GRFX_*
  * @param data the value to write
  */
@@ -333,7 +333,7 @@ void vga_grfx_write(uint8_t reg, uint8_t data);
 
 /**
  * Reads a Sequencer register.
- * 
+ *
  * @param reg one of VGA_REG_SEQR_*
  * @return the register value
  */
@@ -341,7 +341,7 @@ uint8_t vga_seqr_read(uint8_t reg);
 
 /**
  * Writes a Sequencer register.
- * 
+ *
  * @param reg one of VGA_REG_SEQR_*
  * @param data the value to write
  */
@@ -349,7 +349,7 @@ void vga_seqr_write(uint8_t reg, uint8_t data);
 
 /**
  * Reads an Attribute register.
- * 
+ *
  * @param reg one of VGA_REG_ATTR_*
  * @return the register value
  */
@@ -357,7 +357,7 @@ uint8_t vga_attr_read(uint8_t reg);
 
 /**
  * Writes an Attribute register.
- * 
+ *
  * @param reg one of VGA_REG_ATTR_*
  * @param data the value to write
  */
@@ -365,7 +365,7 @@ void vga_attr_write(uint8_t reg, uint8_t data);
 
 /**
  * Reads an External register.
- * 
+ *
  * @param port one of VGA_PORT_EXTL_*
  * @return the register value
  */
@@ -373,7 +373,7 @@ uint8_t vga_extl_read(uint16_t port);
 
 /**
  * Writes an External register.
- * 
+ *
  * @param port one of VGA_PORT_EXTL_*
  * @param data the value to write
  */

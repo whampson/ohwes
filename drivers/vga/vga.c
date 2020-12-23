@@ -179,7 +179,7 @@ uint8_t vga_attr_read(uint8_t reg)
     int flags;
     uint8_t addr = reg & VGA_FLD_ATTR_ADDR_ADDR;
     uint8_t data;
-    
+
     cli_save(flags);
     (void) inb(VGA_PORT_EXTL_IS1);
     outb(VGA_PORT_ATTR_ADDR, VGA_FLD_ATTR_ADDR_PAS | addr); /* keep PAS set */
@@ -193,7 +193,7 @@ void vga_attr_write(uint8_t reg, uint8_t data)
 {
     int flags;
     uint8_t addr = reg & VGA_FLD_ATTR_ADDR_ADDR;
-    
+
     cli_save(flags);
     (void) inb(VGA_PORT_EXTL_IS1);
     outb(VGA_PORT_ATTR_ADDR, VGA_FLD_ATTR_ADDR_PAS | addr); /* keep PAS set */

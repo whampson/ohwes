@@ -23,7 +23,7 @@
 
 int errno;
 
-static const char *errno_text[ERRNO_MAX+1] =
+static const char *errno_text[MAX_ERRNO+1] =
 {
     NULL,
     "Invalid argument",
@@ -38,7 +38,7 @@ void perror(const char *msg)
     }
 
     const char *err;
-    if (errno > 0 && errno <= ERRNO_MAX) {
+    if (errno > 0 && errno <= MAX_ERRNO) {
         err = errno_text[errno];
         puts(err);
         puts("\n");
