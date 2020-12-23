@@ -23,6 +23,14 @@
 
 #include <ohwes/types.h>
 
+/**
+ * Write to this port as a buffer to incur a short delay between I/O reads
+ * and writes.
+ * This is a POST code port, but it should be harmless to write to willy-nilly,
+ * though it may clear any POST codes set during hardware initialization.
+ */
+#define PORT_IO_DELAY  0x80
+
 ssize_t read(int fd, void *buf, size_t n);
 ssize_t write(int fd, const void *buf, size_t n);
 
@@ -36,10 +44,30 @@ static inline uint8_t inb(uint16_t port)
 {
     uint8_t data;
     __asm__ volatile (
-        "inb %w1, %b0"
+        "inb    %w1, %b0"
         : "=a"(data)
         : "d"(port)
-        :
+    );
+    return data;
+}
+
+/**
+ * Reads a byte from an I/O port with a short delay before reading.
+ *
+ * @param port the port to read from
+ * @return the byte read
+ */
+static inline uint8_t inb_p(uint16_t port)
+{
+    uint8_t data;
+    __asm__ volatile (
+        "                   \n\
+        xorb    %b0, %b0    \n\
+        outb    %b0, %w2    \n\
+        inb     %w1, %b0    \n\
+        "
+        : "=a"(data)
+        : "d"(port), "n"(PORT_IO_DELAY)
     );
     return data;
 }
@@ -53,10 +81,28 @@ static inline uint8_t inb(uint16_t port)
 static inline void outb(uint16_t port, uint8_t data)
 {
     __asm__ volatile (
-        "outb %b0, %w1"
+        "outb   %b0, %w1"
         :
         : "a"(data), "d"(port)
+    );
+}
+
+/**
+ * Writes a byte to an I/O port with a short delay before writing.
+ *
+ * @param port the port to write to
+ * @param data the byte to write
+ */
+static inline void outb_p(uint16_t port, uint8_t data)
+{
+    __asm__ volatile (
+        "                   \n\
+        xorb    %b0, %b0    \n\
+        outb    %b0, %w2    \n\
+        outb    %b0, %w1    \n\
+        "
         :
+        : "a"(data), "d"(port), "n"(PORT_IO_DELAY)
     );
 }
 
