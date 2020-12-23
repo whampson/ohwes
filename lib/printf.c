@@ -100,6 +100,7 @@ static int pad(struct printf_params *p, int n, char c);
 static int write_string(struct printf_params *p, char *str, size_t len);
 static int write_char(struct printf_params *p, char c);
 static void reset_fmt_params(struct printf_params *p);
+static void terminate(struct printf_params *p);
 
 int printf(const char *fmt, ...)
 {
@@ -339,6 +340,7 @@ static int _printf(struct printf_params *p)
         nchars += write_char(p, c);
     }
 
+    terminate(p);
     return nchars;
 }
 
@@ -572,15 +574,23 @@ static int write_char(struct printf_params *p, char c)
 {
     if (p->use_buf) {
         if (p->bounded) {
-            if (p->n > 0 && p->pos < p->n - 1) {
+            if (p->n > 0 && p->pos < p->n-1) {
                 p->buf[p->pos++] = c;
-                return sizeof(char);
             }
-            return 0;
+            /* Always return num chars printed, even if one wasn't
+               placed in the buffer, as per snprintf() spec. */
+            return sizeof(char);
         }
         p->buf[p->pos++] = c;
         return sizeof(char);
     }
 
     return write(p->fd, &c, sizeof(char));
+}
+
+static void terminate(struct printf_params *p)
+{
+    if (p->use_buf) {
+        p->buf[p->pos] = '\0';
+    }
 }
