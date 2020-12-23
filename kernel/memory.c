@@ -74,8 +74,8 @@ void mem_init(void)
         kb_free = 0;
         g_tom = 0;
         while (smap->limit != 0) {
-            int kb = (uint32_t) (smap->limit >> 10);
-            uint64_t end = smap->addr+smap->limit;
+            int kb = (uint32_t) (smap->limit >> KB_SHIFT);
+            uint64_t end = smap->addr + smap->limit;
             if (smap->type == SMAP_TYPE_FREE) {
                 kb_free += kb;
                 if (end > g_tom) {
