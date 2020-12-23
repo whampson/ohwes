@@ -40,7 +40,7 @@ size_t g_tom;
 void mem_init(void)
 {
     /* TODO: check for/handle 15-16M hole */
-    
+
     uint16_t above1M;           /* 1K blocks */
     uint16_t above1M_e801;      /* 1K blocks */
     uint16_t above16M;          /* 64K blocks */
@@ -82,7 +82,7 @@ void mem_init(void)
                     g_tom = end;
                 }
             }
-            printk("%p%p %p%p %d %-2d\n",
+            kprintf("%p%p %p%p %d %-2d\n",
                 p64(smap->addr), p64(end-1),
                 smap->type, smap->extra);
             smap++;

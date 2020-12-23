@@ -89,25 +89,25 @@ __fastcall void handle_except(struct iframe *regs)
     rdcr0(cr0); rdcr2(cr2); rdcr3(cr3); rdcr4(cr4);
     eflags = (struct eflags *) &regs->eflags;
 
-    printk("Exception 0x%02X!\n", regs->vec_num);
-    printk("Error Code: %p\n", regs->err_code);
-    printk("EAX=%p EBX=%p ECX=%p EDX=%p\n", regs->eax, regs->ebx, regs->ecx, regs->edx);
-    printk("ESI=%p EDI=%p EBP=%p EIP=%p\n", regs->esi, regs->edi, regs->ebp, regs->eip);
-    printk("CR0=%p CR2=%p CR3=%p CR4=%p\n", cr0, cr2, cr3, cr4);
-    printk("CS=%02x IOPL=%d EFLAGS=%p [ ", regs->cs, eflags->iopl, eflags->_value);
-    if (eflags->cf) printk("CF "); if (eflags->pf) printk("PF ");
-    if (eflags->af) printk("AF "); if (eflags->zf) printk("ZF ");
-    if (eflags->sf) printk("SF "); if (eflags->tf) printk("TF ");
-    if (eflags->if_) printk("IF "); if (eflags->df) printk("DF ");
-    if (eflags->of) printk("OF "); if (eflags->nt) printk("NT ");
-    if (eflags->rf) printk("RF "); if (eflags->vm) printk("VM ");
-    if (eflags->ac) printk("AC "); if (eflags->vif) printk("VIF ");
-    if (eflags->vip) printk("VIP "); if (eflags->zf) printk("ID ");
-    printk("]\n\n");
+    kprintf("Exception 0x%02X!\n", regs->vec_num);
+    kprintf("Error Code: %p\n", regs->err_code);
+    kprintf("EAX=%p EBX=%p ECX=%p EDX=%p\n", regs->eax, regs->ebx, regs->ecx, regs->edx);
+    kprintf("ESI=%p EDI=%p EBP=%p EIP=%p\n", regs->esi, regs->edi, regs->ebp, regs->eip);
+    kprintf("CR0=%p CR2=%p CR3=%p CR4=%p\n", cr0, cr2, cr3, cr4);
+    kprintf("CS=%02x IOPL=%d EFLAGS=%p [ ", regs->cs, eflags->iopl, eflags->_value);
+    if (eflags->cf) kprintf("CF "); if (eflags->pf) kprintf("PF ");
+    if (eflags->af) kprintf("AF "); if (eflags->zf) kprintf("ZF ");
+    if (eflags->sf) kprintf("SF "); if (eflags->tf) kprintf("TF ");
+    if (eflags->if_) kprintf("IF "); if (eflags->df) kprintf("DF ");
+    if (eflags->of) kprintf("OF "); if (eflags->nt) kprintf("NT ");
+    if (eflags->rf) kprintf("RF "); if (eflags->vm) kprintf("VM ");
+    if (eflags->ac) kprintf("AC "); if (eflags->vif) kprintf("VIF ");
+    if (eflags->vip) kprintf("VIP "); if (eflags->zf) kprintf("ID ");
+    kprintf("]\n\n");
     panic("You done goofed!");
 }
 
 __fastcall void handle_irq(struct iframe *regs)
 {
-    printk("Device IRQ %d!\n", ~regs->vec_num);
+    kprintf("Device IRQ %d!\n", ~regs->vec_num);
 }

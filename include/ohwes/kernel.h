@@ -38,7 +38,7 @@
 /**
  * Prints a message to the kernel console.
  */
-#define printk(...) printf(__VA_ARGS__)
+#define kprintf(...) printf(__VA_ARGS__)
 
 /**
  * Uh oh, something bad happened!
@@ -46,7 +46,7 @@
  */
 #define panic(x)                \
 do {                            \
-    printk("KERNEL PANIC: " x); \
+    kprintf("KERNEL PANIC: " x); \
     for (;;);                   \
 } while (0)
 

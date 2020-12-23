@@ -74,37 +74,37 @@ int test5(int a, int b, int c, int d, int e)
 
 int sys_test0(void)
 {
-    printk("sys_test0()\n");
+    kprintf("sys_test0()\n");
     return 0;
 }
 
 int sys_test1(int a)
 {
-    printk("sys_test1(): a=%p\n", a);
+    kprintf("sys_test1(): a=%p\n", a);
     return 0;
 }
 
 int sys_test2(int a, int b)
 {
-    printk("sys_test2(): a=%p, b=%p\n", a,b);
+    kprintf("sys_test2(): a=%p, b=%p\n", a,b);
     return 0;
 }
 
 int sys_test3(int a, char b, int c)
 {
-    printk("sys_test3(): a=%p, b=%p, c=%p\n", a,b,c);
+    kprintf("sys_test3(): a=%p, b=%p, c=%p\n", a,b,c);
     return 0;
 }
 
 int sys_test4(int a, int b, int c, int d)
 {
-    printk("sys_test4(): a=%p, b=%p, c=%p, d=%p\n", a,b,c,d);
+    kprintf("sys_test4(): a=%p, b=%p, c=%p, d=%p\n", a,b,c,d);
     return 0;
 }
 
 int sys_test5(int a, int b, int c, int d, int e)
 {
-    printk("sys_test5(): a=%p, b=%p, c=%p, d=%p, e=%p\n", a,b,c,d,e);
+    kprintf("sys_test5(): a=%p, b=%p, c=%p, d=%p, e=%p\n", a,b,c,d,e);
     return 0;
 }
 
@@ -116,12 +116,12 @@ void kmain(void)
     tss_init();
     con_init();
 
-    printk("Into TheKernel!!!\n\n");
+    kprintf("Into TheKernel!!!\n\n");
 
     mem_init();
 
-    printk("\nOHWES 0.1\n");
-    printk("Copyright (C) 2020-2021 Wes Hampson\n\n");
+    kprintf("\nOHWES 0.1\n");
+    kprintf("Copyright (C) 2020-2021 Wes Hampson\n\n");
 
 
     test0();
