@@ -18,95 +18,10 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <ohwes/ohwes.h>
 #include <ohwes/boot.h>
 #include <ohwes/init.h>
 #include <ohwes/kernel.h>
-#include <ohwes/console.h>
-#include <ohwes/memory.h>
-#include <ohwes/interrupt.h>
-#include <ohwes/syscall.h>
-#include <ohwes/types.h>
 #include <x86/desc.h>
-#include <x86/cntrl.h>
-
-int test0(void)
-{
-    __syscall_setup;
-    __syscall0(SYS_TEST0);
-    __syscall_ret;
-}
-
-int test1(int a)
-{
-    __syscall_setup;
-    __syscall1(SYS_TEST1, a);
-    __syscall_ret;
-}
-
-int test2(int a, int b)
-{
-    __syscall_setup;
-    __syscall2(SYS_TEST2, a, b);
-    __syscall_ret;
-}
-int test3(int a, char b, int c)
-{
-    __syscall_setup;
-    __syscall3(SYS_TEST3, a, b, c);
-    __syscall_ret;
-}
-int test4(int a, int b, int c, int d)
-{
-    __syscall_setup;
-    __syscall4(SYS_TEST4, a, b, c, d);
-    __syscall_ret;
-}
-int test5(int a, int b, int c, int d, int e)
-{
-    __syscall_setup;
-    __syscall5(SYS_TEST5, a, b, c, d, e);
-    __syscall_ret;
-}
-
-int sys_test0(void)
-{
-    kprintf("sys_test0()\n");
-    return 0;
-}
-
-int sys_test1(int a)
-{
-    kprintf("sys_test1(): a=%p\n", a);
-    return 0;
-}
-
-int sys_test2(int a, int b)
-{
-    kprintf("sys_test2(): a=%p, b=%p\n", a,b);
-    return 0;
-}
-
-int sys_test3(int a, char b, int c)
-{
-    kprintf("sys_test3(): a=%p, b=%p, c=%p\n", a,b,c);
-    return 0;
-}
-
-int sys_test4(int a, int b, int c, int d)
-{
-    kprintf("sys_test4(): a=%p, b=%p, c=%p, d=%p\n", a,b,c,d);
-    return 0;
-}
-
-int sys_test5(int a, int b, int c, int d, int e)
-{
-    kprintf("sys_test5(): a=%p, b=%p, c=%p, d=%p, e=%p\n", a,b,c,d,e);
-    return 0;
-}
 
 void kmain(void)
 {
@@ -122,14 +37,6 @@ void kmain(void)
 
     kprintf("\nOHWES 0.1\n");
     kprintf("Copyright (C) 2020-2021 Wes Hampson\n\n");
-
-
-    test0();
-    test1(0xFFFFFF01);
-    test2(0xFFFFFF02, 0xFFFFFF03);
-    test3(0xFFFFFF03, 0x04, 0xFFFFFF05);
-    test4(0xFFFFFF04, 0xFFFFFF05, 0xFFFFFF06, 0xFFFFFF07);
-    test5(0xFFFFFF05, 0xFFFFFF06, 0xFFFFFF07, 0xFFFFFF08, 0xFFFFFF09);
 }
 
 void gdt_init(void)

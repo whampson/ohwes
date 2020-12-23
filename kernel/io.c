@@ -23,9 +23,22 @@
 #include <ohwes/console.h>
 #include <ohwes/io.h>
 #include <ohwes/syscall.h>
-#include <ohwes/ohwes.h>
 
-__fastcall ssize_t sys_read(int fd, void *buf, size_t n)
+ssize_t read(int fd, void *buf, size_t n)
+{
+    syscall_setup;
+    syscall3(SYS_READ, fd, buf, n);
+    syscall_ret;
+}
+
+ssize_t write(int fd, const void *buf, size_t n)
+{
+    syscall_setup;
+    syscall3(SYS_WRITE, fd, buf, n);
+    syscall_ret;
+}
+
+__syscall ssize_t sys_read(int fd, void *buf, size_t n)
 {
     (void) fd;
     (void) buf;
@@ -34,16 +47,7 @@ __fastcall ssize_t sys_read(int fd, void *buf, size_t n)
     return -ENOSYS;
 }
 
-__fastcall ssize_t sys_write(int fd, const void *buf, size_t n)
-{
-    (void) fd;
-    (void) buf;
-    (void) n;
-
-    return -ENOSYS;
-}
-
-/*__fastcall*/ ssize_t /*sys_write*/write(int fd, const void *buf, size_t n)
+__syscall ssize_t sys_write(int fd, const void *buf, size_t n)
 {
     /* TODO: actually implement this */
     (void) fd;

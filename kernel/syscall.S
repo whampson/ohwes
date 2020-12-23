@@ -31,10 +31,6 @@ nosys:
     ret
 
 sys_jmptbl:
-    .long   sys_test0
-    .long   sys_test1
-    .long   sys_test2
-    .long   sys_test3
-    .long   sys_test4
-    .long   sys_test5
+    .long   sys_read
+    .long   sys_write
 sys_jmptbl_end:

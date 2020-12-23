@@ -21,60 +21,89 @@
 #ifndef __SYSCALL_H
 #define __SYSCALL_H
 
-#define SYS_TEST0       0
-#define SYS_TEST1       1
-#define SYS_TEST2       2
-#define SYS_TEST3       3
-#define SYS_TEST4       4
-#define SYS_TEST5       5
-#define NUM_SYSCALL     6
+/* System Call Numbers */
+#define SYS_READ        0
+#define SYS_WRITE       1
 
-#define __syscall_setup                                                     \
+/**
+ * 'syscall' calling convention.
+ * Ensures parameters are always retrieved from the stack.
+ */
+#define __syscall       __attribute__((regparm(0)))
+
+/**
+ * System call setup routine for library functions.
+ * Use this before invoking one of the syscallN() macros.
+ */
+#define syscall_setup                                                       \
     int __ret;
 
-#define __syscall0(fn)                                                      \
+/**
+ * Invokes a system call with zero parameters.
+ */
+#define syscall0(n)                                                         \
 __asm__ volatile (                                                          \
     "int $0x80"                                                             \
     : "=a"(__ret)                                                           \
-    : "a"(fn)                                                               \
+    : "a"(n)                                                                \
 )
 
-#define __syscall1(fn,arg1)                                                 \
+/**
+ * Invokes a system call with one parameter.
+ */
+#define syscall1(n,arg1)                                                    \
 __asm__ volatile (                                                          \
     "int $0x80"                                                             \
     : "=a"(__ret)                                                           \
-    : "a"(fn), "b"(arg1)                                                    \
+    : "a"(n), "b"(arg1)                                                     \
 )
 
-#define __syscall2(fn,arg1,arg2)                                            \
+/**
+ * Invokes a system call with two parameters.
+ */
+#define syscall2(n,arg1,arg2)                                               \
 __asm__ volatile (                                                          \
     "int $0x80"                                                             \
     : "=a"(__ret)                                                           \
-    : "a"(fn), "b"(arg1), "c"(arg2)                                         \
+    : "a"(n), "b"(arg1), "c"(arg2)                                          \
 )
 
-#define __syscall3(fn,arg1,arg2,arg3)                                       \
+/**
+ * Invokes a system call with three parameters.
+ */
+#define syscall3(n,arg1,arg2,arg3)                                          \
 __asm__ volatile (                                                          \
     "int $0x80"                                                             \
     : "=a"(__ret)                                                           \
-    : "a"(fn), "b"(arg1), "c"(arg2), "d"(arg3)                              \
+    : "a"(n), "b"(arg1), "c"(arg2), "d"(arg3)                               \
 )
 
-#define __syscall4(fn,arg1,arg2,arg3,arg4)                                  \
+/**
+ * Invokes a system call with four parameters.
+ */
+#define syscall4(n,arg1,arg2,arg3,arg4)                                     \
 __asm__ volatile (                                                          \
     "int $0x80"                                                             \
     : "=a"(__ret)                                                           \
-    : "a"(fn), "b"(arg1), "c"(arg2), "d"(arg3), "S"(arg4)                   \
+    : "a"(n), "b"(arg1), "c"(arg2), "d"(arg3), "S"(arg4)                    \
 )
 
-#define __syscall5(fn,arg1,arg2,arg3,arg4,arg5)                             \
+/**
+ * Invokes a system call with five parameters.
+ */
+#define syscall5(n,arg1,arg2,arg3,arg4,arg5)                                \
 __asm__ volatile (                                                          \
     "int $0x80"                                                             \
     : "=a"(__ret)                                                           \
-    : "a"(fn), "b"(arg1), "c"(arg2), "d"(arg3), "S"(arg4), "D"(arg5)        \
+    : "a"(n), "b"(arg1), "c"(arg2), "d"(arg3), "S"(arg4), "D"(arg5)         \
 )
 
-#define __syscall_ret                                                       \
+/**
+ * Returns from the calling function after exiting a system call.
+ * Sets errno then returns -1 if the system call returned a negative result,
+ * otherwise returns the syscall return value.
+ */
+#define syscall_ret                                                         \
 do {                                                                        \
     if (__ret < 0) {                                                        \
         errno = -__ret;                                                     \

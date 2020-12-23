@@ -31,8 +31,8 @@ IFRAME_ECX          = 0x04
 IFRAME_EDX          = 0x08
 IFRAME_ESI          = 0x0C
 IFRAME_EDI          = 0x10
-IFRAME_EAX          = 0x14
-IFRAME_EBP          = 0x18
+IFRAME_EBP          = 0x14
+IFRAME_EAX          = 0x18
 IFRAME_VEC_NUM      = 0x1C
 IFRAME_ERR_CODE     = 0x20
 IFRAME_EIP          = 0x24
@@ -48,8 +48,8 @@ common_interrupt:
     movl    %edx, IFRAME_EDX(%esp)
     movl    %esi, IFRAME_ESI(%esp)
     movl    %edi, IFRAME_EDI(%esp)
-    movl    %eax, IFRAME_EAX(%esp)
     movl    %ebp, IFRAME_EBP(%esp)
+    movl    %eax, IFRAME_EAX(%esp)
 
     movl    %esp, %ecx              # ecx: fastcall arg0 (struct iframe *)
 

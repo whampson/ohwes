@@ -27,7 +27,12 @@
 
 #ifndef __ASSEMBLY__
 #include <stdint.h>
-#include <ohwes/ohwes.h>
+
+/**
+ * 'fastcall' calling convention.
+ * Passes the first two arguments through ECX and EDX respectively.
+ */
+#define __fastcall      __attribute__((fastcall))
 
 /**
  * The stack frame upon entry to an interrupt handler.
@@ -41,8 +46,8 @@ struct iframe
     uint32_t edx;
     uint32_t esi;
     uint32_t edi;
-    uint32_t eax;
     uint32_t ebp;
+    uint32_t eax;
 
     /* Interrupt vector number.
        Exception number when an exception raised.
