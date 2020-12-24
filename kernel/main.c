@@ -21,8 +21,10 @@
 #include <ohwes/boot.h>
 #include <ohwes/init.h>
 #include <ohwes/kernel.h>
-#include <ohwes/interrupt.h>
+#include <ohwes/io.h>
 #include <ohwes/irq.h>
+#include <ohwes/interrupt.h>
+#include <ohwes/debug.h>
 #include <x86/desc.h>
 
 void kmain(void)
@@ -35,11 +37,12 @@ void kmain(void)
     kprintf("Into TheKernel!!!\n\n");
     mem_init();
     irq_init();
-    // irq_unmask(IRQ_KEYBOARD);
 
     kprintf("\nOHWES 0.1\n");
     kprintf("Copyright (C) 2020-2021 Wes Hampson\n\n");
     sti();
+
+    dbgprintf("Test debug print! 0x%x", 0xC001C0D3);
 }
 
 void gdt_init(void)
