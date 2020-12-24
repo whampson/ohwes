@@ -30,7 +30,7 @@
  * This is a POST code port, but it should be harmless to write to willy-nilly,
  * though it may clear any POST codes set during hardware initialization.
  */
-#define PORT_IO_DELAY  0x80
+#define IO_DELAY_PORT  0x80
 
 ssize_t read(int fd, void *buf, size_t n);
 ssize_t write(int fd, const void *buf, size_t n);
@@ -50,7 +50,6 @@ static inline uint8_t inb(uint16_t port)
         : "d"(port)
     );
 
-    // kprintf("IN(0x%02X) = 0x%02X\n", port, data);
     return data;
 }
 
@@ -70,10 +69,9 @@ static inline uint8_t inb_p(uint16_t port)
         inb     %w1, %b0    \n\
         "
         : "=a"(data)
-        : "d"(port), "n"(PORT_IO_DELAY)
+        : "d"(port), "n"(IO_DELAY_PORT)
     );
 
-    kprintf("IN(0x%02X) = 0x%02X\n", port, data);
     return data;
 }
 
@@ -85,7 +83,6 @@ static inline uint8_t inb_p(uint16_t port)
  */
 static inline void outb(uint16_t port, uint8_t data)
 {
-    // kprintf("OUT(0x%02X) = 0x%02X\n", port, data);
     __asm__ volatile (
         "outb   %b0, %w1"
         :
@@ -101,7 +98,6 @@ static inline void outb(uint16_t port, uint8_t data)
  */
 static inline void outb_p(uint16_t port, uint8_t data)
 {
-    kprintf("OUT(0x%02X) = 0x%02X\n", port, data);
     __asm__ volatile (
         "                   \n\
         outb    %b0, %w1    \n\
@@ -109,7 +105,7 @@ static inline void outb_p(uint16_t port, uint8_t data)
         outb    %b0, %w2    \n\
         "
         :
-        : "a"(data), "d"(port), "n"(PORT_IO_DELAY)
+        : "a"(data), "d"(port), "n"(IO_DELAY_PORT)
     );
 }
 
