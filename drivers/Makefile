@@ -24,12 +24,12 @@ endif
 
 include $(TOPDIR)/Tree.mk
 
-.PHONY: all i8259 vga
+.PHONY: all pic vga
 
-all: i8259 vga
+all: pic vga
 
-i8259: dirs
-	@$(MAKE) -C i8259
+pic: dirs
+	@$(MAKE) -C pic
 
 vga: dirs
 	@$(MAKE) -C vga

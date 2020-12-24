@@ -19,7 +19,7 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#include <drivers/i8259.h>
+#include <drivers/pic.h>
 #include <ohwes/interrupt.h>
 #include <ohwes/irq.h>
 

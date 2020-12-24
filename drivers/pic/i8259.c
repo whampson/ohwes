@@ -13,24 +13,35 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/drivers/i8259.c                                           *
- * Created: December 22, 2020                                                 *
+ *    File: drivers/pic/i8259.c                                               *
+ * Created: December 23, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#ifndef __I8259_H
-#define __I8259_H
+#include <drivers/pic.h>
+#include <ohwes/io.h>
 
-#include <stdint.h>
+static uint16_t get_data_port(int pic_num)
+{
+    return (pic_num % 2) ? I8259_PORT_PIC1_DATA : I8259_PORT_PIC0_DATA;
+}
 
-/* I/O Ports */
-#define I8259_PORT_PIC0_CMD     0x20        /* Master PIC Command Port */
-#define I8259_PORT_PIC0_DATA    0x21        /* Master PIC Data Port */
-#define I8259_PORT_PIC1_CMD     0xA0        /* Slave PIC Command Port */
-#define I8259_PORT_PIC1_DATA    0xA1        /* Slave PIC Data Port */
+static uint16_t get_cmd_port(int pic_num)
+{
+    return (pic_num % 2) ? I8259_PORT_PIC1_CMD : I8259_PORT_PIC0_CMD;
+}
 
-uint8_t i8259_data_read(int pic_num);
-void i8259_data_write(int pic_num, uint8_t data);
-void i8259_cmd_write(int pic_num, uint8_t data);
+uint8_t i8259_data_read(int pic_num)
+{
+    return inb_p(get_data_port(pic_num));
+}
 
-#endif /* __I8259_H */
+void i8259_data_write(int pic_num, uint8_t data)
+{
+    outb_p(get_data_port(pic_num), data);
+}
+
+void i8259_cmd_write(int pic_num, uint8_t data)
+{
+    outb_p(get_cmd_port(pic_num), data);
+}
