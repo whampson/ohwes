@@ -71,4 +71,7 @@ void idt_init(void);
 /* irq.c */
 void irq_init(void);
 
+/* i8042.c */
+void ps2_init(void);
+
 #endif /* __KERNEL_H */

@@ -35,14 +35,13 @@ void kmain(void)
     tss_init();
     con_init();
     kprintf("Into TheKernel!!!\n\n");
-    mem_init();
     irq_init();
+    ps2_init();
+    mem_init();
 
     kprintf("\nOHWES 0.1\n");
     kprintf("Copyright (C) 2020-2021 Wes Hampson\n\n");
     sti();
-
-    dbgprintf("Test debug print! 0x%x", 0xC001C0D3);
 }
 
 void gdt_init(void)
