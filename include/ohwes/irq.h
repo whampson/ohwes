@@ -39,10 +39,16 @@
 #define NUM_IRQ         16
 
 #ifndef __ASSEMBLY__
+#include <stdbool.h>
+
+typedef void (*irq_handler)(void);
 
 void irq_mask(int irq_num);
 void irq_unmask(int irq_num);
 void irq_eoi(int irq_num);
+
+bool irq_register_handler(int irq_num, irq_handler func);
+void irq_unregister_handler(int irq_num);
 
 #endif /* __ASSEMBLY */
 

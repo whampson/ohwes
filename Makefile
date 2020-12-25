@@ -36,7 +36,8 @@ export INCLUDE		:= $(TOPDIR)/include
 export IMGFILE		:= $(BINDIR)/ohwes.img
 
 BINUTILS_PREFIX		:= i686-elf-
-GCC_WARNINGS		:= -Wall -Wextra -Werror -Wpedantic
+GCC_WARNINGS		:= -Wall -Wextra -Werror -Wpedantic \
+			-Wno-unused-function
 GCC_FLAGS		:= $(GCC_WARNINGS) -g
 
 export AS		:= $(BINUTILS_PREFIX)gcc

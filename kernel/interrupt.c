@@ -107,11 +107,3 @@ __fastcall void handle_except(struct iframe *regs)
     kprintf("]\n\n");
     panic("You done goofed!");
 }
-
-__fastcall void handle_irq(struct iframe *regs)
-{
-    int irq_num = ~regs->vec_num;
-    kprintf("Device IRQ %d!\n", irq_num);
-
-    irq_eoi(irq_num);
-}

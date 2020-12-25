@@ -48,9 +48,9 @@
  * Uh oh, something bad happened!
  * Prints a message then halts the system.
  */
-#define panic(x)                            \
+#define panic(...)                          \
 do {                                        \
-    kprintf("KERNEL PANIC: " x);            \
+    kprintf("KERNEL PANIC: " __VA_ARGS__);  \
     for (;;);                               \
 } while (0)
 
@@ -71,7 +71,7 @@ void idt_init(void);
 /* irq.c */
 void irq_init(void);
 
-/* i8042.c */
-void ps2_init(void);
+/* input.c */
+void kbd_init(void);
 
 #endif /* __KERNEL_H */

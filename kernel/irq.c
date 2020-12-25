@@ -19,9 +19,11 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#include <drivers/pic.h>
+#include <stddef.h>
+#include <ohwes/kernel.h>
 #include <ohwes/interrupt.h>
 #include <ohwes/irq.h>
+#include <drivers/pic.h>
 
 #define PIC_MASTER  0
 #define PIC_SLAVE   1
@@ -41,6 +43,10 @@
 
 /* Interrupt Masks */
 #define MASK_ALL    0xFF    /* Mask all interrupts */
+
+#define valid_irq(n)    ((n) >= 0 && (n) < NUM_IRQ)
+
+static irq_handler handler_map[NUM_IRQ] = { 0 };  /* TODO: linked list */
 
 void irq_init(void)
 {
@@ -85,4 +91,45 @@ void irq_eoi(int irq_num)
         i8259_cmd_write(PIC_SLAVE, EOI | (irq_num & 7));
     }
     i8259_cmd_write(PIC_MASTER, EOI | (irq_num & 7));
+}
+
+bool irq_register_handler(int irq_num, irq_handler func)
+{
+    if (!valid_irq(irq_num)) {
+        return false;
+    }
+    if (handler_map[irq_num] != NULL) {
+        return false;
+    }
+
+    handler_map[irq_num] = func;
+    return true;
+}
+
+void irq_unregister_handler(int irq_num)
+{
+    if (!valid_irq(irq_num)) {
+        return;
+    }
+
+    handler_map[irq_num] = NULL;
+}
+
+__fastcall void handle_irq(struct iframe *regs)
+{
+    int irq_num = ~regs->vec_num;
+
+    if (!valid_irq(irq_num)) {
+        panic("Unexpected IRQ number: %d", irq_num);
+    }
+
+    irq_handler handler = handler_map[irq_num];
+    if (handler != NULL) {
+        handler();
+    }
+    else {
+        kprintf("Unhandled IRQ %d!\n", irq_num);
+    }
+
+    irq_eoi(irq_num);   /* TODO: pass EOI responsibility onto handler? */
 }

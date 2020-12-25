@@ -76,6 +76,11 @@
 #define PS2_OUT_P1DAT           (1<<7)  /* First Device Port Data (output) */
 
 /**
+ * Initializes the PS/2 Controller.
+ */
+void ps2_init(void);
+
+/**
  * Flushes the PS/2 Controller's output buffer.
  * Any bytes read-in from the buffer will be discarded.
  */
