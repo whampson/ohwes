@@ -93,4 +93,7 @@ void mem_init(void)
     if (kb_free < MIN_KB) {
         panic("Not enough memory!");
     }
+
+    /* TODO: build memory map, check for overlapping regions,
+       enable/disable pages based on mapping */
 }
