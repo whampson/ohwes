@@ -51,10 +51,10 @@ struct smap_entry
     };
     union {
         struct {
-            uint32_t limit_lo;
-            uint32_t limit_hi;
+            uint32_t size_lo;
+            uint32_t size_hi;
         };
-        uint64_t limit;
+        uint64_t size;
     };
     uint32_t type;
     uint32_t extra;
