@@ -18,12 +18,17 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
+#include <ctype.h>
+#include <stdlib.h>
 #include <ohwes/boot.h>
 #include <ohwes/init.h>
 #include <ohwes/kernel.h>
 #include <ohwes/irq.h>
 #include <ohwes/interrupt.h>
+#include <ohwes/input.h>
 #include <x86/desc.h>
+
+#include <drivers/ps2.h>
 
 void kmain(void)
 {
@@ -34,11 +39,17 @@ void kmain(void)
     con_init();
     mem_init();
     irq_init();
-    kbd_init();
+    input_init();
 
     kprintf("\nOHWES 0.1\n");
     kprintf("Copyright (C) 2020-2021 Wes Hampson\n\n");
     sti();
+
+    while (1) {
+        if (keydown(VK_SYSRQ)) {
+            ps2_cmd(PS2_CMD_SYSRESET);
+        }
+    }
 }
 
 void gdt_init(void)

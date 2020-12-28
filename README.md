@@ -26,12 +26,12 @@ This will generate a floppy disk image at `bin/ohwes.img`. You can then boot
     - [x] Enter Protected Mode
     - [x] Enable Paging
     - [x] Setup GDT/LDT/TSS
-- [ ] Interrupt & Exception Handling
+- [x] Interrupt & Exception Handling
     - [x] Setup IDT
-    - [ ] Setup 8259A PIC
-    - [ ] Setup handlers for Intel exceptions
+    - [x] Setup 8259A PIC
+    - [x] Setup handlers for Intel exceptions
 - [ ] Terminal I/O
-    - [ ] Keyboard driver
+    - [x] Keyboard driver
     - [x] VGA driver
     - [x] ANSI escape sequences
     - [ ] Input/Output buffering

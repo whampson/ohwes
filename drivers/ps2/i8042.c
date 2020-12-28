@@ -19,10 +19,8 @@
  *============================================================================*/
 
 #include <drivers/ps2.h>
-#include <ohwes/ohwes.h>
 #include <ohwes/io.h>
-#include <ohwes/interrupt.h>
-#include <ohwes/kernel.h>
+#include <ohwes/ohwes.h>
 
 /* TOOD: watchdog timer */
 
@@ -43,20 +41,6 @@ void ps2_init(void)
     cfg &= ~PS2_CFG_XLATON;
     ps2_cmd(PS2_CMD_WRCFG);
     ps2_outb(cfg);
-
-    /* test controller and ports */
-    ps2_cmd(PS2_CMD_TEST);
-    if (ps2_inb() != PS2_TEST_PASS) {
-        panic("PS/2 controller self-test failed!");
-    }
-    ps2_cmd(PS2_CMD_P1TEST);
-    if (ps2_inb() != PS2_P1TEST_PASS) {
-        panic("PS/2 controller port 1 self-test failed!");
-    }
-    ps2_cmd(PS2_CMD_P2TEST);
-    if (ps2_inb() != PS2_P2TEST_PASS) {
-        panic("PS/2 controller port 2 self-test failed!");
-    }
 }
 
 void ps2_flush(void)
@@ -69,6 +53,24 @@ void ps2_flush(void)
 uint8_t ps2_status(void)
 {
     return inb(PS2_PORT_STS);
+}
+
+bool ps2_testctl(void)
+{
+    ps2_cmd(PS2_CMD_TEST);
+    return ps2_inb() == PS2_RES_PASS;
+}
+
+bool ps2_testp1(void)
+{
+    ps2_cmd(PS2_CMD_P1TEST);
+    return ps2_inb() == PS2_RES_P1PASS;
+}
+
+bool ps2_testp2(void)
+{
+    ps2_cmd(PS2_CMD_P2TEST);
+    return ps2_inb() == PS2_RES_P2PASS;
 }
 
 void ps2_cmd(uint8_t cmd)

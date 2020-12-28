@@ -28,21 +28,18 @@
 #define PIC_MASTER  0
 #define PIC_SLAVE   1
 
-#define SLAVE_IRQ   2           /* IRQ line of slave PIC on master */
+#define SLAVE_MASK  (1<<(IRQ_SLAVE_PIC))
 
 /* Initialization Command Words */
-#define ICW1        0x11            /* edge-triggered, 8 lines, cascade mode, ICW4 needed */
-#define ICW2_M      (INT_IRQ)       /* master PIC base interrupt vector */
-#define ICW2_S      (INT_IRQ+8)     /* slave PIC base interrupt vector */
-#define ICW3_M      (1<<(SLAVE_IRQ))/* mask of slave IRQ on master */
-#define ICW3_S      (SLAVE_IRQ)     /* slave IRQ number, to be sent to master */
-#define ICW4        0x01            /* not fully nested, not auto EOI, 8086 mode */
+#define PIC_ICW1    0x11            /* edge-triggered, 8 lines, cascade mode, ICW4 needed */
+#define PIC_ICW2_M  (INT_IRQ)       /* master PIC base interrupt vector */
+#define PIC_ICW2_S  (INT_IRQ+8)     /* slave PIC base interrupt vector */
+#define PIC_ICW3_M  (SLAVE_MASK)    /* mask of slave IRQ on master */
+#define PIC_ICW3_S  (IRQ_SLAVE_PIC) /* slave IRQ number, to be sent to master */
+#define PIC_ICW4    0x01            /* not fully nested, not auto EOI, 8086 mode */
 
 /* End of Interrupt Command */
-#define EOI         0x60    /* specific EOI, requires IRQ num in low bits */
-
-/* Interrupt Masks */
-#define MASK_ALL    0xFF    /* Mask all interrupts */
+#define PIC_EOI     0x60            /* specific EOI, needs IRQ num in low bits */
 
 #define valid_irq(n)    ((n) >= 0 && (n) < NUM_IRQ)
 
@@ -51,20 +48,20 @@ static irq_handler handler_map[NUM_IRQ] = { 0 };  /* TODO: linked list */
 void irq_init(void)
 {
     /* configure master PIC */
-    i8259_cmd_write(PIC_MASTER, ICW1);
-    i8259_data_write(PIC_MASTER, ICW2_M);
-    i8259_data_write(PIC_MASTER, ICW3_M);
-    i8259_data_write(PIC_MASTER, ICW4);
+    i8259_cmd_write(PIC_MASTER, PIC_ICW1);
+    i8259_data_write(PIC_MASTER, PIC_ICW2_M);
+    i8259_data_write(PIC_MASTER, PIC_ICW3_M);
+    i8259_data_write(PIC_MASTER, PIC_ICW4);
 
     /* configure slave PIC */
-    i8259_cmd_write(PIC_SLAVE, ICW1);
-    i8259_data_write(PIC_SLAVE, ICW2_S);
-    i8259_data_write(PIC_SLAVE, ICW3_S);
-    i8259_data_write(PIC_SLAVE, ICW4);
+    i8259_cmd_write(PIC_SLAVE, PIC_ICW1);
+    i8259_data_write(PIC_SLAVE, PIC_ICW2_S);
+    i8259_data_write(PIC_SLAVE, PIC_ICW3_S);
+    i8259_data_write(PIC_SLAVE, PIC_ICW4);
 
     /* mask all IRQs, except slave line on master PIC */
-    i8259_data_write(PIC_MASTER, MASK_ALL & ~(1<<SLAVE_IRQ));
-    i8259_data_write(PIC_SLAVE, MASK_ALL);
+    i8259_data_write(PIC_MASTER, 0xFF & ~SLAVE_MASK);
+    i8259_data_write(PIC_SLAVE, 0xFF);
 }
 
 void irq_mask(int irq_num)
@@ -88,9 +85,9 @@ void irq_unmask(int irq_num)
 void irq_eoi(int irq_num)
 {
     if (irq_num >= 8) {
-        i8259_cmd_write(PIC_SLAVE, EOI | (irq_num & 7));
+        i8259_cmd_write(PIC_SLAVE, PIC_EOI | (irq_num & 7));
     }
-    i8259_cmd_write(PIC_MASTER, EOI | (irq_num & 7));
+    i8259_cmd_write(PIC_MASTER, PIC_EOI | (irq_num & 7));
 }
 
 bool irq_register_handler(int irq_num, irq_handler func)

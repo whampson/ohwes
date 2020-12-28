@@ -72,6 +72,6 @@ void idt_init(void);
 void irq_init(void);
 
 /* input.c */
-void kbd_init(void);
+void input_init(void);
 
 #endif /* __KERNEL_H */

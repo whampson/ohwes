@@ -130,7 +130,6 @@ void con_write(char c)
 
     /* CRNL conversion */
     /* TODO: move this elsewhere, along with other output formatting */
-    if (c == '\r') return;
     if (c == '\n') cr();
 
     if (iscntrl(c)) {

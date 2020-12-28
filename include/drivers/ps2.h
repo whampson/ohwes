@@ -17,12 +17,14 @@
  * Created: December 24, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *                                                                            *
- * Intel 8042 PS/2 Controller driver.                                         *
+ * Intel 8042 PS/2 Controller and PS/2 Keyboard driver.                       *
  *============================================================================*/
 
 #ifndef __PS2_H
 #define __PS2_H
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /* I/O Ports */
@@ -44,13 +46,13 @@
 #define PS2_CMD_P2TEST          0xA9    /* Test Second Device Port */
 #define PS2_CMD_SYSRESET        0xFE    /* Reset the System */
 
-/* Test Result Values */
-#define PS2_TEST_PASS           0x55    /* Controller Test Pass */
-#define PS2_TEST_FAIL           0xFC    /* Controller Test Fail */
-#define PS2_P1TEST_PASS         0x00    /* Port 1 Test Pass */
-#define PS2_P2TEST_PASS         0x00    /* Port 2 Test Pass */
+/* Controller Response Values */
+#define PS2_RES_PASS            0x55    /* Controller Self-Test Pass */
+#define PS2_RES_FAIL            0xFC    /* Controller Self-Test Fail */
+#define PS2_RES_P1PASS          0x00    /* Port 1 Self-Test Pass */
+#define PS2_RES_P2PASS          0x00    /* Port 2 Self-Test Pass */
 
-/* Status Register Fields */
+/* Controller Status Register Fields */
 #define PS2_STS_OUTPUT          (1<<0)  /* Output Buffer Status (1 = full) */
 #define PS2_STS_INPUT           (1<<1)  /* Input Buffer Status (1 = full) */
 #define PS2_STS_POST            (1<<2)  /* System Passed POST */
@@ -75,6 +77,31 @@
 #define PS2_OUT_P1CLK           (1<<6)  /* First Device Port Clock (output) */
 #define PS2_OUT_P1DAT           (1<<7)  /* First Device Port Data (output) */
 
+/* Keyboard Commands */
+#define KBD_CMD_SETLED          0xED    /* Set ScrLk, CapsLk, and NumLk LEDs */
+#define KBD_CMD_SCANCODE        0xF0    /* Set Scancode Mapping */
+#define KBD_CMD_SCANON          0xF4    /* Enable scanning */
+#define KBD_CMD_SCANOFF         0xF5    /* Disable scanning */
+#define KBD_CMD_DEFAULTS        0xF6    /* Set keyboard defaults */
+#define KBD_CMD_ALL_TR          0xF7    /* Set all keys to typematic/autorepeat only (scancode 3) */
+#define KBD_CMD_ALL_MB          0xF8    /* Set all keys to make/break only (scancode 3) */
+#define KBD_CMD_ALL_M           0xF9    /* Set all keys to make only (scancode 3) */
+#define KBD_CMD_ALL_MBTR        0xFA    /* Set all keys to make/break/typematic/autorepeat (scancode 3) */
+#define KBD_CMD_KEY_TR          0xFB    /* Set specific key to typematic/autorepeat only (scancode 3) */
+#define KBD_CMD_KEY_MB          0xFC    /* Set specific key to make/break only (scancode 3) */
+#define KBD_CMD_KEY_M           0xFD    /* Set specific key to make only (scancode 3) */
+#define KBD_CMD_SELFTEST        0xFF    /* Run self-test */
+
+/* Keyboard LED masks */
+#define KBD_LED_SCRLK           (1<<0)  /* Scroll Lock Light */
+#define KBD_LED_NUMLK           (1<<1)  /* Num Lock Light */
+#define KBD_LED_CAPLK           (1<<2)  /* Caps Lock Light */
+
+/* Keyboard Command Responses */
+#define KBD_RES_PASS            0xAA    /* Self-Test Passed */
+#define KBD_RES_ACK             0xFA    /* Data Received */
+#define KBD_RES_RESEND          0xFE    /* Data Not Received, Resend */
+
 /**
  * Initializes the PS/2 Controller.
  */
@@ -92,6 +119,27 @@ void ps2_flush(void);
  * @return status register contents (use PS2_STS_* to check fields)
  */
 uint8_t ps2_status(void);
+
+/**
+ * Tests PS/2 Controller.
+ *
+ * @return true if the test passed, false if the test failed
+ */
+bool ps2_testctl(void);
+
+/**
+ * Tests Port 1 of the PS/2 Controller.
+ *
+ * @return true if the test passed, false if the test failed
+ */
+bool ps2_testp1(void);
+
+/**
+ * Tests Port 2 of the PS/2 Controller.
+ *
+ * @return true if the test passed, false if the test failed
+ */
+bool ps2_testp2(void);
 
 /**
  * Issues a command to the PS/2 Controller.
@@ -119,5 +167,27 @@ uint8_t ps2_inb(void);
  */
 void ps2_outb(uint8_t data);
 
+/**
+ * Initializes the PS/2 keyboard device.
+ */
+void kbd_init(void);
+
+/**
+ * Tests the keyboard device.
+ *
+ * @return true if the test passed, false if the test failed
+ */
+bool kbd_test(void);
+
+/**
+ * Issues a command to the keyboard device.
+ *
+ * @param cmd the command to issue (one of KBD_CMD_*)
+ * @param data the command data, if required
+ * @param n the number of bytes in 'data' to transmit
+ * @return 0 on success, nonzero value if the command didn't complete as
+ *         expected (keyboard response byte), -1 if the command timed out
+ */
+int kbd_cmd(uint8_t cmd, uint8_t *data, size_t n);
 
 #endif /* __PS2_H */
