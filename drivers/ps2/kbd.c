@@ -22,7 +22,7 @@
 #include <drivers/ps2.h>
 #include <ohwes/kernel.h>
 
-void ps2kbd_init(void)
+void ps2kbd_on(void)
 {
     uint8_t ps2cfg;
 

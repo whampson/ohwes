@@ -159,4 +159,7 @@ ssize_t kbd_read(char *buf, size_t n);
 
 bool key_pressed(vk_t key);
 
+int kbd_getmode(void);
+bool kbd_setmode(int mode);
+
 #endif /* __KEYBOARD_H */

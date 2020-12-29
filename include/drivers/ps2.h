@@ -73,7 +73,7 @@
 #define PS2_OUT_P2CLK           (1<<2)  /* Second Device Port Clock (output) */
 #define PS2_OUT_P2DAT           (1<<3)  /* Second Device Port Data (output) */
 #define PS2_OUT_P1INT           (1<<4)  /* First Device Port Interrupt (IRQ1) */
-#define PS2_OUT_P2INT           (1<<5)  /* Second Debice Port Interrupt (IRQ12) */
+#define PS2_OUT_P2INT           (1<<5)  /* Second Device Port Interrupt (IRQ12) */
 #define PS2_OUT_P1CLK           (1<<6)  /* First Device Port Clock (output) */
 #define PS2_OUT_P1DAT           (1<<7)  /* First Device Port Data (output) */
 
@@ -168,9 +168,9 @@ uint8_t ps2_inb(void);
 void ps2_outb(uint8_t data);
 
 /**
- * Initializes the PS/2 keyboard device.
+ * Allows the controller to receive interrupts from the PS/2 keyboard device.
  */
-void ps2kbd_init(void);
+void ps2kbd_on(void);
 
 /**
  * Tests the keyboard device.

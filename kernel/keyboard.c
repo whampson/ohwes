@@ -20,6 +20,7 @@
 
 #include <ctype.h>
 #include <string.h>
+#include <queue.h>
 #include <ohwes/debug.h>
 #include <ohwes/kernel.h>
 #include <ohwes/keyboard.h>
@@ -43,14 +44,16 @@ static const uint8_t *SC_MAP[] = { SC1, SC1_EX0, SC2, SC2_EX0, SC3, SC3 };
 static bool m_num = false;
 static bool m_caps = false;
 static bool m_scroll = false;
-static uint8_t m_mode = KB_RAW;
+static uint8_t m_mode = KB_TRANSLATE;
 static uint8_t m_scancode_set = 2;
 static uint64_t m_keydown_map[2] = { 0 };
-static char m_q[KBD_BUFLEN];
-static size_t m_qhead = 0;
-static size_t m_qtail = 0;
-static size_t m_qlen = 0;
-static bool m_qfull = false;
+static char _qbuf[KBD_BUFLEN + 28];
+static queue_t *m_queue = (queue_t *) (_qbuf + KBD_BUFLEN);
+
+#define qempty()        (queue_empty(m_queue))
+#define qfull()         (queue_full(m_queue))
+#define getq(c)         (queue_get(m_queue))
+#define putq(c)         (queue_put(m_queue, c))
 
 #define is_sc1()        (m_scancode_set==1)
 #define is_sc2()        (m_scancode_set==2)
@@ -63,19 +66,19 @@ static bool m_qfull = false;
 
 static void switch_scancode(int set);
 static void kbd_interrupt(void);
-static void kbd_putq(char c);
 
 void kbd_init(void)
 {
+    queue_init(m_queue, _qbuf, KBD_BUFLEN);
+
     ps2_init();
     if (!ps2_testctl()) panic("PS/2 controller self-test failed!");
     if (!ps2_testp1()) panic("PS/2 port 1 self-test failed!");
     if (!ps2_testp2()) panic("PS/2 port 1 self-test failed!");
 
-    ps2kbd_init();
     if (!ps2kbd_test()) panic("keyboard self-test failed!");
-
     switch_scancode(1);
+    ps2kbd_on();
 
     irq_register_handler(IRQ_KEYBOARD, kbd_interrupt);
     irq_unmask(IRQ_KEYBOARD);
@@ -86,51 +89,30 @@ bool key_pressed(vk_t key)
     return is_keydown(key);
 }
 
-ssize_t kbd_read(char *buf, size_t n)
+int kbd_getmode(void)
 {
-    ssize_t len, chunk_len;
-
-    if (n > m_qlen) {
-        n = m_qlen;
-    }
-
-    len = 0;
-    if (m_qtail + n > KBD_BUFLEN) {
-        chunk_len = KBD_BUFLEN - m_qtail;
-        memcpy(buf, &m_q[m_qtail], chunk_len);
-        len += chunk_len;
-        m_qtail = 0;
-    }
-
-    chunk_len = n - len;
-    memcpy(((char *) buf) + len, &m_q[m_qtail], chunk_len);
-    len += chunk_len;
-    m_qtail += chunk_len;
-    m_qlen -= len;
-
-    if (m_qfull && len > 0) {
-        m_qfull = false;
-    }
-
-    return len;
+    return m_mode;
 }
 
-static void kbd_putq(char c)
+bool kbd_setmode(int mode)
 {
-    if (m_qfull) {
-        return;
+    if (mode >= KB_RAW && mode <= KB_ASCII) {
+        m_mode = mode;
+        return true;
     }
 
-    m_q[m_qhead++] = c;
-    m_qlen++;
+    return false;
+}
 
-    if (m_qhead >= KBD_BUFLEN) {
-        m_qhead = 0;
+ssize_t kbd_read(char *buf, size_t n)
+{
+    size_t i;
+    for (i = 0; i < n; i++) {
+        if (qempty()) return i;
+        *(buf++) = getq();
     }
 
-    if (m_qhead == m_qtail) {
-        m_qfull = true;
-    }
+    return i;
 }
 
 static void switch_scancode(int set)
@@ -158,7 +140,8 @@ static void kbd_interrupt(void)
 
     sc = ps2_inb();
     if (m_mode == KB_RAW) {
-        kbd_putq(sc);
+        putq(sc);
+        // printf("0x%02hhx\n", sc);
         return;
     }
 
@@ -206,7 +189,7 @@ static void kbd_interrupt(void)
         vk = VK_PAUSE;
     }
     if (vk == 0) {
-        dbgprintf("Unrecognized scancode %02X!\n", sc);
+        kprintf("Unrecognized scancode %02X!\n", sc);
         return;
     }
 
@@ -233,7 +216,7 @@ static void kbd_interrupt(void)
     }
 
     if (m_mode == KB_TRANSLATE) {
-        kbd_putq(vk);
+        putq(vk);
         return;
     }
 
@@ -252,12 +235,12 @@ static const uint8_t SC1[128] =
 /*38-3F*/  VK_LALT,VK_SPACE,VK_CAPSLK,VK_F1,VK_F2,VK_F3,VK_F4,VK_F5,
 /*40-47*/  VK_F6,VK_F7,VK_F8,VK_F9,VK_F10,VK_NUMLK,VK_SCRLK,VK_NUMPAD7,
 /*48-4F*/  VK_NUMPAD8,VK_NUMPAD9,VK_SUBTRACT,VK_NUMPAD4,VK_NUMPAD5,VK_NUMPAD6,VK_ADD,VK_NUMPAD1,
-/*50-57*/  VK_NUMPAD2,VK_NUMPAD3,VK_NUMPAD0,VK_DECIMAL,VK_SYSRQ,0,0,VK_F11,
+/*50-57*/  VK_NUMPAD2,VK_NUMPAD3,VK_NUMPAD0,VK_DECIMAL,VK_SYSRQ,0,VK_INT1,VK_F11,
 /*58-5F*/  VK_F12,0,0,0,0,0,0,0,
 /*60-67*/  0,0,0,0,0,0,0,0,
 /*68-6F*/  0,0,0,0,0,0,0,0,
-/*70-77*/  0,0,0,0,0,0,0,0,
-/*78-7F*/  0,0,0,0,0,0,0,0,
+/*70-77*/  VK_KATAKANA,0,0,VK_INT3,0,0,0,VK_FURIGANA,
+/*78-7F*/  0,VK_KANJI,0,VK_HIRAGANA,0,VK_INT4,VK_INT5,0,
 };
 
 static const uint8_t SC1_EX0[128] =

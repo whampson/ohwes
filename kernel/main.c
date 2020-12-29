@@ -26,6 +26,7 @@
 #include <ohwes/irq.h>
 #include <ohwes/interrupt.h>
 #include <ohwes/io.h>
+#include <ohwes/keyboard.h>
 #include <x86/desc.h>
 
 void kmain(void)
@@ -43,15 +44,29 @@ void kmain(void)
     kprintf("Copyright (C) 2020-2021 Wes Hampson\n\n");
     sti();
 
+    kbd_setmode(KB_TRANSLATE);
+
+
     char buf[16];
-    int i, n;
+    int i, n, m;
+
+    m = kbd_getmode();
     while (1) {
         n = read(0, buf, sizeof(buf));
         for (i = 0; i < n; i++) {
-            printf("0x%02x ", buf[i]);
+            if (m == KB_RAW) {
+                printf("0x%02hhx ", buf[i]);
+            }
+            if (m == KB_TRANSLATE) {
+                printf("keycode %3d %s\n",
+                        buf[i] & 0x7F,
+                        buf[i] & 0x80 ? "release" : "press");
+            }
         }
-        printf("\n");
+        if (m == KB_RAW) printf("\n");
     }
+
+    // printf("%02x\n", 0xFF);
 
     // while (1) {
     //     if (keydown(VK_SYSRQ)) {
