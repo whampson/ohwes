@@ -43,7 +43,7 @@ static inline char * itoa(int value, char *str, int base)   /* Non-standard */
     char tmp[33];
     char *ptr;
     int i, len;
-    unsigned int uval;
+    unsigned v;
 
     if (base < 2 || base > 36) {
         str[0] = '\0';
@@ -57,16 +57,18 @@ static inline char * itoa(int value, char *str, int base)   /* Non-standard */
 
     int sign = (base == 10 && value < 0);
     if (sign) {
-        value = -value;
+        v = -value;
+    }
+    else {
+        v = (unsigned) value;
     }
 
     ptr = tmp;
-    uval = (unsigned int) value;
-    while (uval > 0) {
-        i = (int) (uval % base);
+    while (v) {
+        i = v % base;
+        v /= base;
         *ptr = digits[i];
         ptr++;
-        uval /= base;
     }
     if (sign) {
         *(ptr++) = '-';
