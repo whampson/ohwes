@@ -71,7 +71,7 @@ void idt_init(void);
 /* irq.c */
 void irq_init(void);
 
-/* input.c */
-void input_init(void);
+/* keyboard.c */
+void kbd_init(void);
 
 #endif /* __KERNEL_H */

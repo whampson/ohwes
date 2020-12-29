@@ -21,6 +21,7 @@
 
 #include <errno.h>
 #include <ohwes/console.h>
+#include <ohwes/keyboard.h>
 #include <ohwes/io.h>
 #include <ohwes/syscall.h>
 
@@ -40,16 +41,20 @@ ssize_t write(int fd, const void *buf, size_t n)
 
 __syscall ssize_t sys_read(int fd, void *buf, size_t n)
 {
+    /* TODO: actually implement this */
+    /* TODO: alloc kernel buffer and copy to userspace */
     (void) fd;
-    (void) buf;
-    (void) n;
 
-    return -ENOSYS;
+    ssize_t ret;
+    while ((ret = kbd_read(buf, n)) == 0) { }
+
+    return ret;
 }
 
 __syscall ssize_t sys_write(int fd, const void *buf, size_t n)
 {
     /* TODO: actually implement this */
+    /* TODO: alloc kernel buffer and copy from userspace */
     (void) fd;
 
     char *ptr = (char *) buf;

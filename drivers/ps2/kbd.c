@@ -22,7 +22,7 @@
 #include <drivers/ps2.h>
 #include <ohwes/kernel.h>
 
-void kbd_init(void)
+void ps2kbd_init(void)
 {
     uint8_t ps2cfg;
 
@@ -32,16 +32,15 @@ void kbd_init(void)
     ps2_cmd(PS2_CMD_WRCFG);
     ps2_outb(ps2cfg);
     ps2_cmd(PS2_CMD_P1ON);
-    kbd_cmd(KBD_CMD_SCANOFF, NULL, 0);
 }
 
-bool kbd_test(void)
+bool ps2kbd_test(void)
 {
-    kbd_cmd(KBD_CMD_SELFTEST, NULL, 0);
+    ps2kbd_cmd(KBD_CMD_SELFTEST, NULL, 0);
     return ps2_inb() == KBD_RES_PASS;
 }
 
-int kbd_cmd(uint8_t cmd, uint8_t *data, size_t n)
+int ps2kbd_cmd(uint8_t cmd, uint8_t *data, size_t n)
 {
     const int NUM_RETRIES = 3;
     uint8_t res;

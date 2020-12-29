@@ -170,14 +170,14 @@ void ps2_outb(uint8_t data);
 /**
  * Initializes the PS/2 keyboard device.
  */
-void kbd_init(void);
+void ps2kbd_init(void);
 
 /**
  * Tests the keyboard device.
  *
  * @return true if the test passed, false if the test failed
  */
-bool kbd_test(void);
+bool ps2kbd_test(void);
 
 /**
  * Issues a command to the keyboard device.
@@ -188,6 +188,6 @@ bool kbd_test(void);
  * @return 0 on success, nonzero value if the command didn't complete as
  *         expected (keyboard response byte), -1 if the command timed out
  */
-int kbd_cmd(uint8_t cmd, uint8_t *data, size_t n);
+int ps2kbd_cmd(uint8_t cmd, uint8_t *data, size_t n);
 
 #endif /* __PS2_H */

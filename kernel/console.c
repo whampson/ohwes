@@ -21,9 +21,9 @@
 #include <ctype.h>
 #include <string.h>
 #include <drivers/vga.h>
+#include <ohwes/ascii.h>
 #include <ohwes/console.h>
 #include <ohwes/kernel.h>
-#include <ohwes/input.h>
 #include <ohwes/ohwes.h>
 
 #define DEFAULT_FG          VGA_WHT
