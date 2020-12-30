@@ -23,21 +23,31 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <ohwes/types.h>
+#include <types.h>
 
-#define KB_KEYUP    0x80
-
-enum keyboard_mode
+/**
+ * Keyboard Modes
+ */
+enum kb_mode
 {
-    KB_RAW,         /* Send Raw Scan Codes to input buffer. */
-    KB_TRANSLATE,   /* Send Virtual Key Codes to input buffer. */
-    KB_ASCII,       /* Send ASCII characters to input buffer. */
+    KB_RAW,         /* Raw scancodes only. */
+    KB_MEDIUMRAW,   /* Translate scancodes into virtual keycodes. */
+    KB_COOKED       /* Translate keycodes into ASCII character sequences. */
 };
 
-typedef uint8_t vk_t;
+int kbd_getmode(void);
+bool kbd_setmode(int mode);
 
+/**
+ * Keyboard Virtual Key Codes
+ */
 enum virtual_key
 {
+    /* DO NOT EDIT!
+       unless you want to update the translaton maps
+       or the key classificaton functions */
+
+    /* Scancode Set 1 */
     VK_NONE,
     VK_ESCAPE,
     VK_1,
@@ -146,20 +156,97 @@ enum virtual_key
     VK_PGDOWN,
     VK_INSERT,
     VK_DELETE,
+    /* 0x6B-0x6F */
     VK_KATAKANA     = 0x70,
+    /* 0x71-0x72 */
     VK_INT3         = 0x73,
+    /* 0x74-0x76 */
     VK_FURIGANA     = 0x77,
+    /* 0x78 */
     VK_KANJI        = 0x79,
+    /* 0x7A */
     VK_HIRAGANA     = 0x7B,
+    /* 0x7C */
     VK_INT4         = 0x7D,
     VK_INT5         = 0x7E,
+    /* 0x7F */
 };
 
-ssize_t kbd_read(char *buf, size_t n);
+typedef uint8_t vk_t;
+
+static inline bool shift_key(vk_t key)
+{
+    return key == VK_LSHIFT || key == VK_RSHIFT;
+}
+
+static inline bool ctrl_key(vk_t key)
+{
+    return key == VK_LCTRL || key == VK_RCTRL;
+}
+
+static inline bool alt_key(vk_t key)
+{
+    return key == VK_LALT || key == VK_RALT;
+}
+
+static inline bool modifier_key(vk_t key)
+{
+    return shift_key(key) || ctrl_key(key) || alt_key(key);
+}
+
+static inline bool super_key(vk_t key)
+{
+    return key == VK_LSUPER || key == VK_RSUPER;
+}
+
+static inline bool system_key(vk_t key)
+{
+    return super_key(key)
+        || key == VK_PRTSCN || key == VK_SYSRQ
+        || key == VK_PAUSE || key == VK_BREAK
+        || key == VK_ESCAPE;
+}
+
+static inline bool function_key(vk_t key)
+{
+    return (key >= VK_F1 && key <= VK_F10)
+        || (key >= VK_F11 && key <= VK_F12);
+}
+
+static inline bool arrow_key(vk_t key)
+{
+    return key == VK_LEFT || key == VK_RIGHT
+        || key == VK_UP || key == VK_DOWN;
+}
+
+static inline bool navigation_key(vk_t key)
+{
+    return arrow_key(key)
+        || key == VK_HOME || key == VK_END
+        || key == VK_PGUP || key == VK_PGDOWN
+        || key == VK_TAB;
+}
+
+static inline bool editing_key(vk_t key)
+{
+    return key == VK_ENTER || key == VK_RETURN
+        || key == VK_INSERT || key == VK_DELETE
+        || key == VK_BACKSPACE;
+}
+
+static inline bool lock_key(vk_t key)
+{
+    return key == VK_NUMLK || key == VK_CAPSLK || key == VK_SCRLK;
+}
+
+static inline bool numpad_key(vk_t key)
+{
+    return (key >= VK_NUMPAD7 && key <= VK_DECIMAL)
+        || (key == VK_MULTIPLY || key == VK_DIVIDE);
+}
 
 bool key_pressed(vk_t key);
 
-int kbd_getmode(void);
-bool kbd_setmode(int mode);
+ssize_t kbd_read(char *buf, size_t n);
 
 #endif /* __KEYBOARD_H */

@@ -18,34 +18,33 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
+#include <ascii.h>
 #include <ctype.h>
 #include <string.h>
 #include <queue.h>
 #include <ohwes/debug.h>
 #include <ohwes/kernel.h>
 #include <ohwes/keyboard.h>
+#include <ohwes/interrupt.h>
 #include <ohwes/irq.h>
+#include <ohwes/ohwes.h>
 #include <drivers/ps2.h>
-
-#define EX0_CODE    0xE0    /* scancode sets 1 & 2 extension marker */
-#define EX1_CODE    0xE1    /* scancode set 1 additional extension marker; only appears in Pause sequence AFAIK */
-#define BRK_CODE    0xF0    /* scancode set 3 break marker */
-#define BRK_MASK    0x80    /* scancode set 1 break mask; XOR to get scancode */
 
 #define KBD_BUFLEN  128
 
 static const uint8_t SC1[128];
-static const uint8_t SC1_EX0[128];
-static const uint8_t SC2[256];
-static const uint8_t SC2_EX0[256];
-static const uint8_t SC3[256];
-static const uint8_t *SC_MAP[] = { SC1, SC1_EX0, SC2, SC2_EX0, SC3, SC3 };
+static const uint8_t SC1_E0[128];
+static const uint8_t CH[128];
+static const uint8_t CH_SHIFT[128];
 
 static bool m_num = false;
 static bool m_caps = false;
 static bool m_scroll = false;
-static uint8_t m_mode = KB_TRANSLATE;
-static uint8_t m_scancode_set = 2;
+static bool m_shift = false;
+static bool m_ctrl = false;
+static bool m_alt = false;
+static bool m_super = false;
+static uint8_t m_mode = KB_RAW;
 static uint64_t m_keydown_map[2] = { 0 };
 static char _qbuf[KBD_BUFLEN + 28];
 static queue_t *m_queue = (queue_t *) (_qbuf + KBD_BUFLEN);
@@ -55,29 +54,26 @@ static queue_t *m_queue = (queue_t *) (_qbuf + KBD_BUFLEN);
 #define getq(c)         (queue_get(m_queue))
 #define putq(c)         (queue_put(m_queue, c))
 
-#define is_sc1()        (m_scancode_set==1)
-#define is_sc2()        (m_scancode_set==2)
-#define is_sc3()        (m_scancode_set==3)
-#define sc_map(x)       (SC_MAP[((m_scancode_set-1)<<1)+x])
+#define keydown(vk)     (m_keydown_map[(vk)/64]|= (1ULL<<((vk)%64)))
+#define keyup(vk)       (m_keydown_map[(vk)/64]&=~(1ULL<<((vk)%64)))
+#define is_keydown(vk)  (m_keydown_map[(vk)/64]&  (1ULL<<((vk)%64)))
 
-#define keydown(vk)     (m_keydown_map[vk/64]|= (1ULL<<(vk%64)))
-#define keyup(vk)       (m_keydown_map[vk/64]&=~(1ULL<<(vk%64)))
-#define is_keydown(vk)  (m_keydown_map[vk/64]&  (1ULL<<(vk%64)))
-
-static void switch_scancode(int set);
+static void scancode_set1(void);
 static void kbd_interrupt(void);
+static void kbd_putq(char c);
+static void kbd_putqs(const char *s);
 
 void kbd_init(void)
 {
     queue_init(m_queue, _qbuf, KBD_BUFLEN);
 
     ps2_init();
-    if (!ps2_testctl()) panic("PS/2 controller self-test failed!");
-    if (!ps2_testp1()) panic("PS/2 port 1 self-test failed!");
-    if (!ps2_testp2()) panic("PS/2 port 1 self-test failed!");
+    if (!ps2_testctl()) panic("ps2ctl: self-test failed!");
+    if (!ps2_testp1()) panic("ps2ctl: port 1 self-test failed!");
+    if (!ps2_testp2()) panic("ps2ctl: port 1 self-test failed!");
 
-    if (!ps2kbd_test()) panic("keyboard self-test failed!");
-    switch_scancode(1);
+    if (!ps2kbd_test()) panic("ps2kbd: self-test failed!");
+    scancode_set1();
     ps2kbd_on();
 
     irq_register_handler(IRQ_KEYBOARD, kbd_interrupt);
@@ -86,7 +82,7 @@ void kbd_init(void)
 
 bool key_pressed(vk_t key)
 {
-    return is_keydown(key);
+    return is_keydown(key & 0x7F);
 }
 
 int kbd_getmode(void)
@@ -96,9 +92,12 @@ int kbd_getmode(void)
 
 bool kbd_setmode(int mode)
 {
-    if (mode >= KB_RAW && mode <= KB_ASCII) {
-        m_mode = mode;
-        return true;
+    switch (mode) {
+        case KB_RAW:
+        case KB_MEDIUMRAW:
+        case KB_COOKED:
+            m_mode = mode;
+            return true;
     }
 
     return false;
@@ -106,121 +105,246 @@ bool kbd_setmode(int mode)
 
 ssize_t kbd_read(char *buf, size_t n)
 {
+    uint32_t flags;
     size_t i;
+
+    cli_save(flags);
     for (i = 0; i < n; i++) {
-        if (qempty()) return i;
+        if (qempty()) break;
         *(buf++) = getq();
     }
 
+    restore_flags(flags);
     return i;
 }
 
-static void switch_scancode(int set)
+static void scancode_set1(void)
 {
-    uint8_t res;
+    uint8_t data;
 
-    m_scancode_set = set;
-    ps2kbd_cmd(KBD_CMD_SCANCODE, &m_scancode_set, 1);
-    res = 0;  /* sanity check */
-    ps2kbd_cmd(KBD_CMD_SCANCODE, &res, 1);
-    if (ps2_inb() != m_scancode_set) {
-        panic("failed to switch to scancode set %d!", m_scancode_set);
-    }
-    if (m_scancode_set == 3) {
-        ps2kbd_cmd(KBD_CMD_ALL_MBTR, NULL, 0);
+    data = 1;
+    ps2kbd_cmd(KBD_CMD_SCANCODE, &data, 1);
+
+    data = 0;  /* sanity check */
+    ps2kbd_cmd(KBD_CMD_SCANCODE, &data, 1);
+    if (ps2_read() != 1) {
+        panic("ps2kbd: failed to switch to scancode set 1!");
     }
 }
 
 static void kbd_interrupt(void)
 {
-    static bool ex0 = false;
-    static bool ex1 = false;
+    static bool e0 = false;
+    static bool e1 = false;
     static bool brk = false;
-    uint8_t sc, vk;
+    static int num_ack = 0;
+    uint8_t sc, vk, ch, led;
 
-    sc = ps2_inb();
+    ps2_cmd(PS2_CMD_P1OFF);
+
+readsc:
+    sc = ps2_read();
+    switch (sc)
+    {
+        case 0xFA:
+            if (num_ack == 0) {
+                kprintf("ps2kbd: got unexpected ACK\n");
+            }
+            --num_ack;
+            goto done;
+        case 0xFE:
+            kprintf("ps2kbd: please resend command\n");
+            goto done;
+        case 0xFF:
+        case 0x00:
+            kprintf("ps2kbd: error %02X", sc);
+            goto done;
+    }
+
     if (m_mode == KB_RAW) {
         putq(sc);
-        // printf("0x%02hhx\n", sc);
-        return;
+        goto done;
+    }
+    if (sc == 0xE0) {
+        e0 = true;
+        goto done;
+    }
+    if (sc == 0xE1) {
+        e1 = true;
+        goto done;
     }
 
-    if (is_sc1()) {
-        if (sc == EX0_CODE) {
-            ex0 = true;
-            return;
-        }
-        if (sc == EX1_CODE) {
-            ex1 = true;
-            return;
-        }
-        if (sc >= BRK_MASK) {
-            brk = true;
-            sc ^= BRK_MASK;
-        }
-    }
-    if (is_sc2()) {
-        if (sc == EX0_CODE) {
-            ex0 = true;
-            return;
-        }
-        if (sc == EX1_CODE) {
-            ex1 = true;
-            return;
-        }
-        if (sc == BRK_CODE) {
-            brk = true;
-            return;
-        }
-    }
-    if (is_sc3()) {
-        if (sc == BRK_CODE) {
-            brk = true;
-            return;
-        }
+    if (sc >= 0x80) {
+        brk = true;
+        sc ^= 0x80;
     }
 
-    vk = sc_map(ex0)[sc];
-    if (ex0) {
-        ex0 = false;
+    vk = (e0) ? SC1_E0[sc] : SC1[sc];
+    if (e0) {
+        e0 = false;
     }
-    if (ex1 && vk == VK_NUMLK) {
-        ex1 = false;
+    if (e1 && vk == VK_NUMLK) {
+        e1 = false;
         vk = VK_PAUSE;
     }
-    if (vk == 0) {
-        kprintf("Unrecognized scancode %02X!\n", sc);
-        return;
+    if (brk) {
+        vk |= 0x80;
+        brk = false;
+    }
+
+    if ((vk & 0x7F) == 0) {
+        kprintf("ps2kbd: got unrecognized scancode: %02X\n", sc);
+        goto done;
+    }
+
+    switch (vk & 0x7F)
+    {
+        case VK_NUMLK:
+            m_num = (vk & 0x80) ? m_num : !m_num;
+            break;
+        case VK_CAPSLK:
+            m_caps = (vk & 0x80) ? m_caps : !m_caps;
+            break;
+        case VK_SCRLK:
+            m_scroll = (vk & 0x80) ? m_scroll : !m_scroll;
+            break;
+    }
+
+    if (vk & 0x80) {
+        keyup(vk & 0x7F);
+    }
+    else {
+        keydown(vk & 0x7F);
+        if (num_ack == 0) {
+            led = (m_caps << 2) | (m_num << 1) | (m_scroll << 0);
+            ps2_write(KBD_CMD_SETLED);
+            ps2_write(led);
+            num_ack = 2;
+        }
+    }
+
+    m_shift = is_keydown(VK_LSHIFT) || is_keydown(VK_RSHIFT);
+    m_ctrl = is_keydown(VK_LCTRL) || is_keydown(VK_RCTRL);
+    m_alt = is_keydown(VK_LALT) || is_keydown(VK_RALT);
+    m_super = is_keydown(VK_LSUPER) || is_keydown(VK_RSUPER);
+
+    if (m_mode == KB_MEDIUMRAW) {
+        putq(vk);
+        goto done;
+    }
+    if (vk & 0x80) {
+        goto done;
     }
 
     switch (vk)
     {
-        case VK_NUMLK:
-            m_num = (!brk) ? !m_num : m_num;
-            break;
-        case VK_CAPSLK:
-            m_caps = (!brk) ? !m_caps : m_caps;
-            break;
-        case VK_SCRLK:
-            m_scroll = (!brk) ? !m_scroll : m_scroll;
-            break;
+        case VK_NUMPAD0: if (!m_num) vk = VK_INSERT; break;
+        case VK_NUMPAD1: if (!m_num) vk = VK_END;    break;
+        case VK_NUMPAD2: if (!m_num) vk = VK_DOWN;   break;
+        case VK_NUMPAD3: if (!m_num) vk = VK_PGDOWN; break;
+        case VK_NUMPAD4: if (!m_num) vk = VK_LEFT;   break;
+        case VK_NUMPAD5: if (!m_num) vk = VK_NONE;   break;
+        case VK_NUMPAD6: if (!m_num) vk = VK_RIGHT;  break;
+        case VK_NUMPAD7: if (!m_num) vk = VK_HOME;   break;
+        case VK_NUMPAD8: if (!m_num) vk = VK_UP;     break;
+        case VK_NUMPAD9: if (!m_num) vk = VK_PGDOWN; break;
+        case VK_DECIMAL: if (!m_num) vk = VK_DELETE; break;
     }
 
-    if (!brk) {
-        keydown(vk);
+    ch = (m_shift) ? CH_SHIFT[vk] : CH[vk];
+    if (ch == 0x00) {
+        goto done;
+    }
+
+    if (ch == 0xE0) {
+        kbd_putqs("\033[");
+        switch (vk) {
+            case VK_UP: kbd_putq('A'); break;
+            case VK_DOWN: kbd_putq('B'); break;
+            case VK_RIGHT: kbd_putq('C'); break;
+            case VK_LEFT: kbd_putq('D'); break;
+            case VK_PAUSE: kbd_putq('P'); break;
+            case VK_BREAK: kbd_putq('Q'); break;
+            case VK_SYSRQ: kbd_putq('R'); break;
+            case VK_F1: kbd_putqs("1~"); break;
+            case VK_F2: kbd_putqs("2~"); break;
+            case VK_F3: kbd_putqs("3~"); break;
+            case VK_F4: kbd_putqs("4~"); break;
+            case VK_F5: kbd_putqs("5~"); break;
+            case VK_F6: kbd_putqs("6~"); break;
+            case VK_F7: kbd_putqs("7~"); break;
+            case VK_F8: kbd_putqs("8~"); break;
+            case VK_F9: kbd_putqs("9~"); break;
+            case VK_F10: kbd_putqs("10~"); break;
+            case VK_F11: kbd_putqs("11~"); break;
+            case VK_F12: kbd_putqs("12~"); break;
+            case VK_HOME: kbd_putqs("13~"); break;
+            case VK_END: kbd_putqs("14~"); break;
+            case VK_PGUP: kbd_putqs("15~"); break;
+            case VK_PGDOWN: kbd_putqs("16~"); break;
+            case VK_INSERT: kbd_putqs("17~"); break;
+            case VK_DELETE: kbd_putqs("18~"); break;
+            case VK_PRTSCN: kbd_putqs("19~"); break;
+        }
+        goto done;
+    }
+
+    if (m_ctrl) {
+        if (ch >= 0x40 && ch < 0x60) {
+            ch -= 0x40;
+        }
+        else if (ch >= 0x60 && ch < 0x7E) {
+            ch -= 0x60;
+        }
+        else {
+            switch (ch)
+            {
+                case '2': ch = ASCII_NUL; break;
+                case '6': ch = ASCII_RS; break;
+                case '-': ch = ASCII_US; break;
+                case '/':
+                case '?': ch = ASCII_DEL; break;
+                default:  goto done;
+            }
+        }
+    }
+
+    if (m_caps) {
+        if (isupper(ch)) {
+            ch = tolower(ch);
+        }
+        else if (islower(ch)) {
+            ch = toupper(ch);
+        }
+    }
+
+    kbd_putq(ch);
+
+done:
+    if (ps2_canread()) {
+        goto readsc;
+    }
+    ps2_cmd(PS2_CMD_P1ON);
+}
+
+static void kbd_putq(char c)
+{
+    if (iscntrl(c)) {
+        printf("^");
+        printf("%c", (c + 0x40) & 0x7F);
     }
     else {
-        keyup(vk);
-        vk |= KB_KEYUP;
-        brk = false;
+        printf("%c", c);
     }
+    putq(c);
+}
 
-    if (m_mode == KB_TRANSLATE) {
-        putq(vk);
-        return;
+static void kbd_putqs(const char *s)
+{
+    char c;
+    while ((c = *(s++)) != '\0') {
+        kbd_putq(c);
     }
-
-    /* TODO: ASCII */
 }
 
 static const uint8_t SC1[128] =
@@ -243,7 +367,7 @@ static const uint8_t SC1[128] =
 /*78-7F*/  0,VK_KANJI,0,VK_HIRAGANA,0,VK_INT4,VK_INT5,0,
 };
 
-static const uint8_t SC1_EX0[128] =
+static const uint8_t SC1_E0[128] =
 {
 /*00-07*/  0,0,0,0,0,0,0,0,
 /*08-0F*/  0,0,0,0,0,0,0,0,
@@ -263,89 +387,26 @@ static const uint8_t SC1_EX0[128] =
 /*78-7F*/  0,0,0,0,0,0,0,0,
 };
 
-static const uint8_t SC2[256] =
+static const uint8_t CH[128] =
 {
-// /*00-07*/  0,VK_F9,0,VK_F5,VK_F3,VK_F1,VK_F2,VK_F12,
-// /*08-0F*/  VK_F17,VK_F10,VK_F8,VK_F6,VK_F4,VK_TAB,VK_OEM11,0,
-// /*10-17*/  VK_F18,VK_LALT,VK_LSHIFT,0,VK_LCTRL,VK_Q,VK_1,0,
-// /*18-1F*/  VK_F19,0,VK_Z,VK_S,VK_A,VK_W,VK_2,VK_F13,
-// /*20-27*/  VK_F20,VK_C,VK_X,VK_D,VK_E,VK_4,VK_3,VK_F14,
-// /*28-2F*/  VK_F21,VK_SPACE,VK_V,VK_F,VK_T,VK_R,VK_5,VK_F15,
-// /*30-37*/  VK_F22,VK_N,VK_B,VK_H,VK_G,VK_Y,VK_6,0,
-// /*38-3F*/  VK_F23,0,VK_M,VK_J,VK_U,VK_7,VK_8,0,
-// /*40-47*/  VK_F24,VK_OEM2,VK_K,VK_I,VK_O,VK_0,VK_9,0,
-// /*48-4F*/  0,VK_OEM4,VK_OEM5,VK_L,VK_OEM6,VK_P,VK_OEM3,0,
-// /*50-57*/  0,0,VK_OEM1,0,VK_OEM8,VK_OEM7,0,0,
-// /*58-5F*/  VK_CAPSLK,VK_RSHIFT,VK_RETURN,VK_OEM10,0,VK_OEM9,VK_F16,0,
-// /*60-67*/  0,0,0,0,0,0,VK_BACKSPACE,0,
-// /*68-6F*/  0,VK_NUMPAD1,0,VK_NUMPAD4,VK_NUMPAD7,0,0,0,
-// /*70-77*/  VK_NUMPAD0,VK_DECIMAL,VK_NUMPAD2,VK_NUMPAD5,VK_NUMPAD6,VK_NUMPAD8,VK_ESCAPE,VK_NUMLK,
-// /*78-7F*/  VK_F11,VK_ADD,VK_NUMPAD3,VK_SUBTRACT,VK_MULTIPLY,VK_NUMPAD9,VK_SCRLK,0,
-// /*80-87*/  0,0,0,VK_F7,VK_SYSRQ,0,0,0,
-// /*88-8F*/  0,0,0,0,0,0,0,0,
-// /*90-9F*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*A0-AF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*B0-BF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*C0-CF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*D0-DF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*E0-EF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-/*F0-FF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+/*00-0F*/  0,'\033','1','2','3','4','5','6','7','8','9','0','-','=','\b','\t',
+/*10-1F*/  'q','w','e','r','t','y','u','i','o','p','[',']','\r',0,'a','s',
+/*20-2F*/  'd','f','g','h','j','k','l',';','\'','`',0,'\\','z','x','c','v',
+/*30-3F*/  'b','n','m',',','.','/',0,'*',0,' ',0,0xE0,0xE0,0xE0,0xE0,0xE0,
+/*40-4F*/  0xE0,0xE0,0xE0,0xE0,0xE0,0,0,'7','8','9','-','4','5','6','+','1',
+/*50-5F*/  '2','3','0','.',0xE0,0xE0,0,0xE0,0xE0,0,0,0,'\r',0,'/',0,
+/*60-6F*/  0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0,0,0,0,
+/*70-7F*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 };
 
-static const uint8_t SC2_EX0[256] =
+static const uint8_t CH_SHIFT[128] =
 {
-// /*00-07*/  0,0,0,0,0,0,0,0,
-// /*08-0F*/  0,0,0,0,0,0,0,0,
-// /*10-17*/  0,VK_RALT,VK_LSHIFT,0,VK_RCTRL,0,0,0,
-// /*18-1F*/  0,0,0,0,0,0,0,VK_LMETA,
-// /*20-27*/  0,0,0,0,0,0,0,VK_RMETA,
-// /*28-2F*/  0,0,0,0,0,0,0,VK_APPLICATION,
-// /*30-37*/  0,0,0,0,0,0,0,0,
-// /*38-3F*/  0,0,0,0,0,0,0,0,
-// /*40-47*/  0,0,0,0,0,0,0,0,
-// /*48-4F*/  0,0,VK_DIVIDE,0,0,0,0,0,
-// /*50-57*/  0,0,0,0,0,0,0,0,
-// /*58-5F*/  0,0,VK_ENTER,0,0,0,0,0,
-// /*60-67*/  0,0,0,0,0,0,0,0,
-// /*68-6F*/  0,VK_END,0,VK_LEFT,VK_HOME,0,0,0,
-// /*70-77*/  VK_INSERT,VK_DELETE,VK_DOWN,0,VK_RIGHT,VK_UP,0,VK_PAUSE,
-// /*78-7F*/  0,0,VK_PGDOWN,0,VK_PRTSCN,VK_PGUP,VK_BREAK,0,
-// /*80-87*/  0,0,0,VK_SYSRQ,0,0,0,0,
-// /*88-8F*/  0,0,0,0,0,0,0,0,
-// /*90-9F*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*A0-AF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*B0-BF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*C0-CF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*D0-DF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*E0-EF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-/*F0-FF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-};
-
-static const uint8_t SC3[256] =
-{
-// /*00-07*/  0,0,0,0,0,0,0,VK_F1,
-// /*08-0F*/  VK_ESCAPE,0,0,0,0,VK_TAB,VK_OEM11,VK_F2,
-// /*10-17*/  0,VK_LCTRL,VK_LSHIFT,0,VK_CAPSLK,VK_Q,VK_1,VK_F3,
-// /*18-1F*/  0,VK_LALT,VK_Z,VK_S,VK_A,VK_W,VK_2,VK_F4,
-// /*20-27*/  0,VK_C,VK_X,VK_D,VK_E,VK_4,VK_3,VK_F5,
-// /*28-2F*/  0,VK_SPACE,VK_V,VK_F,VK_T,VK_R,VK_5,VK_F6,
-// /*30-37*/  0,VK_N,VK_B,VK_H,VK_G,VK_Y,VK_6,VK_F7,
-// /*38-3F*/  0,VK_RALT,VK_M,VK_J,VK_U,VK_7,VK_8,VK_F8,
-// /*40-47*/  0,VK_OEM2,VK_K,VK_I,VK_O,VK_0,VK_9,VK_F9,
-// /*48-4F*/  0,VK_OEM4,VK_OEM5,VK_L,VK_OEM6,VK_P,VK_OEM3,VK_F10,
-// /*50-57*/  0,0,VK_OEM1,VK_OEM9,VK_OEM8,VK_OEM7,VK_F11,VK_PRTSCN,
-// /*58-5F*/  VK_RCTRL,VK_RSHIFT,VK_RETURN,VK_OEM10,VK_OEM9,0,VK_F12,VK_SCRLK,
-// /*60-67*/  VK_DOWN,VK_LEFT,VK_PAUSE,VK_UP,VK_DELETE,VK_END,VK_BACKSPACE,VK_INSERT,
-// /*68-6F*/  0,VK_NUMPAD1,VK_RIGHT,VK_NUMPAD4,VK_NUMPAD7,VK_PGDOWN,VK_HOME,VK_PGUP,
-// /*70-77*/  VK_NUMPAD0,VK_DECIMAL,VK_NUMPAD2,VK_NUMPAD5,VK_NUMPAD6,VK_NUMPAD8,VK_NUMLK,VK_DIVIDE,
-// /*78-7F*/  0,VK_ENTER,VK_NUMPAD3,0,VK_ADD,VK_NUMPAD9,VK_MULTIPLY,0,
-// /*80-87*/  0,0,0,0,VK_SUBTRACT,0,0,0,
-// /*88-8F*/  0,0,0,VK_LMETA,VK_RMETA,VK_APPLICATION,0,0,
-// /*90-9F*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*A0-AF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*B0-BF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*C0-CF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*D0-DF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-// /*E0-EF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-/*F0-FF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+/*00-0F*/  0,'\033','!','@','#','$','%','^','&','*','(',')','_','+','\b','\t',
+/*10-1F*/  'Q','W','E','R','T','Y','U','I','O','P','{','}','\r',0,'A','S',
+/*20-2F*/  'D','F','G','H','J','K','L',':','"','~',0,'|','Z','X','C','V',
+/*30-3F*/  'B','N','M','<','>','?',0,'*',0,' ',0,0xE0,0xE0,0xE0,0xE0,0xE0,
+/*40-4F*/  0xE0,0xE0,0xE0,0xE0,0xE0,0,0,'7','8','9','-','4','5','6','+','1',
+/*50-5F*/  '2','3','0','.',0xE0,0xE0,0,0xE0,0xE0,0,0,0,'\r',0,'/',0,
+/*60-6F*/  0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0,0,0,0,
+/*70-7F*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 };

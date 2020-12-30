@@ -44,20 +44,27 @@ void kmain(void)
     kprintf("Copyright (C) 2020-2021 Wes Hampson\n\n");
     sti();
 
-    kbd_setmode(KB_TRANSLATE);
-
+    kbd_setmode(KB_COOKED);
 
     char buf[16];
     int i, n, m;
 
     m = kbd_getmode();
     while (1) {
+        if (m == KB_COOKED) {
+            n = read(0, buf, 1);
+            if (n == 1) {
+                printf("\t%3d 0%03o 0x%02x\n", buf[0], buf[0], buf[0]);
+            }
+            continue;
+        }
+
         n = read(0, buf, sizeof(buf));
         for (i = 0; i < n; i++) {
             if (m == KB_RAW) {
                 printf("0x%02hhx ", buf[i]);
             }
-            if (m == KB_TRANSLATE) {
+            if (m == KB_MEDIUMRAW) {
                 printf("keycode %3d %s\n",
                         buf[i] & 0x7F,
                         buf[i] & 0x80 ? "release" : "press");
@@ -65,14 +72,6 @@ void kmain(void)
         }
         if (m == KB_RAW) printf("\n");
     }
-
-    // printf("%02x\n", 0xFF);
-
-    // while (1) {
-    //     if (keydown(VK_SYSRQ)) {
-    //         ps2_cmd(PS2_CMD_SYSRESET);
-    //     }
-    // }
 }
 
 void gdt_init(void)
