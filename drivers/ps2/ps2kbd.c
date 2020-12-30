@@ -13,7 +13,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: drivers/ps2/kbd.c                                                 *
+ *    File: drivers/ps2/ps2kbd.c                                              *
  * Created: December 25, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
