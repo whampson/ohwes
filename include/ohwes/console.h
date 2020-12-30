@@ -35,6 +35,7 @@ struct console
 {
     bool initialized;       /* console initalized? */
     int cols, rows;         /* screen dimensions */
+    int tabsize;            /* number of spaces per tab stop */
     char *framebuf;         /* frame buffer */
     struct disp_attr {      /* display attributes */
         bool blink_on;      /*   character blinking enabled */

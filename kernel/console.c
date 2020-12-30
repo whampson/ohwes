@@ -18,12 +18,13 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
+#include <ascii.h>
 #include <ctype.h>
 #include <string.h>
 #include <drivers/vga.h>
-#include <ohwes/ascii.h>
 #include <ohwes/console.h>
 #include <ohwes/kernel.h>
+#include <ohwes/interrupt.h>
 #include <ohwes/ohwes.h>
 
 #define DEFAULT_FG          VGA_WHT
@@ -36,6 +37,7 @@
 #define m_initialized   (consoles[curr_con].initialized)
 #define m_cols          (consoles[curr_con].cols)
 #define m_rows          (consoles[curr_con].rows)
+#define m_tabsize       (consoles[curr_con].tabsize)
 #define m_framebuf      ((struct vga_cell *) consoles[curr_con].framebuf)
 #define m_disp          (consoles[curr_con].disp)
 #define m_attr          (consoles[curr_con].attr)
@@ -74,6 +76,7 @@ static void bs(void);
 static void cr(void);
 static void lf(void);
 static void r_lf(void);
+static void tab(void);
 static void scroll(int n);
 static void erase(int mode);
 static void erase_ln(int mode);
@@ -112,6 +115,7 @@ static void defaults(struct console *con)
     memset(con->csiparam, CSIPARAM_DEFAULT, MAX_CSIPARAMS);
     con->cols = VGA_TEXT_COLS;
     con->rows = VGA_TEXT_ROWS;
+    con->tabsize = 8;
     con->framebuf = (char *) VGA_FRAMEBUF_COLOR;
     con->attr.bg = DEFAULT_BG;
     con->attr.fg = DEFAULT_FG;
@@ -122,6 +126,9 @@ static void defaults(struct console *con)
 
 void con_write(char c)
 {
+    uint32_t flags;
+
+    cli_save(flags);
     int pos = xy2pos(m_cursor.x, m_cursor.y);
     bool update_char = false;
     bool update_attr = false;
@@ -161,7 +168,7 @@ void con_write(char c)
                     update_attr = true;
                     break;
                 case ASCII_HT:      /* ^I   horizonal tab */
-                    /*tab();*/
+                    tab();
                     break;
                 case ASCII_LF:      /* ^J   line feed */
                 case ASCII_VT:      /* ^K   vertical tab */
@@ -173,10 +180,10 @@ void con_write(char c)
                     break;
                 case ASCII_CAN:     /* ^X   abort escape sequence */
                     m_state = S_NORM;
-                    return;
+                    goto done;
                 case ASCII_ESC:     /* ^[   start escape sequence */
                     m_state = S_ESC;
-                    return;
+                    goto done;
                 case ASCII_DEL:     /* ^?   delete char */
                     c = BLANK_CHAR;
                     update_char = true;
@@ -184,7 +191,7 @@ void con_write(char c)
                     break;
                 default:
                     if (iscntrl(c)) {
-                        return;
+                        goto done;
                     }
                     update_char = true;
                     update_attr = true;
@@ -207,6 +214,9 @@ void con_write(char c)
     if (update_curs) {
         update_cursor();
     }
+
+done:
+    restore_flags(flags);
 }
 
 static void esc(char c)
@@ -460,6 +470,22 @@ static void r_lf(void)
     if (--m_cursor.y < 0) {
         scroll(-1);
         m_cursor.y++;
+    }
+}
+
+static void tab(void)
+{
+    char tmp;
+
+    tmp = m_cursor.x % m_tabsize;
+    if (tmp == 0) {
+        m_cursor.x += m_tabsize;
+    }
+    else {
+        m_cursor.x += (m_tabsize - tmp);
+    }
+    if (m_cursor.x >= m_cols) {
+        m_cursor.x = m_cols - 1;
     }
 }
 
