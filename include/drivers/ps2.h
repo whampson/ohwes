@@ -153,19 +153,35 @@ void ps2_cmd(uint8_t cmd);
 /**
  * Reads a byte from the PS/2 Controller's Data Register.
  * WARNING: this function will block until there is a byte available to read.
+ * Use ps2_canread() to check whether the controller is ready for reading.
  *
  * @return data from the controller's output buffer
  */
-uint8_t ps2_inb(void);
+uint8_t ps2_read(void);
+
+/**
+ * Checks whether the PS/2 controller has byte available to read.
+ *
+ * @return true if the PS/2 controller's output buffer is full
+ */
+bool ps2_canread(void);
 
 /**
  * Writes a byte to the PS/2 Controller's Data Register.
  * WARNING: this function will block until the controller is ready to accept
- * another byte.
+ * another byte. Use ps2_canwrite() to check whether the controller is ready for
+ * writing.
  *
  * @param data the data to write to the controller's input buffer
  */
-void ps2_outb(uint8_t data);
+void ps2_write(uint8_t data);
+
+/**
+ * Checks whether the PS/2 controller is ready to accept another byte.
+ *
+ * @return true if the PS/2 controller's input buffer is empty
+ */
+bool ps2_canwrite(void);
 
 /**
  * Allows the controller to receive interrupts from the PS/2 keyboard device.

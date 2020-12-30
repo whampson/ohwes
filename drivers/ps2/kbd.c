@@ -27,17 +27,17 @@ void ps2kbd_on(void)
     uint8_t ps2cfg;
 
     ps2_cmd(PS2_CMD_RDCFG);
-    ps2cfg = ps2_inb();
+    ps2cfg = ps2_read();
     ps2cfg |= PS2_CFG_P1INTON;
     ps2_cmd(PS2_CMD_WRCFG);
-    ps2_outb(ps2cfg);
+    ps2_write(ps2cfg);
     ps2_cmd(PS2_CMD_P1ON);
 }
 
 bool ps2kbd_test(void)
 {
     ps2kbd_cmd(KBD_CMD_SELFTEST, NULL, 0);
-    return ps2_inb() == KBD_RES_PASS;
+    return ps2_read() == KBD_RES_PASS;
 }
 
 int ps2kbd_cmd(uint8_t cmd, uint8_t *data, size_t n)
@@ -49,21 +49,22 @@ int ps2kbd_cmd(uint8_t cmd, uint8_t *data, size_t n)
     i = 0; r = 0;
     while (r++ < NUM_RETRIES)
     {
-        ps2_outb(cmd);
+        ps2_write(cmd);
         goto check_resp;
 
     send_data:
         if (i >= (int) n) break;
-        ps2_outb(data[i++]);
+        ps2_write(data[i++]);
 
     check_resp:
-        switch (res = ps2_inb()) {
+        switch (res = ps2_read()) {
             case KBD_RES_ACK:
                 goto send_data;
             case KBD_RES_RESEND:
                 continue;
             default:
                 /* unexpected result */
+                kprintf("ps2kbd: unexpected command result: %02X\n", res);
                 return res;
         }
     }
