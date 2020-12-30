@@ -117,7 +117,7 @@ __fastcall void handle_irq(struct iframe *regs)
     int irq_num = ~regs->vec_num;
 
     if (!valid_irq(irq_num)) {
-        panic("Unexpected IRQ number: %d", irq_num);
+        panic("unknown device IRQ number: %d", irq_num);
     }
 
     irq_handler handler = handler_map[irq_num];
@@ -125,7 +125,7 @@ __fastcall void handle_irq(struct iframe *regs)
         handler();
     }
     else {
-        kprintf("Unhandled IRQ %d!\n", irq_num);
+        kprintf("unhandled IRQ: %d\n", irq_num);
     }
 
     irq_eoi(irq_num);   /* TODO: pass EOI responsibility onto handler? */

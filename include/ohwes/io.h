@@ -21,7 +21,7 @@
 #ifndef __IO_H
 #define __IO_H
 
-#include <ohwes/types.h>
+#include <types.h>
 #include <ohwes/kernel.h>
 
 /**

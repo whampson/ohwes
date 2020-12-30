@@ -50,7 +50,7 @@
  */
 #define panic(...)                          \
 do {                                        \
-    kprintf("KERNEL PANIC: " __VA_ARGS__);  \
+    kprintf("PANIC: " __VA_ARGS__);         \
     for (;;);                               \
 } while (0)
 

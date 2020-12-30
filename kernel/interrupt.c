@@ -105,5 +105,5 @@ __fastcall void handle_except(struct iframe *regs)
     if (eflags->ac) kprintf("AC "); if (eflags->vif) kprintf("VIF ");
     if (eflags->vip) kprintf("VIP "); if (eflags->zf) kprintf("ID ");
     kprintf("]\n\n");
-    panic("You done goofed!");
+    panic("ya done goofed!");
 }

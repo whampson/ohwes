@@ -23,6 +23,7 @@
 #include <ohwes/console.h>
 #include <ohwes/keyboard.h>
 #include <ohwes/io.h>
+#include <ohwes/interrupt.h>
 #include <ohwes/syscall.h>
 
 ssize_t read(int fd, void *buf, size_t n)

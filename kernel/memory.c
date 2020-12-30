@@ -24,7 +24,7 @@
 #include <ohwes/memory.h>
 #include <ohwes/kernel.h>
 #include <ohwes/init.h>
-#include <ohwes/acpi.h>
+#include <acpi.h>
 #include <x86/paging.h>
 #include <x86/cntrl.h>
 #include <drivers/vga.h>
@@ -104,7 +104,7 @@ void mem_init(void)
 
     printf("%d KiB free\n", kb_free);
     if (kb_free < MIN_KB) {
-        panic("Not enough memory!");
+        panic("not enough memory; system needs at least %d KiB to run", MIN_KB);
     }
 
     /* TODO: build memory map, check for overlapping regions,
