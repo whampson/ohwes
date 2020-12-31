@@ -1,0 +1,71 @@
+Protected Mode Memory Map
+
++===============================+   0x100000000 4G
+|///////////////////////////////|
+| (reserved for hardware) //////|
+|///////////////////////////////|
++-------------------------------+   (varies)
+|                               |
+|                               |
+| (free space for kernel/user)  |
+|                               |
+|                               |
++-------------------------------+   0x200000    2M
+|                               |
+|                               |
+| Kernel Code & Static Data     |
+|                               |
+|                               |
++-------------------------------+   0x100000    1M
+|///////////////////////////////|
+| (reserved for hardware) //////|
+|///////////////////////////////|
++-------------------------------+   0x9FC00     639K
+|                               |
+| Kernel Stack (initial)        |
+|                               |
++-------------------------------+   (varies)
+|                               |
+|                               |
+| (free space for kernel)       |
+|                               |
+|                               |
++-------------------------------+   0x10000     64K
+| Terminal 12-15 I/O Buffer     |
++-------------------------------+   0x0F000     60K
+| Terminal 8-11 I/O Buffer      |
++-------------------------------+   0x0E000     56K
+| Terminal 4-7 I/O Buffer       |
++-------------------------------+   0x0D000     52K
+| Terminal 0-3 I/O Buffer       |
++-------------------------------+   0x0C000     48K
+| Console 7 Frame Buffer        |
++-------------------------------+   0x0B000     44K
+| Console 6 Frame Buffer        |
++-------------------------------+   0x0A000     40K
+| Console 5 Frame Buffer        |
++-------------------------------+   0x09000     36K
+| Console 4 Frame Buffer        |
++-------------------------------+   0x08000     32K
+| Console 3 Frame Buffer        |
++-------------------------------+   0x07000     28K
+| Console 2 Frame Buffer        |
++-------------------------------+   0x06000     24K
+| Console 1 Frame Buffer        |
++-------------------------------+   0x05000     20K
+| Console 0 Frame Buffer        |
++-------------------------------+   0x04000     16K
+| Kernel Page Table (0-4 MiB)   |
++-------------------------------+   0x03000     12K
+| Page Directory                |
++-------------------------------+   0x02000     8K
+| Memory Info                   |
++-------------------------------+   0x01000     4K
+| CPU Descriptors               |
++===============================+   0x00000     0K
+
+Notes:
+* Terminal input and output buffers are each 512 bytes in size.
+* The Memory Info page contains the physical memory map table.
+* The CPU Descriptors page contains the GDT, LDT, IDT, TSS, and any other data
+  structures required by the CPU to run in Protected Mode.
