@@ -20,6 +20,7 @@
 
 #include <ohwes/init.h>
 #include <ohwes/kernel.h>
+#include <ohwes/compiler.h>
 #include <ohwes/except.h>
 #include <ohwes/interrupt.h>
 #include <ohwes/syscall.h>

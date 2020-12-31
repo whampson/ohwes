@@ -37,12 +37,12 @@ export IMGFILE		:= $(BINDIR)/ohwes.img
 
 BINUTILS_PREFIX		:= i686-elf-
 GCC_WARNINGS		:= -Wall -Wextra -Werror -Wpedantic
-GCC_FLAGS		:= $(GCC_WARNINGS) -g
+GCC_FLAGS		:= $(GCC_WARNINGS) -g -m32
 
 export AS		:= $(BINUTILS_PREFIX)gcc
-export ASFLAGS		:= $(GCC_FLAGS) -D__ASSEMBLY__ -m32
+export ASFLAGS		:= $(GCC_FLAGS)
 export CC		:= $(BINUTILS_PREFIX)gcc
-export CFLAGS		:= $(GCC_FLAGS) -m32 -ffreestanding -fno-exceptions \
+export CFLAGS		:= $(GCC_FLAGS) -ffreestanding -fno-exceptions \
 			-fno-unwind-tables -fno-asynchronous-unwind-tables
 export LD		:= $(BINUTILS_PREFIX)ld
 export LDFLAGS		:=

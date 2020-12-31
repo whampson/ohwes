@@ -27,14 +27,8 @@
 #define INT_IRQ             0x20
 #define INT_SYSCALL         0x80
 
-#ifndef __ASSEMBLY__
+#ifndef __ASSEMBLER__
 #include <stdint.h>
-
-/**
- * 'fastcall' calling convention.
- * Passes the first two arguments through ECX and EDX respectively.
- */
-#define __fastcall      __attribute__((fastcall))
 
 /**
  * The stack frame upon entry to an interrupt handler.
@@ -122,6 +116,6 @@ __asm__ volatile (          \
     : "memory", "cc"        \
 )
 
-#endif /* __ASSEMBLY__ */
+#endif /* __ASSEMBLER__ */
 
 #endif /* __INTERRUPT _H */

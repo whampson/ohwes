@@ -59,7 +59,7 @@
 #define VIP_MASK    (1 << VIP_SHIFT)
 #define ID_MASK     (1 << ID_SHIFT)
 
-#ifndef __ASSEMBLY__
+#ifndef __ASSEMBLER__
 #include <stdint.h>
 
 struct eflags
@@ -93,7 +93,7 @@ struct eflags
     };
 };
 
-#endif /* __ASSEMBLY__ */
+#endif /* __ASSEMBLER__ */
 
 #endif /* __X86_FLAGS_H */
 

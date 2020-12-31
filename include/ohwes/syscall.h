@@ -26,12 +26,6 @@
 #define SYS_WRITE       1
 
 /**
- * 'syscall' calling convention.
- * Ensures parameters are always retrieved from the stack.
- */
-#define __syscall       __attribute__((regparm(0)))
-
-/**
  * System call setup routine for library functions.
  * Use this before invoking one of the syscallN() macros.
  */

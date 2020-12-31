@@ -26,11 +26,6 @@
 #include <stdint.h>
 
 /**
- * Case statement fall-through hint (GCC).
- */
-#define __fallthrough   __attribute__((fallthrough))
-
-/**
  * Checks whether a bit or bitmask is set in a value.
  *
  * @param x the value to check

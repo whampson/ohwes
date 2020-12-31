@@ -22,7 +22,6 @@
 #define __KERNEL_H
 
 #include <stdio.h>
-#include <ohwes/console.h>
 
 /* Privilege Levels */
 #define KERNEL_PL   0                       /* Kernel Privilege Level */
@@ -53,25 +52,5 @@ do {                                        \
     kprintf("PANIC: " __VA_ARGS__);         \
     for (;;);                               \
 } while (0)
-
-/* main.c */
-void gdt_init(void);
-void ldt_init(void);
-void tss_init(void);
-
-/* console.c */
-void con_init(void);
-
-/* memory.c */
-void mem_init(void);
-
-/* interrupt.c */
-void idt_init(void);
-
-/* irq.c */
-void irq_init(void);
-
-/* keyboard.c */
-void kbd_init(void);
 
 #endif /* __KERNEL_H */

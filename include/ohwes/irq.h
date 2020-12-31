@@ -38,7 +38,7 @@
 #define IRQ_ATA2        15
 #define NUM_IRQ         16
 
-#ifndef __ASSEMBLY__
+#ifndef __ASSEMBLER__
 #include <stdbool.h>
 
 typedef void (*irq_handler)(void);

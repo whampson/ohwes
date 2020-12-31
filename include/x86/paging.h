@@ -49,7 +49,7 @@
 #define PTE_G       (1 << 8)        /* Page Global */
 #define PTE_PFB     (1 << 12)       /* Page Frame Base Address */
 
-#ifndef __ASSEMBLY__
+#ifndef __ASSEMBLER__
 #include <stdint.h>
 
 struct pgdir_entry
@@ -116,6 +116,6 @@ __asm__ volatile (                  \
     "                               \
 )
 
-#endif /* __ASSEMBLY__ */
+#endif /* __ASSEMBLER__ */
 
 #endif /* __X86_PAGING_H */

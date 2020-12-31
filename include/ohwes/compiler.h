@@ -13,23 +13,35 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: include/errno.h                                                   *
- * Created: December 22, 2020                                                 *
+ *    File: include/ohwes/compiler.h                                          *
+ * Created: December 30, 2020                                                 *
  *  Author: Wes Hampson                                                       *
- *                                                                            *
- * Implementation of errno.h from the C Standard Library.                     *
- * Some standard POSIX error codes are defined here as well.
  *============================================================================*/
 
-#ifndef __ERRNO_H
-#define __ERRNO_H
+#ifndef __COMPILER_H
+#define __COMPILER_H
 
-#define EINVAL          1
-#define ENOSYS          2
-#define MAX_ERRNO       2
+#ifdef __GNUC__
 
-#ifndef __ASSEMBLER__
-extern int errno;
-#endif /* __ASSEMBLER__ */
+/**
+ * 'fastcall' calling convention.
+ * Passes the first two arguments through ECX and EDX respectively.
+ */
+#define __fastcall      __attribute__((fastcall))
 
-#endif /* __ERRNO_H */
+/**
+ * 'syscall' calling convention.
+ * Ensures parameters are always retrieved from the stack.
+ */
+#define __syscall       __attribute__((regparm(0)))
+
+/**
+ * Case statement fall-through hint.
+ */
+#define __fallthrough   __attribute__((fallthrough))
+
+#else
+#error "Please compile using GCC."
+#endif  /* __GNUC__ */
+
+#endif /* __COMPILER_H */

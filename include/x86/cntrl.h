@@ -34,7 +34,7 @@
 #define CR4_PAE     (1 << 5)        /* Physical Address Extension Enable */
 #define CR4_PGE     (1 << 7)        /* Page Global-bit Enable */
 
-#ifndef __ASSEMBLY__
+#ifndef __ASSEMBLER__
 #include <stdint.h>
 
 /**
@@ -213,6 +213,6 @@ __asm__ volatile (          \
     :                       \
 )
 
-#endif /* __ASSEMBLY__ */
+#endif /* __ASSEMBLER__ */
 
 #endif /* __X86_CNTRL_H */

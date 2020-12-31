@@ -20,6 +20,7 @@
  *============================================================================*/
 
 #include <stddef.h>
+#include <ohwes/compiler.h>
 #include <ohwes/kernel.h>
 #include <ohwes/interrupt.h>
 #include <ohwes/irq.h>

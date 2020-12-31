@@ -47,4 +47,28 @@
 #define MEMINFO_E801B   (MEMINFO+0x0A)      /* INT 15h AX=E801h result 2 */
 #define MEMINFO_88      (MEMINFO+0x00)      /* INT 15h AH=88h result */
 
+#ifndef __ASSEMBLER__
+
+/* main.c */
+void gdt_init(void);
+void ldt_init(void);
+void tss_init(void);
+
+/* console.c */
+void con_init(void);
+
+/* memory.c */
+void mem_init(void);
+
+/* interrupt.c */
+void idt_init(void);
+
+/* irq.c */
+void irq_init(void);
+
+/* keyboard.c */
+void kbd_init(void);
+
+#endif /* __ASSEMBLER__ */
+
 #endif  /* __INIT_H */

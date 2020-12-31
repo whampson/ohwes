@@ -20,6 +20,8 @@
  *============================================================================*/
 
 #include <errno.h>
+#include <stddef.h>
+#include <ohwes/compiler.h>
 #include <ohwes/console.h>
 #include <ohwes/keyboard.h>
 #include <ohwes/io.h>
