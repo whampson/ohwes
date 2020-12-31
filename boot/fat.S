@@ -83,7 +83,7 @@ boot_code:
     cli
     clc
     cld
-    ljmpw   $BOOT_SEG, $continue    # ensure cs is correct
+    ljmpw   $STAGE1_SEGMENT, $continue    # ensure cs is correct
 
 continue:
     push    %cs
@@ -131,18 +131,18 @@ _do_load:
     call    read_sectors
 
 load_stage2:
-    movw    $INIT_SEG, %ax          # INIT.SYS gets loaded at 0x9000
+    movw    $STAGE2_SEGMENT, %ax
     leaw    s_init_file, %di
     call    load_sys_file
 
 load_kernel:
-    movw    $KERN_SEG, %ax          # OHWES.SYS gets loaded at 0x10000
+    movw    $KERNEL_SEGMENT, %ax
     leaw    s_kern_file, %di
     call    load_sys_file
 
 go_to_stage2:
-    ljmpw   $INIT_SEG, $0
-    # see ya!
+    ljmpw   $STAGE2_SEGMENT, $0
+    # see ya in init.S!
 
 error:
     leaw    s_error, %si

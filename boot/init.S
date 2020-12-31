@@ -47,14 +47,26 @@ init:
     movl    %cr0, %eax
     orl     $CR0_PE, %eax       # enable Protected Mode
     movl    %eax, %cr0
-    ljmpl   $DUMMY_CS, $INIT_BASE+init32
+    ljmpl   $DUMMY_CS, $STAGE2_BASE+init32
 
 .code32
 init32:
     movw    $DUMMY_DS, %ax
     movw    %ax, %ds
+    movw    %ax, %es
     movw    %ax, %ss
-    pushl   $KERN_ENTRY
+    call    move_kernel
+    pushl   $KERNEL_ENTRY
+    ret
+
+move_kernel:
+    movl    $512<<KB_SHIFT, %ecx
+    shrl    $2, %ecx
+    movl    $KERNEL_BASE_EARLY, %esi
+    movl    $KERNEL_BASE, %edi
+    xorl    %eax, %eax
+    cld
+    rep     movsl
     ret
 
 .code16

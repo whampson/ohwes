@@ -123,7 +123,7 @@ void tss_init(void)
 {
     struct tss *tss = (struct tss *) TSS_BASE;
     tss->ldt_segsel = LDT;
-    tss->esp0 = KERN_STACK;
+    tss->esp0 = KERNEL_STACK;
     tss->ss0 = KERNEL_DS;
 
     /* we're also not really using the TSS, so just set up the minimum

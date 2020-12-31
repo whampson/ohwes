@@ -31,8 +31,6 @@
 
 #define p64(x) (uint32_t)((x) >> 32), (uint32_t)((x) & 0xFFFFFFFF)
 
-#define MIN_KB  4096
-
 struct pgdir_entry *g_pgdir   = (struct pgdir_entry *) PGDIR;
 struct pgtbl_entry *g_pgtbl0  = (struct pgtbl_entry *) PGTBL0;
 

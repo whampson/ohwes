@@ -30,7 +30,7 @@
 
 .global kentry
 kentry:
-    movl    $KERN_STACK, %esp
+    movl    $KERNEL_STACK, %esp
     movl    %esp, %ebp
     call    enable_paging
     call    kmain

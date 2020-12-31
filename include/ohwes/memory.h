@@ -21,17 +21,22 @@
 #ifndef __MEMORY_H
 #define __MEMORY_H
 
-#define KB              1024
-#define MB              (1024*KB)
-#define GB              (1024*MB)
+/* Minimum memory required to run OHWES. */
+#define MIN_KB          4096
+
 #define KB_SHIFT        10
+#define KB              (1<<KB_SHIFT)
 #define MB_SHIFT        20
+#define MB              (1<<MB_SHIFT)
 #define GB_SHIFT        30
+#define GB              (1<<GB_SHIFT)
 
 #define PAGE_SHIFT      12
 #define PAGE_SIZE       (1<<PAGE_SHIFT)
-
 #define LG_PAGE_SHIFT   22
 #define LG_PAGE_SIZE    (1<<LG_PAGE_SHIFT)
+
+#define PGDIR           0x2000
+#define PGTBL0          0x3000
 
 #endif /* __MEMROY_H */

@@ -16,15 +16,19 @@
  *    File: include/ohwes/init.h                                              *
  * Created: December 11, 2020                                                 *
  *  Author: Wes Hampson                                                       *
+ *
+ * Kernel initialization routines and macros.
  *============================================================================*/
 
 #ifndef __INIT_H
 #define __INIT_H
 
-/* Page 0: Reserved for Real Mode IVT & BIOS */
+#define KERNEL_BASE     0x100000            /* Kernel Base Address */
+#define KERNEL_STACK    0x09FC00            /* Initial Kernel Stack Address */
+#define KERNEL_ENTRY    (KERNEL_BASE)       /* Kernel Entry Point Address */
 
-/* Page 1: CPU Tables and Console Info */
-#define CPUTABLES       0x1000              /* x86 Descriptor Area */
+/* Page 0: CPU Tables and Console Info */
+#define CPUTABLES       0x0000              /* x86 Descriptor Area */
 #define IDT_BASE        (CPUTABLES)         /* Interrupt Descriptor Table */
 #define IDT_SIZE        (256*8)             /* 256 IDT entries */
 #define GDT_BASE        (IDT_BASE+IDT_SIZE) /* Global Descriptor Table */
@@ -36,25 +40,11 @@
 #define IDT_REGPTR      (GDT_BASE+GDT_SIZE) /* IDT base/limit (for LGDT) */
 #define GDT_REGPTR      (IDT_REGPTR+8)      /* GDT base/limit (for LIDT) */
 
-/* Page 2: Memory Info */
-#define MEMINFO         0x2000
-#define MEMINFO_SMAP    (MEMINFO+0x10)  /* INT 15h AX=E820h result */
-#define MEMINFO_E801A   (MEMINFO+0x08)  /* INT 15h AX=E801h result 1 */
-#define MEMINFO_E801B   (MEMINFO+0x0A)  /* INT 15h AX=E801h result 2 */
-#define MEMINFO_88      (MEMINFO+0x00)  /* INT 15h AH=88h result */
-
-/* Page 3: Page Directory */
-#define PGDIR           0x3000
-
-/* Page 4-12: Page Tables */
-/* Each Page Table can address 4M of memory, for a total of 32M */
-#define PGTBL0          0x4000
-#define PGTBL1          0x5000
-#define PGTBL2          0x6000
-#define PGTBL3          0x7000
-#define PGTBL4          0x8000
-#define PGTBL5          0x9000
-#define PGTBL6          0xA000
-#define PGTBL7          0xB000
+/* Page 1: Memory Info */
+#define MEMINFO         0x1000
+#define MEMINFO_SMAP    (MEMINFO+0x10)      /* INT 15h AX=E820h result */
+#define MEMINFO_E801A   (MEMINFO+0x08)      /* INT 15h AX=E801h result 1 */
+#define MEMINFO_E801B   (MEMINFO+0x0A)      /* INT 15h AX=E801h result 2 */
+#define MEMINFO_88      (MEMINFO+0x00)      /* INT 15h AH=88h result */
 
 #endif  /* __INIT_H */

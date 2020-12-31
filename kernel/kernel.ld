@@ -26,10 +26,12 @@ ENTRY(kentry)
 
 SECTIONS
 {
-    /* Kernel base address; should match KERN_BASE defined in <ohwes/boot.h> */
-    . = 0x10000;
+    /* Kernel Base Address
+       This should match KERNEL_BASE defined in <ohwes/init.h> */
+    . = 0x100000;   /* 1 MiB */
+    __start = .;
 
-    /* ELF sections */
+    /* ELF Binary Sections */
     .text       : {
         *(.entry)       /* Ensure the setup ASM code goes first. */
         *(.text)
@@ -37,9 +39,10 @@ SECTIONS
     .data       : { *(.data) }
     .bss        : { *(.bss) }
     .rodata     : { *(.rodata) }
-    _end = .;
+    __end = .;
 
-    /* Don't allow the kernel to grow beyond 0x80000;
-       this is where we keep the TTY input/output buffers. */
-    . = ASSERT(_end <= 0x80000, "Kernel is too big!");
+    /* Since we initially load the kernel in low memory, we need to
+       ensure the kernel is small enough to fit in this region.
+       Limit the kernel size to 512 KiB. */
+    . = ASSERT((__end - __start) <= 0x80000, "Kernel is too big!");
 }
