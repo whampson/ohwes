@@ -87,8 +87,11 @@ void irq_eoi(int irq_num)
 {
     if (irq_num >= 8) {
         i8259_cmd_write(PIC_SLAVE, PIC_EOI | (irq_num & 7));
+        i8259_cmd_write(PIC_MASTER, PIC_EOI | IRQ_SLAVE_PIC);
     }
-    i8259_cmd_write(PIC_MASTER, PIC_EOI | (irq_num & 7));
+    else {
+        i8259_cmd_write(PIC_MASTER, PIC_EOI | irq_num);
+    }
 }
 
 bool irq_register_handler(int irq_num, irq_handler func)
