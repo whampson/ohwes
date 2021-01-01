@@ -98,8 +98,8 @@ void con_init(void)
     defaults(&consoles[curr_con]);
     m_cursor.shape = vga_get_cursor_shape();
     pos2xy(vga_get_cursor_pos(), &m_cursor.x, &m_cursor.y);
+    cr(); lf();
     m_initialized = true;
-    kprintf("\r\nInto TheKernel!!!\n");
 }
 
 static void reset(void)
