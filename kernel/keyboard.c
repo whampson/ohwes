@@ -44,7 +44,7 @@ static bool m_shift = false;
 static bool m_ctrl = false;
 static bool m_alt = false;
 static bool m_super = false;
-static uint8_t m_mode = KB_RAW;
+static uint8_t m_mode = KB_COOKED;
 static uint64_t m_keydown_map[2] = { 0 };
 static char _qbuf[KBD_BUFLEN + 28];
 static queue_t *m_queue = (queue_t *) (_qbuf + KBD_BUFLEN);
