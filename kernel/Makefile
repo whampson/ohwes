@@ -24,6 +24,8 @@ endif
 
 include $(TOPDIR)/Tree.mk
 
+CFLAGS	+= -D__KERNEL__
+
 SRC_S	:= $(wildcard *.S)
 SRC_C	:= $(wildcard *.c)
 OBJ	:= $(addprefix $(OBJDIR)/,$(SRC_S:.S=.o)) \
