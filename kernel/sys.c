@@ -1,4 +1,3 @@
-
 /*============================================================================*
  * Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                  *
  *                                                                            *
@@ -14,25 +13,37 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: kernel/io.c                                                       *
- * Created: December 16, 2020                                                 *
+ *    File: kernel/sys.c                                                      *
+ * Created: December 30, 2020                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#include <errno.h>
 #include <types.h>
+#include <ohwes/compiler.h>
 #include <ohwes/syscall.h>
 
-ssize_t read(int fd, void *buf, size_t n)
+__syscall ssize_t sys_read(int fd, void *buf, size_t n)
 {
-    syscall_setup;
-    syscall3(SYS_READ, fd, buf, n);
-    syscall_ret;
+    /* TODO: actually implement this */
+    /* TODO: alloc kernel buffer and copy to userspace */
+    (void) fd;
+
+    ssize_t ret;
+    while ((ret = kbd_read(buf, n)) == 0) { }
+
+    return ret;
 }
 
-ssize_t write(int fd, const void *buf, size_t n)
+__syscall ssize_t sys_write(int fd, const void *buf, size_t n)
 {
-    syscall_setup;
-    syscall3(SYS_WRITE, fd, buf, n);
-    syscall_ret;
+    /* TODO: actually implement this */
+    /* TODO: alloc kernel buffer and copy from userspace */
+    (void) fd;
+
+    char *ptr = (char *) buf;
+    for (size_t i = 0; i < n; i++) {
+        con_write(ptr[i]);
+    }
+
+    return (ssize_t) n;
 }
