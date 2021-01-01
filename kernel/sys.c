@@ -20,6 +20,8 @@
 
 #include <types.h>
 #include <ohwes/compiler.h>
+#include <ohwes/console.h>
+#include <ohwes/keyboard.h>
 #include <ohwes/syscall.h>
 
 __syscall ssize_t sys_read(int fd, void *buf, size_t n)
