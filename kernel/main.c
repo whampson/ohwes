@@ -35,43 +35,14 @@ void kmain(void)
     ldt_init();
     idt_init();
     tss_init();
-    con_init();
-    mem_init();
     irq_init();
     kbd_init();
+    con_init();
+    mem_init();
 
     kprintf("\nOHWES 0.1\n");
     kprintf("Copyright (C) 2020-2021 Wes Hampson\n\n");
     sti();
-
-    kbd_setmode(KB_COOKED);
-
-    char buf[16];
-    int i, n, m;
-
-    m = kbd_getmode();
-    while (1) {
-        if (m == KB_COOKED) {
-            n = read(0, buf, 1);
-            if (n == 1) {
-                printf("\t%3d 0%03o 0x%02x\n", buf[0], buf[0], buf[0]);
-            }
-            continue;
-        }
-
-        n = read(0, buf, sizeof(buf));
-        for (i = 0; i < n; i++) {
-            if (m == KB_RAW) {
-                printf("0x%02hhx ", buf[i]);
-            }
-            if (m == KB_MEDIUMRAW) {
-                printf("keycode %3d %s\n",
-                        buf[i] & 0x7F,
-                        buf[i] & 0x80 ? "release" : "press");
-            }
-        }
-        if (m == KB_RAW) printf("\n");
-    }
 }
 
 void gdt_init(void)
