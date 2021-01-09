@@ -45,13 +45,14 @@ static bool m_ctrl = false;
 static bool m_alt = false;
 static bool m_super = false;
 static uint8_t m_mode = KB_COOKED;
+static bool m_echo = true;
 static uint64_t m_keydown_map[2] = { 0 };
 static char _qbuf[KBD_BUFLEN + 28];
 static queue_t *m_queue = (queue_t *) (_qbuf + KBD_BUFLEN);
 
 #define qempty()        (queue_empty(m_queue))
 #define qfull()         (queue_full(m_queue))
-#define getq(c)         (queue_get(m_queue))
+#define getq()          (queue_get(m_queue))
 #define putq(c)         (queue_put(m_queue, c))
 
 #define keydown(vk)     (m_keydown_map[(vk)/64]|= (1ULL<<((vk)%64)))
@@ -80,10 +81,46 @@ void kbd_init(void)
     irq_unmask(IRQ_KEYBOARD);
 }
 
-bool key_pressed(vk_t key)
+bool key_down(vk_t key)
 {
     return is_keydown(key & 0x7F);
 }
+
+bool ctrl_down(void)
+{
+    return is_keydown(VK_LCTRL) || is_keydown(VK_RCTRL);
+}
+
+bool shift_down(void)
+{
+    return is_keydown(VK_LSHIFT) || is_keydown(VK_RSHIFT);
+}
+
+bool alt_down(void)
+{
+    return is_keydown(VK_LALT) || is_keydown(VK_RALT);
+}
+
+bool super_down(void)
+{
+    return is_keydown(VK_LSUPER) || is_keydown(VK_RSUPER);
+}
+
+bool capslock(void)
+{
+    return m_caps;
+}
+
+bool numlock(void)
+{
+    return m_num;
+}
+
+bool scrlock(void)
+{
+    return m_scroll;
+}
+
 
 int kbd_getmode(void)
 {
@@ -101,6 +138,16 @@ bool kbd_setmode(int mode)
     }
 
     return false;
+}
+
+void kbd_setecho(bool enabled)
+{
+    m_echo = enabled;
+}
+
+void kbd_flush(void)
+{
+    while (!qempty()) (void) getq();
 }
 
 ssize_t kbd_read(char *buf, size_t n)
@@ -329,12 +376,14 @@ done:
 
 static void kbd_putq(char c)
 {
-    if (iscntrl(c)) {
-        printf("^");
-        printf("%c", (c + 0x40) & 0x7F);
-    }
-    else {
-        printf("%c", c);
+    if (m_echo) {
+        if (iscntrl(c)) {
+            printf("^");
+            printf("%c", (c + 0x40) & 0x7F);
+        }
+        else {
+            printf("%c", c);
+        }
     }
     putq(c);
 }
