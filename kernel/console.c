@@ -20,6 +20,7 @@
 
 #include <ascii.h>
 #include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 #include <drivers/vga.h>
 #include <ohwes/console.h>
@@ -97,7 +98,7 @@ void con_init(void)
     curr_con = 0;
     defaults(&consoles[curr_con]);
     read_cursor();
-    cr(); lf();
+    puts("\nOHWES 0.1, (C) 2020-2021 Wes Hampson");
     m_initialized = true;
 }
 

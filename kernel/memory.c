@@ -84,7 +84,7 @@ void mem_init(void)
     }
 
     kb_free = 0;
-    kprintf("Physical memory map:\n");
+    kprintf("Physical Memory Map:\n");
     while (smap->size != 0) {
         int kb = (uint32_t) (smap->size >> KB_SHIFT);
         uint64_t limit = smap->addr + smap->size - 1;

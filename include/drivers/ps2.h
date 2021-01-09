@@ -90,7 +90,7 @@
 #define KBD_CMD_KEY_TR          0xFB    /* Set specific key to typematic/autorepeat only (scancode 3) */
 #define KBD_CMD_KEY_MB          0xFC    /* Set specific key to make/break only (scancode 3) */
 #define KBD_CMD_KEY_M           0xFD    /* Set specific key to make only (scancode 3) */
-#define KBD_CMD_SELFTEST        0xFF    /* Run self-test */
+#define KBD_CMD_TESTRESET       0xFF    /* Resets the keyboard and runs the self-test */
 
 /* Keyboard LED masks */
 #define KBD_LED_SCRLK           (1<<0)  /* Scroll Lock Light */
@@ -101,6 +101,8 @@
 #define KBD_RES_PASS            0xAA    /* Self-Test Passed */
 #define KBD_RES_ACK             0xFA    /* Data Received */
 #define KBD_RES_RESEND          0xFE    /* Data Not Received, Resend */
+#define KBD_RES_ERROR0          0x00
+#define KBD_RES_ERROR1          0xFF
 
 /**
  * Initializes the PS/2 Controller.
@@ -196,13 +198,18 @@ void ps2kbd_on(void);
 bool ps2kbd_test(void);
 
 /**
+ * Resets the keyboard device.
+ */
+void ps2kbd_reset(void);
+
+/**
  * Issues a command to the keyboard device.
  *
  * @param cmd the command to issue (one of KBD_CMD_*)
  * @param data the command data, if required
  * @param n the number of bytes in 'data' to transmit
  * @return 0 on success, nonzero value if the command didn't complete as
- *         expected (keyboard response byte), -1 if the command timed out
+ *         expected (keyboard response byte), -1 if the command failed
  */
 int ps2kbd_cmd(uint8_t cmd, uint8_t *data, size_t n);
 

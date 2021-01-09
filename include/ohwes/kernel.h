@@ -43,10 +43,11 @@
  */
 #define kprintf(...)    printf(__VA_ARGS__)
 
-/**
- * Uh oh, something bad happened!
- * Prints a message then halts the system.
- */
+#define warn(...)                                                           \
+do {                                                                        \
+    kprintf("Warning: " __VA_ARGS__);                                       \
+} while (0)
+
 #define panic(...)                                                          \
 do {                                                                        \
     kprintf("PANIC: " __VA_ARGS__);                                         \
