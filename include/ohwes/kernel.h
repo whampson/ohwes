@@ -47,10 +47,15 @@
  * Uh oh, something bad happened!
  * Prints a message then halts the system.
  */
-#define panic(...)                          \
-do {                                        \
-    kprintf("PANIC: " __VA_ARGS__);         \
-    for (;;);                               \
+#define panic(...)                                                          \
+do {                                                                        \
+    kprintf("PANIC: " __VA_ARGS__);                                         \
+    for (;;);                                                               \
+} while (0)
+
+#define halt()                                                              \
+do {                                                                        \
+    __asm__ volatile ("_die%=: hlt; jmp _die%=" : );                        \
 } while (0)
 
 #endif /* __KERNEL_H */
