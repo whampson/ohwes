@@ -27,7 +27,9 @@
 #include <ohwes/interrupt.h>
 #include <ohwes/io.h>
 #include <ohwes/keyboard.h>
+#include <ohwes/test.h>
 #include <x86/desc.h>
+#include <drivers/vga.h>
 
 void kmain(void)
 {
@@ -43,6 +45,13 @@ void kmain(void)
     kprintf("\nOHWES 0.1\n");
     kprintf("Copyright (C) 2020-2021 Wes Hampson\n\n");
     sti();
+
+    while (1) {
+        if (ctrl_down() && key_down(VK_F8)) {
+            kbd_flush();
+            start_interactive_tests();
+        }
+    }
 }
 
 void gdt_init(void)

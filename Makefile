@@ -67,7 +67,7 @@ img: boot kernel
 boot: dirs
 	@$(MAKE) -C boot
 
-kernel: dirs lib drivers
+kernel: dirs lib drivers tests
 	@$(MAKE) -C kernel
 
 drivers: dirs
@@ -75,6 +75,9 @@ drivers: dirs
 
 lib: dirs
 	@$(MAKE) -C lib
+
+tests: dirs
+	@$(MAKE) -C tests
 
 tools: dirs
 	@$(MAKE) -C tools
