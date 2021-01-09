@@ -36,8 +36,14 @@ void ps2kbd_on(void)
 
 bool ps2kbd_test(void)
 {
-    ps2kbd_cmd(KBD_CMD_SELFTEST, NULL, 0);
+    ps2kbd_cmd(KBD_CMD_TESTRESET, NULL, 0);
     return ps2_read() == KBD_RES_PASS;
+}
+
+void ps2kbd_reset(void)
+{
+    ps2kbd_cmd(KBD_CMD_TESTRESET, NULL, 0);
+    (void) ps2_read();
 }
 
 int ps2kbd_cmd(uint8_t cmd, uint8_t *data, size_t n)
@@ -62,6 +68,9 @@ int ps2kbd_cmd(uint8_t cmd, uint8_t *data, size_t n)
                 goto send_data;
             case KBD_RES_RESEND:
                 continue;
+            case KBD_RES_ERROR0:
+            case KBD_RES_ERROR1:
+                return -1;
             default:
                 /* unexpected result */
                 kprintf("ps2kbd: unexpected command result: %02X\n", res);

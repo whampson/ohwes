@@ -28,6 +28,7 @@
 #include <ohwes/io.h>
 #include <ohwes/keyboard.h>
 #include <x86/desc.h>
+#include <drivers/vga.h>
 
 void kmain(void)
 {
@@ -36,12 +37,9 @@ void kmain(void)
     idt_init();
     tss_init();
     irq_init();
-    kbd_init();
     con_init();
+    kbd_init();
     mem_init();
-
-    kprintf("\nOHWES 0.1\n");
-    kprintf("Copyright (C) 2020-2021 Wes Hampson\n\n");
     sti();
 }
 

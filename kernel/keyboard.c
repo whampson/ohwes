@@ -59,7 +59,7 @@ static queue_t *m_queue = (queue_t *) (_qbuf + KBD_BUFLEN);
 #define keyup(vk)       (m_keydown_map[(vk)/64]&=~(1ULL<<((vk)%64)))
 #define is_keydown(vk)  (m_keydown_map[(vk)/64]&  (1ULL<<((vk)%64)))
 
-static void scancode_set1(void);
+static bool scancode_set1(void);
 static void kbd_interrupt(void);
 static void kbd_putq(char c);
 static void kbd_putqs(const char *s);
@@ -74,7 +74,7 @@ void kbd_init(void)
     if (!ps2_testp2()) panic("ps2ctl: port 1 self-test failed!");
 
     if (!ps2kbd_test()) panic("ps2kbd: self-test failed!");
-    scancode_set1();
+    if (!scancode_set1()) warn("ps2kbd: failed to switch to scancode set 1!\n");
     ps2kbd_on();
 
     irq_register_handler(IRQ_KEYBOARD, kbd_interrupt);
@@ -121,7 +121,6 @@ bool scrlock(void)
     return m_scroll;
 }
 
-
 int kbd_getmode(void)
 {
     return m_mode;
@@ -165,18 +164,24 @@ ssize_t kbd_read(char *buf, size_t n)
     return i;
 }
 
-static void scancode_set1(void)
+static bool scancode_set1(void)
 {
     uint8_t data;
 
     data = 1;
-    ps2kbd_cmd(KBD_CMD_SCANCODE, &data, 1);
+    if (ps2kbd_cmd(KBD_CMD_SCANCODE, &data, 1)) {
+        ps2kbd_reset();
+        return false;
+    }
 
     data = 0;  /* sanity check */
-    ps2kbd_cmd(KBD_CMD_SCANCODE, &data, 1);
-    if (ps2_read() != 1) {
-        panic("ps2kbd: failed to switch to scancode set 1!");
+    if (ps2kbd_cmd(KBD_CMD_SCANCODE, &data, 1)) {
+        ps2kbd_reset();
+        return false;
     }
+    if (ps2_read() != 1) return false;
+
+    return true;
 }
 
 static void kbd_interrupt(void)
@@ -281,6 +286,10 @@ readsc:
     }
     if (vk & 0x80) {
         goto done;
+    }
+
+    if (vk == VK_SYSRQ) {
+        ps2_cmd(PS2_CMD_SYSRESET);
     }
 
     switch (vk)

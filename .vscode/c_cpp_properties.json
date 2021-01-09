@@ -6,7 +6,7 @@
                 "${workspaceFolder}/include/*"
             ],
             "defines": [],
-            "compilerPath": "C:\\i686-elf-tools\\bin\\i686-elf-gcc",
+            "compilerPath": "C:/i686-elf-tools/bin/i686-elf-gcc",
             "cStandard": "c11",
             "cppStandard": "c++11",
             "intelliSenseMode": "gcc-x86",
