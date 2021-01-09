@@ -78,4 +78,6 @@ struct console
  */
 void con_write(char c);
 
+void con_reset(void);
+
 #endif /* __CONSOLE_H */

@@ -66,7 +66,6 @@ static const char CSI_COLORS[8] =
 };
 
 static void defaults(struct console *con);
-static void reset(void);
 static void save(void);
 static void restore(void);
 static void esc(char c);
@@ -86,7 +85,8 @@ static void cursor_up(int n);
 static void cursor_down(int n);
 static void cursor_left(int n);
 static void cursor_right(int n);
-static void update_cursor(void);
+static void read_cursor(void);
+static void write_cursor(void);
 static void pos2xy(int pos, int *x, int *y);
 static int xy2pos(int x, int y);
 
@@ -96,17 +96,16 @@ void con_init(void)
 
     curr_con = 0;
     defaults(&consoles[curr_con]);
-    m_cursor.shape = vga_get_cursor_shape();
-    pos2xy(vga_get_cursor_pos(), &m_cursor.x, &m_cursor.y);
+    read_cursor();
     cr(); lf();
     m_initialized = true;
 }
 
-static void reset(void)
+void con_reset(void)
 {
     defaults(&consoles[curr_con]);
+    write_cursor();
     erase(0);
-    update_cursor();
 }
 
 static void defaults(struct console *con)
@@ -129,6 +128,7 @@ void con_write(char c)
     uint32_t flags;
 
     cli_save(flags);
+    read_cursor();
     int pos = xy2pos(m_cursor.x, m_cursor.y);
     bool update_char = false;
     bool update_attr = false;
@@ -212,7 +212,7 @@ void con_write(char c)
         cr(); lf();
     }
     if (update_curs) {
-        update_cursor();
+        write_cursor();
     }
 
 done:
@@ -256,7 +256,7 @@ static void esc(char c)
             lf();
             break;
         case 'c':       /* ^[c  reset console */
-            reset();
+            con_reset();
             break;
         case '3':       /* ^[3  disable blink */
             m_disp.blink_on = false;
@@ -641,9 +641,16 @@ static void cursor_right(int n)
     }
 }
 
-static void update_cursor(void)
+static void read_cursor(void)
+{
+    m_cursor.shape = vga_get_cursor_shape();
+    pos2xy(vga_get_cursor_pos(), &m_cursor.x, &m_cursor.y);
+}
+
+static void write_cursor(void)
 {
     vga_set_cursor_pos(xy2pos(m_cursor.x, m_cursor.y));
+    vga_set_cursor_shape(m_cursor.shape & 0xFF, m_cursor.shape >> 8);
 }
 
 static inline void pos2xy(int pos, int *x, int *y)
