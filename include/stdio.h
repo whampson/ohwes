@@ -158,7 +158,7 @@ int vsnprintf(char *str, size_t n, const char *fmt, va_list args);
 // int vfprintf(FILE *stream, const char *fmt, va_list args);
 // int vfscanf(FILE *stream, const char *fmt, va_list args);
 
-// int getchar(void);
+int getchar(void);
 // int getc(FILE *stream);
 // char * gets(char *str);
 // int fgetc(FILE *stream);

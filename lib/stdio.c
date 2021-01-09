@@ -22,6 +22,16 @@
 #include <stdio.h>
 #include <ohwes/io.h>
 
+int getchar(void)
+{
+    char c;
+    if (read(STDIN_FILENO, &c, 1) < 0) {
+        return EOF;
+    }
+
+    return c;
+}
+
 int putchar(int ch)
 {
     return write(STDOUT_FILENO, &ch, 1);
@@ -29,5 +39,12 @@ int putchar(int ch)
 
 int puts(const char *str)
 {
-    return write(STDOUT_FILENO, str, strlen(str));
+    ssize_t ret;
+    if ((ret = write(STDOUT_FILENO, str, strlen(str))) < 0) {
+        return EOF;
+    }
+    if ((ret = write(STDOUT_FILENO, "\n", 1)) < 0) {
+        return EOF;
+    }
+    return ret;
 }
