@@ -52,7 +52,7 @@ This will generate a floppy disk image at `bin/ohwes.img`. You can then boot
     - [ ] Basic signal support
 
 ## Console Codes
-The **OHWES** console supports numerous VT52/VT100 terminal control characters and escape sequences, plus some OHWES-specific escape sequences, for controlling character color, cursor position, and other console attributes.
+The **OHWES** console supports numerous VT52/VT100 terminal control characters and escape sequences, plus some OHWES-specific escape sequences, for controlling color, cursor position, and other console attributes.
 
 ### Control Characters
 | Character         | Short | Name              | Effect                                        |
@@ -66,25 +66,20 @@ The **OHWES** console supports numerous VT52/VT100 terminal control characters a
 | `^?`              | DEL   | Delete            | Deletes the character beneath the cursor (forward delete). |
 
 ### Escape Sequences
-| Sequence          | Name              | Effect                                        |
-| :---------------- | :---------------- | --------------------------------------------- |
-| `ESC 3`           | Disable Blink     | Disables blinking text.                       |
-| `ESC 4`           | Enable Blink      | Enables blinking text.                        |
-| `ESC 5`           | Hide Cursor       | Makes the cursor invisible.                   |
-| `ESC 6`           | Hide Cursor       | Makes the cursor visible.                     |
-| `ESC 7`           | Save State        | Saves the console state (cursor position, graphics attribute, blink status). |
-| `ESC 8`           | Restore State     | Restores the console state most-recently saved with `ESC 7`. |
-| `ESC c`           | Reset Console     | Resets the console to the default settings.   |
-| `ESC A`           | Cursor Up         | Moves the cursor up one row.                  |
-| `ESC B`           | Cursor Down       | Moves the cursor down one row.                |
-| `ESC C`           | Cursor Right      | Moves the cursor right one column.            |
-| `ESC D`           | Cursor Left       | Moves the cursor left one column.             |
-| `ESC E`           | Newline           | Performs a newline (CR-LF).                   |
-| `ESC H`           | Cursor Home       | Moves the cursor to the home position (1,1).  |
-| `ESC I`           | Reverse Linefeed  | Moves the cursor up one row. If the cursor is initially in the top row, the cursor will remain in the top row, the screen contents will shift down one row, and the top row will be blanked, creating a scrolling effect. |
-| `ESC J`           | Erase Display     | Erases characters from the cursor to the end of the screen. |
-| `ESC K`           | Erase Line        | Erases characters from the cursor to the end of the current line. |
-| `ESC M`           | Linefeed          | Performs a linefeed (LF).                     |
-| `ESC [`           | Control Sequence Introducer | Starts a control sequence.          |
+| Sequence          | Short |Name               | Effect                                         |
+| :---------------- | :---- |:----------------- | ---------------------------------------------- |
+| `ESC 3`           |       | Disable Blink     | Disables blinking text.                       |
+| `ESC 4`           |       | Enable Blink      | Enables blinking text.                        |
+| `ESC 5`           |       | Hide Cursor       | Makes the cursor invisible.                   |
+| `ESC 6`           |       | Show Cursor       | Makes the cursor visible.                     |
+| `ESC 7`           | DECSC | Save State        | Saves the console state (cursor position, graphics attribute, blink status). |
+| `ESC 8`           | DECRC | Restore State     | Restores the console state most-recently saved with `ESC 7`. |
+| `ESC E`           |       | Newline           | Performs a newline (CR-LF).                   |
+| `ESC I`           |       | Reverse Linefeed  | Moves the cursor up one row. If the cursor is initially in the top row, the cursor will remain in the top row, the screen contents will shift down one row, and the top row will be blanked, creating a scrolling effect. |
+| `ESC M`           |       | Linefeed          | Performs a linefeed (LF).                     |
+| `ESC [`           | CSI   | Control Sequence Introducer | Starts a control sequence.          |
 
 ### Control Sequences
+| Sequence          | Short |Name              | Effect                                         |
+| :---------------- | :---- |:---------------- | ---------------------------------------------- |
+| `CSI` *n* `A`| CUU   | Cursor Up        | Moves the cursor up *n* rows (default 1).      |
