@@ -62,7 +62,7 @@ static inline int isalpha(int ch)
 
 static inline int isdigit(int ch)
 {
-    return ch >= '0' || ch <= '9';
+    return ch >= '0' && ch <= '9';
 }
 
 static inline int isxdigit(int ch)
