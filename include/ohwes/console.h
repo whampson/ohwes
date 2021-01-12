@@ -27,47 +27,51 @@
 
 #define NUM_CONSOLES        8
 #define MAX_CSIPARAMS       8
+#define MAX_TABSTOPS        (VGA_TEXT_COLS)
 
 /**
  * System Console
  */
 struct console
 {
-    bool initialized;       /* console initalized? */
-    int cols, rows;         /* screen dimensions */
-    int tabsize;            /* number of spaces per tab stop */
-    char *framebuf;         /* frame buffer */
-    struct disp_attr {      /* display attributes */
-        bool blink_on;      /*   character blinking enabled */
+    bool initialized;               /* console initalized? */
+    int cols, rows;                 /* screen dimensions */
+    char *framebuf;                 /* frame buffer */
+    char tabstop[MAX_TABSTOPS];     /* tab stops */
+    char csiparam[MAX_CSIPARAMS];   /* control sequence parameters */
+    int paramidx;                   /* control sequence parameter index */
+    struct disp_attr {              /* display attributes */
+        bool blink_on;              /*   character blinking enabled */
     } disp;
-    struct char_attr {      /* character attributes */
-        int bg, fg;         /*   background, foreground colors */
-        bool bright;        /*   use bright foreground */
-        bool faint;         /*   use dim foreground */
-        bool underline;     /*   show underline */
-        bool blink;         /*   blink character (if enabled) */
-        bool invert;        /*   swap background and foreground colors */
+    struct char_attr {              /* character attributes */
+        int bg, fg;                 /*   background, foreground colors */
+        bool bright;                /*   use bright foreground */
+        bool faint;                 /*   use dim foreground */
+        bool italic;                /*   italicize (simulated with color)*/
+        bool underline;             /*   underline (simulated with color) */
+        bool blink;                 /*   blink character (if enabled) */
+        bool invert;                /*   swap background and foreground colors */
     } attr;
-    struct cursor {         /* cursor parameters */
-        int x, y;           /*   position */
-        int shape;          /*   shape */
-        bool hidden;        /*   visibility */
+    struct cursor {                 /* cursor parameters */
+        int x, y;                   /*   position */
+        int shape;                  /*   shape */
+        bool hidden;                /*   visibility */
     } cursor;
-    struct save_state {     /* saved parameters */
+    struct save_state {             /* saved parameters */
+        struct disp_attr disp;
         struct char_attr attr;
         struct cursor cursor;
+        char tabstop[MAX_TABSTOPS];
     } saved;
-    struct default_state {  /* default parameters */
+    struct default_state {          /* default parameters */
         struct char_attr attr;
         struct cursor cursor;
     } defaults;
-    enum console_state {    /* console control state */
-        S_NORM,             /*   normal */
-        S_ESC,              /*   escape sequence */
-        S_CSI               /*   control sequence */
+    enum console_state {            /* console control state */
+        S_NORM,                     /*   normal */
+        S_ESC,                      /*   escape sequence */
+        S_CSI                       /*   control sequence */
     } state;
-    char csiparam[MAX_CSIPARAMS];
-    int paramidx;
 };
 
 /**
@@ -79,5 +83,9 @@ struct console
 void con_write(char c);
 
 void con_reset(void);
+void con_save(void);
+void con_restore(void);
+void con_cursor_save(void);
+void con_cursor_restore(void);
 
 #endif /* __CONSOLE_H */

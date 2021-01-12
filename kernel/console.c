@@ -38,8 +38,11 @@
 #define m_initialized   (consoles[curr_con].initialized)
 #define m_cols          (consoles[curr_con].cols)
 #define m_rows          (consoles[curr_con].rows)
-#define m_tabsize       (consoles[curr_con].tabsize)
 #define m_framebuf      ((struct vga_cell *) consoles[curr_con].framebuf)
+#define m_tabstop       (consoles[curr_con].tabstop)
+#define m_csiparam      (consoles[curr_con].csiparam)
+#define m_paramidx      (consoles[curr_con].paramidx)
+#define m_currparam     (m_csiparam[m_paramidx])
 #define m_disp          (consoles[curr_con].disp)
 #define m_attr          (consoles[curr_con].attr)
 #define m_attr_default  (consoles[curr_con].attr_default)
@@ -47,9 +50,6 @@
 #define m_saved         (consoles[curr_con].saved)
 #define m_defaults      (consoles[curr_con].defaults)
 #define m_state         (consoles[curr_con].state)
-#define m_csiparam      (consoles[curr_con].csiparam)
-#define m_paramidx      (consoles[curr_con].paramidx)
-#define m_currparam     (m_csiparam[m_paramidx])
 
 static struct console consoles[NUM_CONSOLES] = { 0 };
 static int curr_con = 0;
@@ -69,6 +69,7 @@ static const char CSI_COLORS[8] =
 static void defaults(struct console *con);
 static void save(void);
 static void restore(void);
+static void reset(void);
 static void esc(char c);
 static void csi(char c);
 static void csi_m(char p);
@@ -86,6 +87,8 @@ static void cursor_up(int n);
 static void cursor_down(int n);
 static void cursor_left(int n);
 static void cursor_right(int n);
+static void cursor_save(void);
+static void cursor_restore(void);
 static void read_cursor(void);
 static void write_cursor(void);
 static void pos2xy(int pos, int *x, int *y);
@@ -98,30 +101,62 @@ void con_init(void)
     curr_con = 0;
     defaults(&consoles[curr_con]);
     read_cursor();
-    puts("\nOHWES 0.1, (C) 2020-2021 Wes Hampson");
+    save();
+    puts("\n\n" OS_NAME_STRING " " OS_VERSION_STRING ", " OS_COPYRIGHT_STRING);
     m_initialized = true;
 }
 
 void con_reset(void)
 {
-    defaults(&consoles[curr_con]);
-    write_cursor();
-    erase(0);
+    reset();
+}
+
+void con_save(void)
+{
+    save();
+}
+
+void con_restore(void)
+{
+    restore();
+}
+
+void con_cursor_save(void)
+{
+    cursor_save();
+}
+
+void con_cursor_restore(void)
+{
+    cursor_restore();
 }
 
 static void defaults(struct console *con)
 {
-    memset(con, 0, sizeof(struct console));
-    memset(con->csiparam, CSIPARAM_DEFAULT, MAX_CSIPARAMS);
     con->cols = VGA_TEXT_COLS;
     con->rows = VGA_TEXT_ROWS;
-    con->tabsize = 8;
     con->framebuf = (char *) VGA_FRAMEBUF_COLOR;
+    con->disp.blink_on = false;
     con->attr.bg = DEFAULT_BG;
     con->attr.fg = DEFAULT_FG;
+    con->attr.bright = false;
+    con->attr.faint = false;
+    con->attr.italic = false;
+    con->attr.underline = false;
+    con->attr.blink = false;
+    con->attr.invert = false;
+    con->cursor.x = 0;
+    con->cursor.y = 0;
     con->cursor.shape = CURSOR_DEFAULT;
+    con->cursor.hidden = false;
     con->defaults.attr = con->attr;
     con->defaults.cursor = con->cursor;
+    con->state = S_NORM;
+    con->paramidx = 0;
+    memset(con->csiparam, CSIPARAM_DEFAULT, MAX_CSIPARAMS);
+    for (int i = 0; i < MAX_TABSTOPS; i++) {
+        m_tabstop[i] = (((i + 1) % 8) == 0);
+    }
 }
 
 void con_write(char c)
@@ -222,66 +257,48 @@ done:
 
 static void esc(char c)
 {
-    /* Some VT52/VT100 escape sequences, not 100% compliant */
-
     switch (c) {
-        case 'A':       /* ^[A  move cursor up */
-            cursor_up(1);
-            break;
-        case 'B':       /* ^[B  move cursor down */
-            cursor_down(1);
-            break;
-        case 'C':       /* ^[C  move cursor right */
-            cursor_right(1);
-            break;
-        case 'D':       /* ^[D  move cursor left */
-            cursor_left(1);
-            break;
-        case 'E':       /* ^[E  newline (CRLF) */
-            cr(); lf();
-            break;
-        case 'H':       /* ^[H  set cursor to row 1, column 1 */
-            m_cursor.x = 0;
-            m_cursor.y = 0;
-            break;
-        case 'I':       /* ^[I  reverse line feed */
-            r_lf();
-            break;
-        case 'J':       /* ^[J  erase to end of screen */
-            erase(0);
-            break;
-        case 'K':       /* ^[K  erase to end of line */
-            erase_ln(0);
-            break;
-        case 'M':       /* ^[M  line feed */
-            lf();
-            break;
-        case 'c':       /* ^[c  reset console */
-            con_reset();
-            break;
-        case '3':       /* ^[3  disable blink */
+        case '3':       /* ESC 3    disable blink */
             m_disp.blink_on = false;
             vga_disable_blink();
             break;
-        case '4':       /* ^[4  enable blink */
+        case '4':       /* ESC 4    enable blink */
             m_disp.blink_on = true;
             vga_enable_blink();
             break;
-        case '5':       /* ^[5  hide cursor */
+        case '5':       /* ESC 5    hide cursor */
             m_cursor.hidden = true;
             vga_hide_cursor();
             break;
-        case '6':       /* ^[6  show cursor */
+        case '6':       /* ESC 6    show cursor */
             m_cursor.hidden = false;
             vga_show_cursor();
             break;
-        case '7':       /* ^[7  save state */
+        case '7':       /* ESC 7    save console */
             save();
             break;
-        case '8':       /* ^[8  restore state */
+        case '8':       /* ESC 8    restore console */
             restore();
             break;
-        case '[':       /* ^[[  control sequence introducer */
+        case 'c':       /* ESC c    reset console */
+            reset();
+            break;
+        case 'E':       /* ESC E    newline (CRLF) */
+            cr(); lf();
+            break;
+        case 'I':       /* ESC I    reverse line feed */
+            r_lf();
+            break;
+        case 'M':       /* ESC M    line feed (LF) */
+            lf();
+            break;
+        case 'T':       /* ESC T    set tab stop */
+            m_tabstop[m_cursor.x] = 1;
+            break;
+        case 't':       /* ESC t    clear tab stop */
+            m_tabstop[m_cursor.x] = 0;
+            break;
+        case '[':       /* ESC [    control sequence introducer */
             memset(m_csiparam, CSIPARAM_DEFAULT, MAX_CSIPARAMS);
             m_paramidx = 0;
             m_state = S_CSI;
@@ -295,102 +312,107 @@ static void esc(char c)
 
 static void csi(char c)
 {
-    /* Some VT52/VT100 control sequences, not 100% compliant */
+
+#define default_param(i,x)  do { if (m_csiparam[(i)] < (x)) m_csiparam[(i)] = (x); } while (0)
 
     int i = 0;
     switch (c)
     {
-        case 'A':       /* ^[[nA    move cursor up n rows */
-            if (m_csiparam[0] < 1) m_csiparam[0] = 1;
+        case 'A':       /* CSI n A      move cursor up n rows */
+            default_param(0, 1);
             cursor_up(m_csiparam[0]);
-            m_state = S_NORM;
             break;
-        case 'B':       /* ^[[nB    cursor down n rows */
-            if (m_csiparam[0] < 1) m_csiparam[0] = 1;
+        case 'B':       /* CSI n B      move cursor down n rows */
+            default_param(0, 1);
             cursor_down(m_csiparam[0]);
-            m_state = S_NORM;
             break;
-        case 'C':       /* ^[[nC    cursor right n columns */
-            if (m_csiparam[0] < 1) m_csiparam[0] = 1;
+        case 'C':       /* CSI n C      move cursor right n columns */
+            default_param(0, 1);
             cursor_right(m_csiparam[0]);
-            m_state = S_NORM;
             break;
-        case 'D':       /* ^[[nD    cursor left n columns */
-            if (m_csiparam[0] < 1) m_csiparam[0] = 1;
+        case 'D':       /* CSI n D      move cursor left n columns */
+            default_param(0, 1);
             cursor_left(m_csiparam[0]);
-            m_state = S_NORM;
             break;
-        case 'E':       /* ^[[nE    n newlines (CRLF) */
-            if (m_csiparam[0] < 1) m_csiparam[0] = 1;
-            for (i = 0; i < m_csiparam[0]; i++) {
-                cr(); lf();
-            }
-            m_state = S_NORM;
+        case 'E':       /* CSI n E      move cursor to beginning of line, n rows down */
+            default_param(0, 1);
+            m_cursor.x = 0;
+            cursor_down(m_csiparam[0]);
             break;
-        case 'H':       /* ^[[m;nH  set cursor row m, column n */
-        case 'f':       /* ^[[m;nf  set cursor row m, comumn n */
-            if (m_csiparam[0] < 1) m_csiparam[0] = 1;
-            if (m_csiparam[1] < 1) m_csiparam[1] = 1;
+        case 'F':       /* CSI n F      move cursor to beginning of line, n rows up */
+            default_param(0, 1);
+            m_cursor.x = 0;
+            cursor_up(m_csiparam[0]);
+            break;
+        case 'G':       /* CSI n G      move cursor to column n */
+            default_param(0, 1);
+            if (m_csiparam[0] > m_cols) m_csiparam[0] = m_cols;
+            m_cursor.x = m_csiparam[0] - 1;
+            break;
+        case 'H':       /* CSI n ; m H  move cursor row n, column m */
+            default_param(0, 1);
+            default_param(1, 1);
             if (m_csiparam[0] > m_rows) m_csiparam[0] = m_rows;
             if (m_csiparam[1] > m_cols) m_csiparam[1] = m_cols;
             m_cursor.y = m_csiparam[0] - 1;
             m_cursor.x = m_csiparam[1] - 1;
-            m_state = S_NORM;
             break;
-        case 'I':       /* ^[[nI    n reverse linefeeds */
-            if (m_csiparam[0] < 1) m_csiparam[0] = 1;
-            for (i = 0; i < m_csiparam[0]; i++) {
-                r_lf();
-            }
-            m_state = S_NORM;
+        case 'I':       /* CSI n I      emit n reverse-linefeeds */
+            default_param(0, 1);
+            for (i = 0; i < m_csiparam[0]; i++) r_lf();
             break;
-        case 'J':       /* ^[[mJ    erase screen */
-            if (m_csiparam[0] < 0) m_csiparam[0] = 0;
+        case 'M':       /* CSI n M      emit n linefeeds */
+            default_param(0, 1);
+            for (i = 0; i < m_csiparam[0]; i++) lf();
+            break;
+        case 'J':       /* CSI n J      erase in display (n = mode) */
+            default_param(0, 0);
             erase(m_csiparam[0]);
-            m_state = S_NORM;
             break;
-        case 'K':       /* ^[[mK    erase current line */
-            if (m_csiparam[0] < 0) m_csiparam[0] = 0;
+        case 'K':       /* CSI n K      erase in line (n = mode) */
+            default_param(0, 0);
             erase_ln(m_csiparam[0]);
-            m_state = S_NORM;
             break;
-        case 'M':       /* ^[[nM    n linefeeds */
-            if (m_csiparam[0] < 1) m_csiparam[0] = 1;
-            for (i = 0; i < m_csiparam[0]; i++) {
-                lf();
-            }
-            m_state = S_NORM;
+        case 'S':       /* CSI n S      scroll n lines */
+            default_param(0, 1);
+            scroll(m_csiparam[0]);
             break;
-        case 'm':       /* ^[[xm    set graphics attribute */
-            while (i <= m_paramidx) {
-                csi_m(m_csiparam[i++]);
-            }
-            m_state = S_NORM;
+        case 'T':       /* CSI n T      reverse scroll n lines */
+            default_param(0, 1);
+            scroll(-m_csiparam[0]);
+            break;
+        case 'm':       /* CSI n m      set graphics attribute */
+            default_param(0, 0);
+            while (i <= m_paramidx) csi_m(m_csiparam[i++]);
+            break;
+        case 's':       /* CSI s        save cursor position */
+            cursor_save();
+            break;
+        case 'u':       /* CSI u        restore cursor position */
+            cursor_restore();
             break;
         case ';':       /* (parameter separator) */
             if (++m_paramidx >= MAX_CSIPARAMS) {
-                m_state = S_NORM;
+                break;
             }
-            break;
+            return;
         default:        /* (parameter) */
             if (isdigit(c)) {
                 if (m_currparam == CSIPARAM_DEFAULT) {
                     m_currparam = 0;
                 }
-                m_currparam *= 10;  /* next digit */
+                m_currparam *= 10;
                 m_currparam += (c - '0');
-            }
-            else {
-                m_state = S_NORM;
+                return;
             }
             break;
     }
+
+    m_state = S_NORM;
 }
 
 static void csi_m(char p)
 {
-    /* CSIm set character attribute */
-
     switch (p) {
         case 0:
             m_attr = m_defaults.attr;
@@ -400,6 +422,9 @@ static void csi_m(char p)
             break;
         case 2:
             m_attr.faint = true;
+            break;
+        case 3:
+            m_attr.italic = true;
             break;
         case 4:
             m_attr.underline = true;
@@ -416,6 +441,9 @@ static void csi_m(char p)
         case 22:
             m_attr.faint = false;
             break;
+        case 23:
+            m_attr.italic = false;
+            break;
         case 24:
             m_attr.underline = false;
             break;
@@ -428,6 +456,7 @@ static void csi_m(char p)
         default:
             if (p >= 30 && p <= 37) m_attr.fg = CSI_COLORS[p - 30];
             if (p >= 40 && p <= 47) m_attr.bg = CSI_COLORS[p - 40];
+            /* TODO: programmable defaults */
             if (p == 38 || p == 39) m_attr.fg = m_defaults.attr.fg;
             if (p == 48 || p == 49) m_attr.bg = m_defaults.attr.bg;
             break;
@@ -436,14 +465,25 @@ static void csi_m(char p)
 
 static void save(void)
 {
-    m_saved.cursor = m_cursor;
+    m_saved.disp = m_disp;
     m_saved.attr = m_attr;
+    cursor_save();
+    memcpy(&m_saved.tabstop, &m_tabstop, MAX_TABSTOPS);
 }
 
 static void restore(void)
 {
-    m_cursor = m_saved.cursor;
+    m_disp = m_saved.disp;
     m_attr = m_saved.attr;
+    cursor_restore();
+    memcpy(&m_tabstop, &m_saved.tabstop, MAX_TABSTOPS);
+}
+
+static void reset(void)
+{
+    defaults(&consoles[curr_con]);
+    write_cursor();
+    erase(0);
 }
 
 static void bs(void)
@@ -476,15 +516,12 @@ static void r_lf(void)
 
 static void tab(void)
 {
-    char tmp;
+    while (m_cursor.x < m_cols) {
+        if (m_tabstop[++m_cursor.x]) {
+            break;
+        }
+    }
 
-    tmp = m_cursor.x % m_tabsize;
-    if (tmp == 0) {
-        m_cursor.x += m_tabsize;
-    }
-    else {
-        m_cursor.x += (m_tabsize - tmp);
-    }
     if (m_cursor.x >= m_cols) {
         m_cursor.x = m_cols - 1;
     }
@@ -567,46 +604,17 @@ static void erase_ln(int mode)
             count = area - (pos % m_cols);
             break;
         case 1:     /* erase line from cursor up /*/
-            start = m_framebuf;
+            start = &m_framebuf[xy2pos(0, m_cursor.y)];
             count = (pos % m_cols) + 1;
             break;
         case 2:     /* erase entire line */
-            start = m_framebuf;
+            start = &m_framebuf[xy2pos(0, m_cursor.y)];
             count = area;
     }
 
     for (int i = 0; i < count; i++) {
         start[i].ch = BLANK_CHAR;
         set_vga_attr(&start[i].attr);
-    }
-}
-
-static void update_vga_attr(int pos)
-{
-    set_vga_attr(&m_framebuf[pos].attr);
-}
-
-static void set_vga_attr(struct vga_attr *a)
-{
-    a->bg = m_attr.bg;
-    a->fg = m_attr.fg;
-
-    if (m_attr.bright) {
-        a->bright = 1;
-    }
-    if (m_attr.faint) {
-        a->fg = VGA_BLK;    /* emulate with dark gray */
-        a->bright = 1;
-    }
-    if (m_attr.underline) {
-        a->fg = VGA_CYN;    /* emulate with bright cyan */
-        a->bright = 1;
-    }
-    if (m_attr.blink) {
-        a->blink = 1;
-    }
-    if (m_attr.invert) {
-        swap(a->color_bg, a->color_fg);
     }
 }
 
@@ -642,6 +650,16 @@ static void cursor_right(int n)
     }
 }
 
+static void cursor_save(void)
+{
+    m_saved.cursor = m_cursor;
+}
+
+static void cursor_restore(void)
+{
+    m_cursor = m_saved.cursor;
+}
+
 static void read_cursor(void)
 {
     m_cursor.shape = vga_get_cursor_shape();
@@ -663,4 +681,37 @@ static inline void pos2xy(int pos, int *x, int *y)
 static inline int xy2pos(int x, int y)
 {
     return y * m_cols + x;
+}
+
+static void update_vga_attr(int pos)
+{
+    set_vga_attr(&m_framebuf[pos].attr);
+}
+
+static void set_vga_attr(struct vga_attr *a)
+{
+    a->bg = m_attr.bg;
+    a->fg = m_attr.fg;
+
+    if (m_attr.bright) {
+        a->bright = 1;
+    }
+    if (m_attr.faint) {
+        a->fg = VGA_BLK;    /* simulate with dark gray */
+        a->bright = 1;
+    }
+    if (m_attr.italic) {
+        a->fg = VGA_GRN;    /* simulate with green */
+        a->bright = 0;
+    }
+    if (m_attr.underline) {
+        a->fg = VGA_CYN;    /* simulate with cyan */
+        a->bright = 0;
+    }
+    if (m_attr.blink) {
+        a->blink = 1;
+    }
+    if (m_attr.invert) {
+        swap(a->color_bg, a->color_fg);
+    }
 }
