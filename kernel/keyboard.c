@@ -288,7 +288,7 @@ readsc:
         goto done;
     }
 
-    if (vk == VK_SYSRQ) {
+    if (m_ctrl && m_alt && vk == VK_DELETE) {
         ps2_cmd(PS2_CMD_SYSRESET);
     }
 
@@ -322,27 +322,30 @@ readsc:
             case VK_PAUSE: kbd_putq('P'); break;
             case VK_BREAK: kbd_putq('Q'); break;
             case VK_SYSRQ: kbd_putq('R'); break;
-            case VK_F1: kbd_putqs("1~"); break;
-            case VK_F2: kbd_putqs("2~"); break;
-            case VK_F3: kbd_putqs("3~"); break;
-            case VK_F4: kbd_putqs("4~"); break;
-            case VK_F5: kbd_putqs("5~"); break;
-            case VK_F6: kbd_putqs("6~"); break;
-            case VK_F7: kbd_putqs("7~"); break;
-            case VK_F8: kbd_putqs("8~"); break;
-            case VK_F9: kbd_putqs("9~"); break;
-            case VK_F10: kbd_putqs("10~"); break;
-            case VK_F11: kbd_putqs("11~"); break;
-            case VK_F12: kbd_putqs("12~"); break;
-            case VK_HOME: kbd_putqs("13~"); break;
-            case VK_END: kbd_putqs("14~"); break;
-            case VK_PGUP: kbd_putqs("15~"); break;
-            case VK_PGDOWN: kbd_putqs("16~"); break;
-            case VK_INSERT: kbd_putqs("17~"); break;
-            case VK_DELETE: kbd_putqs("18~"); break;
-            case VK_PRTSCN: kbd_putqs("19~"); break;
+            case VK_PRTSCN: kbd_putq('S'); break;
+            case VK_HOME: kbd_putqs("1~"); break;
+            case VK_INSERT: kbd_putqs("2~"); break;
+            case VK_DELETE: kbd_putqs("3~"); break;
+            case VK_END: kbd_putqs("4~"); break;
+            case VK_PGUP: kbd_putqs("5~"); break;
+            case VK_PGDOWN: kbd_putqs("6~"); break;
+            case VK_F1: kbd_putqs("11~"); break;
+            case VK_F2: kbd_putqs("12~"); break;
+            case VK_F3: kbd_putqs("13~"); break;
+            case VK_F4: kbd_putqs("14~"); break;
+            case VK_F5: kbd_putqs("15~"); break;
+            case VK_F6: kbd_putqs("17~"); break;
+            case VK_F7: kbd_putqs("18~"); break;
+            case VK_F8: kbd_putqs("19~"); break;
+            case VK_F9: kbd_putqs("20~"); break;
+            case VK_F10: kbd_putqs("21~"); break;
+            case VK_F11: kbd_putqs("23~"); break;
+            case VK_F12: kbd_putqs("24~"); break;
         }
         goto done;
+    }
+    else if (m_alt) {
+        kbd_putq('\033');
     }
 
     if (m_ctrl) {
