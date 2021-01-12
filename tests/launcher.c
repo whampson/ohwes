@@ -68,10 +68,9 @@ static void console_menu(void)
 print_menu:
     menu_header();
     print("Console Tests:\n");
-    print("   [1] VGA\n");
-    print("   [2] ANSI Escape Sequences\n");
+    print("   [1] VGA Display\n");
+    print("   [2] Escape Sequences\n");
     print("   [3] Keyboard\n");
-    print("\n<BACKSPACE> Go Back\n");
 
     while (1) {
         switch (getchar()) {
@@ -105,7 +104,7 @@ static void menu_header(void)
     print("  \033[37;44m\n");
 #endif
     print("\n\n");
-    print(" * Type a number to select a menu option.\n");
+    print(" * Type a number to select a test category.\n");
     print(" * Press <BACKSPACE> to return to the previous menu.\n");
     print(" * Press <SPACE> to advance to the next test.\n");
     print(" * Press <ESC> to cancel a test or exit Test Mode.\n");
@@ -118,6 +117,38 @@ void reset_console(void)
     con_reset();
 #endif
     print("\033c");
+}
+
+void save_console(void)
+{
+#ifdef NOANSI
+    con_save();
+#endif
+    print("\0337");
+}
+
+void restore_console(void)
+{
+#ifdef NOANSI
+    con_restore();
+#endif
+    print("\0338");
+}
+
+void save_cursor(void)
+{
+#ifdef NOANSI
+    con_cursor_save();
+#endif
+    print("\033[s");
+}
+
+void restore_cursor(void)
+{
+#ifdef NOANSI
+    con_cursor_restore();
+#endif
+    print("\033[u");
 }
 
 void clear_screen(void)
@@ -142,24 +173,20 @@ void __failmsg(const char *name)
 {
     printf("\n");
 #ifndef NOANSI
-    print("\033[41mFAIL\033[0m");
+    print("\033[31mFAIL\033[37m");
 #else
     print("FAIL");
 #endif
-    print(":");
-    print(name);
-    print("\n");
+    print(": "); print(name); print("\n");
 }
 
 void __passmsg(const char *name)
 {
     printf("\n");
 #ifndef NOANSI
-    print("\033[42mPASS\033[0m");
+    print("\033[32mPASS\033[37m");
 #else
     print("PASS");
 #endif
-    print(":");
-    print(name);
-    print("\n");
+    print(": "); print(name); print("\n");
 }

@@ -1,22 +1,14 @@
 #include <ohwes/test.h>
 #include <drivers/vga.h>
 
-static int cursor_visibility(void);
+static int cursor(void);
 static int colors(void);
+static void c(int bg, int fg);
 
 void test_ansi(void)
 {
-    // clear_screen();
-    // print("ANSI escape sequences will now be printed to the console.\n");
-    // print("These sequences will manipulate the behavior of the console display.\n\n");
-    // print("Press <SPACE> to print the next sequence.\n");
-    // print("Press <ESC> to cancel the test.\n\n");
-    // anykey();
-
-    suite_begin("ANSI Escape Sequences");
-    test("Cursor Visibility", cursor_visibility);
+    test("Cursor Sequences", cursor);
     test("Color Sequences", colors);
-    suite_end("ANSI Escape Sequences");
 
 cancel:
 done:
@@ -24,45 +16,31 @@ done:
     return;
 }
 
-static int cursor_visibility(void)
+static int cursor(void)
 {
-    print("Cursor: OFF\0335"); wait();
-    print("\nCursor: ON \0336"); wait();
+    print("Cursor escape sequences will be tested.\n");
+    print("NOTE: depending on your system, it may not be possible to hide the cursor.\n");
+
+    print("\nCursor: OFF\0335"); wait();
+    print("\nCursor: ON\0336"); wait();
 
     return PASS;
     cancel: return FAIL;
 }
 
-static inline void c(int bg, int fg)
-{
-    int bf = (fg >= 10);
-    int bb = (bg >= 10);
-
-    print("\033[");
-    if (bf) { print("1;"); fg -= 10; } else { print("21;"); }
-    if (bb) { print("5;"); bg -= 10; } else { print("25;"); }
-    printf("3%d;4%dm", fg, bg);
-
-    printf(" %d%d%d", (bb << 1) | (bf << 0), bg, fg);
-}
-
 static int colors(void)
 {
-    int bg = 0;
-    int i = 0;
-    int ret;
-
+    print("A color table will be shown to test color escape sequences. The number in each\n");
+    print("cell represents the color combination. The rightmost digit is the foreground\n");
+    print("color, the middle digit is the background color, and the leftmost digit is a\n");
+    print("bitmask where the 0th bit indicates a bright foreground and the 1st bit\n");
+    print("indicates a bright background.\n\n");
     anykey();
 
-    print("\0337");    /* save console state */
-    vga_disable_blink();
-
-color_table:
-    vga_set_cursor_pos(0);
-    print("\033[0;");
-    if (i >= 8) print("5;");
-    printf("4%dm", bg);
+    save_console();
+    print("\033[0m");
     clear_screen();
+    vga_disable_blink();
 
     /* Black Row */
     c(00,00); c(00,01); c(00,02); c(00,03); c(00,04); c(00,05); c(00,06); c(00,07);
@@ -112,21 +90,23 @@ color_table:
     /* White Row */
     c(17,00); c(17,01); c(17,02); c(17,03); c(17,04); c(17,05); c(17,06); c(17,07);
     c(17,10); c(17,11); c(17,12); c(17,13); c(17,14); c(17,15); c(17,16); c(17,17); print("\n");
-    wait();
+    print("\033[0m");
+    anykey();
 
-    bg++; i++;
-    if (i == 8) bg = 0;
-    if (i < 16) goto color_table;
-
-    ret = PASS;
-    goto done;
-
-cancel:
-    ret = FAIL;
-
-done:
-    print("\033[0m");   /* reset graphics attributes */
-    print("\0338");     /* restore console state */
+    restore_console();
     clear_screen();
-    return ret;
+    return PASS;
+}
+
+static inline void c(int bg, int fg)
+{
+    int bf = (fg >= 10);
+    int bb = (bg >= 10);
+
+    print("\033[");
+    if (bf) { print("1;"); fg -= 10; } else { print("21;"); }
+    if (bb) { print("5;"); bg -= 10; } else { print("25;"); }
+    printf("3%d;4%dm", fg, bg);
+
+    printf(" %d%d%d", (bb << 1) | (bf << 0), bg, fg);
 }

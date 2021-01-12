@@ -52,7 +52,7 @@ do {                                                                        \
     if (!f()) { __failmsg(n); goto done; }                                  \
     __passmsg(n); wait();                                                   \
 } while (0)
-
+/*
 #define suite_begin(n)                                                      \
 do {                                                                        \
     clear_screen(); print("Test Suite: " n "\n\n"); wait();                 \
@@ -62,8 +62,12 @@ do {                                                                        \
 do {                                                                        \
     clear_screen(); print("Complete: " n "\n\n"); goto done;                \
 } while(0)
-
+ */
 void reset_console(void);
+void save_console(void);
+void restore_console(void);
+void save_cursor(void);
+void restore_cursor(void);
 void clear_screen(void);
 void print(const char *str);
 
