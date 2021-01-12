@@ -25,6 +25,10 @@
 
 #include <stdint.h>
 
+#define OS_NAME_STRING      "OHWES"
+#define OS_VERSION_STRING   "0.1"
+#define OS_COPYRIGHT_STRING "(C) 2020-2021 Wes Hampson. All Rights Reserved."
+
 /**
  * Checks whether a bit or bitmask is set in a value.
  *
