@@ -31,6 +31,11 @@
 #include <x86/desc.h>
 #include <drivers/vga.h>
 
+static bool keydown(vk_t key)
+{
+    return kbd_ioctl(KBKEYDOWN, key);
+}
+
 void kmain(void)
 {
     gdt_init();
@@ -44,8 +49,7 @@ void kmain(void)
     sti();
 
     while (1) {
-        if (ctrl_down() && key_down(VK_F8)) {
-            kbd_flush();
+        if ((keydown(VK_LCTRL) || keydown(VK_RCTRL)) && keydown(VK_F8)) {
             start_interactive_tests();
         }
     }

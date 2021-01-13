@@ -17,12 +17,12 @@ do {                                                            \
 } while (0)
 
 static int font(void);
-static int cursor(void);
+// static int cursor(void);
 
 void test_vga(void)
 {
     test("Font & Character Attributes", font);
-    test("Cursor Settings", cursor);
+    // test("Cursor Settings", cursor);
 
 cancel:
 done:
@@ -120,7 +120,7 @@ static int font(void)
     return PASS;
 }
 
-static int cursor(void)
-{
-    return FAIL;
-}
+// static int cursor(void)
+// {
+//     return FAIL;
+// }

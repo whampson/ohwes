@@ -35,7 +35,8 @@ static void console_menu(void);
 void start_interactive_tests(void)
 {
     end_tests = false;
-    kbd_setecho(false);
+    kbd_ioctl(KBFLUSH, 0);
+    kbd_ioctl(KBSETECHO, 0);
 
 print_menu:
     menu_header();
@@ -59,7 +60,7 @@ print_menu:
 
 cleanup:
     reset_console();
-    kbd_setecho(true);
+    kbd_ioctl(KBSETECHO, 1);
     print("Exiting Test Mode...\n");
 }
 
@@ -79,6 +80,9 @@ print_menu:
                 goto print_menu;
             case '2':
                 test_ansi();
+                goto print_menu;
+            case '3':
+                test_keyboard();
                 goto print_menu;
             case '\b':
                 return;
@@ -156,6 +160,7 @@ void clear_screen(void)
 #ifdef NOANSI
     size_t n = VGA_TEXT_COLS * VGA_TEXT_ROWS * sizeof(struct vga_cell);
     memset((void *) VGA_FRAMEBUF_COLOR, 0, n);
+    vga_set_cursor_pos(0);
 #else
     print("\033[2J\033[H");
 #endif

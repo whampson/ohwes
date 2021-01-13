@@ -35,23 +35,15 @@ enum kb_mode
     KB_COOKED       /* Translate keycodes into ASCII character sequences. */
 };
 
+#define KBKEYDOWN   0
+#define KBGETMODE   1
+#define KBSETMODE   2
+#define KBGETECHO   3
+#define KBSETECHO   4
+#define KBFLUSH     5
+
 ssize_t kbd_read(char *buf, size_t n);
-
-
-/* TODO: make these into ioctls */
-
-int kbd_getmode(void);
-bool kbd_setmode(int mode);
-void kbd_setecho(bool enabled);
-void kbd_flush(void);
-bool key_down(vk_t key);
-bool ctrl_down(void);
-bool shift_down(void);
-bool alt_down(void);
-bool super_down(void);
-bool capslock(void);
-bool numlock(void);
-bool scrlock(void);
+int kbd_ioctl(int cmd, long arg);
 
 static inline bool shift_key(vk_t key)
 {

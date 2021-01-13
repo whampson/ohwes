@@ -21,6 +21,7 @@
 #include <ascii.h>
 #include <ctype.h>
 #include <string.h>
+#include <errno.h>
 #include <queue.h>
 #include <ohwes/debug.h>
 #include <ohwes/kernel.h>
@@ -59,6 +60,12 @@ static queue_t *m_queue = (queue_t *) (_qbuf + KBD_BUFLEN);
 #define keyup(vk)       (m_keydown_map[(vk)/64]&=~(1ULL<<((vk)%64)))
 #define is_keydown(vk)  (m_keydown_map[(vk)/64]&  (1ULL<<((vk)%64)))
 
+static int key_down(vk_t key);
+static int getmode(void);
+static int setmode(int mode);
+static int getecho(void);
+static int setecho(bool enabled);
+static int flush(void);
 static bool scancode_set1(void);
 static void kbd_interrupt(void);
 static void kbd_putq(char c);
@@ -81,74 +88,6 @@ void kbd_init(void)
     irq_unmask(IRQ_KEYBOARD);
 }
 
-bool key_down(vk_t key)
-{
-    return is_keydown(key & 0x7F);
-}
-
-bool ctrl_down(void)
-{
-    return is_keydown(VK_LCTRL) || is_keydown(VK_RCTRL);
-}
-
-bool shift_down(void)
-{
-    return is_keydown(VK_LSHIFT) || is_keydown(VK_RSHIFT);
-}
-
-bool alt_down(void)
-{
-    return is_keydown(VK_LALT) || is_keydown(VK_RALT);
-}
-
-bool super_down(void)
-{
-    return is_keydown(VK_LSUPER) || is_keydown(VK_RSUPER);
-}
-
-bool capslock(void)
-{
-    return m_caps;
-}
-
-bool numlock(void)
-{
-    return m_num;
-}
-
-bool scrlock(void)
-{
-    return m_scroll;
-}
-
-int kbd_getmode(void)
-{
-    return m_mode;
-}
-
-bool kbd_setmode(int mode)
-{
-    switch (mode) {
-        case KB_RAW:
-        case KB_MEDIUMRAW:
-        case KB_COOKED:
-            m_mode = mode;
-            return true;
-    }
-
-    return false;
-}
-
-void kbd_setecho(bool enabled)
-{
-    m_echo = enabled;
-}
-
-void kbd_flush(void)
-{
-    while (!qempty()) (void) getq();
-}
-
 ssize_t kbd_read(char *buf, size_t n)
 {
     uint32_t flags;
@@ -162,6 +101,68 @@ ssize_t kbd_read(char *buf, size_t n)
 
     restore_flags(flags);
     return i;
+}
+
+
+int kbd_ioctl(int cmd, long arg)
+{
+    switch (cmd)
+    {
+    case KBKEYDOWN:
+        return key_down((vk_t) arg);
+    case KBGETMODE:
+        return getmode();
+    case KBSETMODE:
+        return setmode((int) arg);
+    case KBGETECHO:
+        return getecho();
+    case KBSETECHO:
+        return setecho((int) arg);
+    case KBFLUSH:
+        return flush();
+    default:
+        return -EINVAL;
+    }
+}
+
+static int key_down(vk_t key)
+{
+    return is_keydown(key & 0x7F);
+}
+
+static int getmode(void)
+{
+    return m_mode;
+}
+
+static int setmode(int mode)
+{
+    switch (mode) {
+        case KB_RAW:
+        case KB_MEDIUMRAW:
+        case KB_COOKED:
+            m_mode = mode;
+            return 0;
+    }
+
+    return -EINVAL;
+}
+
+static int getecho(void)
+{
+    return m_echo;
+}
+
+static int setecho(bool enabled)
+{
+    m_echo = enabled;
+    return 0;
+}
+
+static int flush(void)
+{
+    while (!qempty()) (void) getq();
+    return 0;
 }
 
 static bool scancode_set1(void)
@@ -288,7 +289,7 @@ readsc:
         goto done;
     }
 
-    if (m_ctrl && m_alt && vk == VK_DELETE) {
+    if (m_ctrl && m_alt && vk == VK_END) {
         ps2_cmd(PS2_CMD_SYSRESET);
     }
 

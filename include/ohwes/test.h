@@ -74,6 +74,7 @@ void print(const char *str);
 void start_interactive_tests(void);
 void test_vga(void);
 void test_ansi(void);
+void test_keyboard(void);
 
 void __failmsg(const char *name);
 void __passmsg(const char *name);
