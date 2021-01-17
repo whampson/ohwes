@@ -31,7 +31,7 @@ qemu="qemu-system-i386"
 qemu_args+=" -boot a"
 qemu_args+=" -m 128M"
 qemu_args+=" -drive file=${OHWES_BINDIR}/ohwes.img,if=floppy,format=raw,index=0"
-
+qemu_args+=" -serial file:CON"
 if [ "$1" = "d" ] || [ "$1" = "debug" ]; then
     qemu_args+=" -s -S"
 fi

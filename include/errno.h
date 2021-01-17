@@ -26,7 +26,8 @@
 
 #define EINVAL          1
 #define ENOSYS          2
-#define MAX_ERRNO       2
+#define EAGAIN          3
+#define MAX_ERRNO       3
 
 #ifndef __ASSEMBLER__
 extern int errno;

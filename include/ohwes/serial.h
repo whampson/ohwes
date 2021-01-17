@@ -13,35 +13,18 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: lib/errno.c                                                       *
- * Created: December 22, 2020                                                 *
+ *    File: include/ohwes/serial.h                                            *
+ * Created: January 12, 2021                                                  *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#include <errno.h>
-#include <stdio.h>
+#ifndef __SERIAL_H
+#define __SERIAL_H
 
-int errno;
+#include <types.h>
 
-static const char *errno_text[MAX_ERRNO+1] =
-{
-    NULL,
-    "Invalid argument",
-    "Function not implemented",
-    "Device temporarily unavailable"
-};
+int serial_read(char *c);
+int serial_write(char c);
+int serial_ioctl(int cmd, long num);
 
-void perror(const char *msg)
-{
-    if (msg != NULL) {
-        puts(msg);
-        puts(": ");
-    }
-
-    const char *err;
-    if (errno > 0 && errno <= MAX_ERRNO) {
-        err = errno_text[errno];
-        puts(err);
-        puts("\n");
-    }
-}
+#endif /* __SERIAL_H */

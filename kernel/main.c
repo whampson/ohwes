@@ -27,14 +27,15 @@
 #include <ohwes/interrupt.h>
 #include <ohwes/io.h>
 #include <ohwes/keyboard.h>
+#include <ohwes/serial.h>
 #include <ohwes/test.h>
 #include <x86/desc.h>
 #include <drivers/vga.h>
 
-static bool keydown(vk_t key)
-{
-    return kbd_ioctl(KBKEYDOWN, key);
-}
+// static bool keydown(vk_t key)
+// {
+//     return kbd_ioctl(KBKEYDOWN, key);
+// }
 
 void kmain(void)
 {
@@ -46,13 +47,31 @@ void kmain(void)
     con_init();
     kbd_init();
     mem_init();
+    serial_init();
     sti();
 
+    kbd_ioctl(KBSETECHO, 0);
+    serial_write('\r'); serial_write('\n');
+
+    char rx, tx;
+    int kb_ret, sl_ret;
+
     while (1) {
-        if ((keydown(VK_LCTRL) || keydown(VK_RCTRL)) && keydown(VK_F8)) {
-            start_interactive_tests();
-        }
-    }
+    rx_loop:
+        kb_ret = kbd_read(&tx, 1);
+        sl_ret = serial_read(&rx);
+        if (sl_ret > 0) putchar(rx);
+        if (kb_ret < 1) goto rx_loop;
+    tx_loop:
+        sl_ret = serial_write(tx);
+        if (sl_ret < 0) goto tx_loop;
+    };
+
+    // while (1) {
+    //     if ((keydown(VK_LCTRL) || keydown(VK_RCTRL)) && keydown(VK_F8)) {
+    //         start_interactive_tests();
+    //     }
+    // }
 }
 
 void gdt_init(void)

@@ -69,6 +69,8 @@ void irq_init(void);
 /* keyboard.c */
 void kbd_init(void);
 
+void serial_init(void);
+
 #endif /* __ASSEMBLER__ */
 
 #endif  /* __INIT_H */
