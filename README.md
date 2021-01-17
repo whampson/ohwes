@@ -134,7 +134,7 @@ Multiple parameters may be passed in a given sequence, each separated by a `;`.
 | F10       | `<ESC>[21~`       |
 | F11       | `<ESC>[23~`       |
 | F12       | `<ESC>[24~`       |
-| Alt+<key> | `<ESC><key>`      |
+| Alt+&lt;key&gt; | `<ESC><key>`      |
 
 ## TODO List
 - [x] Boot Loader
