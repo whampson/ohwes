@@ -289,7 +289,8 @@ readsc:
         goto done;
     }
 
-    if (m_ctrl && m_alt && vk == VK_END) {
+    /* three finger salute */
+    if (m_ctrl && m_alt && vk == VK_BACKSPACE) {
         ps2_cmd(PS2_CMD_SYSRESET);
     }
 
