@@ -22,7 +22,7 @@
 #define __MEMORY_H
 
 /* Minimum memory required to run OHWES. */
-#define MIN_KB          4096
+#define MIN_KB          2048
 
 #define KB_SHIFT        10
 #define KB              (1<<KB_SHIFT)

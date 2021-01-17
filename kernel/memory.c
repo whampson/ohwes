@@ -102,7 +102,7 @@ void mem_init(void)
 
     printf("%d KiB free\n", kb_free);
     if (kb_free < MIN_KB) {
-        panic("not enough memory; system needs at least %d KiB to run", MIN_KB);
+        panic("not enough memory! OHWES needs at least %d KiB to run.", MIN_KB);
     }
 
     /* TODO: build memory map, check for overlapping regions,
