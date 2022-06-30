@@ -14,7 +14,7 @@ designed by Wes Hampson.
 * `$ winget install msys2.msys2`
 * Extract i686-elf-tools
 * `mingw32$ make`
-* `mingw32$ pacman -s mingw32/mingw-w64-i686-gdb`
+* `mingw32$ pacman -S mingw32/mingw-w64-i686-gdb`
 
 
 ### OLD OLD

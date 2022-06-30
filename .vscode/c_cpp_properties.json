@@ -3,15 +3,17 @@
         {
             "name": "OHWES",
             "includePath": [
-                "${workspaceFolder}/include/*"
+                "${workspaceFolder}/src/include/*"
             ],
             "defines": [],
-            "compilerPath": "C:/i686-elf-tools/bin/i686-elf-gcc",
+            "compilerPath": "${workspaceFolder}/lib/i686-elf-tools/bin/i686-elf-gcc",
             "cStandard": "c11",
             "cppStandard": "c++11",
             "intelliSenseMode": "gcc-x86",
             "compilerArgs": [
-                "-ffreestanding -nostdinc"
+                "-ffreestanding",
+                "-nostdinc",
+                "-nostdlib"
             ]
         },
         {
@@ -20,14 +22,12 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [
-                "_DEBUG",
-                "UNICODE",
-                "_UNICODE"
+                "_DEBUG"
             ],
-            "compilerPath": "C:/msys64/mingw64/bin/gcc.exe",
+            "compilerPath": "C:/msys64/mingw32/bin/gcc.exe",
             "cStandard": "c11",
             "cppStandard": "c++11",
-            "intelliSenseMode": "gcc-x64"
+            "intelliSenseMode": "gcc-x86"
         }
     ],
     "version": 4
