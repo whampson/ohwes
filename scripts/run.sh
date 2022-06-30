@@ -1,9 +1,10 @@
+#!/bin/bash
 #==============================================================================#
 # Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                    #
 #                                                                              #
 # This file is part of the OHWES Operating System.                             #
 # OHWES is free software; you may redistribute it and/or modify it under the   #
-# the terms of the license agreement provided with this software.              #
+# terms of the license agreement provided with this software.                  #
 #                                                                              #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR   #
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,     #
@@ -13,44 +14,27 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER          #
 # DEALINGS IN THE SOFTWARE.                                                    #
 #==============================================================================#
-#    File: Rules.mk                                                            #
-# Created: November 27, 2020                                                   #
+#    File: scripts/ruh.sh                                                      #
+# Created: November 22, 2020                                                   #
 #  Author: Wes Hampson                                                         #
 #                                                                              #
-# Makefile rules common to all parts of the build.                             #
+# Boots OHWES in QEMU.                                                         #
 #==============================================================================#
 
-.PHONY: all clean dirs
-.PRECIOUS: $(BINDIR)/%.elf
+if [ -z ${_BINROOT+x} ]; then
+    echo "Error: develoment environment not set."
+    echo "Please source 'scripts/devenv.sh' and try again."
+    exit 1
+fi
 
-all: dirs $(BIN)
+qemu="qemu-system-i386"
+qemu_args+=" -boot a"
+qemu_args+=" -m 128M"
+qemu_args+=" -drive file=${_BINROOT}/ohwes.img,if=floppy,format=raw,index=0"
+qemu_args+=" -serial file:CON"
+if [ "$1" = "d" ] || [ "$1" = "debug" ]; then
+    qemu_args+=" -s"
+    qemu_args+=" -S"
+fi
 
-clean:
-	@$(RM) -r $(BINDIR)
-	@$(RM) -r $(OBJDIR)
-
-dirs:
-	@$(MKDIR) $(BINDIR)
-	@$(MKDIR) $(OBJDIR)
-
-$(BINDIR)/%.bin: $(BINDIR)/%.elf
-	@$(OBJCOPY) -O binary $< $@
-	@echo 'OUT $(subst $(TOPDIR)/,,$(abspath $@))'
-
-$(BINDIR)/%.sys: $(BINDIR)/%.elf
-	@$(OBJCOPY) -O binary $< $@
-	@echo 'OUT $(subst $(TOPDIR)/,,$(abspath $@))'
-
-$(BINDIR)/%.elf: $(OBJ)
-	@echo 'LD  $(LDFLAGS) $(subst $(TOPDIR)/,,$(realpath $^))'
-	@$(LD) $(LDFLAGS) -o $@ $^
-
-$(OBJDIR)/%.o: %.c
-	@echo 'CC  $(CFLAGS) $(TREE)$<'
-	@$(CC) $(CFLAGS) -MD -MF $(@:.o=.d) -I$(INCLUDE) -c -o $@ $<
-
-$(OBJDIR)/%.o: %.S
-	@echo 'AS  $(ASFLAGS) $(TREE)$<'
-	@$(AS) $(ASFLAGS) -MD -MF $(@:.o=.d) -I$(INCLUDE) -c -o $@ $<
-
--include $(DEP)
+$qemu $qemu_args

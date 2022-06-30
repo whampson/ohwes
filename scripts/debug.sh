@@ -22,25 +22,25 @@
 #==============================================================================#
 
 if [ "$1" = "boot" ]; then
-    gdb ${OHWES_BINDIR}/boot.elf \
+    gdb ${_BINROOT}/boot.elf \
         -ex 'target remote localhost:1234' \
-        -ex 'set tdesc filename scripts/gdb_targets/i386-16bit.xml' \
+        -ex "set tdesc filename $SCRIPTS/gdb_targets/i386-16bit.xml" \
         -ex 'set architecture i8086' \
         -ex 'break *0x7C00' \
         -ex 'layout asm' \
         -ex 'layout regs' \
         -ex 'continue'
 elif [ "$1" = "init" ]; then
-    gdb ${OHWES_BINDIR}/init.elf \
+    gdb ${_BINROOT}/init.elf \
         -ex 'target remote localhost:1234' \
-        -ex 'set tdesc filename scripts/gdb_targets/i386-16bit.xml' \
+        -ex "set tdesc filename $SCRIPTS/gdb_targets/i386-16bit.xml" \
         -ex 'set architecture i8086' \
         -ex 'break *0x9000' \
         -ex 'layout src' \
         -ex 'layout regs' \
         -ex 'continue'
 elif [ "$1" = "kentry" ]; then
-    gdb ${OHWES_BINDIR}/ohwes.elf \
+    gdb ${_BINROOT}/ohwes.elf \
         -ex 'target remote localhost:1234' \
         -ex 'set architecture i386' \
         -ex 'break kentry' \
@@ -48,7 +48,7 @@ elif [ "$1" = "kentry" ]; then
         -ex 'layout regs' \
         -ex 'continue'
 else
-    gdb ${OHWES_BINDIR}/ohwes.elf \
+    gdb ${_BINROOT}/ohwes.elf \
         -ex 'target remote localhost:1234' \
         -ex 'set architecture i386' \
         -ex 'break kmain' \

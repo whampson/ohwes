@@ -18,15 +18,17 @@
 #  Author: Wes Hampson                                                         #
 #==============================================================================#
 
-ifeq ($(MAKELEVEL), 0)
-$(error To build, please run 'make fatfs' from the top-level directory)
-endif
+BIN = $(BINDIR)/fatfs
 
-include $(TOPDIR)/Tree.mk
+include $(_TOOLSRC)/Common.mk
 
-SRC	:= $(wildcard *.cpp)
-OBJ	:= $(addprefix $(OBJDIR)/,$(SRC:.cpp=.o))
-DEP	:= $(OBJ:%.o=%.d)
-BIN	:= $(BINDIR)/fatfs
+SRC = $(wildcard *.cpp)
+OBJ = $(addprefix $(OBJDIR)/,$(SRC:.cpp=.o))
 
-include $(TOOLSDIR)/Rules.mk
+$(BIN): $(OBJ)
+	@echo 'LD      $(LDFLAGS) $^'
+	@$(LD) $(LDFLAGS) -o $@ $^
+
+$(OBJDIR)/%.o: %.cpp
+	@echo 'CXX     $(CXXFLAGS) $(TREE)/$<'
+	@$(CXX) $(CXXFLAGS) $(addprefix -I,$(INC)) -MMD -MF $(@:.o=.d)  -c -o $@ $<

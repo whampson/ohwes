@@ -9,6 +9,15 @@ designed by Wes Hampson.
 - Disk I/O; support a common file system like FAT or ext2 (or both!)
 
 ## Building & Running
+### Toolchain Installation
+* `$ winget install qemu`
+* `$ winget install msys2.msys2`
+* Extract i686-elf-tools
+* `mingw32$ make`
+* `mingw32$ pacman -s mingw32/mingw-w64-i686-gdb`
+
+
+### OLD OLD
 To build **OHWES**, first set up the build environment, then build using `make`.
 ```
 $ source scripts/devenv.sh
