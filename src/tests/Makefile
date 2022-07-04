@@ -1,1 +1,1 @@
-include $(_OSROOT)/build/Common.mk
+include $(_OSROOT)/Makefile

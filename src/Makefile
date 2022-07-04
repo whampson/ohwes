@@ -1,19 +1,18 @@
-include $(_OSROOT)/build/Common.mk
+include $(_OSROOT)/Makefile
 
-IMGFILE = $(BINDIR)/ohwes.img
+.PHONY: all boot kernel drivers lib tests tools
 
-.PHONY: all img boot kernel drivers lib tests
+all: boot kernel tools
 
-all: img
+# $(BINDIR)/ohwes.img: tools boot kernel
+# 	@echo '> Creating floppy image...'
+# 	@fatfs -i $(BIN) create
+# 	@fatfs -i $(BIN) add $(BINDIR)/init.sys
+# 	@fatfs -i $(BIN) add $(BINDIR)/ohwes.sys
+# 	@echo '> Writing boot sector...'
+# 	@dd if=$(BINDIR)/boot.bin of=$(BIN) conv=notrunc status=none
+# 	@echo 'OUT $(abspath $(BIN))'
 
-img: boot kernel
-	@echo '> Creating floppy image...'
-	@fatfs -i $(IMGFILE) create
-	@fatfs -i $(IMGFILE) add $(BINDIR)/init.sys
-	@fatfs -i $(IMGFILE) add $(BINDIR)/ohwes.sys
-	@echo '> Writing boot sector...'
-	@dd if=$(_BINROOT)/boot.bin of=$(IMGFILE) conv=notrunc status=none
-	@echo 'OUT $(abspath $(IMGFILE))'
 
 boot:
 	@$(MAKE) -C boot
@@ -29,3 +28,6 @@ lib:
 
 tests:
 	@$(MAKE) -C tests
+
+tools:
+	@$(MAKE) -C tools

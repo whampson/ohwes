@@ -1,4 +1,4 @@
-include $(_OSROOT)/build/Common.mk
+include $(_OSROOT)/Makefile
 
 .PHONY: all ps2 pic vga
 
