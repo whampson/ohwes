@@ -1,18 +1,23 @@
-# Variables that can be overriden
-# TARGET
-# ARCH
-# DEBUG
-# ENTRY_POINT
-# CODE_BASE
-# DIRS
-# C_FLAGS
-# C_DEFINES
-# C_WARNINGS
-# AS_FLAGS
-# AS_DEFINES
-# AS_WARNINGS
-# LD_FLAGS
-# LD_WARNINGS
+#===============================================================================
+#    File: Makefile
+# Created: July 4, 2022
+#  Author: Wes Hampson
+#
+# The master Makefile containing the build system infrastructure.
+# All Makefiles in this project must include this Makefile in order for the
+# build system to function properly. This can be done by adding the following
+# line in your Makefile:
+#     include $(_MAKEGOD)
+#
+# _MAKEGOD is an environment variable that contains the path to this file.
+#===============================================================================
+
+# ------------------------------------------------------------------------------
+# Build environment sanity checking
+
+ifndef _MAKEGOD
+  $(error "Please source src/scripts/env.sh before invoking this Makefile.")
+endif
 
 # ------------------------------------------------------------------------------
 # Global config
@@ -21,34 +26,18 @@ export DEBUG            = 1
 export ARCH             = x86
 
 # ------------------------------------------------------------------------------
-# Build environment sanity checking
-
-ifndef _OSROOT
-  $(error "Environment variable '_OSROOT' not defined! Did you remember to source env.sh?")
-endif
-ifndef _SRCROOT
-  $(error "Environment variable '_SRCROOT' not defined! Did you remember to source env.sh?")
-endif
-ifndef _BINROOT
-  $(error "Environment variable '_BINROOT' not defined! Did you remember to source env.sh?")
-endif
-ifndef _OBJROOT
-  $(error "Environment variable '_OBJROOT' not defined! Did you remember to source env.sh?")
-endif
-
-# ------------------------------------------------------------------------------
 # Directory tree tracking
 
 ifeq ($(_OSROOT),$(CURDIR))
-  TREEROOT = 1
-  OSROOT = 1
+  __TREEROOT = 1
+  __OSROOT = 1
 endif
 ifeq ($(_SRCROOT),$(CURDIR))
-  TREEROOT = 1
-  SRCROOT = 1
+  __TREEROOT = 1
+  __SRCROOT = 1
 endif
 
-ifndef TREEROOT
+ifndef __TREEROOT
   export TREE           = $(subst $(_SRCROOT)/,,$(CURDIR))
 endif
 
@@ -69,7 +58,7 @@ export RM               := rm -f
 export BIN_PATH         := $(_BINROOT)/$(ARCH)
 export OBJ_PATH         := $(_OBJROOT)/$(ARCH)
 
-ifndef TREEROOT
+ifndef __TREEROOT
   export OBJ_PATH       := $(OBJ_PATH)/$(TREE)
 endif
 
@@ -87,17 +76,16 @@ TARGET_ELF               := $(addsuffix .elf, $(basename $(TARGET)))
 # ------------------------------------------------------------------------------
 # Sources, objects, and dependencies
 
-SRC_S                   = $(wildcard *.S)
-SRC_C                   = $(wildcard *.c)
+__SRC_S                 = $(wildcard *.S)
+__SRC_C                 = $(wildcard *.c)
 
-
-ifdef SRC_S
-  SRC                   += $(SRC_S)
-  OBJ                   += $(addprefix $(OBJ_PATH)/,$(SRC_S:.S=.o))
+ifdef __SRC_S
+  SRC                   += $(__SRC_S)
+  OBJ                   += $(addprefix $(OBJ_PATH)/,$(__SRC_S:.S=.o))
 endif
-ifdef SRC_C
-  SRC                   += $(SRC_C)
-  OBJ                   += $(addprefix $(OBJ_PATH)/,$(SRC_C:.c=.o))
+ifdef __SRC_C
+  SRC                   += $(__SRC_C)
+  OBJ                   += $(addprefix $(OBJ_PATH)/,$(__SRC_C:.c=.o))
 endif
 
 DEP                     = $(OBJ:%.o=%.d)
@@ -115,7 +103,7 @@ export LD_FLAGS         =
 export LD_WARNINGS      =
 export OBJCOPY_FLAGS    = -Obinary
 
-export MAKEFLAGS        = --no-print-directory
+MAKEFLAGS               = --no-print-directory
 
 ifdef DEBUG
   C_DEFINES             += DEBUG
@@ -136,7 +124,7 @@ LD_ARGS                 = $(LD_FLAGS)
 # ------------------------------------------------------------------------------
 # Settings for this (root) Makefile
 
-ifdef OSROOT
+ifdef __OSROOT
   DIRS                  = src
 endif
 
@@ -186,6 +174,7 @@ debug-make:
 	@echo '_OBJROOT = $(_OBJROOT)'
 	@echo '_SCRIPTS = $(_SCRIPTS)'
 	@echo '_TOOLSRC = $(_TOOLSRC)'
+	@echo '_MAKEGOD = $(_MAKEGOD)'
 	@echo '----------------------------------------'
 	@echo 'ARCH = $(ARCH)'
 	@echo 'DEBUG = $(DEBUG)'

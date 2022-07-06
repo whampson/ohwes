@@ -19,6 +19,8 @@ export _SRCROOT=$_OSROOT/src
 export _SCRIPTS=$_SRCROOT/scripts
 export _TOOLSRC=$_SRCROOT/tools
 
+export _MAKEGOD=$_OSROOT/Makefile
+
 echo "Setting build variables..."
 echo "   _OSROOT = $_OSROOT"
 echo "  _BINROOT = $_BINROOT"
@@ -26,17 +28,18 @@ echo "  _OBJROOT = $_OBJROOT"
 echo "  _SRCROOT = $_SRCROOT"
 echo "  _SCRIPTS = $_SCRIPTS"
 echo "  _TOOLSRC = $_TOOLSRC"
+echo "  _MAKEGOD = $_MAKEGOD"
 
-QEMU="/c/Program Files/qemu"    # TODO: this should go somewhere repository-local
-BINUTILS=$_OSROOT/lib/i686-elf-tools/bin
-TOOLSBIN=$_BINROOT/tools
-export PATH=$PATH:$BINUTILS:$QEMU:$TOOLSBIN:$_SCRIPTS
+qemu_path="/c/Program Files/qemu"    # TODO: this should go somewhere repository-local
+binutils_path=$_OSROOT/lib/i686-elf-tools/bin
+tools_path=$_BINROOT/tools
+
+export PATH=$PATH:$qemu_path:$binutils_path:$tools_path:$_SCRIPTS
 
 echo "Updating PATH..."
-echo "     PATH += $BINUTILS"
-echo "     PATH += $QEMU"
-echo "     PATH += $OSTOOLS"
-echo "     PATH += $TOOLSBIN"
+echo "     PATH += $qemu_path"
+echo "     PATH += $binutils_path"
+echo "     PATH += $tools_path"
 echo "     PATH += $_SCRIPTS"
 
 echo "All set!"

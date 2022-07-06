@@ -1,3 +1,3 @@
 DIRS = boot
 
-include $(_OSROOT)/Makefile
+include $(_MAKEGOD)

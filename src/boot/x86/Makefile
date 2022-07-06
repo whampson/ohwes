@@ -4,4 +4,4 @@ CODE_BASE = 0x0000
 
 DIRS = fat
 
-include $(_OSROOT)/Makefile
+include $(_MAKEGOD)
