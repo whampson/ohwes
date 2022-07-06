@@ -1,10 +1,27 @@
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-# NIOBIUM NIOBIUM NIOBIUM NIOBIUM NIOBIUM NIOBIUM NIOBIUM NIOBIUM 
-# NbOS NbOS NbOS NbOS NbOS NbOS NbOS NbOS NbOS NbOS NbOS NbOS NbOS
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Variables that can be overriden
+# TARGET
+# ARCH
+# DEBUG
+# ENTRY_POINT
+# CODE_BASE
+# DIRS
+# C_FLAGS
+# C_DEFINES
+# C_WARNINGS
+# AS_FLAGS
+# AS_DEFINES
+# AS_WARNINGS
+# LD_FLAGS
+# LD_WARNINGS
 
 # ------------------------------------------------------------------------------
-# Sanity checking
+# Global config
+
+export DEBUG            = 1
+export ARCH             = x86
+
+# ------------------------------------------------------------------------------
+# Build environment sanity checking
 
 ifndef _OSROOT
   $(error "Environment variable '_OSROOT' not defined! Did you remember to source env.sh?")
@@ -20,187 +37,193 @@ ifndef _OBJROOT
 endif
 
 # ------------------------------------------------------------------------------
-# Flags
-
-export DEFINES          :=
-export WARNINGS         := all extra error pedantic
-
-export ASFLAGS          := -m32
-export CFLAGS           := -m32
-export LDFLAGS          :=
-export MAKEFLAGS        := --no-print-directory
-
-ifdef DEBUG
-  export ASFLAGS        += -ggdb
-  export CFLAGS         += -ggdb
-  export DEFINES        += DEBUG
-else
-  # TODO: optimization flags?
-  export ASFLAGS        +=
-  export CFLAGS         +=
-endif
-
-export CFLAGS           += -ffreestanding \
-                           -nostdinc \
-                           -nostdlib
-
-# TODO: assess whether these are needed
-export CFLAGS           += -fno-exceptions \
-                           -fno-unwind-tables \
-                           -fno-asynchronous-unwind-tables
-
-# ------------------------------------------------------------------------------
 # Directory tree tracking
 
 ifeq ($(_OSROOT),$(CURDIR))
-  export TREE           =
-  TREE_ROOT = 1
+  TREEROOT = 1
+  OSROOT = 1
 endif
 ifeq ($(_SRCROOT),$(CURDIR))
-  export TREE           =
-  TREE_ROOT = 1
+  TREEROOT = 1
+  SRCROOT = 1
 endif
 
-ifndef TREE_ROOT
+ifndef TREEROOT
   export TREE           = $(subst $(_SRCROOT)/,,$(CURDIR))
 endif
 
 # ------------------------------------------------------------------------------
-# Build directories, include paths, source files, etc.
+# Shell Commands
 
-export BINDIR           = $(_BINROOT)
-export OBJDIR           = $(_OBJROOT)/$(TREE)
-
-export INC		= . \
-                           $(_SRCROOT)/include
-
-SRC_S   = $(wildcard *.S)
-SRC_C   = $(wildcard *.c)
-SRC_CPP = $(wildcard *.cpp)
-
-ifdef SRC_S
-  export SRC            += $(SRC_S)
-  export OBJ            += $(addprefix $(OBJDIR)/,$(SRC_S:.S=.o))
-endif
-ifdef SRC_C
-  export SRC            += $(SRC_C)
-  export OBJ            += $(addprefix $(OBJDIR)/,$(SRC_C:.c=.o))
-endif
-ifdef SRC_CPP
-  export SRC            += $(SRC_CPP)
-  export OBJ            += $(addprefix $(OBJDIR)/,$(SRC_CPP:.cpp=.o))
-endif
-
-export DEP              = $(OBJ:%.o=%.d)
-
-# Binutils/Compiler
-export BINUTILS_PREFIX  := i686-elf-
+BINUTILS_PREFIX         := i686-elf-
 export AS               := $(BINUTILS_PREFIX)gcc
 export CC               := $(BINUTILS_PREFIX)gcc
 export LD               := $(BINUTILS_PREFIX)ld
 export OBJCOPY          := $(BINUTILS_PREFIX)objcopy
+export MKDIR            := mkdir -p
+export RM               := rm -f
 
 # ------------------------------------------------------------------------------
-# Shell Commands
+# Directories
 
-export MKDIR            := mkdir -p
-export RM    	        := rm -f
+export BIN_PATH         := $(_BINROOT)/$(ARCH)
+export OBJ_PATH         := $(_OBJROOT)/$(ARCH)
+
+ifndef TREEROOT
+  export OBJ_PATH       := $(OBJ_PATH)/$(TREE)
+endif
+
+# ------------------------------------------------------------------------------
+# Includes
+
+export INC              := . \
+                          $(_SRCROOT)/include
+
+# ------------------------------------------------------------------------------
+# Binaries
+
+TARGET_ELF               := $(addsuffix .elf, $(basename $(TARGET)))
+
+# ------------------------------------------------------------------------------
+# Sources, objects, and dependencies
+
+SRC_S                   = $(wildcard *.S)
+SRC_C                   = $(wildcard *.c)
+
+
+ifdef SRC_S
+  SRC                   += $(SRC_S)
+  OBJ                   += $(addprefix $(OBJ_PATH)/,$(SRC_S:.S=.o))
+endif
+ifdef SRC_C
+  SRC                   += $(SRC_C)
+  OBJ                   += $(addprefix $(OBJ_PATH)/,$(SRC_C:.c=.o))
+endif
+
+DEP                     = $(OBJ:%.o=%.d)
+
+# ------------------------------------------------------------------------------
+# Defines, flags, and warnings
+
+export C_FLAGS          =
+export C_DEFINES        =
+export C_WARNINGS       = all extra pedantic error
+export AS_FLAGS         =
+export AS_DEFINES       =
+export AS_WARNINGS      = all extra pedantic error
+export LD_FLAGS         =
+export LD_WARNINGS      =
+export OBJCOPY_FLAGS    = -Obinary
+
+export MAKEFLAGS        = --no-print-directory
+
+ifdef DEBUG
+  C_DEFINES             += DEBUG
+  AS_DEFINES            += DEBUG
+endif
+
+ifdef ENTRY_POINT
+  LD_FLAGS              += -e $(ENTRY_POINT)
+endif
+ifdef CODE_BASE
+  LD_FLAGS              += -Ttext $(CODE_BASE)
+endif
+
+CC_ARGS                 = $(addprefix -D,$(C_DEFINES)) $(addprefix -I,$(INC)) $(addprefix -W,$(C_WARNINGS)) $(C_FLAGS)
+AS_ARGS                 = $(addprefix -D,$(AS_DEFINES)) $(addprefix -I,$(INC)) $(addprefix -W,$(AS_WARNINGS)) $(AS_FLAGS)
+LD_ARGS                 = $(LD_FLAGS)
+
+# ------------------------------------------------------------------------------
+# Settings for this (root) Makefile
+
+ifdef OSROOT
+  DIRS                  = src
+endif
 
 # ------------------------------------------------------------------------------
 # Rules
 
-.PHONY: all dirs src clean clean-all debug-make
+.PHONY: all clean nuke dirs debug-make $(DIRS)
 
-# Default rule. Keep this as-is to ensure child Makefiles default to a working build.
-all: dirs $(OBJ) $(BIN)
+all: dirs $(DIRS) $(TARGET)
 
-# Create directories.
-dirs:
-	@$(MKDIR) $(BINDIR)
-	@$(MKDIR) $(OBJDIR)
-
-# Build source.
-src:
-	$(MAKE) -C $(_SRCROOT)
-
-# Clean objects from current working tree.
 clean:
-	@$(RM) -r $(OBJDIR)
+	@$(RM) $(TARGET)
+	@$(RM) $(TARGET_ELF)
+	@$(RM) -r $(OBJ_PATH)
 
-# Clean objects and binaries from working tree.
-clean-all:
+nuke:
 	@$(RM) -r $(_OBJROOT)
 	@$(RM) -r $(_BINROOT)
 
-# Output some variables for debugging.
+dirs:
+	@$(MKDIR) $(BIN_PATH)
+	@$(MKDIR) $(OBJ_PATH)
+
+$(DIRS):
+	@$(MAKE) -C $@
+
+$(OBJ_PATH)/%.o: %.S
+	@echo 'AS      $(AS_ARGS) $(TREE)/$<'
+	@$(AS)         $(AS_ARGS) -MD -MF $(@:.o=.d) -c -o $@ $<
+
+$(TARGET_ELF): $(OBJ)
+	@$(MKDIR)      $(dir $(TARGET))
+	@echo 'LD      $(LD_ARGS) $^'
+	@$(LD)         $(LD_ARGS) -o $@ $^
+
+$(TARGET): %: $(TARGET_ELF)
+	@echo 'OBJCOPY -Obinary $< $@'
+	@$(OBJCOPY)    -Obinary $< $@
+
 debug-make:
+	@echo '----------------------------------------'
+	@echo ">>> Build Variables <<<"
+	@echo '----------------------------------------'
 	@echo '_OSROOT = $(_OSROOT)'
 	@echo '_SRCROOT = $(_SRCROOT)'
 	@echo '_BINROOT = $(_BINROOT)'
 	@echo '_OBJROOT = $(_OBJROOT)'
 	@echo '_SCRIPTS = $(_SCRIPTS)'
 	@echo '_TOOLSRC = $(_TOOLSRC)'
+	@echo '----------------------------------------'
+	@echo 'ARCH = $(ARCH)'
 	@echo 'DEBUG = $(DEBUG)'
 	@echo '----------------------------------------'
-	@echo 'DEFINES = $(DEFINES)'
-	@echo 'WARNINGS = $(WARNINGS)'
-	@echo 'ASFLAGS = $(ASFLAGS)'
-	@echo 'CFLAGS = $(CFLAGS)'
-	@echo 'CXXFLAGS = $(CXXFLAGS)'
-	@echo 'LDFLAGS = $(LDFLAGS)'
+	@echo 'TREE = $(TREE)'
+	@echo 'DIRS = $(DIRS)'
+	@echo 'BIN_PATH = $(BIN_PATH)'
+	@echo 'OBJ_PATH = $(OBJ_PATH)'
+	@echo 'TARGET = $(TARGET)'
+	@echo 'TARGET_ELF = $(TARGET_ELF)'
+	@echo '----------------------------------------'
+	@echo 'C_FLAGS = $(C_FLAGS)'
+	@echo 'C_DEFINES = $(C_DEFINES)'
+	@echo 'C_WARNINGS = $(C_WARNINGS)'
+	@echo 'AS_FLAGS = $(AS_FLAGS)'
+	@echo 'AS_DEFINES = $(AS_DEFINES)'
+	@echo 'AS_WARNINGS = $(AS_WARNINGS)'
+	@echo 'LD_FLAGS = $(LD_FLAGS)'
+	@echo 'LD_WARNINGS = $(LD_WARNINGS)'
+	@echo 'OBJCOPY_FLAGS = $(OBJCOPY_FLAGS)'
 	@echo 'MAKEFLAGS = $(MAKEFLAGS)'
 	@echo '----------------------------------------'
-	@echo 'AS = $(AS)'
 	@echo 'CC = $(CC)'
+	@echo 'AS = $(AS)'
 	@echo 'LD = $(LD)'
+	@echo 'OBJCOPY = $(OBJCOPY)'
 	@echo 'MAKE = $(MAKE)'
 	@echo 'MKDIR = $(MKDIR)'
-	@echo 'OBJCOPY = $(OBJCOPY)'
 	@echo 'RM = $(RM)'
-	@echo 'TREE = $(TREE)'
 	@echo '----------------------------------------'
-	@echo 'CURDIR = $(CURDIR)'
-	@echo 'BINDIR = $(BINDIR)'
-	@echo 'OBJDIR = $(OBJDIR)'
-	@echo 'BIN = $(BIN)'
+	@echo 'CC_ARGS = $(CC_ARGS)'
+	@echo 'AS_ARGS = $(AS_ARGS)'
+	@echo 'LD_ARGS = $(LD_ARGS)'
+	@echo '----------------------------------------'
 	@echo 'INC = $(INC)'
 	@echo 'SRC = $(SRC)'
 	@echo 'OBJ = $(OBJ)'
 	@echo 'DEP = $(DEP)'
-
-ARGS_AS  = $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INC)) $(addprefix -W,$(WARNINGS)) $(ASFLAGS)
-ARGS_CC  = $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INC)) $(addprefix -W,$(WARNINGS)) $(CFLAGS)
-ARGS_CXX = $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INC)) $(addprefix -W,$(WARNINGS)) $(CXXFLAGS)
-
-# Create object files from x86 ASM source.
-$(OBJDIR)/%.o: %.S
-	@echo 'AS      $(ARGS_AS) $(TREE)/$<'
-	@$(AS)         $(ARGS_AS) -MD -MF $(@:.o=.d) -c -o $@ $<
-
-# Create object files from C source.
-$(OBJDIR)/%.o: %.c
-	@echo 'CC      $(ARGS_CC) $(TREE)/$<'
-	@$(CC)         $(ARGS_CC) -MD -MF $(@:.o=.d) -c -o $@ $<
-
-# Create object files from C++ source.
-$(OBJDIR)/%.o: %.cpp
-	@echo 'CXX     $(ARGS_CXX) $(TREE)/$<'
-	@$(CXX)        $(ARGS_CXX) -MD -MF $(@:.o=.d) -c -o $@ $<
-
-# Create ELF executable files from object files.
-$(BINDIR)/%.elf: $(OBJ)
-	@echo 'LD      $(LDFLAGS) $^'
-	@$(LD)         $(LDFLAGS) -o $@ $^
-
-# Create raw binary files from ELF executables.
-$(BINDIR)/%.bin: $(BINDIR)/%.elf
-	@echo 'OBJCOPY -O binary $< $@'
-	@$(OBJCOPY)    -O binary $< $@
-
-# Create raw binary files from ELF executables (system driver files)
-$(BINDIR)/%.sys: $(BINDIR)/%.elf
-	@echo 'OBJCOPY -O binary $< $@'
-	@$(OBJCOPY)    -O binary $< $@
 
 # Include dependency rules
 -include $(DEP)
