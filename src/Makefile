@@ -1,3 +1,3 @@
-DIRS = boot
+DIRS = tools boot
 
 include $(_MAKEGOD)
