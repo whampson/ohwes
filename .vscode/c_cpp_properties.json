@@ -1,7 +1,7 @@
 {
     "configurations": [
         {
-            "name": "OHWES",
+            "name": "Niobium",
             "includePath": [
                 "${workspaceFolder}/src/include/*"
             ],
@@ -17,14 +17,14 @@
             ]
         },
         {
-            "name": "OHWES Tools (MinGW)",
+            "name": "Niobium Tools (MinGW)",
             "includePath": [
                 "${workspaceFolder}/**"
             ],
             "defines": [
                 "_DEBUG"
             ],
-            "compilerPath": "C:/msys64/mingw32/bin/gcc.exe",
+            "compilerPath": "C:/msys64/mingw32/bin/g++.exe",
             "cStandard": "c11",
             "cppStandard": "c++11",
             "intelliSenseMode": "gcc-x86"
