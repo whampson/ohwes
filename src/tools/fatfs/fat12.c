@@ -1,0 +1,71 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include "fat12.h"
+
+#define OEM_NAME    "fatfs   "
+#define FS_TYPE     "FAT12   "
+#define LABEL       "NO NAME    "
+
+void InitBPB(BiosParamBlock *bpb)
+{
+    bpb->MediaType = MEDIA_TYPE_1440K;
+    bpb->SectorSize = 512;
+    bpb->SectorCount = 2880;
+    bpb->ReservedSectorCount = 1;
+    bpb->HiddenSectorCount = 0;
+    bpb->LargeSectorCount = 0;  
+    bpb->SectorsPerCluster = 1;
+    bpb->SectorsPerTable = 9;
+    bpb->SectorsPerTrack = 18;
+    bpb->TableCount = 2;
+    bpb->MaxRootDirEntryCount = 224;
+    bpb->HeadCount = 2;
+    bpb->DriveNumber = 0;
+    bpb->_Reserved = 0;
+    bpb->ExtendedBootSignature = EXT_BOOT_SIG;
+    bpb->VolumeId = time(NULL);
+    strcpy(bpb->Label, LABEL);
+    strcpy(bpb->FileSystemType, FS_TYPE);
+}
+
+void InitBootSector(BootSector *bootsect)
+{
+    static const char BootCode[] =
+    {
+    /* boot_code:  pushw   %cs          */  "\x0E"
+    /*             popw    %ds          */  "\x1F"
+    /*             leaw    message, %si */  "\x8D\x36\x1C\x00"
+    /* print_loop: movb    $0x0e, %ah   */  "\xB4\x0E"
+    /*             movw    $0x07, %bx   */  "\xBB\x07\x00"
+    /*             lodsb                */  "\xAC"
+    /*             andb    %al, %al     */  "\x20\xC0"
+    /*             jz      key_press    */  "\x74\x04"
+    /*             int     $0x10        */  "\xCD\x10"
+    /*             jmp     print_loop   */  "\xEB\xF2"
+    /* key_press:  xorb    %ah, %ah     */  "\x30\xE4"
+    /*             int     $0x16        */  "\xCD\x16"
+    /*             int     $0x19        */  "\xCD\x19"
+    /* halt:       jmp     halt         */  "\xEB\xFE"
+    /* message:    .ascii               */  "\r\nThis disk is not bootable!"
+    /*             .asciz               */  "\r\nInsert a bootable disk and press any key to try again..."
+    };
+
+    static const char JumpCode[] =
+    {
+    /* entry:       jmp     boot_code   */  '\xEB', '\x3C',
+    /*              nop                 */  '\x90'
+    };
+
+    static_assert(sizeof(BootCode) <= sizeof(BootCode));
+    static_assert(sizeof(JumpCode) <= sizeof(bootsect->JumpCode));
+
+    memcpy(bootsect->BootCode, BootCode, sizeof(BootCode));
+    memcpy(bootsect->JumpCode, JumpCode, sizeof(JumpCode));
+    strcpy(bootsect->OemName, OEM_NAME);
+
+    bootsect->Signature = BOOT_ID;
+
+    InitBPB(&bootsect->BiosParams);
+}

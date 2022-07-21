@@ -12,6 +12,8 @@
 # _MAKEGOD is an environment variable that contains the path to this file.
 #===============================================================================
 
+# !!! TODO: header file change detection appears to be broken
+
 ifndef _MAKEGOD
   $(error "Please source src/scripts/env.sh before invoking this Makefile.")
 endif
@@ -96,7 +98,7 @@ ifdef __SRC_CPP
   OBJ                   += $(addprefix $(OBJ_PATH)/,$(__SRC_CPP:.cpp=.o))
 endif
 
-DEP                     = $(OBJ:%.o=%.d)
+DEP                     = $(OBJ:.o=.d)
 
 # ------------------------------------------------------------------------------
 # Defines, flags, and warnings
@@ -146,6 +148,7 @@ endif
 # Rules
 
 .PHONY: all clean nuke dirs debug-make $(DIRS)
+.DEFAULT_GOAL: all
 
 ifdef NO_ELF
   .INTERMEDIATE: $(TARGET_ELF)

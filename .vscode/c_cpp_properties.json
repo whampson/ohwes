@@ -27,7 +27,14 @@
             "compilerPath": "C:/msys64/mingw32/bin/g++.exe",
             "cStandard": "c11",
             "cppStandard": "c++11",
-            "intelliSenseMode": "gcc-x86"
+            "intelliSenseMode": "gcc-x86",
+            "compilerArgs": [
+                "-Wall",
+                "-Werror",
+                "-Wextra",
+                "-Wpedantic",
+                "-fshort-enums"
+            ]
         }
     ],
     "version": 4
