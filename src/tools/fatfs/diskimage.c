@@ -1,9 +1,13 @@
 #include "diskimage.h"
+#include "fatfs.h"
 #include "fat12.h"
 
 static BootSector g_BootSect;
 static uint16_t *g_pClusterMap = NULL;
 static DirectoryEntry *g_pRootDir = NULL;
+static char g_FilePath[MAX_PATH];
+
+static int GetClusterOffset(int clusterNum);
 
 bool OpenImage(const char *path)
 {
@@ -23,38 +27,6 @@ bool OpenImage(const char *path)
         LogError("could not read boot sector\n");
         success = false;
         goto Cleanup;
-    }
-
-    {
-        const BiosParamBlock *bpb = &g_BootSect.BiosParams;
-
-        printf("BOOT SECTOR\n");
-        if (bpb->ExtendedBootSignature == EXT_BOOT_SIG)
-        {
-            printf("  File System               = %.8s\n", bpb->FileSystemType);
-            printf("  Volume Label              = %.11s\n", bpb->Label);
-            printf("  Volume ID                 = 0x%x\n", bpb->VolumeId);
-        }
-        else if (bpb->ExtendedBootSignature == EXT_BOOT_SIG_2)
-        {
-            printf("  Volume ID                 = 0x%x\n", bpb->VolumeId);
-        }
-        printf("  OEM Name                  = %.8s\n", g_BootSect.OemName);
-        printf("  Disk Size                 = %d\n", bpb->SectorSize * bpb->SectorCount);
-        printf("  Cluster Size              = %d\n", bpb->SectorSize * bpb->SectorsPerCluster);
-        printf("  Sector Size               = %d\n", bpb->SectorSize);
-        printf("  Sector Count              = %d\n", bpb->SectorCount);
-        printf("  Media Type                = 0x%x\n", bpb->MediaType);
-        printf("  Head Count                = %d\n", bpb->HeadCount);
-        printf("  Sectors per Track         = %d\n", bpb->SectorsPerTrack);
-        printf("  Drive Number              = %d\n", bpb->DriveNumber);
-        printf("  Reserved Sector Count     = %d\n", bpb->ReservedSectorCount);
-        printf("  Hidden Sector Count       = %d\n", bpb->HiddenSectorCount);
-        printf("  Large Sector Count        = %d\n", bpb->LargeSectorCount);
-        printf("  FAT Count                 = %d\n", bpb->TableCount);
-        printf("  Sectors per FAT           = %d\n", bpb->SectorsPerTable);
-        printf("  Root Dir Capacity         = %d\n", bpb->MaxRootDirEntryCount);
-        printf("  Ext. Boot Signature       = 0x%x\n", bpb->ExtendedBootSignature);
     }
 
     int sectorSize = g_BootSect.BiosParams.SectorSize;
@@ -98,19 +70,6 @@ bool OpenImage(const char *path)
     // // TODO: error detection/correction?
     fseek(fp, sectorSize * fatSectors * (numFats - 1), SEEK_CUR);
 
-    {
-        printf("PARTIAL CLUSTER MAP\n  ");
-        for (int i = 0; i < 128; i++)
-        {
-            if (i != 0 && (i % 8) == 0)
-            {
-                printf("\n  ");
-            }
-            printf("0x%03x ", g_pClusterMap[i]);
-        }
-        printf("\n");
-    }
-
     int numDirEntries = g_BootSect.BiosParams.MaxRootDirEntryCount;
     size_t size = numDirEntries * sizeof(DirectoryEntry);
 
@@ -130,54 +89,137 @@ bool OpenImage(const char *path)
         goto Cleanup;
     }
 
+    if (success)
     {
-        printf("INDEX OF /\n");
-        for (int i = 0; i < g_BootSect.BiosParams.MaxRootDirEntryCount; i++)
-        {
-            const DirectoryEntry *e = &g_pRootDir[i];
-            unsigned char c = e->Name[0];
-            char nameBuf[12] = { 0 };
-
-            switch (c)
-            {
-                case 0x00:
-                    // empty slot
-                    continue;
-                case 0xE5:
-                    printf("  (deleted)\n");
-                    continue;
-                case 0x2E:
-                    printf("  (dot)\n");
-                    continue;
-            }
-
-            int n = 0;
-            for (int k = 0; k < NAME_LENGTH + EXTENSION_LENGTH; k++)
-            {
-                c = e->Name[k];
-                if (c == ' ') continue;
-
-                if (k == NAME_LENGTH)
-                {
-                    nameBuf[n] = '.';
-                    n++;
-                }
-                nameBuf[n] = c;
-                n++;
-            }
-            assert(n <= 12);
-
-            printf("  %s\n", nameBuf);
-        }
+        strncpy(g_FilePath, path, MAX_PATH);
     }
 
 Cleanup:
     fclose(fp);
-    return success;    
+    return success;
 }
 
 void CloseImage()
 {
     SafeFree(g_pRootDir);
     SafeFree(g_pClusterMap);
+}
+
+
+const DirectoryEntry * FindFile(const char *path)
+{
+    char realPath[MAX_PATH];
+    char *fileName;
+    strncpy(realPath, path, MAX_PATH);
+
+    Uppercase(realPath);
+    fileName = realPath;
+
+    // TODO: walk path
+
+    bool found = false;
+
+    int index = 0;
+    int count = g_BootSect.BiosParams.MaxRootDirEntryCount;
+
+    const char *const Delimiter = ".";
+
+    char reqName[NAME_LENGTH + 1] = { 0 };
+    char reqExt[EXTENSION_LENGTH + 1] = { 0 };
+
+    char name[NAME_LENGTH + 1] = { 0 };
+    char ext[EXTENSION_LENGTH + 1] = { 0 };
+
+    char *tok = strtok(fileName, Delimiter);
+    if (tok != NULL)
+    {
+        strcpy(reqName, tok);
+    }
+
+    tok = strtok(NULL, Delimiter);
+    if (tok != NULL)
+    {
+        strcpy(reqExt, tok);
+    }
+
+    while (!found && index < count)
+    {
+        const DirectoryEntry *e = &g_pRootDir[index++];
+        strncpy(name, e->Name, NAME_LENGTH);
+        strncpy(ext, e->Extension, EXTENSION_LENGTH);
+
+        int nameEnd = -1;
+        int extEnd = -1;
+        for (int i = 0; i < NAME_LENGTH; i++)
+        {
+            if (nameEnd == -1 && name[i] == ' ')
+            {
+                nameEnd = i;
+                name[i] = '\0';
+            }
+
+            if (i < EXTENSION_LENGTH && extEnd == -1 && ext[i] == ' ')
+            {
+                extEnd = i;
+                ext[i] = '\0';
+
+            }
+        }
+
+        bool nameMatch = strcmp(name, reqName) == 0;
+        bool extMatch = strcmp(ext, reqExt) == 0;
+        if (nameMatch && extMatch)
+        {
+            return e;
+        }
+    }
+
+    return NULL;
+}
+
+bool ReadFile(const DirectoryEntry *entry, char *buf)
+{
+    const BiosParamBlock *bpb = &g_BootSect.BiosParams;
+
+    int nextCluster = entry->FirstCluster;
+
+    FILE *fp = fopen(g_FilePath, "rb");
+    if (!fp)
+    {
+        LogError("unable to read disk image\n");
+        return 2;
+    }
+
+    int bytesRead = 0;
+    int offset;
+
+    do
+    {
+        offset = GetClusterOffset(entry->FirstCluster);
+        fseek(fp, offset, SEEK_SET);
+
+        bytesRead += fread(buf, 1, bpb->SectorSize, fp);
+        nextCluster = g_pClusterMap[nextCluster];
+    } while (nextCluster != CLUSTER_END);
+
+    fclose(fp);
+
+    return bytesRead;
+}
+
+void PrintDiskInfo()
+{
+    printf("TODO\n");
+}
+
+static int GetClusterOffset(int clusterNum)
+{
+    const BiosParamBlock *bpb = &g_BootSect.BiosParams;
+
+    const int FirstClusterOffset =
+        (bpb->ReservedSectorCount + (bpb->TableCount * bpb->SectorsPerTable))
+        * bpb->SectorSize
+        + (bpb->MaxRootDirEntryCount * sizeof(DirectoryEntry));
+
+    return FirstClusterOffset + ((clusterNum - 2) * bpb->SectorSize);
 }
