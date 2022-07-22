@@ -1,7 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
 #include "fat12.h"
 
 #define OEM_NAME    "fatfs   "

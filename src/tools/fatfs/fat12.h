@@ -1,7 +1,6 @@
 #ifndef __FAT12_H
 #define __FAT12_H
 
-#include <inttypes.h>
 #include "fatfs.h"
 
 /**
@@ -54,6 +53,8 @@
 
 #define CLUSTER_FREE                0x0FF
 #define CLUSTER_RESERVED            0x001
+#define CLUSTER_FIRST               0x002
+#define CLUSTER_LAST                0xFEF
 #define CLUSTER_BAD                 0xFF7
 #define CLUSTER_END                 0xFFF
 
@@ -142,7 +143,6 @@ typedef struct _DirectoryEntry
 
 void InitBPB(BiosParamBlock *bpb);
 void InitBootSector(BootSector *bootsect);
-void PrintBootSector(const BootSector *bootsect);
 
 static_assert(sizeof(BiosParamBlock) == 51);
 static_assert(sizeof(BootSector) == 512);

@@ -19,7 +19,6 @@
         {
             "name": "Niobium Tools (MinGW)",
             "includePath": [
-                "${workspaceFolder}/**"
             ],
             "defines": [
                 "_DEBUG"
