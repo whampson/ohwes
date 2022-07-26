@@ -2,6 +2,11 @@
 A toy operating system that'll probably never get finished.
 
 ## Building
+### OSX
+`brew install binutils`
+`brew install coreutils`
+
+
 **TODO: installing msys2 (Windows) and acquiring the i686-elf-tools**
 
 **NbOS** uses GNU Make for building all source and external tools.
