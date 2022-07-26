@@ -39,4 +39,6 @@ static inline void Uppercase(char *s)
     }
 }
 
+void Usage(void);
+
 #endif // __FATFS_H
