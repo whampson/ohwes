@@ -103,7 +103,7 @@ DEP                     = $(OBJ:.o=.d)
 # ------------------------------------------------------------------------------
 # Defines, flags, and warnings
 
-export C_FLAGS          =
+export C_FLAGS          = -std=c11
 export C_DEFINES        =
 export C_WARNINGS       = all extra pedantic error
 export CXX_FLAGS        =
