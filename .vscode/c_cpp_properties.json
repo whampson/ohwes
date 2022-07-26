@@ -23,7 +23,26 @@
             "defines": [
                 "_DEBUG"
             ],
-            "compilerPath": "C:/msys64/mingw32/bin/g++.exe",
+            "compilerPath": "C:/msys64/mingw32/bin/gcc.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "intelliSenseMode": "gcc-x86",
+            "compilerArgs": [
+                "-Wall",
+                "-Werror",
+                "-Wextra",
+                "-Wpedantic",
+                "-fshort-enums"
+            ]
+        },
+        {
+            "name": "Niobium Tools (macOS)",
+            "includePath": [
+            ],
+            "defines": [
+                "_DEBUG"
+            ],
+            "compilerPath": "/usr/bin/gcc",
             "cStandard": "c11",
             "cppStandard": "c++11",
             "intelliSenseMode": "gcc-x86",
