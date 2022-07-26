@@ -1,7 +1,5 @@
 #include "diskimage.h"
 
-#define PROG_NAME   "fatfs"
-
 void Usage(void)
 {
     printf("Usage: %s <image_file> <command> [args]\n", PROG_NAME);

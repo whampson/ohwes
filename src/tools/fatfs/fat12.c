@@ -11,7 +11,7 @@ void InitBPB(BiosParamBlock *bpb)
     bpb->SectorCount = 2880;
     bpb->ReservedSectorCount = 1;
     bpb->HiddenSectorCount = 0;
-    bpb->LargeSectorCount = 0;  
+    bpb->LargeSectorCount = 0;
     bpb->SectorsPerCluster = 1;
     bpb->SectorsPerTable = 9;
     bpb->SectorsPerTrack = 18;
@@ -54,8 +54,8 @@ void InitBootSector(BootSector *bootsect)
     /*              nop                 */  '\x90'
     };
 
-    static_assert(sizeof(BootCode) <= sizeof(BootCode));
-    static_assert(sizeof(JumpCode) <= sizeof(bootsect->JumpCode));
+    static_assert(sizeof(BootCode) <= sizeof(BootCode), "BootCode is too large!");
+    static_assert(sizeof(JumpCode) <= sizeof(bootsect->JumpCode), "JumpCode is too large!");
 
     memcpy(bootsect->BootCode, BootCode, sizeof(BootCode));
     memcpy(bootsect->JumpCode, JumpCode, sizeof(JumpCode));

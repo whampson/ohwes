@@ -113,7 +113,7 @@ typedef struct _FatTime
     uint16_t Hours     : 5;     // 0-23
 } FatTime;
 
-typedef enum __attribute__ ((packed)) _FileAttrs 
+typedef enum __attribute__ ((packed)) _FileAttrs
 {
     ATTR_READONLY   = 1 << 0,
     ATTR_HIDDEN     = 1 << 1,
@@ -144,29 +144,29 @@ typedef struct _DirectoryEntry
 void InitBPB(BiosParamBlock *bpb);
 void InitBootSector(BootSector *bootsect);
 
-static_assert(sizeof(BiosParamBlock) == 51);
-static_assert(sizeof(BootSector) == 512);
-static_assert(sizeof(FatDate) == 2);
-static_assert(sizeof(FatTime) == 2);
-static_assert(sizeof(DirectoryEntry) == 32);
+static_assert(sizeof(BiosParamBlock) == 51, "Bad BiosParamBlock size!");
+static_assert(sizeof(BootSector) == 512, "Bad BootSector size!");
+static_assert(sizeof(FatDate) == 2, "Bad FatDate size!");
+static_assert(sizeof(FatTime) == 2, "Bad FatTime size!");
+static_assert(sizeof(DirectoryEntry) == 32, "Bad DirectoryEntry size!");
 
-static_assert(offsetof(BiosParamBlock, SectorSize) == 0x00);
-static_assert(offsetof(BiosParamBlock, SectorsPerCluster) == 0x02);
-static_assert(offsetof(BiosParamBlock, ReservedSectorCount) == 0x03);
-static_assert(offsetof(BiosParamBlock, TableCount) == 0x05);
-static_assert(offsetof(BiosParamBlock, MaxRootDirEntryCount) == 0x06);
-static_assert(offsetof(BiosParamBlock, SectorCount) == 0x08);
-static_assert(offsetof(BiosParamBlock, MediaType) == 0x0A);
-static_assert(offsetof(BiosParamBlock, SectorsPerTable) == 0x0B);
-static_assert(offsetof(BiosParamBlock, SectorsPerTrack) == 0x0D);
-static_assert(offsetof(BiosParamBlock, HeadCount) == 0x0F);
-static_assert(offsetof(BiosParamBlock, HiddenSectorCount) == 0x11);
-static_assert(offsetof(BiosParamBlock, LargeSectorCount) == 0x15);
-static_assert(offsetof(BiosParamBlock, DriveNumber) == 0x19);
-static_assert(offsetof(BiosParamBlock, _Reserved) == 0x1A);
-static_assert(offsetof(BiosParamBlock, ExtendedBootSignature) == 0x1B);
-static_assert(offsetof(BiosParamBlock, VolumeId) == 0x1C);
-static_assert(offsetof(BiosParamBlock, Label) == 0x20);
-static_assert(offsetof(BiosParamBlock, FileSystemType) == 0x2B);
+static_assert(offsetof(BiosParamBlock, SectorSize) == 0x00, "Bad SectorSize offset!");
+static_assert(offsetof(BiosParamBlock, SectorsPerCluster) == 0x02, "Bad SectorsPerCluster offset!");
+static_assert(offsetof(BiosParamBlock, ReservedSectorCount) == 0x03, "Bad ReservedSectorCount offset!");
+static_assert(offsetof(BiosParamBlock, TableCount) == 0x05, "Bad TableCount offset!");
+static_assert(offsetof(BiosParamBlock, MaxRootDirEntryCount) == 0x06, "Bad MaxRootDirEntryCount offset!");
+static_assert(offsetof(BiosParamBlock, SectorCount) == 0x08, "Bad SectorCount offset!");
+static_assert(offsetof(BiosParamBlock, MediaType) == 0x0A, "Bad MediaType offset!");
+static_assert(offsetof(BiosParamBlock, SectorsPerTable) == 0x0B, "Bad SectorsPerTable offset!");
+static_assert(offsetof(BiosParamBlock, SectorsPerTrack) == 0x0D, "Bad SectorsPerTrack offset!");
+static_assert(offsetof(BiosParamBlock, HeadCount) == 0x0F, "Bad HeadCount offset!");
+static_assert(offsetof(BiosParamBlock, HiddenSectorCount) == 0x11, "Bad HiddenSectorCount offset!");
+static_assert(offsetof(BiosParamBlock, LargeSectorCount) == 0x15, "Bad LargeSectorCount offset!");
+static_assert(offsetof(BiosParamBlock, DriveNumber) == 0x19, "Bad DriveNumber offset!");
+static_assert(offsetof(BiosParamBlock, _Reserved) == 0x1A, "Bad _Reserved offset!");
+static_assert(offsetof(BiosParamBlock, ExtendedBootSignature) == 0x1B, "Bad ExtendedBootSignature offset!");
+static_assert(offsetof(BiosParamBlock, VolumeId) == 0x1C, "Bad VolumeId offset!");
+static_assert(offsetof(BiosParamBlock, Label) == 0x20, "Bad Label offset!");
+static_assert(offsetof(BiosParamBlock, FileSystemType) == 0x2B, "Bad FileSystemType offset!");
 
 #endif // __FAT12_H

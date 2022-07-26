@@ -5,26 +5,28 @@
 #include <inttypes.h>
 #include <ctype.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
 #define MAX_PATH    512
+#define PROG_NAME   "fatfs"
 
-#define LogInfo(...)                                                        \
-do {                                                                        \
-    fprintf(stdout, "fatfs: " __VA_ARGS__);                                 \
+#define LogInfo(...)                                                            \
+do {                                                                            \
+    fprintf(stdout, PROG_NAME ": " __VA_ARGS__);                                \
 } while (0)
 
-#define LogWarning(...)                                                     \
-do {                                                                        \
-    fprintf(stderr, "fatfs: warning: " __VA_ARGS__);                        \
+#define LogWarning(...)                                                         \
+do {                                                                            \
+    fprintf(stderr, PROG_NAME ": warning: " __VA_ARGS__);                       \
 } while (0)
 
-#define LogError(...)                                                       \
-do {                                                                        \
-    fprintf(stderr, "fatfs: error: " __VA_ARGS__);                          \
+#define LogError(...)                                                           \
+do {                                                                            \
+    fprintf(stderr, PROG_NAME ": error: " __VA_ARGS__);                         \
 } while (0)
 
 #define SafeFree(ptr)  if (ptr) { free(ptr); (ptr) = NULL; }
