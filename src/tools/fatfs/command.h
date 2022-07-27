@@ -12,9 +12,9 @@ typedef struct _Command
     int (*CommandFunc)(int argc, const char **argv);
 } Command;
 
-extern const Command g_Commands[];
+const Command * GetCommands(void);
+int GetCommandCount(void);
 
 const Command * FindCommand(const char *name);
-int GetCommandCount(void);
 
 #endif // __COMMAND_H

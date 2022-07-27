@@ -1,8 +1,6 @@
 #include "fat12.h"
 
-#define OEM_NAME    "fatfs   "
-#define FS_TYPE     "FAT12   "
-#define LABEL       "NO NAME    "
+static void GetString(char *dst, const char *src, int count);
 
 void InitBPB(BiosParamBlock *bpb)
 {
@@ -20,7 +18,7 @@ void InitBPB(BiosParamBlock *bpb)
     bpb->HeadCount = 2;
     bpb->DriveNumber = 0;
     bpb->_Reserved = 0;
-    bpb->ExtendedBootSignature = EXT_BOOT_SIG;
+    bpb->ExtendedBootSignature = 0x29;
     bpb->VolumeId = time(NULL);
     strcpy(bpb->Label, LABEL);
     strcpy(bpb->FileSystemType, FS_TYPE);
@@ -64,4 +62,33 @@ void InitBootSector(BootSector *bootsect)
     bootsect->Signature = BOOT_ID;
 
     InitBPB(&bootsect->BiosParams);
+}
+
+void GetLabel(char *dst, const char *src)
+{
+    GetString(dst, src, LABEL_LENGTH);
+}
+
+void GetName(char *dst, const char *src)
+{
+    GetString(dst, src, NAME_LENGTH);
+}
+
+void GetExt(char *dst, const char *src)
+{
+    GetString(dst, src, EXTENSION_LENGTH);
+}
+
+static void GetString(char *dst, const char *src, int count)
+{
+    int i;
+    for (i = 0; i < count; i++)
+    {
+        if (src[i] == ' ' || src[i] == '\0')
+        {
+            break;
+        }
+        dst[i] = src[i];
+    }
+    dst[i] = '\0';
 }

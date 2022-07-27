@@ -39,24 +39,16 @@
  */
 #define BOOT_SECTOR_SIZE            512
 
-/**
- * The most common extended boot signature, indicating that the Volume ID,
- * Volume Label, and File System Type fields exist following.
- */
-#define EXT_BOOT_SIG                0x29
-
-/**
- * A less common extended boot signature, indicating that only the Volume ID
- * follows.
- */
-#define EXT_BOOT_SIG_2              0x28
-
 #define CLUSTER_FREE                0x0FF
 #define CLUSTER_RESERVED            0x001
 #define CLUSTER_FIRST               0x002
 #define CLUSTER_LAST                0xFEF
 #define CLUSTER_BAD                 0xFF7
 #define CLUSTER_END                 0xFFF
+
+#define OEM_NAME                    "fatfs   "
+#define FS_TYPE                     "FAT12   "
+#define LABEL                       "NO NAME    "
 
 /**
  * FAT12 BIOS Parameter Block
@@ -87,7 +79,7 @@ typedef struct __attribute__ ((packed)) _BiosParamBlock
 } BiosParamBlock;
 
 /**
- * FAT12 bootsector.
+ * FAT12 boot sector.
  * Contains the initial boot code and volume information.
  */
 typedef struct _BootSector
@@ -143,6 +135,10 @@ typedef struct _DirectoryEntry
 
 void InitBPB(BiosParamBlock *bpb);
 void InitBootSector(BootSector *bootsect);
+
+void GetLabel(char *dst, const char *src);
+void GetName(char *dst, const char *src);
+void GetExt(char *dst, const char *src);
 
 static_assert(sizeof(BiosParamBlock) == 51, "Bad BiosParamBlock size!");
 static_assert(sizeof(BootSector) == 512, "Bad BootSector size!");

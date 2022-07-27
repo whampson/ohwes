@@ -1,15 +1,11 @@
 #include "command.h"
-#include "diskimage.h"
+#include "image.h"
 
-#define STATUS_SUCCESS      0
-#define STATUS_INVALIDARG   1
-#define STATUS_ERROR        2
-
+const char *s_pImagePath = NULL;
 static int s_CommandArgc = 0;
-static const char **s_CommandArgv = NULL;
-static const char *s_CommandName = NULL;
+static const char **s_ppCommandArgv = NULL;
+static const char *s_pCommandName = NULL;
 static bool s_PrintUsage = false;
-static const char *s_ImagePath = NULL;
 
 static bool ParseCommandLine(int argc, const char **argv);
 
@@ -24,8 +20,10 @@ void Usage(void)
     printf("  --help        Print this help menu and exit.\n");
     printf("\n");
     printf("Commands:\n");
+
+    const Command *cmds = GetCommands();
     for (int i = 0; i < GetCommandCount(); i++)
-        printf("  %s          %s\n", g_Commands[i].Name, g_Commands[i].Desc);
+        printf("  %s          %s\n", cmds[i].Name, cmds[i].Desc);
 }
 
 int main(int argc, const char **argv)
@@ -40,15 +38,26 @@ int main(int argc, const char **argv)
         return STATUS_SUCCESS;
     }
 
-    const Command *cmd = FindCommand(s_CommandName);
+    if (s_pImagePath != NULL)
+    {
+        OpenImage(s_pImagePath);
+    }
+
+    const Command *cmd = FindCommand(s_pCommandName);
     if (!cmd)
     {
-        LogError("invalid command - %s\n", s_CommandName);
+        LogError("invalid command - %s\n", s_pCommandName);
         return STATUS_ERROR;
     }
 
-    cmd->CommandFunc(s_CommandArgc, s_CommandArgv);
-    return STATUS_SUCCESS;
+    int retval = cmd->CommandFunc(s_CommandArgc, s_ppCommandArgv);
+
+    if (IsImageOpen())
+    {
+        CloseImage();
+    }
+
+    return retval;
 }
 
 static bool ParseCommandLine(int argc, const char **argv)
@@ -75,7 +84,7 @@ static bool ParseCommandLine(int argc, const char **argv)
     i = 0;
     while (argc > ++i)
     {
-        if (s_CommandName)
+        if (s_pCommandName)
         {
             // Stop processing once we've determined the command to execute.
             // Everything after command name are command arguments.
@@ -85,11 +94,11 @@ static bool ParseCommandLine(int argc, const char **argv)
         switch (argv[i][0])
         {
             default:
-                if (!s_CommandName)
+                if (!s_pCommandName)
                 {
-                    s_CommandName = argv[i];
+                    s_pCommandName = argv[i];
                     s_CommandArgc = argc - i - 1;
-                    s_CommandArgv = &argv[i + 1];
+                    s_ppCommandArgv = &argv[i + 1];
                 }
                 break;
             case '-':
@@ -117,7 +126,7 @@ static bool ParseCommandLine(int argc, const char **argv)
                             break;
                         case 'i':
                             GET_OPTARG('i');
-                            s_ImagePath = optarg;
+                            s_pImagePath = optarg;
                             break;
                     }
                 }
@@ -125,7 +134,7 @@ static bool ParseCommandLine(int argc, const char **argv)
         }
     }
 
-    if (!s_CommandName)
+    if (!s_pCommandName)
     {
         LogError("missing command\n");
         return false;
