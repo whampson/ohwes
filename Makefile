@@ -51,6 +51,7 @@ export LD               := $(BINUTILS_PREFIX)ld
 export OBJCOPY          := $(BINUTILS_PREFIX)objcopy
 export MKDIR            := mkdir -p
 export RM               := rm -f
+export COPY             := cp -f
 
 # ------------------------------------------------------------------------------
 # Directories
@@ -122,6 +123,9 @@ ifdef DEBUG
   C_DEFINES             += DEBUG
   CXX_DEFINES           += DEBUG
   AS_DEFINES            += DEBUG
+
+  C_FLAGS               += -g
+  CXX_FLAGS             += -g
 endif
 
 ifdef ENTRY_POINT
@@ -173,8 +177,13 @@ $(DIRS):
 	@$(MAKE) -C $@
 
 $(TARGET): %: $(TARGET_ELF) $(OBJ)
+ifndef NO_OBJCOPY
 	@echo 'OBJCOPY $(OBJCOPY_ARGS) $< $@'
 	@$(OBJCOPY)    $(OBJCOPY_ARGS) $< $@
+else
+	@echo 'COPY    $< $@'
+	@$(COPY)       $< $@
+endif
 
 $(TARGET_ELF): $(OBJ)
 	@$(MKDIR)      $(dir $(TARGET))
@@ -241,6 +250,7 @@ debug-make:
 	@echo 'MAKE = $(MAKE)'
 	@echo 'MKDIR = $(MKDIR)'
 	@echo 'RM = $(RM)'
+	@echo 'COPY = $(COPY)'
 	@echo '----------------------------------------'
 	@echo 'AS_ARGS = $(AS_ARGS)'
 	@echo 'CC_ARGS = $(CC_ARGS)'

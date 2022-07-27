@@ -1,9 +1,17 @@
 TARGET = $(BIN_PATH)/fatfs
-NO_ELF = 1
+NO_OBJCOPY = 1
 
 include $(_TOOLGOD)
 
 CC = gcc
 LD = gcc
-OBJCOPY = objcopy
-OBJCOPY_FLAGS =
+
+# macOS only
+C_FLAGS += -fsanitize=address
+LD_FLAGS += -fsanitize=address
+
+C_WARNINGS += \
+	no-unused-function \
+	no-unused-parameter \
+	no-unused-variable \
+	no-gnu-statement-expression \
