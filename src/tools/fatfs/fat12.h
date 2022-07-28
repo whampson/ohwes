@@ -122,7 +122,7 @@ typedef struct _DirectoryEntry
     char Extension[EXTENSION_LENGTH];
     FileAttrs Attributes;
     uint8_t _Reserved1;     // varies by system, do not use
-    uint8_t _Reserved2;     // TODO: fine creation time
+    uint8_t _Reserved2;     // TODO: fine creation time, 10ms increments, 0-199
     FatTime CreationTime;
     FatDate CreationDate;
     FatDate LastAccessDate;
@@ -139,6 +139,12 @@ void InitBootSector(BootSector *bootsect);
 void GetLabel(char *dst, const char *src);
 void GetName(char *dst, const char *src);
 void GetExt(char *dst, const char *src);
+
+#define DATE_LENGTH 19      // September 31, 1990
+#define TIME_LENGTH 12      // 12:34:56 PM
+
+void GetDate(char *dst, const FatDate *date);
+void GetTime(char *dst, const FatTime *time);
 
 static_assert(sizeof(BiosParamBlock) == 51, "Bad BiosParamBlock size!");
 static_assert(sizeof(BootSector) == 512, "Bad BootSector size!");

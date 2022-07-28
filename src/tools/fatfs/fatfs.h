@@ -1,5 +1,5 @@
-#ifndef __FATFS_H
-#define __FATFS_H
+#ifndef FATFS_H
+#define FATFS_H
 
 #include <assert.h>
 #include <inttypes.h>
@@ -11,11 +11,14 @@
 #include <string.h>
 #include <time.h>
 
-#define MAX_PATH            256
 #define PROG_NAME           "fatfs"
+#define PROG_VERSION        "0.1"
+
 #define STATUS_SUCCESS      0
 #define STATUS_INVALIDARG   1
 #define STATUS_ERROR        2
+
+#define MAX_PATH            256
 
 // Logging
 #define LogInfo(...)                                                            \
@@ -73,5 +76,6 @@ static void Uppercase(char *s)
 
 // Command-line stuff
 void Usage(void);
+void VersionInfo(void);
 
-#endif // __FATFS_H
+#endif  // FATFS_H

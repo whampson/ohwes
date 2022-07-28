@@ -92,3 +92,42 @@ static void GetString(char *dst, const char *src, int count)
     }
     dst[i] = '\0';
 }
+
+void GetDate(char *dst, const FatDate *date)
+{
+    char month[10];
+
+    switch (date->Month)
+    {
+        case 1:  sprintf(month, "January"); break;
+        case 2:  sprintf(month, "February"); break;
+        case 3:  sprintf(month, "March"); break;
+        case 4:  sprintf(month, "April"); break;
+        case 5:  sprintf(month, "May"); break;
+        case 6:  sprintf(month, "June"); break;
+        case 7:  sprintf(month, "July"); break;
+        case 8:  sprintf(month, "August"); break;
+        case 9:  sprintf(month, "September"); break;
+        case 10: sprintf(month, "October"); break;
+        case 11: sprintf(month, "November"); break;
+        case 12: sprintf(month, "December"); break;
+        default: sprintf(month, "(invalid)"); break;
+    }
+
+    snprintf(dst, DATE_LENGTH, "%s %d, %d",
+        month, date->Day, 1980 + date->Year);
+
+}
+
+void GetTime(char *dst, const FatTime *time)
+{
+    int h = time->Hours;
+    int m = time->Minutes;
+    int s = time->Seconds * 2;
+
+    // TODO: check validity
+
+    snprintf(dst, TIME_LENGTH, "%d:%02d:%02d %s",
+        h % 12, m, s,
+        (h < 12) ? "AM" : "PM");
+}

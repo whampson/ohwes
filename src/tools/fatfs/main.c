@@ -1,29 +1,36 @@
 #include "command.h"
 #include "image.h"
 
-const char *s_pImagePath = NULL;
-static int s_CommandArgc = 0;
-static const char **s_ppCommandArgv = NULL;
-static const char *s_pCommandName = NULL;
+bool g_Verbose = false;
+static CommandArgs s_CommandArgs = { 0 };
 static bool s_PrintUsage = false;
+static bool s_PrintVersionInfo = false;
 
 static bool ParseCommandLine(int argc, const char **argv);
 
 void Usage(void)
 {
-    printf("Usage: %s [OPTIONS] COMMAND [ARGS]\n", PROG_NAME);
-    printf("FAT FileSystem utility. Created by Wes Hampson.\n");
-    printf("Run `%s help COMMAND` to get help about a specific command.\n", PROG_NAME);
+    const Command *cmds = GetCommands();
+    int count = GetCommandCount();
+
+    printf("Usage: %s [OPTIONS] DISKIMAGE COMMAND [ARGUMENTS]\n", PROG_NAME);
+    printf("Create or manipulate the contents of a FAT-formatted disk image.\n");
+    printf("For help about a specific command, run `%s x help COMMAND`.\n", PROG_NAME);
     printf("\n");
     printf("Options:\n");
-    printf("  -i FILE       Specify the disk image file to operate on.\n");
-    printf("  --help        Print this help menu and exit.\n");
+    printf("    -v              Verbose output.\n");
+    printf("    --help          Print this help menu and exit.\n");
+    printf("    --version       Print program version information and exit.\n");
     printf("\n");
     printf("Commands:\n");
+    for (int i = 0; i < count; i++)
+        printf("    %-16s%s\n", cmds[i].Name, cmds[i].ShortHelp);
+}
 
-    const Command *cmds = GetCommands();
-    for (int i = 0; i < GetCommandCount(); i++)
-        printf("  %s          %s\n", cmds[i].Name, cmds[i].Desc);
+void VersionInfo(void)
+{
+    printf("%s %s (%s)\n", PROG_NAME, PROG_VERSION, __DATE__);
+    printf("Copyright (C) 2022 Wes Hampson.\n");
 }
 
 int main(int argc, const char **argv)
@@ -32,40 +39,38 @@ int main(int argc, const char **argv)
     {
         return STATUS_INVALIDARG;
     }
+
     if (s_PrintUsage)
     {
         Usage();
         return STATUS_SUCCESS;
     }
-
-    if (s_pImagePath != NULL)
+    if (s_PrintVersionInfo)
     {
-        OpenImage(s_pImagePath);
+        VersionInfo();
+        return STATUS_SUCCESS;
     }
 
-    const Command *cmd = FindCommand(s_pCommandName);
+    const Command *cmd = FindCommand(s_CommandArgs.CommandName);
     if (!cmd)
     {
-        LogError("invalid command - %s\n", s_pCommandName);
+        LogError("invalid command - %s\n", s_CommandArgs.CommandName);
         return STATUS_ERROR;
     }
 
-    int retval = cmd->CommandFunc(s_CommandArgc, s_ppCommandArgv);
-
-    if (IsImageOpen())
-    {
-        CloseImage();
-    }
-
-    return retval;
+    return cmd->Func(&s_CommandArgs);
 }
 
 static bool ParseCommandLine(int argc, const char **argv)
 {
+    // TODO: make this a generic function like getopt
+
     int i;
     const char *opt;
     const char *optarg;
     const char *longopt;
+
+    memset(&s_CommandArgs, 0, sizeof(s_CommandArgs));
 
 #define GET_OPTARG(opt)                                 \
     optarg = argv[++i];                                 \
@@ -75,16 +80,10 @@ static bool ParseCommandLine(int argc, const char **argv)
         return false;                                   \
     }                                                   \
 
-    if (argc < 2)
-    {
-        Usage();
-        return false;
-    }
-
     i = 0;
     while (argc > ++i)
     {
-        if (s_pCommandName)
+        if (s_CommandArgs.CommandName)
         {
             // Stop processing once we've determined the command to execute.
             // Everything after command name are command arguments.
@@ -94,13 +93,20 @@ static bool ParseCommandLine(int argc, const char **argv)
         switch (argv[i][0])
         {
             default:
-                if (!s_pCommandName)
+                if (!s_CommandArgs.ImagePath)
                 {
-                    s_pCommandName = argv[i];
-                    s_CommandArgc = argc - i - 1;
-                    s_ppCommandArgv = &argv[i + 1];
+                    s_CommandArgs.ImagePath = argv[i];
+                    break;
+                }
+                if (!s_CommandArgs.CommandName)
+                {
+                    s_CommandArgs.CommandName = argv[i];
+                    s_CommandArgs.Argc = argc - i - 1;
+                    s_CommandArgs.Argv = &argv[i + 1];
+                    break;
                 }
                 break;
+
             case '-':
                 opt = &argv[i][0];
                 while (opt && *(++opt))
@@ -118,15 +124,15 @@ static bool ParseCommandLine(int argc, const char **argv)
                                 s_PrintUsage = true;
                                 return true;
                             }
-                            else
+                            else if (strcmp(longopt, "version") == 0)
                             {
-                                LogError("invalid option - %s\n", longopt);
-                                return false;
+                                s_PrintVersionInfo = true;
+                                return true;
                             }
-                            break;
-                        case 'i':
-                            GET_OPTARG('i');
-                            s_pImagePath = optarg;
+                            LogError("invalid option - %s\n", longopt);
+                            return false;
+                        case 'v':
+                            s_CommandArgs.Verbose = true;
                             break;
                     }
                 }
@@ -134,7 +140,13 @@ static bool ParseCommandLine(int argc, const char **argv)
         }
     }
 
-    if (!s_pCommandName)
+    if (!s_CommandArgs.ImagePath)
+    {
+        LogError("missing disk image\n");
+        return false;
+    }
+
+    if (!s_CommandArgs.CommandName)
     {
         LogError("missing command\n");
         return false;
