@@ -18,34 +18,56 @@
 #define STATUS_INVALIDARG   1
 #define STATUS_ERROR        2
 
-#define MAX_PATH            256
+// Command-line stuff
+extern bool g_Verbose;
+void PrintUsage(void);
+void PrintVersionInfo(void);
 
 // Logging
-#define LogInfo(...)                                                            \
-do {                                                                            \
-    fprintf(stdout, PROG_NAME ": " __VA_ARGS__);                                \
-} while (0)
+#define LogInfo(...) \
+    ({ fprintf(stdout, PROG_NAME ": " __VA_ARGS__); })
+#define LogWarning(...) \
+    ({ fprintf(stderr, PROG_NAME ": warning: " __VA_ARGS__); })
+#define LogError(...) \
+    ({ fprintf(stderr, PROG_NAME ": error: " __VA_ARGS__); })
 
-#define LogWarning(...)                                                         \
-do {                                                                            \
-    fprintf(stderr, PROG_NAME ": warning: " __VA_ARGS__);                       \
-} while (0)
+// All Safe* macros require the following to exist before use:
+//   - a bool named 'success'
+//   - a label named 'Cleanup'
 
-#define LogError(...)                                                           \
-do {                                                                            \
-    fprintf(stderr, PROG_NAME ": error: " __VA_ARGS__);                         \
-} while (0)
+#define RIF(x) if (!x) { success = false; goto Cleanup; }
 
 // Alloc/Free
-#define SafeAlloc(ptr,size)                                                     \
-do {                                                                            \
-    ptr = malloc(size);                                                         \
-    if (!ptr) { LogError("out of memory!\n"); success = false; goto Cleanup; }  \
-} while (0)
+#define SafeAlloc(size)                                                         \
+({                                                                              \
+    void *__ptr = malloc(size);                                                 \
+    if (!__ptr) { LogError("out of memory!\n"); success = false; goto Cleanup; }\
+    __ptr;                                                                      \
+})
 
 #define SafeFree(ptr)                                                           \
-do {                                                                            \
+({                                                                              \
     if (ptr) { free(ptr); (ptr) = NULL; }                                       \
+})
+
+// File Open/Read
+#define SafeOpen(path, mode)                                                    \
+({                                                                              \
+    FILE *__fp = fopen(path, mode);                                             \
+    if (!__fp) { LogError("unable to open file\n"); success = false; goto Cleanup; }\
+    __fp;                                                                       \
+})
+
+#define SafeRead(fp, ptr, size)                                                 \
+({                                                                              \
+    size_t __b = fread(ptr, 1, size, fp);                                       \
+    if (ferror(fp)) { LogError("unable to read file\n"); success = false; goto Cleanup; }\
+    __b;                                                                        \
+})
+
+#define SafeClose(fp)                                                           \
+do {                                                                            \
+    if (fp) { fclose(fp); fp = NULL; }                                          \
 } while (0)
 
 // Math
@@ -61,21 +83,10 @@ do {                                                                            
     _a < _b ? _a : _b;                                                          \
 })
 
+#define IsFlagSet(x,flag) (((x) & (flag)) == (flag))
 
 // String utilities
 #define PLURAL(s,n) (n == 1) ? s : s "s"
 #define ISARE(n)    (n == 1) ? "is" : "are"
-
-static void Uppercase(char *s)
-{
-    for (size_t i = 0; i < strnlen(s, MAX_PATH); i++)
-    {
-        s[i] = toupper(s[i]);
-    }
-}
-
-// Command-line stuff
-void Usage(void);
-void VersionInfo(void);
 
 #endif  // FATFS_H

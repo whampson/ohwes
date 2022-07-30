@@ -3,52 +3,33 @@
 
 #include "fatfs.h"
 
-/**
- * Maximum file name length.
- */
 #define NAME_LENGTH                 8
-
-/**
- * Maximum file extension length.
- */
-#define EXTENSION_LENGTH            3
-
-/**
- * Maximum volume label length.
- */
+#define EXT_LENGTH                  3
 #define LABEL_LENGTH                11
 
-/**
- * 3.5in, 2 sided, 80 tracks per side, 18 or 36 sectors per track.
- * Total capacity: 1440K or 2880K.
- */
-#define MEDIA_TYPE_1440K            0xF0
+#define MEDIA_TYPE_1440K            0xF0    // Standard 3.5" floppy disk
+#define MEDIA_TYPE_FIXED            0xF8    // Hard disk
 
-/**
- * Fixed disk, i.e. non-removable, such as a hard disk.
- */
-#define MEDIA_TYPE_FIXED            0xF8
-
-/**
- * Boot sector magic number.
- */
-#define BOOT_ID                     0xAA55
-
-/**
- * Boot sector size.
- */
+#define BOOT_SECTOR_ID              0xAA5
 #define BOOT_SECTOR_SIZE            512
 
-#define CLUSTER_FREE                0x0FF
-#define CLUSTER_RESERVED            0x001
-#define CLUSTER_FIRST               0x002
-#define CLUSTER_LAST                0xFEF
-#define CLUSTER_BAD                 0xFF7
-#define CLUSTER_END                 0xFFF
-
 #define OEM_NAME                    "fatfs   "
-#define FS_TYPE                     "FAT12   "
-#define LABEL                       "NO NAME    "
+#define DEFAULT_FS_TYPE             "FAT12   "
+#define DEFAULT_LABEL               "NO NAME    "
+
+#define CLUSTER_FREE                0x000   // Free data cluster.
+#define CLUSTER_RESERVED            0x001
+#define CLUSTER_FIRST               0x002   // First valid data cluster.
+#define CLUSTER_LAST                0xFEF   // Last valid data cluster.
+#define CLUSTER_BAD                 0xFF7   // Bad cluster marker.
+#define CLUSTER_END                 0xFFF   // End-of-chain marker.
+
+#define CLUSTER_IS_VALID(c)         ((c) >= CLUSTER_FIRST && (c) <= CLUSTER_LAST)
+
+#define MAX_PATH                    257     // completely arbitrary
+#define MAX_DATE                    19      // "September 31, 1990"
+#define MAX_TIME                    12      // "12:34:56 PM"
+#define MAX_SHORTNAME               NAME_LENGTH + EXT_LENGTH + 2
 
 /**
  * FAT12 BIOS Parameter Block
@@ -114,12 +95,13 @@ typedef enum __attribute__ ((packed)) _FileAttrs
     ATTR_DIRECTORY  = 1 << 4,
     ATTR_ARCHIVE    = 1 << 5,
     ATTR_DEVICE     = 1 << 6,
+    ATTR_LFN        = ATTR_LABEL|ATTR_SYSTEM|ATTR_HIDDEN|ATTR_READONLY
 }  FileAttrs;
 
-typedef struct _DirectoryEntry
+typedef struct _DirEntry
 {
     char Name[NAME_LENGTH];
-    char Extension[EXTENSION_LENGTH];
+    char Extension[EXT_LENGTH];
     FileAttrs Attributes;
     uint8_t _Reserved1;     // varies by system, do not use
     uint8_t _Reserved2;     // TODO: fine creation time, 10ms increments, 0-199
@@ -131,26 +113,24 @@ typedef struct _DirectoryEntry
     FatDate ModifiedDate;
     uint16_t FirstCluster;
     uint32_t FileSize;
-} DirectoryEntry;
+} DirEntry;
 
 void InitBPB(BiosParamBlock *bpb);
 void InitBootSector(BootSector *bootsect);
 
-void GetLabel(char *dst, const char *src);
-void GetName(char *dst, const char *src);
-void GetExt(char *dst, const char *src);
+void GetLabel(char dst[LABEL_LENGTH+1], const char *src);
+void GetName(char dst[NAME_LENGTH+1], const char *src);
+void GetExt(char dst[EXT_LENGTH+1], const char *src);
 
-#define DATE_LENGTH 19      // September 31, 1990
-#define TIME_LENGTH 12      // 12:34:56 PM
-
-void GetDate(char *dst, const FatDate *date);
-void GetTime(char *dst, const FatTime *time);
+void GetShortName(char dst[MAX_SHORTNAME], const DirEntry *file);
+void GetDate(char dst[MAX_DATE], const FatDate *date);
+void GetTime(char dst[MAX_TIME], const FatTime *time);
 
 static_assert(sizeof(BiosParamBlock) == 51, "Bad BiosParamBlock size!");
 static_assert(sizeof(BootSector) == 512, "Bad BootSector size!");
 static_assert(sizeof(FatDate) == 2, "Bad FatDate size!");
 static_assert(sizeof(FatTime) == 2, "Bad FatTime size!");
-static_assert(sizeof(DirectoryEntry) == 32, "Bad DirectoryEntry size!");
+static_assert(sizeof(DirEntry) == 32, "Bad DirEntry size!");
 
 static_assert(offsetof(BiosParamBlock, SectorSize) == 0x00, "Bad SectorSize offset!");
 static_assert(offsetof(BiosParamBlock, SectorsPerCluster) == 0x02, "Bad SectorsPerCluster offset!");

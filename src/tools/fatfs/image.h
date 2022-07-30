@@ -10,13 +10,21 @@ void CloseImage(void);
 bool IsImageOpen(void);
 
 const char * GetImagePath(void);
+
 BootSector * GetBootSector(void);
 BiosParamBlock * GetBiosParams(void);
+DirEntry * GetRootDir(void);
 
-uint32_t GetNextCluster(uint32_t cluster);
+size_t GetClusterSize(void);
+size_t GetRootDirSize(void);
+size_t GetTableSize(void);
 
-const DirectoryEntry * FindFile(const char *path);
+uint32_t GetNextCluster(uint32_t current);
 
-bool ReadFile(const DirectoryEntry *entry, char *buf);
+const DirEntry * FindFile(const char *path);
+const DirEntry * FindFileInDir(const DirEntry *dir, const char *path);
+
+bool ReadFile(const DirEntry *file, char *dst);
+bool ReadCluster(uint32_t index, char *dst);
 
 #endif  // __IMAGE_H

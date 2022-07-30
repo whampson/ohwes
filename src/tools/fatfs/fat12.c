@@ -20,8 +20,8 @@ void InitBPB(BiosParamBlock *bpb)
     bpb->_Reserved = 0;
     bpb->ExtendedBootSignature = 0x29;
     bpb->VolumeId = time(NULL);
-    strcpy(bpb->Label, LABEL);
-    strcpy(bpb->FileSystemType, FS_TYPE);
+    strcpy(bpb->Label, DEFAULT_LABEL);
+    strcpy(bpb->FileSystemType, DEFAULT_FS_TYPE);
 }
 
 void InitBootSector(BootSector *bootsect)
@@ -59,30 +59,30 @@ void InitBootSector(BootSector *bootsect)
     memcpy(bootsect->JumpCode, JumpCode, sizeof(JumpCode));
     strcpy(bootsect->OemName, OEM_NAME);
 
-    bootsect->Signature = BOOT_ID;
+    bootsect->Signature = BOOT_SECTOR_ID;
 
     InitBPB(&bootsect->BiosParams);
 }
 
-void GetLabel(char *dst, const char *src)
+void GetLabel(char dst[LABEL_LENGTH+1], const char *src)
 {
     GetString(dst, src, LABEL_LENGTH);
 }
 
-void GetName(char *dst, const char *src)
+void GetName(char dst[NAME_LENGTH+1], const char *src)
 {
     GetString(dst, src, NAME_LENGTH);
 }
 
-void GetExt(char *dst, const char *src)
+void GetExt(char dst[EXT_LENGTH+1], const char *src)
 {
-    GetString(dst, src, EXTENSION_LENGTH);
+    GetString(dst, src, EXT_LENGTH);
 }
 
 static void GetString(char *dst, const char *src, int count)
 {
-    int i;
-    for (i = 0; i < count; i++)
+    int i = 0;
+    for (; i < count; i++)
     {
         if (src[i] == ' ' || src[i] == '\0')
         {
@@ -93,7 +93,24 @@ static void GetString(char *dst, const char *src, int count)
     dst[i] = '\0';
 }
 
-void GetDate(char *dst, const FatDate *date)
+void GetShortName(char dst[MAX_SHORTNAME], const DirEntry *file)
+{
+    char nameBuf[NAME_LENGTH+1] = { 0 };
+    char extBuf[EXT_LENGTH+1] = { 0 };
+
+    GetName(nameBuf, file->Name);
+    GetExt(extBuf, file->Extension);
+    size_t nameLen = strlen(nameBuf);
+    size_t extLen = strlen(extBuf);
+
+    snprintf(dst, nameLen + 1, "%s", nameBuf);
+    if (extLen != 0)
+    {
+        snprintf(dst + nameLen, extLen + 2, ".%s", extBuf);
+    }
+}
+
+void GetDate(char dst[MAX_DATE], const FatDate *date)
 {
     char month[10];
 
@@ -114,12 +131,12 @@ void GetDate(char *dst, const FatDate *date)
         default: sprintf(month, "(invalid)"); break;
     }
 
-    snprintf(dst, DATE_LENGTH, "%s %d, %d",
+    snprintf(dst, MAX_DATE, "%s %d, %d",
         month, date->Day, 1980 + date->Year);
 
 }
 
-void GetTime(char *dst, const FatTime *time)
+void GetTime(char dst[MAX_TIME], const FatTime *time)
 {
     int h = time->Hours;
     int m = time->Minutes;
@@ -127,7 +144,7 @@ void GetTime(char *dst, const FatTime *time)
 
     // TODO: check validity
 
-    snprintf(dst, TIME_LENGTH, "%d:%02d:%02d %s",
+    snprintf(dst, MAX_TIME, "%d:%02d:%02d %s",
         h % 12, m, s,
         (h < 12) ? "AM" : "PM");
 }

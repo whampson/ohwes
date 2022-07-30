@@ -3,32 +3,25 @@
 #include "fat12.h"
 
 static BootSector s_BootSect;
-static uint32_t *s_pClusterMap = NULL;
 static uint32_t s_NumClusters = 0;
-static DirectoryEntry *s_pRootDir = NULL;
+static uint32_t *s_pClusterMap = NULL;
+static DirEntry *s_pRootDir = NULL;
+static FILE *s_FilePtr = NULL;
 static char s_ImagePath[MAX_PATH];
 
 static size_t GetClusterAddress(uint32_t cluster);
+static void MakeUppercase(char *s);
+
+// TODO: switch to an 'open once' scheme, also lock the file (if possible)
 
 bool OpenImage(const char *path)
 {
-    FILE *fp = fopen(path, "rb");
-    if (fp == NULL)
-    {
-        LogError("could not open disk image file\n");
-        return false;
-    }
-
     bool success = true;
 
+    s_FilePtr = SafeOpen(path, "rb+");
+
     // Load boot sector
-    fread(&s_BootSect, 1, sizeof(BootSector), fp);
-    if (ferror(fp))
-    {
-        LogError("could not read boot sector\n");
-        success = false;
-        goto Cleanup;
-    }
+    SafeRead(s_FilePtr, &s_BootSect, sizeof(BootSector));
 
     int sectorSize = GetBiosParams()->SectorSize;
     int resSectors = GetBiosParams()->ReservedSectorCount;
@@ -37,31 +30,23 @@ bool OpenImage(const char *path)
 
     // Skip remaining reserved sectors
     // Boot sector is considered reserved
-    fseek(fp, sectorSize * (resSectors - 1), SEEK_CUR);
+    fseek(s_FilePtr, sectorSize * (resSectors - 1), SEEK_CUR);
 
     // TODO: detect FAT type
     // For now, assume FAT12...
 
     int fatSize = fatSectors * sectorSize;
-    int clusterCount = (fatSize / 3) * 2;   // 3 bytes = 24 bits = 2 FAT12 clusters
-    SafeAlloc(s_pClusterMap, clusterCount * sizeof(uint32_t));
-    s_NumClusters = clusterCount;
+    s_NumClusters = (fatSize / 3) * 2;   // 3 bytes = 24 bits = 2 FAT12 clusters
+    s_pClusterMap = SafeAlloc(s_NumClusters * sizeof(uint32_t));
 
-    int pairCount = clusterCount / 2;
+    int pairCount = s_NumClusters / 2;
     int bytesRead = 0;
     for (int i = 0; i < pairCount; i++)
     {
         uint8_t stride[3];
-        bytesRead += fread(stride, 1, sizeof(stride), fp);
-        if (ferror(fp))
-        {
-            LogError("could not read cluster map\n");
-            success = false;
-            goto Cleanup;
-        }
+        bytesRead += SafeRead(s_FilePtr, stride, sizeof(stride));
 
         // |........|++++....|++++++++|
-
         uint32_t cluster0 = (stride[1] & 0xF) << 8 | stride[0];
         uint32_t cluster1 = (stride[2] << 4) | (stride[1] >> 4);
 
@@ -71,18 +56,13 @@ bool OpenImage(const char *path)
 
     // Skip other copies of the FAT
     // TODO: error detection/correction?
-    fseek(fp, sectorSize * fatSectors * (numFats - 1), SEEK_CUR);
+    fseek(s_FilePtr, sectorSize * fatSectors * (numFats - 1), SEEK_CUR);
 
     int numDirEntries = GetBiosParams()->MaxRootDirEntryCount;
-    SafeAlloc(s_pRootDir, numDirEntries * sizeof(DirectoryEntry));
+    int rootDirSize = numDirEntries * sizeof(DirEntry);
 
-    fread(s_pRootDir, 1, numDirEntries * sizeof(DirectoryEntry), fp);
-    if (ferror(fp))
-    {
-        LogError("could not read root directory\n");
-        success = false;
-        goto Cleanup;
-    }
+    s_pRootDir = SafeAlloc(rootDirSize);
+    SafeRead(s_FilePtr, s_pRootDir, rootDirSize);
 
     if (success)
     {
@@ -92,10 +72,8 @@ bool OpenImage(const char *path)
 Cleanup:
     if (!success)
     {
-        SafeFree(s_pClusterMap);
-        SafeFree(s_pRootDir);
+        CloseImage();
     }
-    fclose(fp);
     return success;
 }
 
@@ -103,6 +81,7 @@ void CloseImage(void)
 {
     SafeFree(s_pRootDir);
     SafeFree(s_pClusterMap);
+    SafeClose(s_FilePtr);
     s_ImagePath[0] = '\0';
 }
 
@@ -126,29 +105,48 @@ BiosParamBlock * GetBiosParams(void)
     return &s_BootSect.BiosParams;
 }
 
-uint32_t GetNextCluster(uint32_t cluster)
+DirEntry * GetRootDir(void)
 {
-    if (cluster >= s_NumClusters)
-    {
-        return CLUSTER_END;
-    }
-
-    if (cluster == CLUSTER_END)
-    {
-        return CLUSTER_END;
-    }
-    // TODO: bad clusters?
-
-    return s_pClusterMap[cluster];
+    return s_pRootDir;
 }
 
-const DirectoryEntry * FindFile(const char *path)
+size_t GetClusterSize(void)
+{
+    return GetBiosParams()->SectorSize * GetBiosParams()->SectorsPerCluster;
+}
+
+size_t GetRootDirSize(void)
+{
+    return GetBiosParams()->MaxRootDirEntryCount * sizeof(DirEntry);
+}
+
+size_t GetTableSize(void)
+{
+    return GetBiosParams()->SectorsPerTable * GetBiosParams()->SectorSize;
+}
+
+uint32_t GetNextCluster(uint32_t current)
+{
+    if (current >= s_NumClusters)
+    {
+        return CLUSTER_END;
+    }
+
+    return s_pClusterMap[current];
+}
+
+const DirEntry * FindFile(const char *path)
+{
+    return FindFileInDir(NULL, path);
+}
+
+const DirEntry * FindFileInDir(const DirEntry *dirEntry, const char *path)
 {
     char realPath[MAX_PATH];
     char *fileName;
 
     strncpy(realPath, path, MAX_PATH);
-    Uppercase(realPath);
+    MakeUppercase(realPath);
 
     // TODO: walk path
     fileName = realPath;
@@ -157,10 +155,10 @@ const DirectoryEntry * FindFile(const char *path)
     int count = GetBiosParams()->MaxRootDirEntryCount;
 
     char requestedName[NAME_LENGTH + 1] = { 0 };
-    char requestedExt[EXTENSION_LENGTH + 1] = { 0 };
+    char requestedExt[EXT_LENGTH + 1] = { 0 };
 
     char tmpName[NAME_LENGTH + 1] = { 0 };
-    char tmpExt[EXTENSION_LENGTH + 1] = { 0 };
+    char tmpExt[EXT_LENGTH + 1] = { 0 };
 
     char *tok = strtok(fileName, ".");
     if (tok != NULL)
@@ -171,13 +169,13 @@ const DirectoryEntry * FindFile(const char *path)
     tok = strtok(NULL, ".");
     if (tok != NULL)
     {
-        strncpy(requestedExt, tok, EXTENSION_LENGTH);
+        strncpy(requestedExt, tok, EXT_LENGTH);
     }
 
     bool found = false;
     while (!found && index < count)
     {
-        const DirectoryEntry *e = &s_pRootDir[index++];
+        const DirEntry *e = &s_pRootDir[index++];
         switch ((unsigned char) e->Name[0])
         {
             case 0x00:
@@ -200,47 +198,52 @@ const DirectoryEntry * FindFile(const char *path)
     return NULL;
 }
 
-bool ReadFile(const DirectoryEntry *entry, char *buf)
+bool ReadCluster(uint32_t index, char *dst)
 {
-    const BiosParamBlock *bpb = GetBiosParams();
+    const size_t ClusterSize = GetClusterSize();
 
-    FILE *fp = fopen(s_ImagePath, "rb");
-    if (!fp)
+    if (index >= s_NumClusters ||
+        index < CLUSTER_FIRST || index > CLUSTER_LAST)
     {
-        LogError("unable to read disk image\n");
+        LogWarning("attempt to read invalid data cluster 0x%03X\n", index);
         return false;
     }
 
-    uint32_t cluster = entry->FirstCluster;
-    size_t fileSize = entry->FileSize;
-    size_t clusterSize = bpb->SectorSize * bpb->SectorsPerCluster;
-    size_t bytesRead = 0;
-    size_t totalBytesRead = 0;
-    size_t offset = 0;
-    size_t readSize;
-
     bool success = true;
-    do
-    {
-        offset = GetClusterAddress(cluster);
-        fseek(fp, offset, SEEK_SET);
+    size_t seekAddr = GetClusterAddress(index);
 
-        readSize = min(clusterSize, (fileSize - totalBytesRead));
-
-        bytesRead = fread(buf, 1, readSize, fp);
-        if (ferror(fp))
-        {
-            LogError("error reading disk image\n");
-            success = false;
-            goto Cleanup;
-        }
-        buf += bytesRead;
-        totalBytesRead += bytesRead;
-        cluster = GetNextCluster(cluster);
-    } while (cluster != CLUSTER_END);
+    fseek(s_FilePtr, seekAddr, SEEK_SET);
+    size_t bytesRead = SafeRead(s_FilePtr, dst, ClusterSize);
+    assert(bytesRead == ClusterSize);
 
 Cleanup:
-    fclose(fp);
+    return success;
+}
+
+bool ReadFile(const DirEntry *entry, char *dst)
+{
+    const size_t ClusterSize = GetClusterSize();
+
+    bool success = true;
+    uint32_t cluster = entry->FirstCluster;
+    size_t fileSize = entry->FileSize;
+    size_t totalBytesRead = 0;
+    size_t readSize;
+    char buf[ClusterSize];
+
+    while (CLUSTER_IS_VALID(cluster))
+    {
+        readSize = min(ClusterSize, (fileSize - totalBytesRead));
+
+        RIF(ReadCluster(cluster, buf));
+        memcpy(dst, buf, readSize);
+
+        dst += readSize;
+        totalBytesRead += readSize;
+        cluster = GetNextCluster(cluster);
+    }
+
+Cleanup:
     return success;
 }
 
@@ -248,10 +251,21 @@ static size_t GetClusterAddress(uint32_t cluster)
 {
     const BiosParamBlock *bpb = GetBiosParams();
 
-    size_t firstClusterAddress =
-        (bpb->ReservedSectorCount + (bpb->TableCount * bpb->SectorsPerTable))
-        * bpb->SectorSize
-        + (bpb->MaxRootDirEntryCount * sizeof(DirectoryEntry));
+    const size_t NumResSectors = bpb->ReservedSectorCount;
+    const size_t NumFatSectors = bpb->TableCount * bpb->SectorsPerTable;
+    const size_t SectorSize = bpb->SectorSize;
+    const size_t ClusterSize = GetClusterSize();
+    const size_t RootDirSize = GetRootDirSize();
 
-    return firstClusterAddress + ((cluster - 2) * bpb->SectorSize);
+    return ((NumResSectors + NumFatSectors) * SectorSize)
+        + RootDirSize
+        + ((cluster - 2) * ClusterSize);
+}
+
+static void MakeUppercase(char *s)
+{
+    for (size_t i = 0; i < strnlen(s, MAX_PATH); i++)
+    {
+        s[i] = toupper(s[i]);
+    }
 }

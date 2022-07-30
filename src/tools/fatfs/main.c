@@ -8,31 +8,6 @@ static bool s_PrintVersionInfo = false;
 
 static bool ParseCommandLine(int argc, const char **argv);
 
-void Usage(void)
-{
-    const Command *cmds = GetCommands();
-    int count = GetCommandCount();
-
-    printf("Usage: %s [OPTIONS] DISKIMAGE COMMAND [ARGUMENTS]\n", PROG_NAME);
-    printf("Create or manipulate the contents of a FAT-formatted disk image.\n");
-    printf("For help about a specific command, run `%s x help COMMAND`.\n", PROG_NAME);
-    printf("\n");
-    printf("Options:\n");
-    printf("    -v              Verbose output.\n");
-    printf("    --help          Print this help menu and exit.\n");
-    printf("    --version       Print program version information and exit.\n");
-    printf("\n");
-    printf("Commands:\n");
-    for (int i = 0; i < count; i++)
-        printf("    %-16s%s\n", cmds[i].Name, cmds[i].ShortHelp);
-}
-
-void VersionInfo(void)
-{
-    printf("%s %s (%s)\n", PROG_NAME, PROG_VERSION, __DATE__);
-    printf("Copyright (C) 2022 Wes Hampson.\n");
-}
-
 int main(int argc, const char **argv)
 {
     if (!ParseCommandLine(argc, argv))
@@ -42,12 +17,12 @@ int main(int argc, const char **argv)
 
     if (s_PrintUsage)
     {
-        Usage();
+        PrintUsage();
         return STATUS_SUCCESS;
     }
     if (s_PrintVersionInfo)
     {
-        VersionInfo();
+        PrintVersionInfo();
         return STATUS_SUCCESS;
     }
 
@@ -153,4 +128,29 @@ static bool ParseCommandLine(int argc, const char **argv)
     }
 
     return true;
+}
+
+void PrintUsage(void)
+{
+    const Command *cmds = GetCommands();
+    int count = GetCommandCount();
+
+    printf("Usage: %s [OPTIONS] DISKIMAGE COMMAND [ARGUMENTS]\n", PROG_NAME);
+    printf("Create or manipulate the contents of a FAT-formatted disk image.\n");
+    printf("For help about a specific command, run `%s x help COMMAND`.\n", PROG_NAME);
+    printf("\n");
+    printf("Options:\n");
+    printf("    -v              Verbose output.\n");
+    printf("    --help          Print this help menu and exit.\n");
+    printf("    --version       Print program version information and exit.\n");
+    printf("\n");
+    printf("Commands:\n");
+    for (int i = 0; i < count; i++)
+        printf("    %-16s%s\n", cmds[i].Name, cmds[i].ShortHelp);
+}
+
+void PrintVersionInfo(void)
+{
+    printf("%s %s (%s)\n", PROG_NAME, PROG_VERSION, __DATE__);
+    printf("Copyright (C) 2022 Wes Hampson.\n");
 }
