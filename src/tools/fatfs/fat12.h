@@ -126,6 +126,12 @@ void GetShortName(char dst[MAX_SHORTNAME], const DirEntry *file);
 void GetDate(char dst[MAX_DATE], const FatDate *date);
 void GetTime(char dst[MAX_TIME], const FatTime *time);
 
+static inline bool IsDirectory(const DirEntry *e)
+{
+    return IsFlagSet(e->Attributes, ATTR_DIRECTORY)
+        && !IsFlagSet(e->Attributes, ATTR_LFN);
+}
+
 static_assert(sizeof(BiosParamBlock) == 51, "Bad BiosParamBlock size!");
 static_assert(sizeof(BootSector) == 512, "Bad BootSector size!");
 static_assert(sizeof(FatDate) == 2, "Bad FatDate size!");

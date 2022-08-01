@@ -27,7 +27,9 @@ int Type(const CommandArgs *args)
         goto Cleanup;
     }
 
-    if (dirEntry->Attributes & ATTR_DIRECTORY)
+    bool isRoot = dirEntry == GetRootDir();
+
+    if (isRoot || (dirEntry->Attributes & ATTR_DIRECTORY))
     {
         // This is hairy...
         // TODO: somehow get the root dir to work
@@ -39,13 +41,23 @@ int Type(const CommandArgs *args)
         char entryName[MAX_SHORTNAME] = { 0 };
         uint32_t cluster = dirEntry->FirstCluster;
 
-        while (CLUSTER_IS_VALID(cluster))
+        do
         {
-            ReadCluster(cluster, buf);
-            cluster = GetNextCluster(cluster);
+            const DirEntry *entry = (const DirEntry *) buf;
+            int count = NumDirEntriesPerCluster;
 
-            DirEntry *entry = (DirEntry *) buf;
-            for (int i = 0; i < NumDirEntriesPerCluster; i++, entry++)
+            if (!isRoot)
+            {
+                ReadCluster(buf, cluster);
+                cluster = GetNextCluster(cluster);
+            }
+            else
+            {
+                entry = GetRootDir();
+                count = GetBiosParams()->MaxRootDirEntryCount;
+            }
+
+            for (int i = 0; i < count; i++, entry++)
             {
                 // TODO: validate dir entry somehow
                 switch ((unsigned char) entry->Name[0])
@@ -66,14 +78,14 @@ int Type(const CommandArgs *args)
                 GetShortName(entryName, entry);
                 printf("%s\n", entryName);
             }
-        }
+        } while (CLUSTER_IS_VALID(cluster));
     }
     else
     {
         int size = dirEntry->FileSize;
         data = SafeAlloc(size);
 
-        success = ReadFile(dirEntry, data);
+        success = ReadFile(data, dirEntry);
         if (success)
         {
             printf("%.*s", size, data);

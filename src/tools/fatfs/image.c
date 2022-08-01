@@ -103,7 +103,7 @@ BiosParamBlock * GetBiosParams(void)
     return &s_BootSect.BiosParams;
 }
 
-DirEntry * GetRootDir(void)
+const DirEntry * GetRootDir(void)
 {
     return s_pRootDir;
 }
@@ -133,102 +133,103 @@ uint32_t GetNextCluster(uint32_t current)
     return s_pClusterMap[current];
 }
 
-const DirEntry * FindFileInDir(const DirEntry *dir, const char *fileName)
+const DirEntry * FindFile(const char *path)
 {
     const size_t ClusterSize = GetClusterSize();
 
-    int count;
-    int index;
-    bool found = false;
-    bool isRoot = (dir == s_pRootDir);
-    bool success = false;
-
-    char buf[ClusterSize];
-
-    if (isRoot)
-    {
-        count = GetBiosParams()->MaxRootDirEntryCount;
-    }
-
-    // TODO: long file names
-    // TODO: read clusters for non-root dirs
-    // TODO: this is fuckin ugly
-
-    char shortName[MAX_SHORTNAME] = { 0 };
-
-    printf("Looking for '%s'...\n", fileName);
-    do
-    {
-        if (!isRoot)
-        {
-            if (!CLUSTER_IS_VALID(dir->FirstCluster))
-            {
-                break;
-            }
-            int addr = GetClusterAddress(dir->FirstCluster);
-            SafeRead(s_FilePtr, buf, ClusterSize);
-            dir = (const DirEntry *) buf;
-            count = ClusterSize / sizeof(DirEntry);
-            index = 0;
-        }
-        while (!found && index < count)
-        {
-            const DirEntry *e = &dir[index++];
-            switch ((unsigned char) e->Name[0])
-            {
-                case 0x00:
-                case 0x05:
-                case 0xE5:
-                    // free slot/deleted file
-                    continue;
-            }
-            GetShortName(shortName, e);
-            printf("    %s\n", shortName);
-            if (strcmp(shortName, fileName) == 0)
-            {
-                dir = e;
-                success = true;
-                break;
-            }
-        }
-    } while (!isRoot && CLUSTER_IS_VALID(dir->FirstCluster));
-
-Cleanup:
-    return (success) ? dir : NULL;
-}
-
-const DirEntry * FindFile(const char *path)
-{
     char realPath[MAX_PATH];
+    char nameBuf[MAX_SHORTNAME];
+    char clustA[ClusterSize];
+    char clustB[ClusterSize];
+    char *clustBuf = clustA;
 
     strncpy(realPath, path, MAX_PATH);
 
     int depth = -1;
     char *tok = strtok(realPath, "/");
-    const DirEntry *file = s_pRootDir;
-    bool found = false;
 
-    while (tok != NULL && file != NULL)
+    const DirEntry *curDir = NULL;
+    uint32_t cluster = 0;
+
+    bool success = false;
+    DirEntry *result = SafeAlloc(sizeof(DirEntry));
+
+    while (tok != NULL)
     {
         depth++;
 
-        file = FindFileInDir(file, tok);
+        bool isRoot = (curDir == NULL);
+        int count = (isRoot)
+            ?  GetBiosParams()->MaxRootDirEntryCount
+            :  ClusterSize / sizeof(DirEntry);
 
-        printf("tok = %s\n", tok);
+        cluster = (isRoot) ? 0 : curDir->FirstCluster;
+        success = false;
+
+        do
+        {
+            if (!isRoot)
+            {
+                // load cluster
+                clustBuf = (clustBuf == clustA) ? clustB : clustA;
+                ReadCluster(clustBuf, cluster);
+                cluster = GetNextCluster(cluster);
+            }
+
+            const DirEntry *e = (isRoot)
+                ? s_pRootDir
+                : (const DirEntry *) clustBuf;
+
+            for (int i = 0; i < count; i++, e++)
+            {
+                switch ((unsigned char) e->Name[0])
+                {
+                    case 0x00:
+                    case 0x05:
+                    case 0xE5:
+                        // free slot/deleted file
+                        continue;
+                }
+                GetShortName(nameBuf, e);
+                if (strcmp(nameBuf, tok) == 0)
+                {
+                    memcpy(result, e, sizeof(DirEntry));
+                    success = true;
+                    if (IsDirectory(e))
+                    {
+                        curDir = e;
+                    }
+                    break;
+                }
+            }
+
+        } while (CLUSTER_IS_VALID(cluster));
+
+        if (!success)
+        {
+            break;
+        }
+
         tok = strtok(NULL, "/");
     }
 
-    printf("depth = %d\n", depth);
-    if (file != NULL)
+    if (depth == -1)
     {
-        printf("found name = %.8s\n", file->Name);
-        printf("found ext  = %.3s\n", file->Extension);
+        SafeFree(result);
+        return s_pRootDir;
     }
 
-    return NULL;
+Cleanup:
+    if (!success)
+    {
+        SafeFree(result);
+        return NULL;
+    }
+
+    return result;
 }
 
-bool ReadCluster(uint32_t index, char *dst)
+bool ReadCluster(char *dst, uint32_t index)
 {
     const size_t ClusterSize = GetClusterSize();
 
@@ -250,7 +251,7 @@ Cleanup:
     return success;
 }
 
-bool ReadFile(const DirEntry *entry, char *dst)
+bool ReadFile(char *dst, const DirEntry *entry)
 {
     const size_t ClusterSize = GetClusterSize();
 
@@ -265,7 +266,7 @@ bool ReadFile(const DirEntry *entry, char *dst)
     {
         readSize = min(ClusterSize, (fileSize - totalBytesRead));
 
-        RIF(ReadCluster(cluster, buf));
+        RIF(ReadCluster(buf, cluster));
         memcpy(dst, buf, readSize);
 
         dst += readSize;

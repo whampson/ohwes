@@ -58,6 +58,7 @@ static bool ParseCommandLine(int argc, const char **argv)
     i = 0;
     while (argc > ++i)
     {
+        // printf("arg = '%s'\n", argv[i]);
         if (s_CommandArgs.CommandName)
         {
             // Stop processing once we've determined the command to execute.
@@ -152,5 +153,5 @@ void PrintUsage(void)
 void PrintVersionInfo(void)
 {
     printf("%s %s (%s)\n", PROG_NAME, PROG_VERSION, __DATE__);
-    printf("Copyright (C) 2022 Wes Hampson.\n");
+    printf("Copyright (C) 2022 Wes Hampson\n");
 }
