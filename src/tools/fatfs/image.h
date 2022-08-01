@@ -22,7 +22,7 @@ size_t GetTableSize(void);
 uint32_t GetNextCluster(uint32_t current);
 
 const DirEntry * FindFile(const char *path);
-const DirEntry * FindFileInDir(const DirEntry *dir, const char *path);
+// const DirEntry * FindFileInDir(const DirEntry *dir, const char *fileName);
 
 bool ReadFile(const DirEntry *file, char *dst);
 bool ReadCluster(uint32_t index, char *dst);

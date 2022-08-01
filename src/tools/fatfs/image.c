@@ -12,8 +12,6 @@ static char s_ImagePath[MAX_PATH];
 static size_t GetClusterAddress(uint32_t cluster);
 static void MakeUppercase(char *s);
 
-// TODO: switch to an 'open once' scheme, also lock the file (if possible)
-
 bool OpenImage(const char *path)
 {
     bool success = true;
@@ -135,64 +133,96 @@ uint32_t GetNextCluster(uint32_t current)
     return s_pClusterMap[current];
 }
 
-const DirEntry * FindFile(const char *path)
+const DirEntry * FindFileInDir(const DirEntry *dir, const char *fileName)
 {
-    return FindFileInDir(NULL, path);
+    const size_t ClusterSize = GetClusterSize();
+
+    int count;
+    int index;
+    bool found = false;
+    bool isRoot = (dir == s_pRootDir);
+    bool success = false;
+
+    char buf[ClusterSize];
+
+    if (isRoot)
+    {
+        count = GetBiosParams()->MaxRootDirEntryCount;
+    }
+
+    // TODO: long file names
+    // TODO: read clusters for non-root dirs
+    // TODO: this is fuckin ugly
+
+    char shortName[MAX_SHORTNAME] = { 0 };
+
+    printf("Looking for '%s'...\n", fileName);
+    do
+    {
+        if (!isRoot)
+        {
+            if (!CLUSTER_IS_VALID(dir->FirstCluster))
+            {
+                break;
+            }
+            int addr = GetClusterAddress(dir->FirstCluster);
+            SafeRead(s_FilePtr, buf, ClusterSize);
+            dir = (const DirEntry *) buf;
+            count = ClusterSize / sizeof(DirEntry);
+            index = 0;
+        }
+        while (!found && index < count)
+        {
+            const DirEntry *e = &dir[index++];
+            switch ((unsigned char) e->Name[0])
+            {
+                case 0x00:
+                case 0x05:
+                case 0xE5:
+                    // free slot/deleted file
+                    continue;
+            }
+            GetShortName(shortName, e);
+            printf("    %s\n", shortName);
+            if (strcmp(shortName, fileName) == 0)
+            {
+                dir = e;
+                success = true;
+                break;
+            }
+        }
+    } while (!isRoot && CLUSTER_IS_VALID(dir->FirstCluster));
+
+Cleanup:
+    return (success) ? dir : NULL;
 }
 
-const DirEntry * FindFileInDir(const DirEntry *dirEntry, const char *path)
+const DirEntry * FindFile(const char *path)
 {
     char realPath[MAX_PATH];
-    char *fileName;
 
     strncpy(realPath, path, MAX_PATH);
-    MakeUppercase(realPath);
 
-    // TODO: walk path
-    fileName = realPath;
-
-    int index = 0;
-    int count = GetBiosParams()->MaxRootDirEntryCount;
-
-    char requestedName[NAME_LENGTH + 1] = { 0 };
-    char requestedExt[EXT_LENGTH + 1] = { 0 };
-
-    char tmpName[NAME_LENGTH + 1] = { 0 };
-    char tmpExt[EXT_LENGTH + 1] = { 0 };
-
-    char *tok = strtok(fileName, ".");
-    if (tok != NULL)
-    {
-        strncpy(requestedName, tok, NAME_LENGTH);
-    }
-
-    tok = strtok(NULL, ".");
-    if (tok != NULL)
-    {
-        strncpy(requestedExt, tok, EXT_LENGTH);
-    }
-
+    int depth = -1;
+    char *tok = strtok(realPath, "/");
+    const DirEntry *file = s_pRootDir;
     bool found = false;
-    while (!found && index < count)
-    {
-        const DirEntry *e = &s_pRootDir[index++];
-        switch ((unsigned char) e->Name[0])
-        {
-            case 0x00:
-            case 0x05:
-            case 0xE5:
-                // free slot/deleted file
-                continue;
-        }
-        GetName(tmpName, e->Name);
-        GetExt(tmpExt, e->Extension);
 
-        bool nameMatch = strcmp(tmpName, requestedName) == 0;
-        bool extMatch = strcmp(tmpExt, requestedExt) == 0;
-        if (nameMatch && extMatch)
-        {
-            return e;
-        }
+    while (tok != NULL && file != NULL)
+    {
+        depth++;
+
+        file = FindFileInDir(file, tok);
+
+        printf("tok = %s\n", tok);
+        tok = strtok(NULL, "/");
+    }
+
+    printf("depth = %d\n", depth);
+    if (file != NULL)
+    {
+        printf("found name = %.8s\n", file->Name);
+        printf("found ext  = %.3s\n", file->Extension);
     }
 
     return NULL;
