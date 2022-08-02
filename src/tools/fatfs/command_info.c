@@ -70,8 +70,9 @@ int Info(const CommandArgs *args)
     }
 
     const char *path = args->Argv[0];
-    const DirEntry * e = FindFile(path);
-    if (!e)
+    DirEntry *e = NULL;
+    success = FindFile(&e, path);
+    if (!success)
     {
         LogError("info: file not found - %s\n", path);
         return STATUS_ERROR;
@@ -148,9 +149,12 @@ int Info(const CommandArgs *args)
 
     if (!isDirectory)
     {
-        printf("The file is %d bytes in size.\n",
+        printf("The file size is %d bytes.\n",
             e->FileSize);
     }
+    printf("The %s size on disk is %d bytes.\n",
+        (isDirectory) ? "directory" : "file",
+        GetFileSizeOnDisk(e));
 
     GetDate(dateBuf, &e->CreationDate);
     GetTime(timeBuf, &e->CreationTime);
@@ -175,5 +179,6 @@ int Info(const CommandArgs *args)
 
 Cleanup:
     CloseImage();
+    SafeFree(e);
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }

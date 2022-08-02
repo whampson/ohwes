@@ -3,7 +3,7 @@
 
 #include "fatfs.h"
 
-#define NAME_LENGTH                 8
+#define NAME_LENGTH                 8       // Name capacity,
 #define EXT_LENGTH                  3
 #define LABEL_LENGTH                11
 
@@ -18,13 +18,13 @@
 #define DEFAULT_LABEL               "NO NAME    "
 
 #define CLUSTER_FREE                0x000   // Free data cluster.
-#define CLUSTER_RESERVED            0x001
+#define CLUSTER_RESERVED            0x001   // Reserved, do not use.
 #define CLUSTER_FIRST               0x002   // First valid data cluster.
 #define CLUSTER_LAST                0xFEF   // Last valid data cluster.
 #define CLUSTER_BAD                 0xFF7   // Bad cluster marker.
 #define CLUSTER_END                 0xFFF   // End-of-chain marker.
 
-#define CLUSTER_IS_VALID(c)         ((c) >= CLUSTER_FIRST && (c) <= CLUSTER_LAST)
+#define IsClusterValid(c)           ((c) >= CLUSTER_FIRST && (c) <= CLUSTER_LAST)
 
 #define MAX_PATH                    257     // completely arbitrary
 #define MAX_DATE                    19      // "September 31, 1990"

@@ -23,26 +23,26 @@ extern bool g_Verbose;
 void PrintUsage(void);
 void PrintVersionInfo(void);
 
+// Some of these macros rely heavily on GCC syntax.
+// If you don't use GCC, well I don't have a solution for you.
+
 // Logging
 #define LogInfo(...) \
-    ({ fprintf(stdout, PROG_NAME ": " __VA_ARGS__); })
+    do { fprintf(stdout, PROG_NAME ": " __VA_ARGS__); } while (0)
 #define LogWarning(...) \
-    ({ fprintf(stderr, PROG_NAME ": warning: " __VA_ARGS__); })
+    do { fprintf(stderr, PROG_NAME ": warning: " __VA_ARGS__); } while (0)
 #define LogError(...) \
-    ({ fprintf(stderr, PROG_NAME ": error: " __VA_ARGS__); })
+    do { fprintf(stderr, PROG_NAME ": error: " __VA_ARGS__); } while (0)
 
-// All Safe* macros require the following to exist before use:
-//   - a bool named 'success'
-//   - a label named 'Cleanup'
-
+// Return If False
 #define RIF(x) if (!x) { success = false; goto Cleanup; }
 
 // Alloc/Free
 #define SafeAlloc(size)                                                         \
 ({                                                                              \
-    void *__ptr = malloc(size);                                                 \
-    if (!__ptr) { LogError("out of memory!\n"); success = false; goto Cleanup; }\
-    __ptr;                                                                      \
+    void *_ptr = malloc(size);                                                  \
+    if (!_ptr) { LogError("out of memory!\n"); success = false; goto Cleanup; } \
+    _ptr;                                                                       \
 })
 
 #define SafeFree(ptr)                                                           \
@@ -53,16 +53,16 @@ void PrintVersionInfo(void);
 // File Open/Read
 #define SafeOpen(path, mode)                                                    \
 ({                                                                              \
-    FILE *__fp = fopen(path, mode);                                             \
-    if (!__fp) { LogError("unable to open file\n"); success = false; goto Cleanup; }\
-    __fp;                                                                       \
+    FILE *_fp = fopen(path, mode);                                              \
+    if (!_fp) { LogError("unable to open file\n"); success = false; goto Cleanup; }\
+    _fp;                                                                        \
 })
 
 #define SafeRead(fp, ptr, size)                                                 \
 ({                                                                              \
-    size_t __b = fread(ptr, 1, size, fp);                                       \
+    size_t _b = fread(ptr, 1, size, fp);                                        \
     if (ferror(fp)) { LogError("unable to read file\n"); success = false; goto Cleanup; }\
-    __b;                                                                        \
+    _b;                                                                         \
 })
 
 #define SafeClose(fp)                                                           \
@@ -86,7 +86,7 @@ do {                                                                            
 #define IsFlagSet(x,flag) (((x) & (flag)) == (flag))
 
 // String utilities
-#define PLURAL(s,n) (n == 1) ? s : s "s"
+#define PLURAL(s,n) (n == 1) ? s : s "s"    // PLURALIZE? Pluralize?
 #define ISARE(n)    (n == 1) ? "is" : "are"
 
 #endif  // FATFS_H

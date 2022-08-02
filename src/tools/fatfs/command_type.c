@@ -4,7 +4,10 @@
 int Type(const CommandArgs *args)
 {
     char *data = NULL;
+    const DirEntry *e = NULL;
+    DirEntry *dirEntry = NULL;
     bool success = true;
+    char shortnameBuf[MAX_SHORTNAME];
 
     if (args->Argc == 0)
     {
@@ -12,88 +15,64 @@ int Type(const CommandArgs *args)
         return STATUS_INVALIDARG;
     }
 
-    success = OpenImage(args->ImagePath);
-    if (!success)
-    {
-        goto Cleanup;
-    }
+    RIF(OpenImage(args->ImagePath));
 
     const char *path = args->Argv[0];
-    const DirEntry * dirEntry = FindFile(path);
-    if (!dirEntry)
+    success = FindFile(&dirEntry, path);
+    if (!success)
     {
         LogError("file not found - %s\n", path);
         success = false;
         goto Cleanup;
     }
 
-    bool isRoot = dirEntry == GetRootDir();
+    bool isRoot = (dirEntry == NULL);
+    size_t size = GetFileSizeOnDisk(dirEntry);
 
-    if (isRoot || (dirEntry->Attributes & ATTR_DIRECTORY))
+    if (!isRoot)
     {
-        // This is hairy...
-        // TODO: somehow get the root dir to work
+        data = SafeAlloc(size);
+        RIF(ReadFile(data, dirEntry));
 
-        const int ClusterSize = GetClusterSize();
-        const int NumDirEntriesPerCluster = ClusterSize / sizeof(DirEntry);
-
-        char buf[ClusterSize];
-        char entryName[MAX_SHORTNAME] = { 0 };
-        uint32_t cluster = dirEntry->FirstCluster;
-
-        do
+        if (!IsDirectory(dirEntry))
         {
-            const DirEntry *entry = (const DirEntry *) buf;
-            int count = NumDirEntriesPerCluster;
+            printf("%.*s", dirEntry->FileSize, data);
+            goto Cleanup;
+        }
 
-            if (!isRoot)
-            {
-                ReadCluster(buf, cluster);
-                cluster = GetNextCluster(cluster);
-            }
-            else
-            {
-                entry = GetRootDir();
-                count = GetBiosParams()->MaxRootDirEntryCount;
-            }
-
-            for (int i = 0; i < count; i++, entry++)
-            {
-                // TODO: validate dir entry somehow
-                switch ((unsigned char) entry->Name[0])
-                {
-                    case 0x00:
-                    case 0x05:
-                    case 0xE5:
-                        // free slot/deleted file
-                        continue;
-                }
-
-                if (IsFlagSet(entry->Attributes, ATTR_LFN))
-                {
-                    // Skip LFN entries
-                    continue;
-                }
-
-                GetShortName(entryName, entry);
-                printf("%s\n", entryName);
-            }
-        } while (CLUSTER_IS_VALID(cluster));
+        e = (const DirEntry *) data;
     }
     else
     {
-        int size = dirEntry->FileSize;
-        data = SafeAlloc(size);
+        e = GetRootDir();
+    }
 
-        success = ReadFile(data, dirEntry);
-        if (success)
+    int count = size / sizeof(DirEntry);
+    for (int i = 0; i < count; i++, e++)
+    {
+        // TODO: validate dir entry somehow
+        switch ((unsigned char) e->Name[0])
         {
-            printf("%.*s", size, data);
+            case 0x00:
+            case 0x05:
+            case 0xE5:
+                // free slot/deleted file
+                continue;
         }
+
+        if (IsFlagSet(e->Attributes, ATTR_LFN))
+        {
+            // Skip LFN entries
+            continue;
+        }
+
+        GetShortName(shortnameBuf, e);
+        printf("%s\n", shortnameBuf);
     }
 
 Cleanup:
-    CloseImage();
     SafeFree(data);
+    SafeFree(dirEntry);
+    CloseImage();
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }

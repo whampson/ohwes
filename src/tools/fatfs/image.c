@@ -9,7 +9,7 @@ static DirEntry *s_pRootDir = NULL;
 static FILE *s_FilePtr = NULL;
 static char s_ImagePath[MAX_PATH];
 
-static size_t GetClusterAddress(uint32_t cluster);
+static size_t CalculateClusterOffset(uint32_t cluster);
 static void MakeUppercase(char *s);
 
 bool OpenImage(const char *path)
@@ -27,22 +27,21 @@ bool OpenImage(const char *path)
     int numFats = GetBiosParams()->TableCount;
 
     // Skip remaining reserved sectors
-    // Boot sector is considered reserved
     fseek(s_FilePtr, sectorSize * (resSectors - 1), SEEK_CUR);
 
     // TODO: detect FAT type
     // For now, assume FAT12...
 
+    // Load cluster map
     int fatSize = fatSectors * sectorSize;
     s_NumClusters = (fatSize / 3) * 2;   // 3 bytes = 24 bits = 2 FAT12 clusters
+    int pairCount = s_NumClusters / 2;
     s_pClusterMap = SafeAlloc(s_NumClusters * sizeof(uint32_t));
 
-    int pairCount = s_NumClusters / 2;
-    int bytesRead = 0;
     for (int i = 0; i < pairCount; i++)
     {
         uint8_t stride[3];
-        bytesRead += SafeRead(s_FilePtr, stride, sizeof(stride));
+        SafeRead(s_FilePtr, stride, sizeof(stride));
 
         // |........|++++....|++++++++|
         uint32_t cluster0 = (stride[1] & 0xF) << 8 | stride[0];
@@ -53,19 +52,17 @@ bool OpenImage(const char *path)
     }
 
     // Skip other copies of the FAT
-    // TODO: error detection/correction?
     fseek(s_FilePtr, sectorSize * fatSectors * (numFats - 1), SEEK_CUR);
+    // TODO: error detection/correction? option to select which FAT to read?
 
+    // Load root directory
     int numDirEntries = GetBiosParams()->MaxRootDirEntryCount;
     int rootDirSize = numDirEntries * sizeof(DirEntry);
-
     s_pRootDir = SafeAlloc(rootDirSize);
     SafeRead(s_FilePtr, s_pRootDir, rootDirSize);
 
-    if (success)
-    {
-        strncpy(s_ImagePath, path, MAX_PATH);
-    }
+    // Save the disk image file path
+    strncpy(s_ImagePath, path, MAX_PATH);
 
 Cleanup:
     if (!success)
@@ -113,16 +110,6 @@ size_t GetClusterSize(void)
     return GetBiosParams()->SectorSize * GetBiosParams()->SectorsPerCluster;
 }
 
-size_t GetRootDirSize(void)
-{
-    return GetBiosParams()->MaxRootDirEntryCount * sizeof(DirEntry);
-}
-
-size_t GetTableSize(void)
-{
-    return GetBiosParams()->SectorsPerTable * GetBiosParams()->SectorSize;
-}
-
 uint32_t GetNextCluster(uint32_t current)
 {
     if (current >= s_NumClusters)
@@ -133,7 +120,27 @@ uint32_t GetNextCluster(uint32_t current)
     return s_pClusterMap[current];
 }
 
-const DirEntry * FindFile(const char *path)
+uint32_t GetFileSizeOnDisk(const DirEntry *file)
+{
+    const uint32_t ClusterSize = GetClusterSize();
+
+    if (file == NULL)
+    {
+        return GetBiosParams()->MaxRootDirEntryCount * sizeof(DirEntry);
+    }
+
+    uint32_t size = 0;
+    uint32_t cluster = file->FirstCluster;
+    while (IsClusterValid(cluster))
+    {
+        size += ClusterSize;
+        cluster = GetNextCluster(cluster);
+    }
+
+    return size;
+}
+
+bool FindFile(DirEntry **file, const char *path)
 {
     const size_t ClusterSize = GetClusterSize();
 
@@ -202,8 +209,7 @@ const DirEntry * FindFile(const char *path)
                     break;
                 }
             }
-
-        } while (CLUSTER_IS_VALID(cluster));
+        } while (IsClusterValid(cluster));
 
         if (!success)
         {
@@ -216,55 +222,40 @@ const DirEntry * FindFile(const char *path)
     if (depth == -1)
     {
         SafeFree(result);
-        return s_pRootDir;
+        *file = NULL;
+        return true;
     }
 
 Cleanup:
     if (!success)
     {
         SafeFree(result);
-        return NULL;
-    }
-
-    return result;
-}
-
-bool ReadCluster(char *dst, uint32_t index)
-{
-    const size_t ClusterSize = GetClusterSize();
-
-    if (index >= s_NumClusters ||
-        index < CLUSTER_FIRST || index > CLUSTER_LAST)
-    {
-        LogWarning("attempt to read invalid data cluster 0x%03X\n", index);
+        *file = NULL;
         return false;
     }
 
-    bool success = true;
-    size_t seekAddr = GetClusterAddress(index);
-
-    fseek(s_FilePtr, seekAddr, SEEK_SET);
-    size_t bytesRead = SafeRead(s_FilePtr, dst, ClusterSize);
-    assert(bytesRead == ClusterSize);
-
-Cleanup:
-    return success;
+    *file = result;
+    return true;
 }
 
-bool ReadFile(char *dst, const DirEntry *entry)
+bool ReadFile(char *dst, const DirEntry *file)
 {
     const size_t ClusterSize = GetClusterSize();
 
     bool success = true;
-    uint32_t cluster = entry->FirstCluster;
-    size_t fileSize = entry->FileSize;
+    char buf[ClusterSize];
+    uint32_t cluster = file->FirstCluster;
+    size_t fileSize = file->FileSize;
     size_t totalBytesRead = 0;
     size_t readSize;
-    char buf[ClusterSize];
 
-    while (CLUSTER_IS_VALID(cluster))
+    bool isDir = IsDirectory(file);
+
+    while (IsClusterValid(cluster))
     {
-        readSize = min(ClusterSize, (fileSize - totalBytesRead));
+        readSize = (isDir)
+            ? ClusterSize
+            : min(ClusterSize, (fileSize - totalBytesRead));
 
         RIF(ReadCluster(buf, cluster));
         memcpy(dst, buf, readSize);
@@ -278,7 +269,28 @@ Cleanup:
     return success;
 }
 
-static size_t GetClusterAddress(uint32_t cluster)
+bool ReadCluster(char *dst, uint32_t index)
+{
+    const size_t ClusterSize = GetClusterSize();
+
+    if (index >= s_NumClusters || !IsClusterValid(index))
+    {
+        LogWarning("attempt to read invalid data cluster 0x%03X\n", index);
+        return false;
+    }
+
+    bool success = true;
+    size_t seekAddr = CalculateClusterOffset(index);
+
+    fseek(s_FilePtr, seekAddr, SEEK_SET);
+    size_t bytesRead = SafeRead(s_FilePtr, dst, ClusterSize);
+    assert(bytesRead == ClusterSize);
+
+Cleanup:
+    return success;
+}
+
+static inline size_t CalculateClusterOffset(uint32_t cluster)
 {
     const BiosParamBlock *bpb = GetBiosParams();
 
@@ -286,7 +298,7 @@ static size_t GetClusterAddress(uint32_t cluster)
     const size_t NumFatSectors = bpb->TableCount * bpb->SectorsPerTable;
     const size_t SectorSize = bpb->SectorSize;
     const size_t ClusterSize = GetClusterSize();
-    const size_t RootDirSize = GetRootDirSize();
+    const size_t RootDirSize = GetFileSizeOnDisk(NULL);
 
     return ((NumResSectors + NumFatSectors) * SectorSize)
         + RootDirSize
