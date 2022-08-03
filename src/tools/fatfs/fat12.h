@@ -26,7 +26,7 @@
 
 #define IsClusterValid(c)           ((c) >= CLUSTER_FIRST && (c) <= CLUSTER_LAST)
 
-#define MAX_PATH                    257     // completely arbitrary
+#define MAX_PATH                    512     // completely arbitrary
 #define MAX_DATE                    19      // "September 31, 1990"
 #define MAX_TIME                    12      // "12:34:56 PM"
 #define MAX_SHORTNAME               NAME_LENGTH + EXT_LENGTH + 2
@@ -98,22 +98,41 @@ typedef enum __attribute__ ((packed)) _FileAttrs
     ATTR_LFN        = ATTR_LABEL|ATTR_SYSTEM|ATTR_HIDDEN|ATTR_READONLY
 }  FileAttrs;
 
-typedef struct _DirEntry
+typedef union _DirEntry
 {
-    char Name[NAME_LENGTH];
-    char Extension[EXT_LENGTH];
-    FileAttrs Attributes;
-    uint8_t _Reserved1;     // varies by system, do not use
-    uint8_t _Reserved2;     // TODO: fine creation time, 10ms increments, 0-199
-    FatTime CreationTime;
-    FatDate CreationDate;
-    FatDate LastAccessDate;
-    uint16_t _Reserved3;    // TODO: access rights bitmap
-    FatTime ModifiedTime;
-    FatDate ModifiedDate;
-    uint16_t FirstCluster;
-    uint32_t FileSize;
+    struct
+    {
+        char Name[NAME_LENGTH];
+        char Extension[EXT_LENGTH];
+        FileAttrs Attributes;
+        uint8_t _Reserved1;     // varies by system, do not use
+        uint8_t _Reserved2;     // TODO: fine creation time, 10ms increments, 0-199
+        FatTime CreationTime;
+        FatDate CreationDate;
+        FatDate LastAccessDate;
+        uint16_t _Reserved3;    // TODO: access rights bitmap
+        FatTime ModifiedTime;
+        FatDate ModifiedDate;
+        uint16_t FirstCluster;
+        uint32_t FileSize;
+    };
+
+    struct __attribute__ ((packed))
+    {
+        char Sequence   : 5;
+        char _Reserved0 : 1;
+        char FirstEntry : 1;
+        char _Reserved1 : 1;
+        wchar_t NameChunk1[5];
+        FileAttrs Attributes;
+        char _Reserved2;
+        char Checksum;
+        wchar_t NameChunk2[6];
+        uint16_t _Reserved3;
+        wchar_t NameChunk3[2];
+    } LFN;
 } DirEntry;
+
 
 void InitBPB(BiosParamBlock *bpb);
 void InitBootSector(BootSector *bootsect);
@@ -156,20 +175,19 @@ static inline bool IsDirectory(const DirEntry *e)
 
 static inline bool IsLongFileName(const DirEntry *e)
 {
-    return IsFlagSet(e->Attributes, ATTR_LFN);
+    return IsFlagSet(e->Attributes, ATTR_LFN)
+        && e->FirstCluster == 0;
 }
 
 static inline bool IsDeleted(const DirEntry *e)
 {
     unsigned char c = e->Name[0];
-    return c == 0x05
-        || c == 0xE5;
+    return c == 0x05 || c == 0xE5;
 }
 
 static inline bool IsFree(const DirEntry *e)
 {
-    return e->Name[0] == 0x00
-        || IsDeleted(e);
+    return IsDeleted(e) || e->Name[0] == 0x00;
 }
 
 static inline bool IsFile(const DirEntry *e)
@@ -181,8 +199,7 @@ static inline bool IsFile(const DirEntry *e)
 
 static inline bool IsRoot(const DirEntry *e)
 {
-    return IsDirectory(e)
-        && e->FirstCluster == 0;
+    return IsDirectory(e) && e->FirstCluster == 0;
 }
 
 static_assert(sizeof(BiosParamBlock) == 51, "Bad BiosParamBlock size!");

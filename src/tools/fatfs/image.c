@@ -266,10 +266,41 @@ static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir)
     // in root, refer back to root
     // elsewhere, get current or parent dir entry and return that
 
+    wchar_t lfnBuf[MAX_PATH] = { 0 };
+    bool hasLfn = false;
+
     const DirEntry *e = dirTable;
     int count = size / sizeof(DirEntry);
     for (int i = 0; i < count; i++, e++)
     {
+        if (!IsDeleted(e) && IsLongFileName(e))
+        {
+            hasLfn = true;
+            int offset = ((e->LFN.Sequence & 0x1F) - 1) * 26;
+            for (int i = 0; i < 13; i++)
+            {
+                wchar_t wc = 0;
+                if (i < 5)
+                {
+                    wc = e->LFN.NameChunk1[i];
+                }
+                if (i >= 5 && i < 11)
+                {
+                    wc = e->LFN.NameChunk2[i - 5];
+                }
+                if (i >= 11)
+                {
+                    wc = e->LFN.NameChunk3[i - 11];
+                }
+
+                if (wc == 0)
+                {
+                    break;
+                }
+                lfnBuf[offset + i] = wc;
+            }
+            continue;
+        }
         if (!IsFile(e))
         {
             // Skip free/deleted slots, LFNs, volume labels
@@ -280,11 +311,28 @@ static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir)
         if (strcmp(shortname, tok) != 0)
         {
             // skip mismatching names
+            hasLfn = false;
             continue;
         }
 
         success = TraversePath(file, NULL, e);  // NULL for recursive call
+        if (hasLfn)
+        {
+            // TODO: figure out how to retrieve this
+            wchar_t wc = 0;
+            int i = 0;
+            while (i < MAX_PATH)
+            {
+                wc = lfnBuf[i++];
+                if (wc != 0)
+                {
+                    printf("%lc", wc);
+                }
+            }
+            printf("\n");
+        }
         if (success) break;
+        hasLfn = false;
     }
 
 Cleanup:
