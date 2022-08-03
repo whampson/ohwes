@@ -126,10 +126,63 @@ void GetShortName(char dst[MAX_SHORTNAME], const DirEntry *file);
 void GetDate(char dst[MAX_DATE], const FatDate *date);
 void GetTime(char dst[MAX_TIME], const FatTime *time);
 
+static inline bool IsReadOnly(const DirEntry *e)
+{
+    return IsFlagSet(e->Attributes, ATTR_READONLY);
+}
+
+static inline bool IsHidden(const DirEntry *e)
+{
+    return IsFlagSet(e->Attributes, ATTR_HIDDEN);
+}
+
+static inline bool IsSystemFile(const DirEntry *e)
+{
+    return (IsFlagSet(e->Attributes, ATTR_SYSTEM)
+        && !IsFlagSet(e->Attributes, ATTR_LFN));
+}
+
+static inline bool IsVolumeLabel(const DirEntry *e)
+{
+    return (IsFlagSet(e->Attributes, ATTR_LABEL)
+        && !IsFlagSet(e->Attributes, ATTR_LFN));
+}
+
 static inline bool IsDirectory(const DirEntry *e)
 {
-    return IsFlagSet(e->Attributes, ATTR_DIRECTORY)
-        && !IsFlagSet(e->Attributes, ATTR_LFN);
+    return (IsFlagSet(e->Attributes, ATTR_DIRECTORY)
+        && !IsFlagSet(e->Attributes, ATTR_LFN));
+}
+
+static inline bool IsLongFileName(const DirEntry *e)
+{
+    return IsFlagSet(e->Attributes, ATTR_LFN);
+}
+
+static inline bool IsDeleted(const DirEntry *e)
+{
+    unsigned char c = e->Name[0];
+    return c == 0x05
+        || c == 0xE5;
+}
+
+static inline bool IsFree(const DirEntry *e)
+{
+    return e->Name[0] == 0x00
+        || IsDeleted(e);
+}
+
+static inline bool IsFile(const DirEntry *e)
+{
+    return !IsFree(e)
+        && !IsLongFileName(e)
+        && !IsVolumeLabel(e);
+}
+
+static inline bool IsRoot(const DirEntry *e)
+{
+    return IsDirectory(e)
+        && e->FirstCluster == 0;
 }
 
 static_assert(sizeof(BiosParamBlock) == 51, "Bad BiosParamBlock size!");

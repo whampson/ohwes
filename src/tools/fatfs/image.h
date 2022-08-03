@@ -41,6 +41,9 @@ BootSector * GetBootSector(void);
  */
 BiosParamBlock * GetBiosParams(void);
 
+/**
+ * Returns a pointer to a DirEntry representing the root directory.
+ */
 const DirEntry * GetRootDir(void);
 
 /**
@@ -57,16 +60,41 @@ size_t GetClusterSize(void);
 uint32_t GetNextCluster(uint32_t current);
 
 /**
+ * Returns the number of bytes required to store a file on disk.
+ * NOTE: for directories, this returns the size of the directory tree structure,
+ * not the total size of the contents of the directory.
+ *
+ * @param file  a DirEntry pointing to the file whose size on disk to calculate
+ * @return      the size in bytes of the file
+ */
+uint32_t GetFileSize(const DirEntry *file);
+
+/**
  * Calculates the number of bytes required to store a file on disk.
  *
- * @param file  a DirEntry pointing to the file whose size on disk to calculate;
- *              pass NULL to get the size of the root directory
- * @return      the size in bytes of the directory table, or 0 if the DirEntry
- *              is not a directory
+ * @param file  a DirEntry pointing to the file whose size on disk to calculate
+ * @return      the number of bytes this file takes up on disk
  */
 uint32_t GetFileSizeOnDisk(const DirEntry *file);
 
-bool FindFile(DirEntry **file, const char *path);
+/**
+ * Attempts to locate a file on disk using the specified absolute path.
+ *
+ * @param file  a pointer to the DirEntry to store found file information
+ * @param path  the absolute path to the desired file
+ * @return      true if the file was found
+ */
+bool FindFile(DirEntry *file, const char *path);
+
+/**
+ * Attempts to locate a file on disk using the specified relative path.
+ *
+ * @param file  a pointer to the DirEntry to store found file information
+ * @param path  the relative path to the desired file
+ * @param dir   the directory in which to begin searching
+ * @return      true if the file was found
+ */
+bool FindFileInDir(DirEntry *file, const char *path, const DirEntry *dir);
 
 /**
  * Reads a file from disk into the destination buffer.

@@ -5,11 +5,7 @@ int Info(const CommandArgs *args)
 {
     bool success = true;
 
-    success = OpenImage(args->ImagePath);
-    if (!success)
-    {
-        goto Cleanup;
-    }
+    RIF(OpenImage(args->ImagePath));
 
     if (args->Argc == 0)
     {
@@ -70,70 +66,64 @@ int Info(const CommandArgs *args)
     }
 
     const char *path = args->Argv[0];
-    DirEntry *e = NULL;
-    success = FindFile(&e, path);
+    DirEntry e;
+    DirEntry *file = &e;
+    success = FindFile(file, path);
     if (!success)
     {
-        LogError("info: file not found - %s\n", path);
-        return STATUS_ERROR;
+        LogError("file not found - %s\n", path);
+        goto Cleanup;
     }
 
     char shortName[MAX_SHORTNAME] = { 0 };
     char dateBuf[MAX_DATE];
     char timeBuf[MAX_TIME];
 
-    GetShortName(shortName, e);
-    printf("%s info:\n", shortName);
+    bool isDir = IsDirectory(file);
+    bool isRoot = IsRoot(file);
+
+    if (isRoot)
+    {
+        printf("%s is the root directory.\n", path);
+        goto Cleanup;
+    }
 
     int clusterCount = 0;
-    uint32_t cluster = e->FirstCluster;
-    while (cluster >= CLUSTER_FIRST && cluster <= CLUSTER_LAST)
+    uint32_t cluster = file->FirstCluster;
+    while (IsClusterValid(cluster))
     {
         clusterCount++;
         cluster = GetNextCluster(cluster);
     }
 
-    bool isDirectory = false;
-
-    printf("%s is a ", shortName);
-    if (e->Attributes & ATTR_READONLY)
+    printf("%s is a ", path);
+    if (IsReadOnly(file))
     {
         printf("read-only ");
     }
-    if (e->Attributes & ATTR_HIDDEN)
+    if (IsHidden(file))
     {
         printf("hidden ");
     }
-    // if (e->Attributes & ATTR_ARCHIVE)
-    // {
-    //     printf("archived ");
-    // }
-    if (e->Attributes & ATTR_LABEL)
+    if (IsSystemFile(file))
     {
-        printf("volume label ");
+        printf("system ");
     }
-    if (e->Attributes & ATTR_SYSTEM)
+    if (IsDirectory(file))
     {
-        printf("system file ");
-    }
-    if (e->Attributes & ATTR_DEVICE)
-    {
-        printf("device file ");
-    }
-    if (e->Attributes & ATTR_DIRECTORY)
-    {
-        isDirectory = true;
         printf("directory ");
     }
     else
     {
         printf("file ");
     }
-    printf("occupying %d %s:\n", clusterCount, PLURAL("cluster", clusterCount));
+    printf("occupying %d %s:\n",
+        clusterCount, PLURAL("cluster", clusterCount));
 
-    cluster = e->FirstCluster;
+    cluster = file->FirstCluster;
     clusterCount = 0;
-    while (cluster >= CLUSTER_FIRST && cluster <= CLUSTER_LAST)
+
+    while (IsClusterValid(cluster))
     {
         printf("  %03x", cluster);
         clusterCount++;
@@ -145,40 +135,40 @@ int Info(const CommandArgs *args)
     }
     printf("\n");
 
-    printf("The short name is '%s'.\n", shortName);
+    GetShortName(shortName, file);
+    printf("The %s short name is '%s'.\n",
+        (isDir) ? "directory" : "file",
+        shortName);
 
-    if (!isDirectory)
-    {
-        printf("The file size is %d bytes.\n",
-            e->FileSize);
-    }
+    printf("The %s size is %d bytes.\n",
+        (isDir) ? "directory" : "file",
+        GetFileSize(file));
     printf("The %s size on disk is %d bytes.\n",
-        (isDirectory) ? "directory" : "file",
-        GetFileSizeOnDisk(e));
+        (isDir) ? "directory" : "file",
+        GetFileSizeOnDisk(file));
 
-    GetDate(dateBuf, &e->CreationDate);
-    GetTime(timeBuf, &e->CreationTime);
+    GetDate(dateBuf, &file->CreationDate);
+    GetTime(timeBuf, &file->CreationTime);
     printf("The %s was created %s %s.\n",
-        (isDirectory) ? "directory" : "file",
+        (isDir) ? "directory" : "file",
         dateBuf, timeBuf);
 
-    GetDate(dateBuf, &e->ModifiedDate);
-    GetTime(timeBuf, &e->ModifiedTime);
+    GetDate(dateBuf, &file->ModifiedDate);
+    GetTime(timeBuf, &file->ModifiedTime);
     printf("The %s was modified %s %s.\n",
-        (isDirectory) ? "directory" : "file",
+        (isDir) ? "directory" : "file",
         dateBuf, timeBuf);
 
-    GetDate(dateBuf, &e->LastAccessDate);
+    GetDate(dateBuf, &file->LastAccessDate);
     printf("The %s was last accessed on %s.\n",
-        (isDirectory) ? "directory" : "file",
+        (isDir) ? "directory" : "file",
         dateBuf);
 
-    printf("The attributes byte is 0x%02X; ", e->Attributes);
+    printf("The attribute byte is 0x%02X; ", file->Attributes);
     printf("the reserved bytes are 0x%02X, 0x%02X, and 0x%02X.\n",
-        e->_Reserved1, e->_Reserved2, e->_Reserved3);
+        file->_Reserved1, file->_Reserved2, file->_Reserved3);
 
 Cleanup:
     CloseImage();
-    SafeFree(e);
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }

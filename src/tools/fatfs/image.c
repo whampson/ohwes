@@ -5,12 +5,19 @@
 static BootSector s_BootSect;
 static uint32_t s_NumClusters = 0;
 static uint32_t *s_pClusterMap = NULL;
-static DirEntry *s_pRootDir = NULL;
 static FILE *s_FilePtr = NULL;
 static char s_ImagePath[MAX_PATH];
 
-static size_t CalculateClusterOffset(uint32_t cluster);
+static DirEntry s_RootDir =
+{
+    .Attributes = ATTR_DIRECTORY,
+    .FileSize = 0,
+    .FirstCluster = 0,
+};
+
+static size_t GetClusterOffset(uint32_t cluster);
 static void MakeUppercase(char *s);
+static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir);
 
 bool OpenImage(const char *path)
 {
@@ -50,16 +57,7 @@ bool OpenImage(const char *path)
         s_pClusterMap[i * 2] = cluster0;
         s_pClusterMap[i * 2 + 1] = cluster1;
     }
-
-    // Skip other copies of the FAT
-    fseek(s_FilePtr, sectorSize * fatSectors * (numFats - 1), SEEK_CUR);
-    // TODO: error detection/correction? option to select which FAT to read?
-
-    // Load root directory
-    int numDirEntries = GetBiosParams()->MaxRootDirEntryCount;
-    int rootDirSize = numDirEntries * sizeof(DirEntry);
-    s_pRootDir = SafeAlloc(rootDirSize);
-    SafeRead(s_FilePtr, s_pRootDir, rootDirSize);
+    // TODO: FAT error detection/correction? option to select which FAT to read?
 
     // Save the disk image file path
     strncpy(s_ImagePath, path, MAX_PATH);
@@ -74,7 +72,6 @@ Cleanup:
 
 void CloseImage(void)
 {
-    SafeFree(s_pRootDir);
     SafeFree(s_pClusterMap);
     SafeClose(s_FilePtr);
     s_ImagePath[0] = '\0';
@@ -102,7 +99,7 @@ BiosParamBlock * GetBiosParams(void)
 
 const DirEntry * GetRootDir(void)
 {
-    return s_pRootDir;
+    return &s_RootDir;
 }
 
 size_t GetClusterSize(void)
@@ -120,11 +117,21 @@ uint32_t GetNextCluster(uint32_t current)
     return s_pClusterMap[current];
 }
 
+uint32_t GetFileSize(const DirEntry *file)
+{
+    if (IsDirectory(file))
+    {
+        return GetFileSizeOnDisk(file);
+    }
+
+    return file->FileSize;
+}
+
 uint32_t GetFileSizeOnDisk(const DirEntry *file)
 {
     const uint32_t ClusterSize = GetClusterSize();
 
-    if (file == NULL)
+    if (IsRoot(file))
     {
         return GetBiosParams()->MaxRootDirEntryCount * sizeof(DirEntry);
     }
@@ -140,102 +147,17 @@ uint32_t GetFileSizeOnDisk(const DirEntry *file)
     return size;
 }
 
-bool FindFile(DirEntry **file, const char *path)
+bool FindFileInDir(DirEntry *file, const char *path, const DirEntry *dir)
 {
-    const size_t ClusterSize = GetClusterSize();
+    char pathCopy[MAX_PATH];
+    strncpy(pathCopy, path, MAX_PATH);
 
-    char realPath[MAX_PATH];
-    char nameBuf[MAX_SHORTNAME];
-    char clustA[ClusterSize];
-    char clustB[ClusterSize];
-    char *clustBuf = clustA;
+    return TraversePath(file, pathCopy, dir);
+}
 
-    strncpy(realPath, path, MAX_PATH);
-
-    int depth = -1;
-    char *tok = strtok(realPath, "/");
-
-    const DirEntry *curDir = NULL;
-    uint32_t cluster = 0;
-
-    bool success = false;
-    DirEntry *result = SafeAlloc(sizeof(DirEntry));
-
-    while (tok != NULL)
-    {
-        depth++;
-
-        bool isRoot = (curDir == NULL);
-        int count = (isRoot)
-            ?  GetBiosParams()->MaxRootDirEntryCount
-            :  ClusterSize / sizeof(DirEntry);
-
-        cluster = (isRoot) ? 0 : curDir->FirstCluster;
-        success = false;
-
-        do
-        {
-            if (!isRoot)
-            {
-                // load cluster
-                clustBuf = (clustBuf == clustA) ? clustB : clustA;
-                ReadCluster(clustBuf, cluster);
-                cluster = GetNextCluster(cluster);
-            }
-
-            const DirEntry *e = (isRoot)
-                ? s_pRootDir
-                : (const DirEntry *) clustBuf;
-
-            for (int i = 0; i < count; i++, e++)
-            {
-                switch ((unsigned char) e->Name[0])
-                {
-                    case 0x00:
-                    case 0x05:
-                    case 0xE5:
-                        // free slot/deleted file
-                        continue;
-                }
-                GetShortName(nameBuf, e);
-                if (strcmp(nameBuf, tok) == 0)
-                {
-                    memcpy(result, e, sizeof(DirEntry));
-                    success = true;
-                    if (IsDirectory(e))
-                    {
-                        curDir = e;
-                    }
-                    break;
-                }
-            }
-        } while (IsClusterValid(cluster));
-
-        if (!success)
-        {
-            break;
-        }
-
-        tok = strtok(NULL, "/");
-    }
-
-    if (depth == -1)
-    {
-        SafeFree(result);
-        *file = NULL;
-        return true;
-    }
-
-Cleanup:
-    if (!success)
-    {
-        SafeFree(result);
-        *file = NULL;
-        return false;
-    }
-
-    *file = result;
-    return true;
+bool FindFile(DirEntry *file, const char *path)
+{
+    return FindFileInDir(file, path, GetRootDir());
 }
 
 bool ReadFile(char *dst, const DirEntry *file)
@@ -244,16 +166,25 @@ bool ReadFile(char *dst, const DirEntry *file)
 
     bool success = true;
     char buf[ClusterSize];
+
+    if (IsRoot(file))
+    {
+        size_t rootSize = GetFileSize(GetRootDir());
+        size_t addr = GetClusterOffset(CLUSTER_FIRST) - rootSize;
+        fseek(s_FilePtr, addr, SEEK_SET);
+
+        SafeRead(s_FilePtr, dst, rootSize);
+        return true;
+    }
+
     uint32_t cluster = file->FirstCluster;
     size_t fileSize = file->FileSize;
     size_t totalBytesRead = 0;
     size_t readSize;
 
-    bool isDir = IsDirectory(file);
-
     while (IsClusterValid(cluster))
     {
-        readSize = (isDir)
+        readSize = IsDirectory(file)
             ? ClusterSize
             : min(ClusterSize, (fileSize - totalBytesRead));
 
@@ -280,7 +211,7 @@ bool ReadCluster(char *dst, uint32_t index)
     }
 
     bool success = true;
-    size_t seekAddr = CalculateClusterOffset(index);
+    size_t seekAddr = GetClusterOffset(index);
 
     fseek(s_FilePtr, seekAddr, SEEK_SET);
     size_t bytesRead = SafeRead(s_FilePtr, dst, ClusterSize);
@@ -290,7 +221,7 @@ Cleanup:
     return success;
 }
 
-static inline size_t CalculateClusterOffset(uint32_t cluster)
+static inline size_t GetClusterOffset(uint32_t cluster)
 {
     const BiosParamBlock *bpb = GetBiosParams();
 
@@ -298,7 +229,7 @@ static inline size_t CalculateClusterOffset(uint32_t cluster)
     const size_t NumFatSectors = bpb->TableCount * bpb->SectorsPerTable;
     const size_t SectorSize = bpb->SectorSize;
     const size_t ClusterSize = GetClusterSize();
-    const size_t RootDirSize = GetFileSizeOnDisk(NULL);
+    const size_t RootDirSize = GetFileSizeOnDisk(GetRootDir());
 
     return ((NumResSectors + NumFatSectors) * SectorSize)
         + RootDirSize
@@ -311,4 +242,52 @@ static void MakeUppercase(char *s)
     {
         s[i] = toupper(s[i]);
     }
+}
+
+static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir)
+{
+    bool success = false;
+    char shortname[MAX_SHORTNAME];
+
+    char *tok = strtok(path, "/");
+    if (tok == NULL)
+    {
+        // we got it!
+        success = true;
+        memcpy(file, dir, sizeof(DirEntry));
+        goto Cleanup;
+    }
+
+    size_t size = GetFileSize(dir);
+    DirEntry *dirTable = SafeAlloc(size);
+    RIF(ReadFile((char *) dirTable, dir));
+
+    // TODO: handle . and ..?
+    // in root, refer back to root
+    // elsewhere, get current or parent dir entry and return that
+
+    const DirEntry *e = dirTable;
+    int count = size / sizeof(DirEntry);
+    for (int i = 0; i < count; i++, e++)
+    {
+        if (!IsFile(e))
+        {
+            // Skip free/deleted slots, LFNs, volume labels
+            continue;
+        }
+
+        GetShortName(shortname, e);
+        if (strcmp(shortname, tok) != 0)
+        {
+            // skip mismatching names
+            continue;
+        }
+
+        success = TraversePath(file, NULL, e);  // NULL for recursive call
+        if (success) break;
+    }
+
+Cleanup:
+    SafeFree(dirTable);
+    return success;
 }

@@ -3,11 +3,11 @@
 
 int Type(const CommandArgs *args)
 {
-    char *data = NULL;
-    const DirEntry *e = NULL;
-    DirEntry *dirEntry = NULL;
     bool success = true;
-    char shortnameBuf[MAX_SHORTNAME];
+    char shortname[MAX_SHORTNAME];
+    char *buf = NULL;
+    const char *path = args->Argv[0];
+    DirEntry file;
 
     if (args->Argc == 0)
     {
@@ -17,62 +17,41 @@ int Type(const CommandArgs *args)
 
     RIF(OpenImage(args->ImagePath));
 
-    const char *path = args->Argv[0];
-    success = FindFile(&dirEntry, path);
+    success = FindFile(&file, path);
     if (!success)
     {
         LogError("file not found - %s\n", path);
-        success = false;
-        goto Cleanup;
+        RIF(false);
     }
 
-    bool isRoot = (dirEntry == NULL);
-    size_t size = GetFileSizeOnDisk(dirEntry);
+    size_t size = GetFileSize(&file);
+    buf = SafeAlloc(size);
+    ReadFile(buf, &file);
 
-    if (!isRoot)
+    if (IsDirectory(&file))
     {
-        data = SafeAlloc(size);
-        RIF(ReadFile(data, dirEntry));
+        const DirEntry *e = (const DirEntry *) buf;
+        int count = size / sizeof(DirEntry);
 
-        if (!IsDirectory(dirEntry))
+        for (int i = 0; i < count; i++, e++)
         {
-            printf("%.*s", dirEntry->FileSize, data);
-            goto Cleanup;
-        }
+            if (!IsFile(e))
+            {
+                // Skip free/deleted slots, LFNs, volume labels
+                continue;
+            }
 
-        e = (const DirEntry *) data;
+            GetShortName(shortname, e);
+            printf("%s\n", shortname);
+        }
     }
     else
     {
-        e = GetRootDir();
-    }
-
-    int count = size / sizeof(DirEntry);
-    for (int i = 0; i < count; i++, e++)
-    {
-        // TODO: validate dir entry somehow
-        switch ((unsigned char) e->Name[0])
-        {
-            case 0x00:
-            case 0x05:
-            case 0xE5:
-                // free slot/deleted file
-                continue;
-        }
-
-        if (IsFlagSet(e->Attributes, ATTR_LFN))
-        {
-            // Skip LFN entries
-            continue;
-        }
-
-        GetShortName(shortnameBuf, e);
-        printf("%s\n", shortnameBuf);
+        printf("%.*s", size, buf);
     }
 
 Cleanup:
-    SafeFree(data);
-    SafeFree(dirEntry);
+    SafeFree(buf);
     CloseImage();
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }
