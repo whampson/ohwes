@@ -6,8 +6,7 @@
 typedef struct _CommandArgs
 {
     int Argc;
-    const char **Argv;
-    const char *CommandName;
+    char * const *Argv;
     const char *ImagePath;
     bool Verbose;
 } CommandArgs;
@@ -32,7 +31,7 @@ int Create(const CommandArgs *args);
 int Copy(const CommandArgs *args);
 int Extract(const CommandArgs *args);
 int Help(const CommandArgs *args);
-int Info(const CommandArgs *args);
+int Info(const CommandArgs *args);  // like 'stat'
 int List(const CommandArgs *args);
 int Mkdir(const CommandArgs *args);
 int Move(const CommandArgs *args);

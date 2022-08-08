@@ -200,6 +200,21 @@ Cleanup:
     return success;
 }
 
+static inline size_t GetClusterOffset(uint32_t cluster)
+{
+    const BiosParamBlock *bpb = GetBiosParams();
+
+    const size_t NumResSectors = bpb->ReservedSectorCount;
+    const size_t NumFatSectors = bpb->TableCount * bpb->SectorsPerTable;
+    const size_t SectorSize = bpb->SectorSize;
+    const size_t ClusterSize = GetClusterSize();
+    const size_t RootDirSize = GetFileSizeOnDisk(GetRootDir());
+
+    return ((NumResSectors + NumFatSectors) * SectorSize)
+        + RootDirSize
+        + ((cluster - 2) * ClusterSize);
+}
+
 bool ReadCluster(char *dst, uint32_t index)
 {
     const size_t ClusterSize = GetClusterSize();
@@ -221,27 +236,46 @@ Cleanup:
     return success;
 }
 
-static inline size_t GetClusterOffset(uint32_t cluster)
+bool ReadLongName(wchar_t dst[MAX_PATH], char *cksum, const DirEntry **entry)
 {
-    const BiosParamBlock *bpb = GetBiosParams();
+    bool hasLfn = false;
+    wchar_t buildBuf[MAX_PATH];
+    memset(buildBuf, 0xFF, sizeof(buildBuf));
 
-    const size_t NumResSectors = bpb->ReservedSectorCount;
-    const size_t NumFatSectors = bpb->TableCount * bpb->SectorsPerTable;
-    const size_t SectorSize = bpb->SectorSize;
-    const size_t ClusterSize = GetClusterSize();
-    const size_t RootDirSize = GetFileSizeOnDisk(GetRootDir());
-
-    return ((NumResSectors + NumFatSectors) * SectorSize)
-        + RootDirSize
-        + ((cluster - 2) * ClusterSize);
-}
-
-static void MakeUppercase(char *s)
-{
-    for (size_t i = 0; i < strnlen(s, MAX_PATH); i++)
+    const DirEntry *e = *entry;
+    while (IsLongFileName(e) && !IsDeleted(e))
     {
-        s[i] = toupper(s[i]);
+        hasLfn = true;
+        if (cksum) *cksum = e->LFN.Checksum;
+
+        int b = (e->LFN.Sequence - 1) * (LFN_CAPACITY * sizeof(wchar_t));
+        for (int k = 0; k < LFN_CAPACITY; k++)
+        {
+            wchar_t c = 0;
+            if (k < 5)              c = e->LFN.NameChunk1[k];
+            if (k >= 5 && k < 11)   c = e->LFN.NameChunk2[k - 5];
+            if (k >= 11)            c = e->LFN.NameChunk3[k - 11];
+
+            buildBuf[b + k] = c;
+        }
+        e++;
+        continue;
     }
+
+    if (hasLfn)
+    {
+        int n = 0;
+        for (int k = 0; k < MAX_PATH; k++)
+        {
+            wchar_t c = buildBuf[k];
+            if (c == 0xFFFF) continue;
+            if ((dst[n++] = c) == 0) break;
+        }
+        --e;
+    }
+
+    *entry = e;
+    return hasLfn;
 }
 
 static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir)
@@ -258,84 +292,66 @@ static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir)
         goto Cleanup;
     }
 
+    wchar_t wtok[MAX_PATH];
+    mbstowcs(wtok, tok, MAX_PATH);
+
     size_t size = GetFileSize(dir);
     DirEntry *dirTable = SafeAlloc(size);
     RIF(ReadFile((char *) dirTable, dir));
 
-    // TODO: handle . and ..?
-    // in root, refer back to root
-    // elsewhere, get current or parent dir entry and return that
-
-    wchar_t lfnBuf[MAX_PATH] = { 0 };
-    bool hasLfn = false;
-
     const DirEntry *e = dirTable;
     int count = size / sizeof(DirEntry);
+
+    // TODO: handle . and .. in root? (self-referential)
+
+    char lfnCksum = 0;
+    wchar_t lfn[MAX_PATH];
+    bool hasLfn = false;
+
     for (int i = 0; i < count; i++, e++)
     {
-        if (!IsDeleted(e) && IsLongFileName(e))
+        if (IsLongFileName(e) && !IsDeleted(e))
         {
-            hasLfn = true;
-            int offset = ((e->LFN.Sequence & 0x1F) - 1) * 26;
-            for (int i = 0; i < 13; i++)
-            {
-                wchar_t wc = 0;
-                if (i < 5)
-                {
-                    wc = e->LFN.NameChunk1[i];
-                }
-                if (i >= 5 && i < 11)
-                {
-                    wc = e->LFN.NameChunk2[i - 5];
-                }
-                if (i >= 11)
-                {
-                    wc = e->LFN.NameChunk3[i - 11];
-                }
-
-                if (wc == 0)
-                {
-                    break;
-                }
-                lfnBuf[offset + i] = wc;
-            }
+            hasLfn = ReadLongName(lfn, &lfnCksum, &e);
             continue;
         }
-        if (!IsFile(e))
+        else if (!IsFile(e))
         {
-            // Skip free/deleted slots, LFNs, volume labels
-            continue;
-        }
-
-        GetShortName(shortname, e);
-        if (strcmp(shortname, tok) != 0)
-        {
-            // skip mismatching names
             hasLfn = false;
             continue;
         }
 
-        success = TraversePath(file, NULL, e);  // NULL for recursive call
-        if (hasLfn)
+        GetShortName(shortname, e);
+
+        bool match = false;
+        if (hasLfn && wcscmp(lfn, wtok) == 0)
         {
-            // TODO: figure out how to retrieve this
-            wchar_t wc = 0;
-            int i = 0;
-            while (i < MAX_PATH)
+            if (GetShortNameChecksum(e) == lfnCksum)
             {
-                wc = lfnBuf[i++];
-                if (wc != 0)
-                {
-                    printf("%lc", wc);
-                }
+                match = true;
             }
-            printf("\n");
         }
-        if (success) break;
-        hasLfn = false;
+        else if (strcmp(shortname, tok) == 0)
+        {
+            match = true;
+        }
+
+        if (match)
+        {
+            success = TraversePath(file, NULL, e);  // NULL for recursive call
+            break;
+        }
     }
 
 Cleanup:
     SafeFree(dirTable);
     return success;
+}
+
+static void MakeUppercase(char *s)
+{
+    for (size_t i = 0; i < strnlen(s, MAX_PATH); i++)
+    {
+        s[i] = toupper(s[i]);
+    }
 }

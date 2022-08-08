@@ -31,6 +31,12 @@
 #define MAX_TIME                    12      // "12:34:56 PM"
 #define MAX_SHORTNAME               NAME_LENGTH + EXT_LENGTH + 2
 
+// Year zero.
+#define YEAR_BASE                   1980
+
+// Number of long file name characters per entry.
+#define LFN_CAPACITY                13
+
 /**
  * FAT12 BIOS Parameter Block
  * Contains disk and volume information.
@@ -106,11 +112,11 @@ typedef union _DirEntry
         char Extension[EXT_LENGTH];
         FileAttrs Attributes;
         uint8_t _Reserved1;     // varies by system, do not use
-        uint8_t _Reserved2;     // TODO: fine creation time, 10ms increments, 0-199
+        uint8_t _Reserved2;     // fine creation time, 10ms increments, 0-199
         FatTime CreationTime;
         FatDate CreationDate;
         FatDate LastAccessDate;
-        uint16_t _Reserved3;    // TODO: access rights bitmap
+        uint16_t _Reserved3;    // TODO: access rights bitmap?
         FatTime ModifiedTime;
         FatDate ModifiedDate;
         uint16_t FirstCluster;
@@ -142,17 +148,24 @@ void GetName(char dst[NAME_LENGTH+1], const char *src);
 void GetExt(char dst[EXT_LENGTH+1], const char *src);
 
 void GetShortName(char dst[MAX_SHORTNAME], const DirEntry *file);
+char GetShortNameChecksum(const DirEntry *file);
+
+// NOTE: the DirEntry provided must exist within a table of DirEntries
+bool ReadLongName(wchar_t dst[MAX_PATH], char *cksum, const DirEntry **entry);
+
 void GetDate(char dst[MAX_DATE], const FatDate *date);
 void GetTime(char dst[MAX_TIME], const FatTime *time);
 
 static inline bool IsReadOnly(const DirEntry *e)
 {
-    return IsFlagSet(e->Attributes, ATTR_READONLY);
+    return (IsFlagSet(e->Attributes, ATTR_READONLY)
+        && !IsFlagSet(e->Attributes, ATTR_LFN));
 }
 
 static inline bool IsHidden(const DirEntry *e)
 {
-    return IsFlagSet(e->Attributes, ATTR_HIDDEN);
+    return (IsFlagSet(e->Attributes, ATTR_HIDDEN)
+        && !IsFlagSet(e->Attributes, ATTR_LFN));
 }
 
 static inline bool IsSystemFile(const DirEntry *e)
@@ -169,8 +182,13 @@ static inline bool IsVolumeLabel(const DirEntry *e)
 
 static inline bool IsDirectory(const DirEntry *e)
 {
-    return (IsFlagSet(e->Attributes, ATTR_DIRECTORY)
-        && !IsFlagSet(e->Attributes, ATTR_LFN));
+    return IsFlagSet(e->Attributes, ATTR_DIRECTORY);
+}
+
+static inline bool IsDeviceFile(const DirEntry *e)
+{
+    // I'm not sure if this is even a thing
+    return IsFlagSet(e->Attributes, ATTR_DEVICE);
 }
 
 static inline bool IsLongFileName(const DirEntry *e)
@@ -200,6 +218,19 @@ static inline bool IsFile(const DirEntry *e)
 static inline bool IsRoot(const DirEntry *e)
 {
     return IsDirectory(e) && e->FirstCluster == 0;
+}
+
+static inline bool IsCurrentDirectory(const DirEntry *e)
+{
+    return e->Name[0] == '.'
+        && e->Name[1] == ' ';
+}
+
+static inline bool IsParentDirectory(const DirEntry *e)
+{
+    return e->Name[0] == '.'
+        && e->Name[1] == '.'
+        && e->Name[2] == ' ';
 }
 
 static_assert(sizeof(BiosParamBlock) == 51, "Bad BiosParamBlock size!");

@@ -24,5 +24,13 @@
                 "/#include.*/"
             ]
         }
-    ]
+    ],
+    "files.associations": {
+        "numbers": "c",
+        "stdbool.h": "c",
+        "unistd.h": "c",
+        "getopt.h": "c",
+        "image.h": "c",
+        "typeinfo": "c"
+    }
 }

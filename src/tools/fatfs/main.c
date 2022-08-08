@@ -6,9 +6,9 @@ static CommandArgs s_CommandArgs = { 0 };
 static bool s_PrintUsage = false;
 static bool s_PrintVersionInfo = false;
 
-static bool ParseCommandLine(int argc, const char **argv);
+static bool ParseCommandLine(int argc, char **argv);
 
-int main(int argc, const char **argv)
+int main(int argc, char **argv)
 {
     if (!ParseCommandLine(argc, argv))
     {
@@ -26,17 +26,17 @@ int main(int argc, const char **argv)
         return STATUS_SUCCESS;
     }
 
-    const Command *cmd = FindCommand(s_CommandArgs.CommandName);
+    const Command *cmd = FindCommand(s_CommandArgs.Argv[0]);
     if (!cmd)
     {
-        LogError("invalid command - %s\n", s_CommandArgs.CommandName);
+        LogError("invalid command - %s\n", s_CommandArgs.Argv[0]);
         return STATUS_ERROR;
     }
 
     return cmd->Func(&s_CommandArgs);
 }
 
-static bool ParseCommandLine(int argc, const char **argv)
+static bool ParseCommandLine(int argc, char **argv)
 {
     // TODO: make this a generic function like getopt
 
@@ -58,7 +58,7 @@ static bool ParseCommandLine(int argc, const char **argv)
     i = 0;
     while (argc > ++i)
     {
-        if (s_CommandArgs.CommandName)
+        if (s_CommandArgs.Argc > 0)
         {
             // Stop processing once we've determined the command to execute.
             // Everything after command name are command arguments.
@@ -73,11 +73,10 @@ static bool ParseCommandLine(int argc, const char **argv)
                     s_CommandArgs.ImagePath = argv[i];
                     break;
                 }
-                if (!s_CommandArgs.CommandName)
+                if (s_CommandArgs.Argc == 0)
                 {
-                    s_CommandArgs.CommandName = argv[i];
-                    s_CommandArgs.Argc = argc - i - 1;
-                    s_CommandArgs.Argv = &argv[i + 1];
+                    s_CommandArgs.Argc = argc - i;
+                    s_CommandArgs.Argv = &argv[i];
                     break;
                 }
                 break;
@@ -121,7 +120,7 @@ static bool ParseCommandLine(int argc, const char **argv)
         return false;
     }
 
-    if (!s_CommandArgs.CommandName)
+    if (!s_CommandArgs.Argc)
     {
         LogError("missing command\n");
         return false;

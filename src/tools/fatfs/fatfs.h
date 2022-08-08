@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <getopt.h>
 
 #define PROG_NAME           "fatfs"
 #define PROG_VERSION        "0.1"

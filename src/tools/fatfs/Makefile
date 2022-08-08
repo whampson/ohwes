@@ -14,5 +14,6 @@ C_WARNINGS += \
 	no-unused-function \
 	no-unused-parameter \
 	no-unused-variable \
+	no-unused-but-set-variable \
 	no-gnu-statement-expression \
 	no-pedantic
