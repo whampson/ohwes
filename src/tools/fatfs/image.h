@@ -47,6 +47,11 @@ BiosParamBlock * GetBiosParams(void);
 const DirEntry * GetRootDir(void);
 
 /**
+ * Returns the cluster map (File Allocation Table).
+ */
+const uint32_t * GetClusterMap(void);
+
+/**
  * Returns the size of a data cluster in bytes.
  */
 size_t GetClusterSize(void);

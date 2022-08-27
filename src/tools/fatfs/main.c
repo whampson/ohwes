@@ -38,7 +38,7 @@ int main(int argc, char **argv)
 
 static bool ParseCommandLine(int argc, char **argv)
 {
-    // TODO: make this a generic function like getopt
+    // TODO: handle global --help
 
     int i;
     const char *opt;

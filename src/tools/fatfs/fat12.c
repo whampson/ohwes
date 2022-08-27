@@ -64,11 +64,6 @@ void InitBootSector(BootSector *bootsect)
     InitBPB(&bootsect->BiosParams);
 }
 
-void GetLabel(char dst[LABEL_LENGTH+1], const char *src)
-{
-    GetString(dst, src, LABEL_LENGTH);
-}
-
 void GetName(char dst[NAME_LENGTH+1], const char *src)
 {
     GetString(dst, src, NAME_LENGTH);
@@ -155,6 +150,17 @@ void GetTime(char dst[MAX_TIME], const FatTime *time)
     int h = time->Hours;
     int m = time->Minutes;
     int s = time->Seconds * 2;
+
+    snprintf(dst, MAX_TIME, "%d:%02d:%02d %s",
+        h % 12, m, s,
+        (h < 12) ? "AM" : "PM");
+}
+
+void GetTimePrecise(char dst[MAX_TIME], const FatTime *time, int fineTime)
+{
+    int h = time->Hours;
+    int m = time->Minutes;
+    int s = ((time->Seconds * 2000) + (10 * fineTime)) / 1000;
 
     snprintf(dst, MAX_TIME, "%d:%02d:%02d %s",
         h % 12, m, s,

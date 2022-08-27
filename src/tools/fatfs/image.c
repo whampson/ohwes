@@ -102,6 +102,11 @@ const DirEntry * GetRootDir(void)
     return &s_RootDir;
 }
 
+const uint32_t * GetClusterMap(void)
+{
+    return s_pClusterMap;
+}
+
 size_t GetClusterSize(void)
 {
     return GetBiosParams()->SectorSize * GetBiosParams()->SectorsPerCluster;

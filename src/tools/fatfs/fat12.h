@@ -143,7 +143,6 @@ typedef union _DirEntry
 void InitBPB(BiosParamBlock *bpb);
 void InitBootSector(BootSector *bootsect);
 
-void GetLabel(char dst[LABEL_LENGTH+1], const char *src);
 void GetName(char dst[NAME_LENGTH+1], const char *src);
 void GetExt(char dst[EXT_LENGTH+1], const char *src);
 
@@ -155,45 +154,48 @@ bool ReadLongName(wchar_t dst[MAX_PATH], char *cksum, const DirEntry **entry);
 
 void GetDate(char dst[MAX_DATE], const FatDate *date);
 void GetTime(char dst[MAX_TIME], const FatTime *time);
+void GetTimePrecise(char dst[MAX_TIME], const FatTime *time, int fineTime);
+
+#define HasAttribute(file,flag) (((file)->Attributes & (flag)) == (flag))
 
 static inline bool IsReadOnly(const DirEntry *e)
 {
-    return (IsFlagSet(e->Attributes, ATTR_READONLY)
-        && !IsFlagSet(e->Attributes, ATTR_LFN));
+    return (HasAttribute(e, ATTR_READONLY)
+        && !HasAttribute(e, ATTR_LFN));
 }
 
 static inline bool IsHidden(const DirEntry *e)
 {
-    return (IsFlagSet(e->Attributes, ATTR_HIDDEN)
-        && !IsFlagSet(e->Attributes, ATTR_LFN));
+    return (HasAttribute(e, ATTR_HIDDEN)
+        && !HasAttribute(e, ATTR_LFN));
 }
 
 static inline bool IsSystemFile(const DirEntry *e)
 {
-    return (IsFlagSet(e->Attributes, ATTR_SYSTEM)
-        && !IsFlagSet(e->Attributes, ATTR_LFN));
+    return (HasAttribute(e, ATTR_SYSTEM)
+        && !HasAttribute(e, ATTR_LFN));
 }
 
 static inline bool IsVolumeLabel(const DirEntry *e)
 {
-    return (IsFlagSet(e->Attributes, ATTR_LABEL)
-        && !IsFlagSet(e->Attributes, ATTR_LFN));
+    return (HasAttribute(e, ATTR_LABEL)
+        && !HasAttribute(e, ATTR_LFN));
 }
 
 static inline bool IsDirectory(const DirEntry *e)
 {
-    return IsFlagSet(e->Attributes, ATTR_DIRECTORY);
+    return HasAttribute(e, ATTR_DIRECTORY);
 }
 
 static inline bool IsDeviceFile(const DirEntry *e)
 {
     // I'm not sure if this is even a thing
-    return IsFlagSet(e->Attributes, ATTR_DEVICE);
+    return HasAttribute(e, ATTR_DEVICE);
 }
 
 static inline bool IsLongFileName(const DirEntry *e)
 {
-    return IsFlagSet(e->Attributes, ATTR_LFN)
+    return HasAttribute(e, ATTR_LFN)
         && e->FirstCluster == 0;
 }
 

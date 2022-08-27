@@ -79,14 +79,14 @@ static const Command s_pCommands[] =
         "Print help about a command.",
         NULL,
     },
-    // { Info,
-    //     "info", "info [FILE]",
-    //     "Print file, directory, or disk information.",
-    //     NULL,
-    // },
+    { Info,
+        "info", "info [FILE]",
+        "Print file, directory, or disk information.",
+        NULL,
+    },
     { List,
         "list", "list [OPTIONS] [FILE]",
-        "List information about a file (the root directory by default).",
+        "List the contents of a directory (the root directory by default).",
         "Options:\n"
         "  -a       List all files; include hidden files.\n"
         "  -b       Bare format; print file names only.\n"
@@ -230,177 +230,172 @@ int Help(const CommandArgs *args)
 int Info(const CommandArgs *args)
 {
     bool success = true;
+    char *buf = NULL;
 
-//     RIF(OpenImage(args->ImagePath));
+    RIF(OpenImage(args->ImagePath));
 
-//     if (args->Argc == 0)
-//     {
-//         const BiosParamBlock *bpb = GetBiosParams();
+    if (args->Argc < 2)
+    {
+        const BiosParamBlock *bpb = GetBiosParams();
 
-//         char label[LABEL_LENGTH + 1];
-//         char fsId[NAME_LENGTH + 1];
+        char label[LABEL_LENGTH + 1] = { 0 };
+        strncpy(label, bpb->Label, LABEL_LENGTH);
 
-//         GetLabel(label, bpb->Label);
-//         GetName(fsId, bpb->FileSystemType);
+        char fsId[NAME_LENGTH + 1];
+        GetName(fsId, bpb->FileSystemType);
 
-//         int sectorSize = bpb->SectorSize;
-//         int sectorCount = bpb->SectorCount;
-//         int sectorsPerCluster = bpb->SectorsPerCluster;
-//         int clusterSize = sectorSize * sectorsPerCluster;
-//         int clusterCount = sectorCount / sectorsPerCluster;
-//         int diskSize = clusterCount * clusterSize;
-//         int tableSectors = bpb->TableCount * bpb->SectorsPerTable;
-//         int rootDirSectors = bpb->MaxRootDirEntryCount * sizeof(DirEntry) / sectorSize;
+        int sectorSize = bpb->SectorSize;
+        int sectorCount = bpb->SectorCount;
+        int sectorsPerCluster = bpb->SectorsPerCluster;
+        int clusterSize = sectorSize * sectorsPerCluster;
+        int reservedSectors = bpb->ReservedSectorCount;
+        int numTables = bpb->TableCount;
+        int tableSectors = numTables * bpb->SectorsPerTable;
+        int maxNumRootEntries = bpb->MaxRootDirEntryCount;
+        int rootSize = maxNumRootEntries * sizeof(DirEntry);
+        int numRootSectors = rootSize / sectorSize;
+        int numDataSectors = sectorCount - reservedSectors - tableSectors - numRootSectors;
+        int clusterCount = numDataSectors / bpb->SectorsPerCluster;
+        int usedClusterCount = 0;
+        int usedSectorCount = 0;
 
-//         // TODO: extended boot signature?
+        buf = SafeAlloc(rootSize);
+        ReadFile(buf, GetRootDir());
 
-//         printf("%s info:\n", GetImagePath());
-//         printf("The disk has %d heads, %d sectors per track, and a sector size of %d bytes.\n",
-//             bpb->HeadCount, bpb->SectorsPerTrack, sectorSize);
-//         printf("The media type ID is %02X; there are %d sectors for a total disk size of %d bytes.\n",
-//             bpb->MediaType, sectorCount, diskSize);
-//         printf("There %s %d hidden %s, %d large %s, and %d reserved %s.\n",
-//             ISARE(bpb->HiddenSectorCount), bpb->HiddenSectorCount, PLURAL("sector", bpb->HiddenSectorCount),
-//             bpb->LargeSectorCount, PLURAL("sector", bpb->LargeSectorCount),
-//             bpb->ReservedSectorCount, PLURAL("sector", bpb->ReservedSectorCount));
-//         printf("The cluster size is %d bytes.\n", clusterSize);
-//         printf("The drive number is %d.\n", bpb->DriveNumber);
-//         printf("There %s %d %s occupying %d sectors.\n",
-//             ISARE(bpb->TableCount), bpb->TableCount, PLURAL("FAT", bpb->TableCount),
-//             tableSectors);
-//         printf("The root directory contains %d slots and occupies %d sectors.\n",
-//             bpb->MaxRootDirEntryCount, rootDirSectors);
-//         switch (bpb->ExtendedBootSignature)
-//         {
-//             case 0x28:
-//                 printf("The volume ID is %08X.\n", bpb->VolumeId);
-//                 break;
-//             case 0x29:
-//                 printf("The volume ID is %08X; the volume label is '%s'.\n",
-//                     bpb->VolumeId, label);
-//                 printf("The file system type is '%s'.\n", fsId);
-//                 break;
-//             default:
-//                 printf(".\n");
-//                 break;
+        const uint32_t *pClusterMap = GetClusterMap();
+        for (int i = 0; i < clusterCount; i++)
+        {
+            uint32_t index = pClusterMap[i];
+            if (IsClusterValid(index))
+            {
+                usedClusterCount++;
+            }
+        }
 
-//         }
-//         printf("The reserved byte is 0x%02x.\n", bpb->_Reserved);
+        usedSectorCount = (usedClusterCount * sectorsPerCluster)
+            + numRootSectors + tableSectors + reservedSectors;
 
-//         // TODO: bytes used/free, file count, dir count
-//         return STATUS_SUCCESS;
-//     }
+        int dataCapacity = clusterCount * clusterSize;
+        int dataUsed = usedClusterCount * clusterSize;
 
-//     const char *path = args->Argv[0];
-//     DirEntry e;
-//     DirEntry *file = &e;
-//     success = FindFile(file, path);
-//     if (!success)
-//     {
-//         LogError("file not found - %s\n", path);
-//         goto Cleanup;
-//     }
+        int diskCapacity = sectorCount * sectorSize;
+        int diskUsed = usedSectorCount * sectorSize;
 
-//     char shortName[MAX_SHORTNAME] = { 0 };
-//     char dateBuf[MAX_DATE];
-//     char timeBuf[MAX_TIME];
+        float dataUsedPercent = ((float) dataUsed / dataCapacity) * 100.0f;
+        float diskUsedPercent = ((float) diskUsed / diskCapacity) * 100.0f;
 
-//     bool isDir = IsDirectory(file);
-//     bool isRoot = IsRoot(file);
+        printf("     Volume Label: %s\n", label);
+        printf("    Serial Number: %04X-%04X\n",
+            (bpb->VolumeId >> 16) & 0xFFFF, bpb->VolumeId & 0xFFFF);
+        printf("  File System Tag: %s\n", fsId);
+        printf("\n");
+        printf("  Data Used/Total: %d/%d clusters (%.0f%%)\n",
+            usedClusterCount, clusterCount, dataUsedPercent);
+        printf("                   %d/%d bytes\n",
+            dataUsed, dataCapacity);
+        printf("\n");
+        printf("Sectors per Track: %d\n", bpb->SectorsPerTrack);
+        printf("            Heads: %d\n", bpb->HeadCount);
+        printf("    Total Sectors: %d\n", bpb->SectorCount);
+        printf("      Sector Size: %d\n", bpb->SectorSize);
+        printf("     Cluster Size: %d\n", clusterSize);
+        printf("    Media Type ID: 0x%02X\n", bpb->MediaType);
+        printf("     Drive Number: %d\n", bpb->DriveNumber);
+        printf("        FAT Count: %d\n", bpb->TableCount);
+        printf("  Sectors per FAT: %d\n", bpb->SectorsPerTable);
+        printf(" Reserved Sectors: %d\n", bpb->ReservedSectorCount);
+        printf("   Hidden Sectors: %d\n", bpb->HiddenSectorCount);
+        printf("    Large Sectors: %d\n", bpb->LargeSectorCount);
+        printf("Root Dir Capacity: %d\n", bpb->MaxRootDirEntryCount);
+        printf("Extended Boot Sig: 0x%02x\n", bpb->ExtendedBootSignature);
+        printf("    Reserved Byte: 0x%02x\n", bpb->_Reserved);
 
-//     if (isRoot)
-//     {
-//         printf("%s is the root directory.\n", path);
-//         goto Cleanup;
-//     }
+        goto Cleanup;
+    }
 
-//     int clusterCount = 0;
-//     uint32_t cluster = file->FirstCluster;
-//     while (IsClusterValid(cluster))
-//     {
-//         clusterCount++;
-//         cluster = GetNextCluster(cluster);
-//     }
+    DirEntry file;
+    const char *path = args->Argv[1];
+    success = FindFile(&file, path);
+    if (!success)
+    {
+        LogError("file not found - %s\n", path);
+        goto Cleanup;
+    }
 
-//     printf("%s is a ", path);
-//     if (IsReadOnly(file))
-//     {
-//         printf("read-only ");
-//     }
-//     if (IsHidden(file))
-//     {
-//         printf("hidden ");
-//     }
-//     if (IsSystemFile(file))
-//     {
-//         printf("system ");
-//     }
-//     if (IsDirectory(file))
-//     {
-//         printf("directory ");
-//     }
-//     else
-//     {
-//         printf("file ");
-//     }
-//     printf("occupying %d %s:\n",
-//         clusterCount, PLURAL("cluster", clusterCount));
+    char shortname[MAX_SHORTNAME];
+    GetShortName(shortname, &file);
 
-//     cluster = file->FirstCluster;
-//     clusterCount = 0;
+    int size = GetFileSize(&file);
+    int clusters = GetFileSizeOnDisk(&file) / GetClusterSize();
 
-//     while (IsClusterValid(cluster))
-//     {
-//         printf("  %03x", cluster);
-//         clusterCount++;
-//         if (clusterCount % 8 == 0)
-//         {
-//             printf("\n");
-//         }
-//         cluster = GetNextCluster(cluster);
-//     }
-//     printf("\n");
+    char createdDate[MAX_DATE];
+    char createdTime[MAX_TIME];
+    char modifiedDate[MAX_DATE];
+    char modifiedTime[MAX_TIME];
+    char accessDate[MAX_DATE];
 
-//     GetShortName(shortName, file);
-//     printf("The %s short name is '%s'.\n",
-//         (isDir) ? "directory" : "file",
-//         shortName);
+    GetDate(createdDate, &file.CreationDate);
+    GetTimePrecise(createdTime, &file.CreationTime, file._Reserved2);
+    GetDate(modifiedDate, &file.ModifiedDate);
+    GetTime(modifiedTime, &file.ModifiedTime);
+    GetDate(accessDate, &file.LastAccessDate);
 
-//     printf("The %s size is %d bytes.\n",
-//         (isDir) ? "directory" : "file",
-//         GetFileSize(file));
-//     printf("The %s size on disk is %d bytes.\n",
-//         (isDir) ? "directory" : "file",
-//         GetFileSizeOnDisk(file));
+    printf("       Name: %s\n", shortname);
+    printf("       Size: %d %s\n", size, PLURALIZE("byte", size));
+    printf("             %d %s\n", clusters, PLURALIZE("cluster", clusters));
+    printf("    Created: %s %s\n", createdDate, createdTime);
+    printf("   Modified: %s %s\n", modifiedDate, modifiedTime);
+    printf("   Accessed: %s\n", accessDate);
+    printf(" Attributes: 0x%02x", file.Attributes);
+    if (file.Attributes != 0)
+    {
+        printf(" [");
+        if (HasAttribute(&file, ATTR_READONLY))
+            printf(" Read-Only");
+        if (HasAttribute(&file, ATTR_HIDDEN))
+            printf(" Hidden");
+        if (HasAttribute(&file, ATTR_SYSTEM))
+            printf(" System");
+        if (HasAttribute(&file, ATTR_LABEL))
+            printf(" Label");
+        if (HasAttribute(&file, ATTR_DIRECTORY))
+            printf(" Directory");
+        if (HasAttribute(&file, ATTR_ARCHIVE))
+            printf(" Archive");
+        if (HasAttribute(&file, ATTR_DEVICE))
+            printf(" Device");
+        if (HasAttribute(&file, ATTR_LFN))
+            printf(" Long File Name");
+        printf(" ]\n");
+    }
+    printf("   Reserved: 0x%02x 0x%02x\n", file._Reserved1, file._Reserved3);
+    printf("Cluster Map: ");
 
-//     GetDate(dateBuf, &file->CreationDate);
-//     GetTime(timeBuf, &file->CreationTime);
-//     printf("The %s was created %s %s.\n",
-//         (isDir) ? "directory" : "file",
-//         dateBuf, timeBuf);
+    uint32_t cluster = file.FirstCluster;
+    int count = 0;
+    while (IsClusterValid(cluster))
+    {
+        if ((count % 8) == 0)
+        {
+            printf("\n    ");
+        }
+        printf("%03x ", cluster);
+        cluster = GetNextCluster(cluster);
+        count++;
+    }
+    printf("\n");
 
-//     GetDate(dateBuf, &file->ModifiedDate);
-//     GetTime(timeBuf, &file->ModifiedTime);
-//     printf("The %s was modified %s %s.\n",
-//         (isDir) ? "directory" : "file",
-//         dateBuf, timeBuf);
-
-//     GetDate(dateBuf, &file->LastAccessDate);
-//     printf("The %s was last accessed on %s.\n",
-//         (isDir) ? "directory" : "file",
-//         dateBuf);
-
-//     printf("The attribute byte is 0x%02X; ", file->Attributes);
-//     printf("the reserved bytes are 0x%02X, 0x%02X, and 0x%02X.\n",
-//         file->_Reserved1, file->_Reserved2, file->_Reserved3);
-
-// Cleanup:
-//     CloseImage();
+Cleanup:
+    SafeFree(buf);
+    CloseImage();
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }
 
 int List(const CommandArgs *args)
 {
+    // TODO: --help
+    // TODO: -r
+
     bool success = true;
     bool listAll = false;
     bool bareFormat = false;
@@ -463,6 +458,7 @@ int List(const CommandArgs *args)
         dirEntry = (const DirEntry *) buf;
 
         // TODO: alphabetize
+        // TODO: recurse
     }
 
     char lfnChecksum = 0;

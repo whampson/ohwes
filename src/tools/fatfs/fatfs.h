@@ -84,10 +84,8 @@ do {                                                                            
     _a < _b ? _a : _b;                                                          \
 })
 
-#define IsFlagSet(x,flag) (((x) & (flag)) == (flag))
-
 // String utilities
-#define PLURAL(s,n) (n == 1) ? s : s "s"    // PLURALIZE? Pluralize?
+#define PLURALIZE(s,n) (n == 1) ? s : s "s"
 #define ISARE(n)    (n == 1) ? "is" : "are"
 
 #endif  // FATFS_H
