@@ -8,12 +8,13 @@ typedef struct _CommandArgs
     int Argc;
     char * const *Argv;
     const char *ImagePath;
-    bool Verbose;
 } CommandArgs;
+
+typedef struct _Command Command;
 
 typedef struct _Command
 {
-    int (*Func)(const CommandArgs *args);
+    int (*Func)(const Command *cmd, const CommandArgs *args);
     const char *Name;
     const char *Usage;
     const char *ShortHelp;
@@ -24,20 +25,21 @@ const Command * GetCommands(void);
 int GetCommandCount(void);
 
 const Command * FindCommand(const char *name);
+void PrintCommandHelp(const Command *cmd);
 
-int Add(const CommandArgs *args);
-int Attr(const CommandArgs *args);
-int Create(const CommandArgs *args);
-int Copy(const CommandArgs *args);
-int Extract(const CommandArgs *args);
-int Help(const CommandArgs *args);
-int Info(const CommandArgs *args);  // like 'stat'
-int List(const CommandArgs *args);
-int Mkdir(const CommandArgs *args);
-int Move(const CommandArgs *args);
-int Remove(const CommandArgs *args);
-int Rename(const CommandArgs *args);
-int Touch(const CommandArgs *args);
-int Type(const CommandArgs *args);
+int Add(const Command *cmd, const CommandArgs *args);
+int Attr(const Command *cmd, const CommandArgs *args);
+int Create(const Command *cmd, const CommandArgs *args);
+int Copy(const Command *cmd, const CommandArgs *args);
+int Extract(const Command *cmd, const CommandArgs *args);
+int Help(const Command *cmd, const CommandArgs *args);
+int Info(const Command *cmd, const CommandArgs *args);
+int List(const Command *cmd, const CommandArgs *args);
+int Mkdir(const Command *cmd, const CommandArgs *args);
+int Move(const Command *cmd, const CommandArgs *args);
+int Remove(const Command *cmd, const CommandArgs *args);
+int Rename(const Command *cmd, const CommandArgs *args);
+int Touch(const Command *cmd, const CommandArgs *args);
+int Type(const Command *cmd, const CommandArgs *args);
 
 #endif  // COMMAND_H

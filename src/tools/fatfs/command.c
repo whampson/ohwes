@@ -34,51 +34,46 @@ static const Command s_pCommands[] =
         "    -f              Overwrite files if they exist regardless of permissions.\n"
         "    -p              Create parent directories if they do not exist.\n"
     },
-    { Attr,
-        "attr", "attr [OPTIONS] FILE",
-        "Change file attributes.",
-        "Options:\n"
-        "    -H              Set the 'hidden' bit.\n"
-        "    -R              Set the 'read-only' bit.\n"
-        "    -S              Set the 'system file' bit.\n"
-        "    -h              Clear the 'hidden' bit.\n"
-        "    -r              Clear the 'read-only' bit.\n"
-        "    -s              Clear the 'system file' bit.\n"
-        "    -X VALUE        Set the attributes byte to VALUE.\n"
-    },
-    { Copy,
-        "copy", "copy [OPTIONS] SOURCE TARGET",
-        "Copy the contents of a file or directory.",
-        "Options:\n"
-        "    -f              Overwrite TARGET if it exists regardless of permissions.\n"
-        "    -p              Create parent directories if they do not exist.\n"
-        "    -r              Copy subdirectories.\n"
-    },
-    { Create,
-        "create", "create [OPTIONS]",
-        "Create a new FAT-formatted disk image.",
-        "DISKIMAGE will be used as the path to create the new disk image.\n"
-        "\n"
-        "Options:\n"
-        "    -L              Set the volume label.\n"
-        "    --force         Overwrite the disk image file if it exists.\n",
-    },
-    { Extract,
-        "extract", "extract [OPTIONS] SOURCE[...]",
-        "Extract files from the disk image.",
-        "SOURCE specifies the path to one or more files on the disk image.\n"
-        "Files are placed in the current working directory unless -d is supplied.\n"
-        "\n"
-        "Options:\n"
-        "    -d TARGETDIR    Extract files to TARGETDIR.\n"
-        "    -f              Overwrite files if they exist.\n"
-        "    -r              Extract subdirectories.\n"
-    },
-    { Help,
-        "help", "help COMMAND",
-        "Print help about a command.",
-        NULL,
-    },
+    // { Attr,
+    //     "attr", "attr [OPTIONS] FILE",
+    //     "Change file attributes.",
+    //     "Options:\n"
+    //     "    -H              Set the 'hidden' bit.\n"
+    //     "    -R              Set the 'read-only' bit.\n"
+    //     "    -S              Set the 'system file' bit.\n"
+    //     "    -h              Clear the 'hidden' bit.\n"
+    //     "    -r              Clear the 'read-only' bit.\n"
+    //     "    -s              Clear the 'system file' bit.\n"
+    //     "    -X VALUE        Set the attributes byte to VALUE.\n"
+    // },
+    // { Copy,
+    //     "copy", "copy [OPTIONS] SOURCE TARGET",
+    //     "Copy the contents of a file or directory.",
+    //     "Options:\n"
+    //     "    -f              Overwrite TARGET if it exists regardless of permissions.\n"
+    //     "    -p              Create parent directories if they do not exist.\n"
+    //     "    -r              Copy subdirectories.\n"
+    // },
+    // { Create,
+    //     "create", "create [OPTIONS]",
+    //     "Create a new FAT-formatted disk image.",
+    //     "DISKIMAGE will be used as the path to create the new disk image.\n"
+    //     "\n"
+    //     "Options:\n"
+    //     "    -L              Set the volume label.\n"
+    //     "    --force         Overwrite the disk image file if it exists.\n",
+    // },
+    // { Extract,
+    //     "extract", "extract [OPTIONS] SOURCE[...]",
+    //     "Extract files from the disk image.",
+    //     "SOURCE specifies the path to one or more files on the disk image.\n"
+    //     "Files are placed in the current working directory unless -d is supplied.\n"
+    //     "\n"
+    //     "Options:\n"
+    //     "    -d TARGETDIR    Extract files to TARGETDIR.\n"
+    //     "    -f              Overwrite files if they exist.\n"
+    //     "    -r              Extract subdirectories.\n"
+    // },
     { Info,
         "info", "info [FILE]",
         "Print file, directory, or disk information.",
@@ -91,55 +86,55 @@ static const Command s_pCommands[] =
         "  -a       List all files; include hidden files.\n"
         "  -b       Bare format; print file names only.\n"
         "  -n       Use short names only.\n"
-        "  -r       Print the contents of subdirectories.\n"
+        // "  -r       Print the contents of subdirectories.\n"     // TODO
     },
-    { Mkdir,
-        "mkdir", "mkdir [OPTIONS] PATH",
-        "Create a directory.",
-        "Options:\n"
-        "    -p              Create parent directories if they do not exist.\n"
-    },
-    { Move,
-        "move", "move [OPTIONS] SOURCE TARGET",
-        "Move a file or directory to a new location.",
-        "Options:\n"
-        "    -f              Overwrite TARGET if it exists regardless of permissions.\n"
-        "    -p              Create parent directories if they do not exist.\n"
-    },
-    { Remove,
-        "remove", "remove [OPTIONS] FILE",
-        "Remove a file or directory.",
-        "Options:\n"
-        "    -f              Remove PATH regardless of permissions or directory\n"
-        "                    contents.\n"
-    },
-    { Rename,
-        "rename", "rename FILE NEWNAME",
-        "Rename a file or directory.",
-        NULL,
-    },
-    { Touch,
-        "touch", "touch [OPTIONS] FILE",
-        "Change file access and modification times.",
-        "By default, both the access and modification times are updated to the current\n"
-        "date and time. If FILE does not exist, it will be created as an empty file.\n"
-        "\n"
-        "Options:\n"
-        "    -a              Change the access time. Modification time is not updated\n"
-        "                    unless -m is specified.\n"
-        "    -m              Change the modification time. Access time is not updated\n"
-        "                    unless -a is specified.\n"
-        "    -d MMDDYYYY     Set access and/or modification date to MMDDYYYY.\n"
-        "                        MM      Month, from 01 to 12.\n"
-        "                        DD      Day, from 01 to 31.\n"
-        "                        YYYY    Year, from 1980 to 2107.\n"
-        "    -t hh:mm:ss     Set access and/or modification time to hh:mm:ss.\n"
-        "                        hh      Hours, from 00 to 23.\n"
-        "                        mm      Minutes, from 00 to 59.\n"
-        "                        ss      Seconds, from 00 to 59.\n"
-        "    -f              Update access and modification times regardless of\n"
-        "                    permissions.\n"
-    },
+    // { Mkdir,
+    //     "mkdir", "mkdir [OPTIONS] PATH",
+    //     "Create a directory.",
+    //     "Options:\n"
+    //     "    -p              Create parent directories if they do not exist.\n"
+    // },
+    // { Move,
+    //     "move", "move [OPTIONS] SOURCE TARGET",
+    //     "Move a file or directory to a new location.",
+    //     "Options:\n"
+    //     "    -f              Overwrite TARGET if it exists regardless of permissions.\n"
+    //     "    -p              Create parent directories if they do not exist.\n"
+    // },
+    // { Remove,
+    //     "remove", "remove [OPTIONS] FILE",
+    //     "Remove a file or directory.",
+    //     "Options:\n"
+    //     "    -f              Remove PATH regardless of permissions or directory\n"
+    //     "                    contents.\n"
+    // },
+    // { Rename,
+    //     "rename", "rename FILE NEWNAME",
+    //     "Rename a file or directory.",
+    //     NULL,
+    // },
+    // { Touch,
+    //     "touch", "touch [OPTIONS] FILE",
+    //     "Change file access and modification times.",
+    //     "By default, both the access and modification times are updated to the current\n"
+    //     "date and time. If FILE does not exist, it will be created as an empty file.\n"
+    //     "\n"
+    //     "Options:\n"
+    //     "    -a              Change the access time. Modification time is not updated\n"
+    //     "                    unless -m is specified.\n"
+    //     "    -m              Change the modification time. Access time is not updated\n"
+    //     "                    unless -a is specified.\n"
+    //     "    -d MMDDYYYY     Set access and/or modification date to MMDDYYYY.\n"
+    //     "                        MM      Month, from 01 to 12.\n"
+    //     "                        DD      Day, from 01 to 31.\n"
+    //     "                        YYYY    Year, from 1980 to 2107.\n"
+    //     "    -t hh:mm:ss     Set access and/or modification time to hh:mm:ss.\n"
+    //     "                        hh      Hours, from 00 to 23.\n"
+    //     "                        mm      Minutes, from 00 to 59.\n"
+    //     "                        ss      Seconds, from 00 to 59.\n"
+    //     "    -f              Update access and modification times regardless of\n"
+    //     "                    permissions.\n"
+    // },
     { Type,
         "type", "type FILE",
         "Print the contents of a file.",
@@ -170,64 +165,32 @@ const Command * FindCommand(const char *name)
     return NULL;
 }
 
-int Add(const CommandArgs *args)
+int Add(const Command *cmd, const CommandArgs *args)
 {
     return STATUS_ERROR;
 }
 
-int Attr(const CommandArgs *args)
+int Attr(const Command *cmd, const CommandArgs *args)
 {
     return STATUS_ERROR;
 }
 
-int Create(const CommandArgs *args)
+int Create(const Command *cmd, const CommandArgs *args)
 {
     return STATUS_ERROR;
 }
 
-int Copy(const CommandArgs *args)
+int Copy(const Command *cmd, const CommandArgs *args)
 {
     return STATUS_ERROR;
 }
 
-int Extract(const CommandArgs *args)
+int Extract(const Command *cmd, const CommandArgs *args)
 {
     return STATUS_ERROR;
 }
 
-int Help(const CommandArgs *args)
-{
-    if (args->Argc < 2)
-    {
-        PrintUsage();
-        return STATUS_SUCCESS;
-    }
-
-    const char *cmdName = args->Argv[1];
-    const Command *cmd = FindCommand(cmdName);
-    if (cmd == NULL)
-    {
-        LogError("help: invalid command - %s\n", cmdName);
-        return STATUS_INVALIDARG;
-    }
-
-    if (cmd->Usage)
-    {
-        printf("Usage: %s\n", cmd->Usage);
-    }
-    if (cmd->ShortHelp)
-    {
-        printf("%s\n", cmd->ShortHelp);
-    }
-    if (cmd->LongHelp)
-    {
-        printf("\n%s", cmd->LongHelp);
-    }
-
-    return STATUS_SUCCESS;
-}
-
-int Info(const CommandArgs *args)
+int Info(const Command *cmd, const CommandArgs *args)
 {
     bool success = true;
     char *buf = NULL;
@@ -318,7 +281,7 @@ int Info(const CommandArgs *args)
     success = FindFile(&file, path);
     if (!success)
     {
-        LogError("file not found - %s\n", path);
+        LogError("file not found '%s'\n", path);
         goto Cleanup;
     }
 
@@ -391,7 +354,7 @@ Cleanup:
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }
 
-int List(const CommandArgs *args)
+int List(const Command *cmd, const CommandArgs *args)
 {
     // TODO: --help
     // TODO: -r
@@ -428,6 +391,7 @@ int List(const CommandArgs *args)
                 break;
             case '?':
                 GETOPT_INVALID();
+                break;
         }
     }
 
@@ -553,32 +517,32 @@ Cleanup:
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }
 
-int Mkdir(const CommandArgs *args)
+int Mkdir(const Command *cmd, const CommandArgs *args)
 {
     return STATUS_ERROR;
 }
 
-int Move(const CommandArgs *args)
+int Move(const Command *cmd, const CommandArgs *args)
 {
     return STATUS_ERROR;
 }
 
-int Remove(const CommandArgs *args)
+int Remove(const Command *cmd, const CommandArgs *args)
 {
     return STATUS_ERROR;
 }
 
-int Rename(const CommandArgs *args)
+int Rename(const Command *cmd, const CommandArgs *args)
 {
     return STATUS_ERROR;
 }
 
-int Touch(const CommandArgs *args)
+int Touch(const Command *cmd, const CommandArgs *args)
 {
     return STATUS_ERROR;
 }
 
-int Type(const CommandArgs *args)
+int Type(const Command *cmd, const CommandArgs *args)
 {
     bool success = true;
     char shortname[MAX_SHORTNAME];
