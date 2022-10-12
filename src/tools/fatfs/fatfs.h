@@ -52,7 +52,7 @@ extern bool g_Verbose;
 ({                                                                                                  \
     FILE *_fp = fopen(path, mode);                                                                  \
     if (!_fp) {                                                                                     \
-        LogError("unable to open disk image '%s'\n", path);                                         \
+        LogError("unable to open file '%s'\n", path);                                               \
         success = false;                                                                            \
         goto Cleanup;                                                                               \
     }                                                                                               \
@@ -64,8 +64,17 @@ extern bool g_Verbose;
 ({                                                                                                  \
     size_t _i = ftell(fp);                                                                          \
     size_t _b = fread(ptr, 1, size, fp);                                                            \
-    if (ferror(fp)) { LogError("unable to read disk image\n"); success = false; goto Cleanup; }     \
-    LogVerbose("%d bytes read from source file at address 0x%08x\n", size, _i);                     \
+    if (ferror(fp)) { LogError("unable to read file\n"); success = false; goto Cleanup; }           \
+    LogVerbose("%d bytes read from file at address 0x%08x\n", size, _i);                            \
+    _b;                                                                                             \
+})
+
+#define SafeWrite(fp, ptr, size)                                                                    \
+({                                                                                                  \
+    size_t _i = ftell(fp);                                                                          \
+    size_t _b = fwrite(ptr, 1, size, fp);                                                           \
+    if (ferror(fp)) { LogError("unable to write file\n"); success = false; goto Cleanup; }          \
+    LogVerbose("%d bytes written to file at address 0x%08x\n", size, _i);                           \
     _b;                                                                                             \
 })
 

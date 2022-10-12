@@ -187,7 +187,76 @@ int Copy(const Command *cmd, const CommandArgs *args)
 
 int Extract(const Command *cmd, const CommandArgs *args)
 {
-    return STATUS_ERROR;
+    bool success = true;
+    char shortname[MAX_SHORTNAME];
+    char *buf = NULL;
+    FILE *fp = NULL;
+    DirEntry file;
+
+    if (args->Argc < 2)
+    {
+        LogError("missing file\n");
+        return STATUS_INVALIDARG;
+    }
+
+    RIF(OpenImage(args->ImagePath));
+
+    for (int i = 1; i < args->Argc; i++)
+    {
+        const char *path = args->Argv[i];
+
+        success = FindFile(&file, path);
+        if (!success)
+        {
+            LogError("file not found - %s\n", path);
+            RIF(false);
+        }
+
+        size_t size = GetFileSize(&file);
+        buf = SafeAlloc(size);
+        ReadFile(buf, &file);
+
+        if (IsDirectory(&file))
+        {
+            LogError("%s is a directory.\n", path);
+            success = false;
+            goto Cleanup;
+
+            // TODO: extract entire dir? recurse?
+
+            // const DirEntry *e = (const DirEntry *) buf;
+            // int count = size / sizeof(DirEntry);
+
+            // for (int i = 0; i < count; i++, e++)
+            // {
+            //     if (!IsFile(e))
+            //     {
+            //         // Skip free/deleted slots, LFNs, volume labels
+            //         continue;
+            //     }
+
+            //     GetShortName(shortname, e);
+            //     printf("%s\n", shortname);
+            // }
+        }
+
+        // TODO: honor -d, -f, -r
+
+        // TODO: get long name
+        char shortname[MAX_SHORTNAME];
+        GetShortName(shortname, &file);
+
+        fp = SafeOpen(shortname, "wb");
+        SafeWrite(fp, buf, size);
+        SafeClose(fp);
+
+        SafeFree(buf);
+    }
+
+Cleanup:
+    SafeFree(buf);
+    CloseImage();
+    return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }
 
 int Info(const Command *cmd, const CommandArgs *args)

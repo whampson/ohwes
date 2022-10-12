@@ -338,6 +338,7 @@ static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir)
     int count = size / sizeof(DirEntry);
 
     // TODO: handle . and .. in root? (self-referential)
+    // TODO: case-insensitive for short names?
 
     char lfnCksum = 0;
     wchar_t lfn[MAX_PATH];
