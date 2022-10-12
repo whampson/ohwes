@@ -56,13 +56,16 @@ extern bool g_Verbose;
         success = false;                                                                            \
         goto Cleanup;                                                                               \
     }                                                                                               \
+    LogVerbose("opened file '%s' with mode '%s'\n", path, mode);                                    \
     _fp;                                                                                            \
 })
 
 #define SafeRead(fp, ptr, size)                                                                     \
 ({                                                                                                  \
+    size_t _i = ftell(fp);                                                                          \
     size_t _b = fread(ptr, 1, size, fp);                                                            \
     if (ferror(fp)) { LogError("unable to read disk image\n"); success = false; goto Cleanup; }     \
+    LogVerbose("%d bytes read from source file at address 0x%08x\n", size, _i);                     \
     _b;                                                                                             \
 })
 

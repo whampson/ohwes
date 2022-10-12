@@ -31,6 +31,10 @@
         "unistd.h": "c",
         "getopt.h": "c",
         "image.h": "c",
-        "typeinfo": "c"
+        "typeinfo": "c",
+        "random": "c",
+        "array": "c",
+        "string_view": "c",
+        "initializer_list": "c"
     }
 }

@@ -14,19 +14,16 @@ static int PrintHelp(void)
         const Command *cmds = GetCommands();
         int count = GetCommandCount();
 
-        printf("Usage: " PROG_NAME " [OPTIONS] IMAGE COMMAND [ARGUMENTS]\n");
-        printf("\n");
-        printf("Manipulates IMAGE as a FAT12 disk via COMMAND. Specify global parameters\n");
-        printf("via OPTIONS and command-specific parameters via ARGUMENTS.\n");
-        printf("\n");
-        printf("Commands:\n");
-        for (int i = 0; i < count; i++)
-            printf("    %-16s%s\n", cmds[i].Name, cmds[i].ShortHelp);
+        printf("Usage: " PROG_NAME " [OPTIONS] IMAGE COMMAND [ARGS]\n");
         printf("\n");
         printf("Options:\n");
         printf("    -v              Make the operation more talkative.\n");
         printf("    --help          Display help and exit.\n");
         printf("    --version       Display version information and exit.\n");
+        printf("\n");
+        printf("Commands:\n");
+        for (int i = 0; i < count; i++)
+            printf("    %-16s%s\n", cmds[i].Name, cmds[i].ShortHelp);
         printf("\n");
 
         return STATUS_SUCCESS;
@@ -194,11 +191,6 @@ int main(int argc, char **argv)
         return PrintVersion();
     }
 
-    if (g_Verbose)
-    {
-        LogVerbose("verbose mode.\n");
-    }
-
     const Command *cmd = FindCommand(s_CommandArgs.Argv[0]);
     if (!cmd)
     {
@@ -206,5 +198,11 @@ int main(int argc, char **argv)
         return STATUS_ERROR;
     }
 
-    return cmd->Func(cmd, &s_CommandArgs);
+    int status = cmd->Func(cmd, &s_CommandArgs);
+    if (status != STATUS_SUCCESS)
+    {
+        LogError("%s: failed with exit code %d.\n", cmd->Name, status);
+    }
+
+    return status;
 }

@@ -23,17 +23,17 @@ do {                                                                            
 
 static const Command s_pCommands[] =
 {
-    { Add,
-        "add", "add [OPTIONS] SOURCE[...]",
-        "Add files to the disk image.",
-        "SOURCE specifies the path to one or more files on the host system.\n"
-        "Files are placed in the root directory unless -d is supplied.\n"
-        "\n"
-        "Options:\n"
-        "    -d TARGETDIR    Add files to TARGETDIR.\n"
-        "    -f              Overwrite files if they exist regardless of permissions.\n"
-        "    -p              Create parent directories if they do not exist.\n"
-    },
+    // { Add,
+    //     "add", "add [OPTIONS] SOURCE[...]",
+    //     "Add files to the disk image.",
+    //     "SOURCE specifies the path to one or more files on the host system.\n"
+    //     "Files are placed in the root directory unless -d is supplied.\n"
+    //     "\n"
+    //     "Options:\n"
+    //     "    -d TARGETDIR    Add files to TARGETDIR.\n"
+    //     "    -f              Overwrite files if they exist regardless of permissions.\n"
+    //     "    -p              Create parent directories if they do not exist.\n"
+    // },
     // { Attr,
     //     "attr", "attr [OPTIONS] FILE",
     //     "Change file attributes.",
@@ -63,17 +63,17 @@ static const Command s_pCommands[] =
     //     "    -L              Set the volume label.\n"
     //     "    --force         Overwrite the disk image file if it exists.\n",
     // },
-    // { Extract,
-    //     "extract", "extract [OPTIONS] SOURCE[...]",
-    //     "Extract files from the disk image.",
-    //     "SOURCE specifies the path to one or more files on the disk image.\n"
-    //     "Files are placed in the current working directory unless -d is supplied.\n"
-    //     "\n"
-    //     "Options:\n"
-    //     "    -d TARGETDIR    Extract files to TARGETDIR.\n"
-    //     "    -f              Overwrite files if they exist.\n"
-    //     "    -r              Extract subdirectories.\n"
-    // },
+    { Extract,
+        "extract", "extract [OPTIONS] SOURCE[...]",
+        "Extract files from the disk image.",
+        "SOURCE specifies the path to one or more files on the disk image.\n"
+        "Files are placed in the current working directory unless -d is supplied.\n"
+        "\n"
+        "Options:\n"
+        "    -d TARGETDIR    Extract files to TARGETDIR.\n"
+        "    -f              Overwrite destination files if they exist.\n"
+        "    -r              Extract subdirectories.\n"
+    },
     { Info,
         "info", "info [FILE]",
         "Print file, directory, or disk information.",
@@ -199,6 +199,10 @@ int Info(const Command *cmd, const CommandArgs *args)
 
     if (args->Argc < 2)
     {
+        //
+        // Disk image info
+        //
+
         const BiosParamBlock *bpb = GetBiosParams();
 
         char label[LABEL_LENGTH + 1] = { 0 };
@@ -275,78 +279,87 @@ int Info(const Command *cmd, const CommandArgs *args)
 
         goto Cleanup;
     }
-
-    DirEntry file;
-    const char *path = args->Argv[1];
-    success = FindFile(&file, path);
-    if (!success)
+    else
     {
-        LogError("file not found '%s'\n", path);
-        goto Cleanup;
-    }
+        //
+        // File info.
+        //
 
-    char shortname[MAX_SHORTNAME];
-    GetShortName(shortname, &file);
-
-    int size = GetFileSize(&file);
-    int clusters = GetFileSizeOnDisk(&file) / GetClusterSize();
-
-    char createdDate[MAX_DATE];
-    char createdTime[MAX_TIME];
-    char modifiedDate[MAX_DATE];
-    char modifiedTime[MAX_TIME];
-    char accessDate[MAX_DATE];
-
-    GetDate(createdDate, &file.CreationDate);
-    GetTimePrecise(createdTime, &file.CreationTime, file._Reserved2);
-    GetDate(modifiedDate, &file.ModifiedDate);
-    GetTime(modifiedTime, &file.ModifiedTime);
-    GetDate(accessDate, &file.LastAccessDate);
-
-    printf("       Name: %s\n", shortname);
-    printf("       Size: %d %s\n", size, PLURALIZE("byte", size));
-    printf("             %d %s\n", clusters, PLURALIZE("cluster", clusters));
-    printf("    Created: %s %s\n", createdDate, createdTime);
-    printf("   Modified: %s %s\n", modifiedDate, modifiedTime);
-    printf("   Accessed: %s\n", accessDate);
-    printf(" Attributes: 0x%02x", file.Attributes);
-    if (file.Attributes != 0)
-    {
-        printf(" [");
-        if (HasAttribute(&file, ATTR_READONLY))
-            printf(" Read-Only");
-        if (HasAttribute(&file, ATTR_HIDDEN))
-            printf(" Hidden");
-        if (HasAttribute(&file, ATTR_SYSTEM))
-            printf(" System");
-        if (HasAttribute(&file, ATTR_LABEL))
-            printf(" Label");
-        if (HasAttribute(&file, ATTR_DIRECTORY))
-            printf(" Directory");
-        if (HasAttribute(&file, ATTR_ARCHIVE))
-            printf(" Archive");
-        if (HasAttribute(&file, ATTR_DEVICE))
-            printf(" Device");
-        if (HasAttribute(&file, ATTR_LFN))
-            printf(" Long File Name");
-        printf(" ]\n");
-    }
-    printf("   Reserved: 0x%02x 0x%02x\n", file._Reserved1, file._Reserved3);
-    printf("Cluster Map: ");
-
-    uint32_t cluster = file.FirstCluster;
-    int count = 0;
-    while (IsClusterValid(cluster))
-    {
-        if ((count % 8) == 0)
+        DirEntry file;
+        const char *path = args->Argv[1];
+        success = FindFile(&file, path);
+        if (!success)
         {
-            printf("\n    ");
+            LogError("file not found '%s'\n", path);
+            goto Cleanup;
         }
-        printf("%03x ", cluster);
-        cluster = GetNextCluster(cluster);
-        count++;
+
+        char shortname[MAX_SHORTNAME];
+        GetShortName(shortname, &file);
+
+        int size = GetFileSize(&file);
+        int sizeOnDisk = GetFileSizeOnDisk(&file);
+        int clusters = sizeOnDisk / GetClusterSize();
+
+        char createdDate[MAX_DATE];
+        char createdTime[MAX_TIME];
+        char modifiedDate[MAX_DATE];
+        char modifiedTime[MAX_TIME];
+        char accessDate[MAX_DATE];
+
+        GetDate(createdDate, &file.CreationDate);
+        GetTimePrecise(createdTime, &file.CreationTime, file._Reserved2);
+        GetDate(modifiedDate, &file.ModifiedDate);
+        GetTime(modifiedTime, &file.ModifiedTime);
+        GetDate(accessDate, &file.LastAccessDate);
+
+        printf("        Name: %s\n", shortname);
+        printf("        Size: %d %s\n", size, PLURALIZE("byte", size));
+        printf("Size on disk: %d %s (%d %s)\n",
+            sizeOnDisk, PLURALIZE("byte", sizeOnDisk),
+            clusters, PLURALIZE("cluster", clusters));
+        printf("     Created: %s %s\n", createdDate, createdTime);
+        printf("    Modified: %s %s\n", modifiedDate, modifiedTime);
+        printf("    Accessed: %s\n", accessDate);
+        printf("  Attributes: 0x%02x", file.Attributes);
+        if (file.Attributes != 0)
+        {
+            printf(" [");
+            if (HasAttribute(&file, ATTR_READONLY))
+                printf(" Read-Only");
+            if (HasAttribute(&file, ATTR_HIDDEN))
+                printf(" Hidden");
+            if (HasAttribute(&file, ATTR_SYSTEM))
+                printf(" System");
+            if (HasAttribute(&file, ATTR_LABEL))
+                printf(" Label");
+            if (HasAttribute(&file, ATTR_DIRECTORY))
+                printf(" Directory");
+            if (HasAttribute(&file, ATTR_ARCHIVE))
+                printf(" Archive");
+            if (HasAttribute(&file, ATTR_DEVICE))
+                printf(" Device");
+            if (HasAttribute(&file, ATTR_LFN))
+                printf(" Long File Name");
+            printf(" ]\n");
+        }
+        printf("   Reserved: 0x%02x 0x%02x\n", file._Reserved1, file._Reserved3);
+        printf("Cluster Map: ");
+
+        uint32_t cluster = file.FirstCluster;
+        int count = 0;
+        while (IsClusterValid(cluster))
+        {
+            if ((count % 8) == 0)
+            {
+                printf("\n    ");
+            }
+            printf("%03x ", cluster);
+            cluster = GetNextCluster(cluster);
+            count++;
+        }
+        printf("\n");
     }
-    printf("\n");
 
 Cleanup:
     SafeFree(buf);
@@ -359,6 +372,7 @@ int List(const Command *cmd, const CommandArgs *args)
     // TODO: --help
     // TODO: -r
 
+    char *buf = NULL;
     bool success = true;
     bool listAll = false;
     bool bareFormat = false;
@@ -410,14 +424,16 @@ int List(const Command *cmd, const CommandArgs *args)
         RIF(false);
     }
 
-    size_t size = GetFileSize(&file);
-    char *buf = SafeAlloc(size);
-    ReadFile(buf, &file);
-
     int count = 1;
     const DirEntry *dirEntry = &file;
+
     if (IsDirectory(&file))
     {
+        size_t size = GetFileSize(&file);
+
+        buf = SafeAlloc(size);
+        ReadFile(buf, &file);
+
         count = size / sizeof(DirEntry);
         dirEntry = (const DirEntry *) buf;
 

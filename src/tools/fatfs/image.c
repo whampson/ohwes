@@ -22,10 +22,12 @@ static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir);
 bool OpenImage(const char *path)
 {
     bool success = true;
+    char *fatBuf = NULL;
 
     s_FilePtr = SafeOpen(path, "rb+");
 
     // Load boot sector
+    LogVerbose("loading boot sector...\n");
     SafeRead(s_FilePtr, &s_BootSect, sizeof(BootSector));
 
     int sectorSize = GetBiosParams()->SectorSize;
@@ -45,10 +47,15 @@ bool OpenImage(const char *path)
     int pairCount = s_NumClusters / 2;
     s_pClusterMap = SafeAlloc(s_NumClusters * sizeof(uint32_t));
 
+    LogVerbose("loading file allocation tables...\n");
+    fatBuf = SafeAlloc(fatSize);
+    SafeRead(s_FilePtr, fatBuf, fatSize);
+
+    assert(pairCount == (fatSize / 3));
+
     for (int i = 0; i < pairCount; i++)
     {
-        uint8_t stride[3];
-        SafeRead(s_FilePtr, stride, sizeof(stride));
+        uint8_t *stride = &fatBuf[i * 3];
 
         // |........|++++....|++++++++|
         uint32_t cluster0 = (stride[1] & 0xF) << 8 | stride[0];
@@ -63,6 +70,7 @@ bool OpenImage(const char *path)
     strncpy(s_ImagePath, path, MAX_PATH);
 
 Cleanup:
+    SafeFree(fatBuf);
     if (!success)
     {
         CloseImage();
@@ -157,6 +165,17 @@ bool FindFileInDir(DirEntry *file, const char *path, const DirEntry *dir)
     char pathCopy[MAX_PATH];
     strncpy(pathCopy, path, MAX_PATH);
 
+    if (!IsRoot(dir))
+    {
+        char name[MAX_SHORTNAME];
+        GetShortName(name, dir);
+        LogVerbose("looking for '%s' in '%s'...\n", path, name);
+    }
+    else
+    {
+        LogVerbose("looking for '%s'...\n", path);
+    }
+
     return TraversePath(file, pathCopy, dir);
 }
 
@@ -174,6 +193,8 @@ bool ReadFile(char *dst, const DirEntry *file)
 
     if (IsRoot(file))
     {
+        LogVerbose("loading root directory...\n");
+
         size_t rootSize = GetFileSize(GetRootDir());
         size_t addr = GetClusterOffset(CLUSTER_FIRST) - rootSize;
         fseek(s_FilePtr, addr, SEEK_SET);
@@ -182,9 +203,14 @@ bool ReadFile(char *dst, const DirEntry *file)
         return true;
     }
 
+    char name[MAX_SHORTNAME];
+    GetShortName(name, file);
+    LogVerbose("reading file '%s'...\n", name);
+
     uint32_t cluster = file->FirstCluster;
     size_t fileSize = file->FileSize;
     size_t totalBytesRead = 0;
+    size_t totalClustersRead = 0;
     size_t readSize;
 
     while (IsClusterValid(cluster))
@@ -195,11 +221,14 @@ bool ReadFile(char *dst, const DirEntry *file)
 
         RIF(ReadCluster(buf, cluster));
         memcpy(dst, buf, readSize);
+        totalClustersRead++;
 
         dst += readSize;
         totalBytesRead += readSize;
         cluster = GetNextCluster(cluster);
     }
+
+    LogVerbose("%d %s read\n", totalClustersRead, PLURALIZE("cluster", totalClustersRead));
 
 Cleanup:
     return success;
@@ -226,13 +255,14 @@ bool ReadCluster(char *dst, uint32_t index)
 
     if (index >= s_NumClusters || !IsClusterValid(index))
     {
-        LogWarning("attempt to read invalid data cluster 0x%03X\n", index);
+        LogWarning("attempt to read invalid data cluster 0x%03x\n", index);
         return false;
     }
 
     bool success = true;
     size_t seekAddr = GetClusterOffset(index);
 
+    LogVerbose("reading cluster 0x%03x...\n", index);
     fseek(s_FilePtr, seekAddr, SEEK_SET);
     size_t bytesRead = SafeRead(s_FilePtr, dst, ClusterSize);
     assert(bytesRead == ClusterSize);
@@ -287,6 +317,7 @@ static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir)
 {
     bool success = false;
     char shortname[MAX_SHORTNAME];
+    DirEntry *dirTable = NULL;
 
     char *tok = strtok(path, "/");
     if (tok == NULL)
@@ -301,10 +332,9 @@ static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir)
     mbstowcs(wtok, tok, MAX_PATH);
 
     size_t size = GetFileSize(dir);
-    DirEntry *dirTable = SafeAlloc(size);
+    dirTable = SafeAlloc(size);
     RIF(ReadFile((char *) dirTable, dir));
 
-    const DirEntry *e = dirTable;
     int count = size / sizeof(DirEntry);
 
     // TODO: handle . and .. in root? (self-referential)
@@ -313,8 +343,9 @@ static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir)
     wchar_t lfn[MAX_PATH];
     bool hasLfn = false;
 
-    for (int i = 0; i < count; i++, e++)
+    for (int i = 0; i < count; i++)
     {
+        const DirEntry *e = &dirTable[i];
         if (IsLongFileName(e) && !IsDeleted(e))
         {
             hasLfn = ReadLongName(lfn, &lfnCksum, &e);
@@ -327,6 +358,7 @@ static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir)
         }
 
         GetShortName(shortname, e);
+        LogVerbose("inspecting '%s'...\n", shortname);
 
         bool match = false;
         if (hasLfn && wcscmp(lfn, wtok) == 0)
@@ -343,6 +375,8 @@ static bool TraversePath(DirEntry *file, char *path, const DirEntry *dir)
 
         if (match)
         {
+            LogVerbose("found '%s', size = %d, first cluster = 0x%03x\n",
+                shortname, e->FileSize, e->FirstCluster);
             success = TraversePath(file, NULL, e);  // NULL for recursive call
             break;
         }
