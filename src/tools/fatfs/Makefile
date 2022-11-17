@@ -7,11 +7,13 @@ CC = gcc
 LD = gcc
 
 # macOS only
-C_FLAGS += -fsanitize=address
-LD_FLAGS += -fsanitize=address
+# C_FLAGS += -fsanitize=address
+# LD_FLAGS += -fsanitize=address
 
 C_WARNINGS += \
 	no-unused-function \
 	no-unused-parameter \
 	no-unused-variable \
+	no-unused-but-set-variable \
 	no-gnu-statement-expression \
+	no-pedantic

@@ -64,11 +64,6 @@ void InitBootSector(BootSector *bootsect)
     InitBPB(&bootsect->BiosParams);
 }
 
-void GetLabel(char dst[LABEL_LENGTH+1], const char *src)
-{
-    GetString(dst, src, LABEL_LENGTH);
-}
-
 void GetName(char dst[NAME_LENGTH+1], const char *src)
 {
     GetString(dst, src, NAME_LENGTH);
@@ -110,6 +105,20 @@ void GetShortName(char dst[MAX_SHORTNAME], const DirEntry *file)
     }
 }
 
+char GetShortNameChecksum(const DirEntry *file)
+{
+    int i;
+    unsigned char sum = 0;
+
+    const char *name = file->Name;
+
+    for (i = 11; i > 0; i--)
+    {
+        sum = ((sum & 1) << 7) + (sum >> 1) + ((unsigned char) (*name++));
+    }
+    return (char) sum;
+}
+
 void GetDate(char dst[MAX_DATE], const FatDate *date)
 {
     char month[10];
@@ -128,11 +137,11 @@ void GetDate(char dst[MAX_DATE], const FatDate *date)
         case 10: sprintf(month, "October"); break;
         case 11: sprintf(month, "November"); break;
         case 12: sprintf(month, "December"); break;
-        default: sprintf(month, "(invalid)"); break;
+        default: sprintf(month, "(%d)", date->Month); break;
     }
 
     snprintf(dst, MAX_DATE, "%s %d, %d",
-        month, date->Day, 1980 + date->Year);
+        month, date->Day, YEAR_BASE + date->Year);
 
 }
 
@@ -142,7 +151,16 @@ void GetTime(char dst[MAX_TIME], const FatTime *time)
     int m = time->Minutes;
     int s = time->Seconds * 2;
 
-    // TODO: check validity
+    snprintf(dst, MAX_TIME, "%d:%02d:%02d %s",
+        h % 12, m, s,
+        (h < 12) ? "AM" : "PM");
+}
+
+void GetTimePrecise(char dst[MAX_TIME], const FatTime *time, int fineTime)
+{
+    int h = time->Hours;
+    int m = time->Minutes;
+    int s = ((time->Seconds * 2000) + (10 * fineTime)) / 1000;
 
     snprintf(dst, MAX_TIME, "%d:%02d:%02d %s",
         h % 12, m, s,

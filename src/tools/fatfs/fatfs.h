@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <getopt.h>
 
 #define PROG_NAME           "fatfs"
 #define PROG_VERSION        "0.1"
@@ -18,75 +19,85 @@
 #define STATUS_INVALIDARG   1
 #define STATUS_ERROR        2
 
-// Command-line stuff
+// Global options
 extern bool g_Verbose;
-void PrintUsage(void);
-void PrintVersionInfo(void);
+
+// Some of these macros rely heavily on GCC syntax.
+// If you don't use GCC, well I don't have a solution for you.
 
 // Logging
-#define LogInfo(...) \
-    ({ fprintf(stdout, PROG_NAME ": " __VA_ARGS__); })
-#define LogWarning(...) \
-    ({ fprintf(stderr, PROG_NAME ": warning: " __VA_ARGS__); })
-#define LogError(...) \
-    ({ fprintf(stderr, PROG_NAME ": error: " __VA_ARGS__); })
+#define LogVerbose(...) do { if (g_Verbose) fprintf(stdout, PROG_NAME ": " __VA_ARGS__); } while (0)
+#define LogInfo(...)    do { fprintf(stdout, PROG_NAME ": " __VA_ARGS__); } while (0)
+#define LogWarning(...) do { fprintf(stderr, PROG_NAME ": warning: " __VA_ARGS__); } while (0)
+#define LogError(...)   do { fprintf(stderr, PROG_NAME ": error: " __VA_ARGS__); } while (0)
 
-// All Safe* macros require the following to exist before use:
-//   - a bool named 'success'
-//   - a label named 'Cleanup'
-
+// Return If False
 #define RIF(x) if (!x) { success = false; goto Cleanup; }
 
 // Alloc/Free
-#define SafeAlloc(size)                                                         \
-({                                                                              \
-    void *__ptr = malloc(size);                                                 \
-    if (!__ptr) { LogError("out of memory!\n"); success = false; goto Cleanup; }\
-    __ptr;                                                                      \
+#define SafeAlloc(size)                                                                             \
+({                                                                                                  \
+    void *_ptr = malloc(size);                                                                      \
+    if (!_ptr) { LogError("out of memory!\n"); success = false; goto Cleanup; }                     \
+    _ptr;                                                                                           \
 })
 
-#define SafeFree(ptr)                                                           \
-({                                                                              \
-    if (ptr) { free(ptr); (ptr) = NULL; }                                       \
+#define SafeFree(ptr)                                                                               \
+({                                                                                                  \
+    if (ptr) { free(ptr); (ptr) = NULL; }                                                           \
 })
 
 // File Open/Read
-#define SafeOpen(path, mode)                                                    \
-({                                                                              \
-    FILE *__fp = fopen(path, mode);                                             \
-    if (!__fp) { LogError("unable to open file\n"); success = false; goto Cleanup; }\
-    __fp;                                                                       \
+#define SafeOpen(path, mode)                                                                        \
+({                                                                                                  \
+    FILE *_fp = fopen(path, mode);                                                                  \
+    if (!_fp) {                                                                                     \
+        LogError("unable to open file '%s'\n", path);                                               \
+        success = false;                                                                            \
+        goto Cleanup;                                                                               \
+    }                                                                                               \
+    LogVerbose("opened file '%s' with mode '%s'\n", path, mode);                                    \
+    _fp;                                                                                            \
 })
 
-#define SafeRead(fp, ptr, size)                                                 \
-({                                                                              \
-    size_t __b = fread(ptr, 1, size, fp);                                       \
-    if (ferror(fp)) { LogError("unable to read file\n"); success = false; goto Cleanup; }\
-    __b;                                                                        \
+#define SafeRead(fp, ptr, size)                                                                     \
+({                                                                                                  \
+    size_t _i = ftell(fp);                                                                          \
+    size_t _b = fread(ptr, 1, size, fp);                                                            \
+    if (ferror(fp)) { LogError("unable to read file\n"); success = false; goto Cleanup; }           \
+    LogVerbose("%d bytes read from file at address 0x%08x\n", size, _i);                            \
+    _b;                                                                                             \
 })
 
-#define SafeClose(fp)                                                           \
-do {                                                                            \
-    if (fp) { fclose(fp); fp = NULL; }                                          \
-} while (0)
+#define SafeWrite(fp, ptr, size)                                                                    \
+({                                                                                                  \
+    size_t _i = ftell(fp);                                                                          \
+    size_t _b = fwrite(ptr, 1, size, fp);                                                           \
+    if (ferror(fp)) { LogError("unable to write file\n"); success = false; goto Cleanup; }          \
+    LogVerbose("%d bytes written to file at address 0x%08x\n", size, _i);                           \
+    _b;                                                                                             \
+})
+
+#define SafeClose(fp)                                                                               \
+({                                                                                                  \
+    if (fp) { fclose(fp); fp = NULL; }                                                              \
+})
 
 // Math
-#define max(a,b)                                                                \
-({  __typeof__ (a) _a = (a);                                                    \
-    __typeof__ (b) _b = (b);                                                    \
-    _a > _b ? _a : _b;                                                          \
+#define max(a,b)                                                                                    \
+({  __typeof__ (a) _a = (a);                                                                        \
+    __typeof__ (b) _b = (b);                                                                        \
+    _a > _b ? _a : _b;                                                                              \
 })
 
-#define min(a,b)                                                                \
-({  __typeof__ (a) _a = (a);                                                    \
-    __typeof__ (b) _b = (b);                                                    \
-    _a < _b ? _a : _b;                                                          \
+#define min(a,b)                                                                                    \
+({  __typeof__ (a) _a = (a);                                                                        \
+    __typeof__ (b) _b = (b);                                                                        \
+    _a < _b ? _a : _b;                                                                              \
 })
-
-#define IsFlagSet(x,flag) (((x) & (flag)) == (flag))
 
 // String utilities
-#define PLURAL(s,n) (n == 1) ? s : s "s"
+#define PLURALIZE(s,n) (n == 1) ? s : s "s"
 #define ISARE(n)    (n == 1) ? "is" : "are"
 
 #endif  // FATFS_H

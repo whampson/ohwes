@@ -3,7 +3,7 @@
 
 #include "fatfs.h"
 
-#define NAME_LENGTH                 8
+#define NAME_LENGTH                 8       // Name capacity,
 #define EXT_LENGTH                  3
 #define LABEL_LENGTH                11
 
@@ -18,18 +18,24 @@
 #define DEFAULT_LABEL               "NO NAME    "
 
 #define CLUSTER_FREE                0x000   // Free data cluster.
-#define CLUSTER_RESERVED            0x001
+#define CLUSTER_RESERVED            0x001   // Reserved, do not use.
 #define CLUSTER_FIRST               0x002   // First valid data cluster.
 #define CLUSTER_LAST                0xFEF   // Last valid data cluster.
 #define CLUSTER_BAD                 0xFF7   // Bad cluster marker.
 #define CLUSTER_END                 0xFFF   // End-of-chain marker.
 
-#define CLUSTER_IS_VALID(c)         ((c) >= CLUSTER_FIRST && (c) <= CLUSTER_LAST)
+#define IsClusterValid(c)           ((c) >= CLUSTER_FIRST && (c) <= CLUSTER_LAST)
 
-#define MAX_PATH                    257     // completely arbitrary
+#define MAX_PATH                    512     // completely arbitrary
 #define MAX_DATE                    19      // "September 31, 1990"
 #define MAX_TIME                    12      // "12:34:56 PM"
 #define MAX_SHORTNAME               NAME_LENGTH + EXT_LENGTH + 2
+
+// Year zero.
+#define YEAR_BASE                   1980
+
+// Number of long file name characters per entry.
+#define LFN_CAPACITY                13
 
 /**
  * FAT12 BIOS Parameter Block
@@ -98,33 +104,136 @@ typedef enum __attribute__ ((packed)) _FileAttrs
     ATTR_LFN        = ATTR_LABEL|ATTR_SYSTEM|ATTR_HIDDEN|ATTR_READONLY
 }  FileAttrs;
 
-typedef struct _DirEntry
+typedef union _DirEntry
 {
-    char Name[NAME_LENGTH];
-    char Extension[EXT_LENGTH];
-    FileAttrs Attributes;
-    uint8_t _Reserved1;     // varies by system, do not use
-    uint8_t _Reserved2;     // TODO: fine creation time, 10ms increments, 0-199
-    FatTime CreationTime;
-    FatDate CreationDate;
-    FatDate LastAccessDate;
-    uint16_t _Reserved3;    // TODO: access rights bitmap
-    FatTime ModifiedTime;
-    FatDate ModifiedDate;
-    uint16_t FirstCluster;
-    uint32_t FileSize;
+    struct
+    {
+        char Name[NAME_LENGTH];
+        char Extension[EXT_LENGTH];
+        FileAttrs Attributes;
+        uint8_t _Reserved1;     // varies by system, do not use
+        uint8_t _Reserved2;     // fine creation time, 10ms increments, 0-199
+        FatTime CreationTime;
+        FatDate CreationDate;
+        FatDate LastAccessDate;
+        uint16_t _Reserved3;    // TODO: access rights bitmap?
+        FatTime ModifiedTime;
+        FatDate ModifiedDate;
+        uint16_t FirstCluster;
+        uint32_t FileSize;
+    };
+
+    struct __attribute__ ((packed))
+    {
+        char Sequence   : 5;
+        char _Reserved0 : 1;
+        char FirstEntry : 1;
+        char _Reserved1 : 1;
+        wchar_t NameChunk1[5];
+        FileAttrs Attributes;
+        char _Reserved2;
+        char Checksum;
+        wchar_t NameChunk2[6];
+        uint16_t _Reserved3;
+        wchar_t NameChunk3[2];
+    } LFN;
 } DirEntry;
+
 
 void InitBPB(BiosParamBlock *bpb);
 void InitBootSector(BootSector *bootsect);
 
-void GetLabel(char dst[LABEL_LENGTH+1], const char *src);
 void GetName(char dst[NAME_LENGTH+1], const char *src);
 void GetExt(char dst[EXT_LENGTH+1], const char *src);
 
 void GetShortName(char dst[MAX_SHORTNAME], const DirEntry *file);
+char GetShortNameChecksum(const DirEntry *file);
+
+// NOTE: the DirEntry provided must exist within a table of DirEntries
+bool ReadLongName(wchar_t dst[MAX_PATH], char *cksum, const DirEntry **entry);
+
 void GetDate(char dst[MAX_DATE], const FatDate *date);
 void GetTime(char dst[MAX_TIME], const FatTime *time);
+void GetTimePrecise(char dst[MAX_TIME], const FatTime *time, int fineTime);
+
+#define HasAttribute(file,flag) (((file)->Attributes & (flag)) == (flag))
+
+static inline bool IsReadOnly(const DirEntry *e)
+{
+    return (HasAttribute(e, ATTR_READONLY)
+        && !HasAttribute(e, ATTR_LFN));
+}
+
+static inline bool IsHidden(const DirEntry *e)
+{
+    return (HasAttribute(e, ATTR_HIDDEN)
+        && !HasAttribute(e, ATTR_LFN));
+}
+
+static inline bool IsSystemFile(const DirEntry *e)
+{
+    return (HasAttribute(e, ATTR_SYSTEM)
+        && !HasAttribute(e, ATTR_LFN));
+}
+
+static inline bool IsVolumeLabel(const DirEntry *e)
+{
+    return (HasAttribute(e, ATTR_LABEL)
+        && !HasAttribute(e, ATTR_LFN));
+}
+
+static inline bool IsDirectory(const DirEntry *e)
+{
+    return HasAttribute(e, ATTR_DIRECTORY);
+}
+
+static inline bool IsDeviceFile(const DirEntry *e)
+{
+    // I'm not sure if this is even a thing
+    return HasAttribute(e, ATTR_DEVICE);
+}
+
+static inline bool IsLongFileName(const DirEntry *e)
+{
+    return HasAttribute(e, ATTR_LFN)
+        && e->FirstCluster == 0;
+}
+
+static inline bool IsDeleted(const DirEntry *e)
+{
+    unsigned char c = e->Name[0];
+    return c == 0x05 || c == 0xE5;
+}
+
+static inline bool IsFree(const DirEntry *e)
+{
+    return IsDeleted(e) || e->Name[0] == 0x00;
+}
+
+static inline bool IsFile(const DirEntry *e)
+{
+    return !IsFree(e)
+        && !IsLongFileName(e)
+        && !IsVolumeLabel(e);
+}
+
+static inline bool IsRoot(const DirEntry *e)
+{
+    return IsDirectory(e) && e->FirstCluster == 0;
+}
+
+static inline bool IsCurrentDirectory(const DirEntry *e)
+{
+    return e->Name[0] == '.'
+        && e->Name[1] == ' ';
+}
+
+static inline bool IsParentDirectory(const DirEntry *e)
+{
+    return e->Name[0] == '.'
+        && e->Name[1] == '.'
+        && e->Name[2] == ' ';
+}
 
 static_assert(sizeof(BiosParamBlock) == 51, "Bad BiosParamBlock size!");
 static_assert(sizeof(BootSector) == 512, "Bad BootSector size!");

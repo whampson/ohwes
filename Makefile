@@ -151,7 +151,7 @@ endif
 # ------------------------------------------------------------------------------
 # Rules
 
-.PHONY: all clean nuke dirs debug-make $(DIRS)
+.PHONY: all remake clean nuke dirs debug-make $(DIRS)
 .DEFAULT_GOAL: all
 
 ifdef NO_ELF
@@ -159,6 +159,8 @@ ifdef NO_ELF
 endif
 
 all: dirs $(DIRS) $(TARGET)
+
+remake: clean all
 
 clean:
 	@$(RM) $(TARGET)
