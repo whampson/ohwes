@@ -14,6 +14,9 @@ static int PrintHelp(void)
         const Command *cmds = GetCommands();
         int count = GetCommandCount();
 
+        // TODO: consider
+        //      fatfs [OPTIONS] COMMAND [ARGS]
+
         printf("Usage: " PROG_NAME " [OPTIONS] IMAGE COMMAND [ARGS]\n");
         printf("\n");
         printf("Options:\n");
@@ -60,6 +63,13 @@ static int PrintVersion(void)
     return STATUS_SUCCESS;
 }
 
+static int PrintCommandLine(void)
+{
+    printf("fatfs Command: %s\n", s_CommandArgs.Argv[0]);
+    printf(" Command Argc: %d\n", s_CommandArgs.Argc);
+    return STATUS_SUCCESS;
+}
+
 static bool ParseCommandLine(int argc, char **argv)
 {
     int i;
@@ -96,16 +106,11 @@ static bool ParseCommandLine(int argc, char **argv)
         switch (argv[i][0])
         {
         default:
-            if (!s_CommandArgs.ImagePath)
-            {
-                s_CommandArgs.ImagePath = argv[i];
-                break;
-            }
             if (s_CommandArgs.Argc == 0)
             {
                 s_CommandArgs.Argc = argc - i;
                 s_CommandArgs.Argv = &argv[i];
-                gotCmd = true;
+                gotCmd = true;      // parse remaining cmdline for universal args (like -?)
                 break;
             }
             break;
@@ -160,12 +165,6 @@ static bool ParseCommandLine(int argc, char **argv)
         }
     }
 
-    if (!s_CommandArgs.ImagePath)
-    {
-        LogError("missing disk image\n");
-        return false;
-    }
-
     if (!s_CommandArgs.Argc)
     {
         LogError("missing command\n");
@@ -181,6 +180,7 @@ int main(int argc, char **argv)
     {
         return STATUS_INVALIDARG;
     }
+    // PrintCommandLine();
 
     if (s_ShowHelp)
     {

@@ -193,15 +193,15 @@ int Extract(const Command *cmd, const CommandArgs *args)
     FILE *fp = NULL;
     DirEntry file;
 
-    if (args->Argc < 2)
+    if (args->Argc < 3)
     {
-        LogError("missing file\n");
+        LogError("missing file argument\n");
         return STATUS_INVALIDARG;
     }
 
-    RIF(OpenImage(args->ImagePath));
+    RIF(OpenImage(args->Argv[1]));
 
-    for (int i = 1; i < args->Argc; i++)
+    for (int i = 2; i < args->Argc; i++)
     {
         const char *path = args->Argv[i];
 
@@ -264,9 +264,16 @@ int Info(const Command *cmd, const CommandArgs *args)
     bool success = true;
     char *buf = NULL;
 
-    RIF(OpenImage(args->ImagePath));
-
     if (args->Argc < 2)
+    {
+        LogError("missing disk image file\n");
+        success = false;
+        goto Cleanup;
+    }
+
+    RIF(OpenImage(args->Argv[1]));
+
+    if (args->Argc < 3)
     {
         //
         // Disk image info
@@ -355,11 +362,11 @@ int Info(const Command *cmd, const CommandArgs *args)
         //
 
         DirEntry file;
-        const char *path = args->Argv[1];
+        const char *path = args->Argv[2];
         success = FindFile(&file, path);
         if (!success)
         {
-            LogError("file not found '%s'\n", path);
+            LogError("file not found - %s\n", path);
             goto Cleanup;
         }
 
@@ -484,7 +491,7 @@ int List(const Command *cmd, const CommandArgs *args)
         path = "/";
     }
 
-    RIF(OpenImage(args->ImagePath));
+    RIF(OpenImage(args->Argv[1]));
 
     success = FindFile(&file, path);
     if (!success)
@@ -636,12 +643,12 @@ int Type(const Command *cmd, const CommandArgs *args)
 
     if (args->Argc < 2)
     {
-        LogError("missing file\n");
+        LogError("missing file argument\n");
         return STATUS_INVALIDARG;
     }
 
-    const char *path = args->Argv[1];
-    RIF(OpenImage(args->ImagePath));
+    const char *path = args->Argv[2];
+    RIF(OpenImage(args->Argv[1]));
 
     success = FindFile(&file, path);
     if (!success)

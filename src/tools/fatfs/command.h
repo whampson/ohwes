@@ -7,7 +7,6 @@ typedef struct _CommandArgs
 {
     int Argc;
     char * const *Argv;
-    const char *ImagePath;
 } CommandArgs;
 
 typedef struct _Command Command;
