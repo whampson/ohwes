@@ -1,7 +1,7 @@
 TARGET = $(BIN_PATH)/fatfs
 NO_OBJCOPY = 1
 
-include $(_TOOLGOD)
+include $(_TOOLMAKEROOT)
 
 CC = gcc
 LD = gcc

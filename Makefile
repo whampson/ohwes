@@ -7,14 +7,14 @@
 # All Makefiles in this project must include this Makefile in order for the
 # build system to function properly. This can be done by adding the following
 # line in your Makefile:
-#     include $(_MAKEGOD)
+#     include $(_MAKEROOT)
 #
-# _MAKEGOD is an environment variable that contains the path to this file.
+# _MAKEROOT is an environment variable that contains the path to this file.
 #===============================================================================
 
-# !!! TODO: header file change detection appears to be broken
+# !!! TODO: header file change detection appears to be broken (MinGW)
 
-ifndef _MAKEGOD
+ifndef _MAKEROOT
   $(error "Please source src/scripts/env.sh before invoking this Makefile.")
 endif
 
@@ -23,6 +23,27 @@ endif
 
 export DEBUG            = 1
 export ARCH             = x86
+
+# ------------------------------------------------------------------------------
+# Makefile build OS detection
+# https://stackoverflow.com/a/14777895
+
+ifeq ($(OS),Windows_NT)
+  BUILD_OS := Windows
+else
+  BUILD_OS := $(shell sh -c 'uname 2>/dev/null || echo Unknown')
+endif
+
+ifeq ($(BUILD_OS),Windows)
+  WIN32 = 1
+else ifeq ($(BUILD_OS),Darwin)
+  OSX = 1
+else ifeq ($(BUILD_OS),Linux)
+  LINUX = 1
+else
+  $(error Unknown system type! Cannot build.)
+endif
+
 
 # ------------------------------------------------------------------------------
 # Directory tree tracking
@@ -103,6 +124,7 @@ DEP                     = $(OBJ:.o=.d)
 
 # ------------------------------------------------------------------------------
 # Defines, flags, and warnings
+# -W, -D, -I automatically appended to warnings, defines, includes
 
 export C_FLAGS          = -std=c11
 export C_DEFINES        =
@@ -220,9 +242,13 @@ debug-make:
 	@echo '_TOOLSRC = $(_TOOLSRC)'
 	@echo '_TOOLBIN = $(_TOOLBIN)'
 	@echo '----------------------------------------'
-	@echo '_MAKEGOD = $(_MAKEGOD)'
-	@echo '_TOOLGOD = $(_TOOLGOD)'
+	@echo '_MAKEROOT = $(_MAKEROOT)'
+	@echo '_TOOLMAKEROOT = $(_TOOLMAKEROOT)'
 	@echo '----------------------------------------'
+	@echo 'BUILD_OS = $(BUILD_OS)'
+	@echo 'WIN32 = $(WIN32)'
+	@echo 'OSX = $(OSX)'
+	@echo 'LINUX = $(LINUX)'
 	@echo 'ARCH = $(ARCH)'
 	@echo 'DEBUG = $(DEBUG)'
 	@echo '----------------------------------------'

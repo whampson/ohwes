@@ -1,3 +1,4 @@
-DIRS = tools boot
+#DIRS = tools boot
+DIRS = tools
 
-include $(_MAKEGOD)
+include $(_MAKEROOT)

@@ -36,12 +36,12 @@ $ make debug-make
 ### Build System
 The most basic Makefile looks like this:
 ```make
-include $(_MAKEGOD)
+include $(_MAKEROOT)
 ```
 When invoked via `make`, this will compile all the source in the current
-directory. `$(_MAKEGOD)` refers to the master Makefile located at the repository
-root, outside of the src/ directory, which contains all the build infrastructure
-and must be included in every Makefile.
+directory. `$(_MAKEROOT)` refers to the master Makefile located at the
+repository root, outside of the src/ directory, which contains all the build
+infrastructure and must be included in every Makefile.
 
 The above Makefile only compiles source; it does invoke the linker or output
 binaries. To build a binary, add a `TARGET` definition before summoning the
@@ -49,7 +49,7 @@ make god:
 ```make
 TARGET = my_exe
 
-include $(_MAKEGOD)
+include $(_MAKEROOT)
 ```
 This will output an executable file named 'my_exe' in the current directory,
 built from the source in that directory. To move the file to a common location,
@@ -57,7 +57,7 @@ you may use the `$(BIN_DIR)` variable as a path prefix:
 ```make
 TARGET = $(BIN_DIR)/my_exe
 
-include $(_MAKEGOD)
+include $(_MAKEROOT)
 ```
 
 Note that the `TARGET` definition appears before the `include` directive. This
@@ -73,7 +73,7 @@ in child Makefiles, and thus are defined after the `include` directive:
 ```make
 TARGET = $(BIN_DIR)/my_exe
 
-include $(_MAKEGOD)
+include $(_MAKEROOT)
 
 C_DEFINES += MY_EXE PREFIX=foo
 ```
@@ -88,7 +88,7 @@ subdirectory contains a Makefile:
 DIRS = my_feature1 my_feature2
 TARGET = $(BIN_DIR)/my_exe
 
-include $(_MAKEGOD)
+include $(_MAKEROOT)
 
 C_DEFINES += MY_EXE PREFIX=foo
 ```

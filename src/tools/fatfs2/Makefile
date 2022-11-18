@@ -1,0 +1,21 @@
+TARGET = $(BIN_PATH)/fatfs
+NO_OBJCOPY = 1
+
+include $(_TOOLMAKEROOT)
+
+CC = gcc
+LD = gcc
+
+# macOS only
+ifeq ($(OSX),1)
+  C_FLAGS += -fsanitize=address
+  LD_FLAGS += -fsanitize=address
+endif
+
+# C_WARNINGS += \
+# 	no-unused-function \
+# 	no-unused-parameter \
+# 	no-unused-variable \
+# 	no-unused-but-set-variable \
+# 	no-gnu-statement-expression \
+# 	no-pedantic

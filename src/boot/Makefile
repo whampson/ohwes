@@ -1,3 +1,3 @@
 DIRS = x86
 
-include $(_MAKEGOD)
+include $(_MAKEROOT)

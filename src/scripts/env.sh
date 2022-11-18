@@ -6,7 +6,7 @@
 #
 # Initializes the development environment by setting build variables and
 # updating the system PATH.
-# 
+#
 # To use, run `source env.sh` in your shell.
 #===============================================================================
 
@@ -20,8 +20,8 @@ export _SCRIPTS=$_SRCROOT/scripts
 export _TOOLSRC=$_SRCROOT/tools
 export _TOOLBIN=$_BINROOT/tools
 
-export _MAKEGOD=$_OSROOT/Makefile
-export _TOOLGOD=$_TOOLSRC/Makefile
+export _MAKEROOT=$_OSROOT/Makefile
+export _TOOLMAKEROOT=$_TOOLSRC/Makefile
 
 echo "Setting build variables..."
 echo "   _OSROOT = $_OSROOT"
@@ -30,8 +30,8 @@ echo "  _OBJROOT = $_OBJROOT"
 echo "  _SRCROOT = $_SRCROOT"
 echo "  _SCRIPTS = $_SCRIPTS"
 echo "  _TOOLSRC = $_TOOLSRC"
-echo "  _MAKEGOD = $_MAKEGOD"
-echo "  _TOOLGOD = $_TOOLGOD"
+echo "  _MAKEROOT = $_MAKEROOT"
+echo "  _TOOLMAKEROOT = $_TOOLMAKEROOT"
 
 qemu_path="/c/Program Files/qemu"    # TODO: this should go somewhere repository-local
 binutils_path=$_OSROOT/lib/i686-elf-tools/bin
