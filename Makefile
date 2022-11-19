@@ -129,7 +129,7 @@ DEP                     = $(OBJ:.o=.d)
 export C_FLAGS          = -std=c11
 export C_DEFINES        =
 export C_WARNINGS       = all extra pedantic error
-export CXX_FLAGS        =
+export CXX_FLAGS        = -std=c++11
 export CXX_DEFINES      =
 export CXX_WARNINGS     = all extra pedantic error
 export AS_FLAGS         =
