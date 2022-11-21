@@ -22,7 +22,7 @@ extern "C" {
 #define STATUS_ERROR        2
 
 // Global options
-extern bool g_Verbose;
+extern int g_bVerbose;
 void PrintGlobalHelp();
 
 // Some of these macros rely heavily on GCC syntax.
@@ -67,6 +67,44 @@ do {                                                                            
 do {                                                                                                \
     LogError("missing argument for '%s'\n", str);                                                   \
 } while (0)
+
+#define SafeAlloc(size)                                                                             \
+({                                                                                                  \
+    void *_ptr = malloc(size);                                                                      \
+    if (!_ptr) { LogError("out of memory!\n"); success = false; goto Cleanup; }                     \
+    _ptr;                                                                                           \
+})
+
+#define SafeFree(ptr)                                                                               \
+({                                                                                                  \
+    if (ptr) { free(ptr); (ptr) = NULL; }                                                           \
+})
+
+#define SafeOpen(path, mode)                                                                        \
+({                                                                                                  \
+    FILE *_fp = fopen(path, mode);                                                                  \
+    if (!_fp) {                                                                                     \
+        LogError("unable to open file '%s'\n", path);                                               \
+        success = false;                                                                            \
+        goto Cleanup;                                                                               \
+    }                                                                                               \
+    LogVerbose("opened file '%s' with mode '%s'\n", path, mode);                                    \
+    _fp;                                                                                            \
+})
+
+#define SafeClose(fp)                                                                               \
+({                                                                                                  \
+    if (fp) { fclose(fp); fp = NULL; }                                                              \
+})
+
+#define SafeWrite(fp, ptr, size)                                                                    \
+({                                                                                                  \
+    size_t _i = ftell(fp);                                                                          \
+    size_t _b = fwrite(ptr, 1, size, fp);                                                           \
+    if (ferror(fp)) { LogError("unable to write file\n"); success = false; goto Cleanup; }          \
+    LogVerbose("%d bytes written to file at address 0x%08zx\n", (int) size, _i);                    \
+    _b;                                                                                             \
+})
 
 }
 

@@ -5,43 +5,47 @@ extern "C" {
 
 #include "fatfs.hpp"
 
-#define NAME_LENGTH             8
-#define EXT_LENGTH              3
-#define LABEL_LENGTH            11
+#define NAME_LENGTH                 8
+#define EXT_LENGTH                  3
+#define LABEL_LENGTH                11
 
-#define MAX_NAME                (NAME_LENGTH+1)
-#define MAX_EXT                 (EXT_LENGTH+1)
-#define MAX_LABEL               (LABEL_LENGTH+1)
+#define MAX_NAME                    (NAME_LENGTH+1)
+#define MAX_EXT                     (EXT_LENGTH+1)
+#define MAX_LABEL                   (LABEL_LENGTH+1)
+#define MAX_PATH                    512
 
-#define MEDIA_TYPE_1440K        0xF0    // Standard 3.5" floppy disk
-#define MEDIA_TYPE_FIXED        0xF8    // Hard disk
+#define MEDIA_TYPE_1440K            0xF0    // Standard 3.5" floppy disk
+#define MEDIA_TYPE_FIXED            0xF8    // Hard disk
 
-#define BOOT_SECTOR_ID          0xAA5
-#define BOOT_SECTOR_SIZE        512
+#define BOOT_SECTOR_ID              0xAA55
 
-#define OEM_NAME                "fatfs   "
-#define DEFAULT_FS_TYPE         "FAT12   "
-#define DEFAULT_LABEL           "NO NAME    "
+// Defaults for a 1440k floppy
+#define DEFAULT_MEDIA_TYPE          (MEDIA_TYPE_1440K)
+#define DEFAULT_SECTOR_SIZE         512
+#define DEFAULT_SECTOR_COUNT        2880
+#define DEFAULT_SECTORS_PER_CLUSTER 1
+#define DEFAULT_SECTORS_PER_TABLE   9
+#define DEFAULT_SECTORS_PER_TRACK   18
+#define DEFAULT_TABLE_COUNT         2
+#define DEFAULT_ROOT_CAPACITY       224
+#define DEFAULT_HEAD_COUNT          2
+#define DEFAULT_RESERVED_COUNT      1
+#define DEFAULT_HIDDEN_COUNT        0
+#define DEFAULT_LARGE_COUNT         0
+#define DEFAULT_DRIVE_NUMBER        0
+#define DEFAULT_EXT_BOOT_SIGNATURE  0x29
+#define DEFAULT_OEM_NAME            "fatfs   "
+#define DEFAULT_FS_TYPE             "FAT12   "
+#define DEFAULT_LABEL               "NO NAME    "
 
-#define CLUSTER_FREE            0x000   // Free data cluster.
-#define CLUSTER_RESERVED        0x001   // Reserved, do not use.
-#define CLUSTER_FIRST           0x002   // First valid data cluster.
-#define CLUSTER_LAST            0xFEF   // Last valid data cluster.
-#define CLUSTER_BAD             0xFF7   // Bad cluster marker.
-#define CLUSTER_END             0xFFF   // End-of-chain marker.
+#define CLUSTER_FREE                0x000   // Free data cluster.
+#define CLUSTER_RESERVED            0x001   // Reserved, do not use.
+#define CLUSTER_FIRST               0x002   // First valid data cluster.
+#define CLUSTER_LAST                0xFEF   // Last valid data cluster.
+#define CLUSTER_BAD                 0xFF7   // Bad cluster marker.
+#define CLUSTER_END                 0xFFF   // End-of-chain marker.
 
-#define IsClusterValid(c)       ((c) >= CLUSTER_FIRST && (c) <= CLUSTER_LAST)
-
-// #define MAX_PATH                512     // (completely arbitrary)
-// #define MAX_DATE                19      // "September 31, 1990\0"
-// #define MAX_TIME                12      // "12:34:56 PM\0"
-// #define MAX_SHORTNAME           (NAME_LENGTH+EXT_LENGTH+2) // 'FILENA~1.TXT\0'
-
-// Year zero.
-#define YEAR_BASE               1980
-
-// // Number of long file name characters per entry.
-// #define LFN_CAPACITY            13
+#define IsClusterValid(c)           ((c) >= CLUSTER_FIRST && (c) <= CLUSTER_LAST)
 
 /**
  * FAT12 BIOS Parameter Block

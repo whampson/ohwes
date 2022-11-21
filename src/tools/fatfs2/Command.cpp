@@ -63,7 +63,7 @@ int Create(const Command *cmd, const CommandArgs *args)
     int bCustomLabel = 0;
     int bForce = 0;
 
-    const char *filename = NULL;
+    const char *path = NULL;
 
     char label[MAX_LABEL] = { };
     const char *tmpLabel = DEFAULT_LABEL;
@@ -133,20 +133,29 @@ int Create(const Command *cmd, const CommandArgs *args)
 
     if (optind < args->Argc)
     {
-        filename = args->Argv[optind];
+        path = args->Argv[optind];
     }
 
-    printf("filename = '%s'\n", filename);
-    printf("label = '%s'\n", label);
-    printf("force = %d\n", bForce);
-
-    if (!filename)
+    if (!path)
     {
         LogError("missing disk image file name\n");
         return STATUS_INVALIDARG;
     }
 
-    return STATUS_SUCCESS;
+    FILE *fp = fopen(path, "r");
+    if (fp != NULL)
+    {
+        if (!bForce)
+        {
+            LogError("%s exists\n", path);
+            fclose(fp);
+            return STATUS_ERROR;
+        }
+        fclose(fp);
+    }
+
+    success = DiskImage::Create(path);
+    return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }
 
 int Help(const Command *cmd, const CommandArgs *args)

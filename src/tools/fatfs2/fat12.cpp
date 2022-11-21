@@ -33,7 +33,7 @@ void InitBootSector(BootSector *bootsect)
 
     memcpy(bootsect->BootCode, BootCode, sizeof(BootCode));
     memcpy(bootsect->JumpCode, JumpCode, sizeof(JumpCode));
-    strcpy(bootsect->OemName, OEM_NAME);
+    strcpy(bootsect->OemName, DEFAULT_OEM_NAME);
 
     bootsect->Signature = BOOT_SECTOR_ID;
 

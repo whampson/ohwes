@@ -12,4 +12,6 @@ ifeq ($(OSX),1)
   LD_FLAGS += -fsanitize=address
 endif
 
-CXX_WARNINGS += no-unused-function
+CXX_WARNINGS += \
+  no-unused-function \
+  no-gnu-statement-expression
