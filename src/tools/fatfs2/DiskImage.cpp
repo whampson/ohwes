@@ -11,7 +11,7 @@ bool DiskImage::Create(
     bool success = true;
 
     BootSector bootSect;
-    BiosParamBlock *bpb = &bootSect.BiosParams;
+    BiosParamBlock *bpb = NULL;
     char *fileAllocTable = NULL;
     char *rootDir = NULL;
     char *zeroSector = NULL;
@@ -19,9 +19,49 @@ bool DiskImage::Create(
     // FAT12
     // TODO: FAT16, FAT32
 
-    memset(&bootSect, 0, sizeof(BootSector));
+    //
+    // Boot Sector
+    //
 
+    memset(&bootSect, 0, sizeof(BootSector));
+    bootSect.Signature = BOOT_SECTOR_ID;
+
+    static const char JumpCode[] =
+    {
+    /* entry:      jmp     boot_code    */  '\xEB', '\x3C',
+    /*             nop                  */  '\x90'
+    };
+    static const char BootCode[] =
+    {
+    /* boot_code:  pushw   %cs          */  "\x0E"
+    /*             popw    %ds          */  "\x1F"
+    /*             leaw    message, %si */  "\x8D\x36\x1C\x00"
+    /* print_loop: movb    $0x0e, %ah   */  "\xB4\x0E"
+    /*             movw    $0x07, %bx   */  "\xBB\x07\x00"
+    /*             lodsb                */  "\xAC"
+    /*             andb    %al, %al     */  "\x20\xC0"
+    /*             jz      key_press    */  "\x74\x04"
+    /*             int     $0x10        */  "\xCD\x10"
+    /*             jmp     print_loop   */  "\xEB\xF2"
+    /* key_press:  xorb    %ah, %ah     */  "\x30\xE4"
+    /*             int     $0x16        */  "\xCD\x16"
+    /*             int     $0x19        */  "\xCD\x19"
+    /* halt:       jmp     halt         */  "\xEB\xFE"
+    /* message:    .ascii               */  "\r\nThis disk is not bootable!"
+    /*             .asciz               */  "\r\nInsert a bootable disk and press any key to try again..."
+    };
+
+    static_assert(sizeof(JumpCode) <= sizeof(bootSect.JumpCode), "JumpCode is too large!");
+    static_assert(sizeof(BootCode) <= sizeof(BootCode), "BootCode is too large!");
+
+    memcpy(bootSect.BootCode, BootCode, sizeof(BootCode));
+    memcpy(bootSect.JumpCode, JumpCode, sizeof(JumpCode));
+    strcpy(bootSect.OemName, OEM_NAME);
+
+    //
     // BIOS Parameter Block
+    //
+    bpb = &bootSect.BiosParams;
     bpb->MediaType = mediaType;
     bpb->SectorSize = 512;
     bpb->SectorCount = 2880;
@@ -39,7 +79,13 @@ bool DiskImage::Create(
     bpb->ExtendedBootSignature = 0x29;
     bpb->VolumeId = time(NULL);
     strncpy(bpb->Label, label, LABEL_LENGTH);
-    strcpy(bpb->FileSystemType, DEFAULT_FS_TYPE);
+    switch (fatWidth)
+    {
+        case 12: strcpy(bpb->FileSystemType, FS_TYPE_FAT12); break;
+        case 16: strcpy(bpb->FileSystemType, FS_TYPE_FAT16); break;
+        case 32: strcpy(bpb->FileSystemType, FS_TYPE_FAT32); break;
+        default: assert(!"Invalid FAT width!"); break;
+    }
 
     // Some convenient variables
     int diskSize = bpb->SectorCount * bpb->SectorSize;
@@ -51,6 +97,10 @@ bool DiskImage::Create(
         - bpb->ReservedSectorCount
         - (bpb->SectorsPerTable * bpb->TableCount)
         - rootSectors;
+
+    //
+    // FATs, Root Directory, and Data Area
+    //
 
     // Allocate the necessary sections
     fileAllocTable = (char *) SafeAlloc(fatSize);
@@ -78,9 +128,7 @@ bool DiskImage::Create(
     fileAllocTable[1] = (char) (((CLUSTER_END & 0x00F) << 4) | 0x0F);
     fileAllocTable[2] = (char) (((CLUSTER_END & 0xFF0) >> 4));
 
-    //
     // The rest of the disk is zeroes. Easy!
-    //
 
     // Now, let's write the disk image.
     fp = SafeOpen(path, "wb");
@@ -155,8 +203,6 @@ Cleanup:
 
 DiskImage::DiskImage(const char *path)
 {
-    // InitBootSector(&m_BootSect);
-
     (void) path;
     (void) m_BootSect;
     (void) m_FilePtr;

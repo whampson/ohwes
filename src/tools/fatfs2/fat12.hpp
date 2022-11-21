@@ -34,9 +34,13 @@ extern "C" {
 #define DEFAULT_LARGE_COUNT         0
 #define DEFAULT_DRIVE_NUMBER        0
 #define DEFAULT_EXT_BOOT_SIGNATURE  0x29
-#define DEFAULT_OEM_NAME            "fatfs   "
-#define DEFAULT_FS_TYPE             "FAT12   "
 #define DEFAULT_LABEL               "NO NAME    "
+
+#define OEM_NAME                    "fatfs   "
+#define FS_TYPE_FAT12               "FAT12   "
+#define FS_TYPE_FAT16               "FAT16   "
+#define FS_TYPE_FAT32               "FAT32   "
+
 
 #define CLUSTER_FREE                0x000   // Free data cluster.
 #define CLUSTER_RESERVED            0x001   // Reserved, do not use.
@@ -45,7 +49,7 @@ extern "C" {
 #define CLUSTER_BAD                 0xFF7   // Bad cluster marker.
 #define CLUSTER_END                 0xFFF   // End-of-chain marker.
 
-#define IsClusterValid(c)           ((c) >= CLUSTER_FIRST && (c) <= CLUSTER_LAST)
+// #define IsClusterValid(c)           ((c) >= CLUSTER_FIRST && (c) <= CLUSTER_LAST)
 
 /**
  * FAT12 BIOS Parameter Block
@@ -145,9 +149,6 @@ typedef struct _DirEntry
 //     uint16_t _Reserved3;
 //     wchar_t NameChunk3[2];
 // } LFN;
-
-void InitBiosParamBlock(BiosParamBlock *bpb);
-void InitBootSector(BootSector *bootsect);
 
 void GetName(char dst[MAX_NAME], const char *src);
 void GetExtension(char dst[MAX_EXTENSION], const char *src);
