@@ -6,7 +6,11 @@
 class DiskImage
 {
 public:
-    static bool Create(const char *path);
+    static bool Create(
+        const char *path,
+        const char *label,
+        int fatWidth,
+        int mediaType);
 
     DiskImage(const char *path);
     ~DiskImage();

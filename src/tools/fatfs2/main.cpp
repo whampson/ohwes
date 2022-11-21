@@ -1,5 +1,8 @@
 #include "Command.hpp"
 
+int g_bNoPrefix = false;
+int g_bQuiet = false;
+int g_bQuietAll = false;
 int g_bVerbose = false;
 
 static CommandArgs s_CommandArgs = { };
@@ -18,9 +21,13 @@ void PrintGlobalHelp()
         printf("    %-16s%s\n", cmds[i].Name, cmds[i].Descripton);
     printf("\n");
     printf("Options:\n");
+    printf("    -P, --no-prefix Do not prefix output with the program name.\n");
+    printf("    -q, --quiet     Do not output informational messages (overrides -v).\n");
+    printf("                      Errors and warnings will still be printed.\n");
+    printf("    -Q, --quiet-all Do not output any messages (overrides -v).\n");
     printf("    -v, --verbose   Make the operation more talkative.\n");
-    printf("    -?, --help      Display this help message and exit.\n");
-    printf("    --version       Display version information and exit.\n");
+    printf("        --help      Display this help message and exit.\n");
+    printf("        --version   Display version information and exit.\n");
     printf("\n");
     printf("Run `fatfs help COMMAND` to get help about a specific command.\n");
 }
@@ -56,9 +63,12 @@ static bool ParseCommandLine(int argc, char **argv)
 {
     static struct option LongOptions[] =
     {
-        { "help", no_argument, &s_bShowHelp, 1 },
-        { "version", no_argument, &s_bShowVersion, 1 },
-        { "verbose", no_argument, &g_bVerbose, 1 },
+        { "no-prefix",  no_argument, 0, 'P' },
+        { "quiet",      no_argument, 0, 'q' },
+        { "quiet-all",  no_argument, 0, 'Q' },
+        { "verbose",    no_argument, 0, 'v' },
+        { "help",       no_argument, &s_bShowHelp, 1 },
+        { "version",    no_argument, &s_bShowVersion, 1 },
         { 0, 0, 0, 0 }
     };
 
@@ -69,7 +79,7 @@ static bool ParseCommandLine(int argc, char **argv)
     while (true)
     {
         int optIdx = 0;
-        int c = getopt_long(argc, argv, "+v", LongOptions, &optIdx);
+        int c = getopt_long(argc, argv, "+:PqQv", LongOptions, &optIdx);
 
         if (c == -1 || !success)
             break;
@@ -80,6 +90,16 @@ static bool ParseCommandLine(int argc, char **argv)
                 if (LongOptions[optIdx].flag != 0)
                     break;
                 assert(!"unhandled getopt_long case!");
+                break;
+            case 'P':
+                g_bNoPrefix = true;
+                break;
+            case 'q':
+                g_bQuiet = true;
+                break;
+            case 'Q':
+                g_bQuiet = true;
+                g_bQuietAll = true;
                 break;
             case 'v':
                 g_bVerbose = true;
@@ -95,6 +115,11 @@ static bool ParseCommandLine(int argc, char **argv)
                 assert(!"unhandled getopt_long case!");
                 break;
         }
+    }
+
+    if (g_bQuiet || g_bQuietAll)
+    {
+        g_bVerbose = false;
     }
 
     if (optind < argc)

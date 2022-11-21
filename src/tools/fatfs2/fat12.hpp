@@ -6,11 +6,11 @@ extern "C" {
 #include "fatfs.hpp"
 
 #define NAME_LENGTH                 8
-#define EXT_LENGTH                  3
+#define EXTENSION_LENGTH            3
 #define LABEL_LENGTH                11
 
 #define MAX_NAME                    (NAME_LENGTH+1)
-#define MAX_EXT                     (EXT_LENGTH+1)
+#define MAX_EXTENSION               (EXTENSION_LENGTH+1)
 #define MAX_LABEL                   (LABEL_LENGTH+1)
 #define MAX_PATH                    512
 
@@ -117,7 +117,7 @@ typedef enum _FileAttrs : char
 typedef struct _DirEntry
 {
     char Name[NAME_LENGTH];
-    char Extension[EXT_LENGTH];
+    char Extension[EXTENSION_LENGTH];
     FileAttrs Attributes;
     uint8_t _Reserved1;     // varies by system, do not use
     uint8_t _Reserved2;     // fine creation time, 10ms increments, 0-199
@@ -148,6 +148,10 @@ typedef struct _DirEntry
 
 void InitBiosParamBlock(BiosParamBlock *bpb);
 void InitBootSector(BootSector *bootsect);
+
+void GetName(char dst[MAX_NAME], const char *src);
+void GetExtension(char dst[MAX_EXTENSION], const char *src);
+void GetLabel(char dst[MAX_LABEL], const char *src);
 
 // void GetName(char dst[NAME_LENGTH+1], const char *src);
 // void GetExt(char dst[EXT_LENGTH+1], const char *src);

@@ -22,17 +22,60 @@ extern "C" {
 #define STATUS_ERROR        2
 
 // Global options
+extern int g_bNoPrefix;
+extern int g_bQuiet;
+extern int g_bQuietAll;
 extern int g_bVerbose;
+
 void PrintGlobalHelp();
 
 // Some of these macros rely heavily on GCC syntax.
 // If you don't use GCC, well I don't have a solution for you.
 
 // Logging
-#define LogVerbose(...) do { if (g_bVerbose) fprintf(stdout, PROG_NAME ": " __VA_ARGS__); } while (0)
-#define LogInfo(...)    do { fprintf(stdout, PROG_NAME ": " __VA_ARGS__); } while (0)
-#define LogWarning(...) do { fprintf(stderr, PROG_NAME ": warning: " __VA_ARGS__); } while (0)
-#define LogError(...)   do { fprintf(stderr, PROG_NAME ": error: " __VA_ARGS__); } while (0)
+#define _Log(stream, level, ...)                                                                    \
+do {                                                                                                \
+    if (!g_bNoPrefix) {                                                                             \
+        if (level[0]) {                                                                             \
+            fprintf(stream, PROG_NAME ": " level ": " __VA_ARGS__);                                 \
+        } else {                                                                                    \
+            fprintf(stream, PROG_NAME ": " __VA_ARGS__);                                            \
+        }                                                                                           \
+    } else {                                                                                        \
+        if (level[0]) {                                                                             \
+            fprintf(stream, level ": " __VA_ARGS__);                                                \
+        } else {                                                                                    \
+            fprintf(stream, __VA_ARGS__);                                                           \
+        }                                                                                           \
+    }                                                                                               \
+} while (0)
+
+#define LogVerbose(...)                                                                             \
+do {                                                                                                \
+    if (!g_bQuiet && g_bVerbose) {                                                                  \
+        _Log(stdout, "", __VA_ARGS__);                                                              \
+    }                                                                                               \
+} while (0)
+
+#define LogInfo(...)                                                                                \
+do {                                                                                                \
+    if (!g_bQuiet) {                                                                                \
+        _Log(stdout, "", __VA_ARGS__);                                                              \
+    }                                                                                               \
+} while (0)
+
+#define LogWarning(...)                                                                             \
+do {                                                                                                \
+    if (!g_bQuietAll) {                                                                             \
+        _Log(stdout, "warning", __VA_ARGS__);                                                       \
+    }                                                                                               \
+} while (0)
+#define LogError(...)                                                                               \
+do {                                                                                                \
+    if (!g_bQuietAll) {                                                                             \
+        _Log(stderr, "error", __VA_ARGS__);                                                         \
+    }                                                                                               \
+} while (0)
 
 #define BAD_COMMAND(str)                                                                            \
 do {                                                                                                \

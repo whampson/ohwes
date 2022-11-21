@@ -6,8 +6,9 @@ static const Command s_pCommands[] =
     { Create,
         "create", "create [OPTIONS] DISKIMAGE",
         "Create a new FAT-formatted disk image.",
-        "  -l LABEL      Set the volume label to LABEL (11 chars max).\n"
-        "  --force       Overwrite the disk image file if it already exists.",
+        "  -l LABEL      Set the volume label (11 chars max)\n"
+        "  -m TYPE       Set the media type ID\n"
+        "  --force       Overwrite the disk image file if it already exists",
         // TODO: more
     },
     { Help,
@@ -60,16 +61,24 @@ int Create(const Command *cmd, const CommandArgs *args)
 {
     (void) cmd;
 
-    int bCustomLabel = 0;
-    int bForce = 0;
-
     const char *path = NULL;
 
+    // Option booleans
+    int bHelp = 0;
+    int bForce = 0;
+    int bLabel = 0;
+    int bMediaType = 0;
+
+    // Option variables, with defaults
+    int mediaType = DEFAULT_MEDIA_TYPE;
     char label[MAX_LABEL] = { };
-    const char *tmpLabel = DEFAULT_LABEL;
+    const char *pLabel = DEFAULT_LABEL;
+
+    const int fatWidth = 12;        // TODO: 16, 32
 
     static struct option LongOptions[] =
     {
+        { "help", no_argument, &bHelp, 1 },
         { "force", no_argument, &bForce, 1 },
         { 0, 0, 0, 0 }
     };
@@ -77,14 +86,21 @@ int Create(const Command *cmd, const CommandArgs *args)
     optind = 0;     // reset option index
     opterr = 0;     // prevent default error messages
 
+    // Parse arguments
     bool success = true;
     while (true)
     {
         int optIdx = 0;
-        int c = getopt_long(args->Argc, args->Argv, "+:l:", LongOptions, &optIdx);
+        int c = getopt_long(args->Argc, args->Argv, "+:l:m:", LongOptions, &optIdx);
 
         if (c == -1 || !success)
             break;
+
+        if (bHelp)
+        {
+            PrintCommandHelp(cmd);
+            return STATUS_SUCCESS;
+        }
 
         switch (c)
         {
@@ -94,8 +110,12 @@ int Create(const Command *cmd, const CommandArgs *args)
                 assert(!"unhandled getopt_long case!");
                 break;
             case 'l':
-                bCustomLabel = 1;
-                tmpLabel = optarg;
+                bLabel = 1;
+                pLabel = optarg;
+                break;
+            case 'm':
+                bMediaType = 1;
+                mediaType = strtol(optarg, NULL, 0);
                 break;
             case '?':
                 if (optopt != 0)
@@ -122,26 +142,28 @@ int Create(const Command *cmd, const CommandArgs *args)
         return STATUS_INVALIDARG;
     }
 
-    int len = strlen(tmpLabel);
+    // Copy label, pad with spaces.
+    int len = strlen(pLabel);
     for (int i = 0; i < LABEL_LENGTH; i++)
     {
         if (i >= len)
             label[i] = ' ';
         else
-            label[i] = tmpLabel[i];
+            label[i] = pLabel[i];
     }
 
+    // Read the path
     if (optind < args->Argc)
     {
         path = args->Argv[optind];
     }
-
     if (!path)
     {
         LogError("missing disk image file name\n");
         return STATUS_INVALIDARG;
     }
 
+    // Test whether the file exists, fail if it does and --force not specified
     FILE *fp = fopen(path, "r");
     if (fp != NULL)
     {
@@ -154,7 +176,9 @@ int Create(const Command *cmd, const CommandArgs *args)
         fclose(fp);
     }
 
-    success = DiskImage::Create(path);
+    // Create the disk image
+    success = DiskImage::Create(
+        path, label, fatWidth, mediaType);
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }
 
