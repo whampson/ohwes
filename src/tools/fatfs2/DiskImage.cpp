@@ -2,9 +2,20 @@
 
 bool DiskImage::Create(
     const char *path,
-    const char *label,
+    int sectorSize,
+    int sectorCount,
+    int headCount,
+    int sectorsPerTrack,
+    int sectorsPerCluster,
+    int mediaType,
+    int driveNumber,
+    int fatCount,
     int fatWidth,
-    int mediaType)
+    int rootCapacity,
+    int reservedCount,
+    int hiddenCount,
+    int volumeId,
+    const char *label)
 {
     FILE *fp = NULL;
     size_t bytesWritten = 0;
@@ -24,7 +35,7 @@ bool DiskImage::Create(
     //
 
     memset(&bootSect, 0, sizeof(BootSector));
-    bootSect.Signature = BOOT_SECTOR_ID;
+    bootSect.BootSignature = BOOTSIG;
 
     static const char JumpCode[] =
     {
@@ -56,47 +67,56 @@ bool DiskImage::Create(
 
     memcpy(bootSect.BootCode, BootCode, sizeof(BootCode));
     memcpy(bootSect.JumpCode, JumpCode, sizeof(JumpCode));
-    strcpy(bootSect.OemName, OEM_NAME);
+    strcpy(bootSect.OemName, OEMNAME);
 
     //
     // BIOS Parameter Block
     //
     bpb = &bootSect.BiosParams;
     bpb->MediaType = mediaType;
-    bpb->SectorSize = 512;
-    bpb->SectorCount = 2880;
-    bpb->ReservedSectorCount = 1;
-    bpb->HiddenSectorCount = 0;
-    bpb->LargeSectorCount = 0;
-    bpb->SectorsPerCluster = 1;
-    bpb->SectorsPerTable = 9;
-    bpb->SectorsPerTrack = 18;
-    bpb->TableCount = 2;
-    bpb->MaxRootDirEntryCount = 224;
-    bpb->HeadCount = 2;
-    bpb->DriveNumber = 0;
+    bpb->SectorSize = sectorSize;
+    bpb->SectorCount = sectorCount;
+    bpb->ReservedSectorCount = reservedCount;
+    bpb->HiddenSectorCount = hiddenCount;
+    bpb->SectorCountLarge = 0;  // TODO: set if sectorCount > 65535
+    bpb->SectorsPerCluster = sectorsPerCluster;
+    bpb->SectorsPerTable = 9;   // TODO: calculate
+    bpb->SectorsPerTrack = sectorsPerTrack;
+    bpb->TableCount = fatCount;
+    bpb->RootDirCapacity = rootCapacity;
+    bpb->HeadCount = headCount;
+    bpb->DriveNumber = driveNumber;
     bpb->_Reserved = 0;
-    bpb->ExtendedBootSignature = 0x29;
-    bpb->VolumeId = time(NULL);
-    strncpy(bpb->Label, label, LABEL_LENGTH);
+    bpb->Signature = 0x29;
+    bpb->VolumeId = volumeId;
+
+    strncpy(bpb->Label, label, LABEL_LENGTH);   // TODO: pad w/ spaces / truncate (create MakeLabel() fn)
     switch (fatWidth)
     {
-        case 12: strcpy(bpb->FileSystemType, FS_TYPE_FAT12); break;
-        case 16: strcpy(bpb->FileSystemType, FS_TYPE_FAT16); break;
-        case 32: strcpy(bpb->FileSystemType, FS_TYPE_FAT32); break;
+        case 12: strcpy(bpb->FileSystemType, FSTYPEID_FAT12); break;
+        case 16: strcpy(bpb->FileSystemType, FSTYPEID_FAT16); break;
         default: assert(!"Invalid FAT width!"); break;
     }
 
+    // TODO: calculate sectors per FAT based on disk size
+    const int sectorsPerTable = bpb->SectorsPerTable;
+
     // Some convenient variables
-    int diskSize = bpb->SectorCount * bpb->SectorSize;
-    int clusterSize = bpb->SectorsPerCluster * bpb->SectorSize;
-    int rootSize = bpb->MaxRootDirEntryCount * sizeof(DirEntry);
-    int rootSectors = rootSize / bpb->SectorSize;
-    int fatSize = bpb->SectorsPerTable * bpb->SectorSize;
-    int dataSectors = bpb->SectorCount
+    int diskSize = sectorCount * sectorSize;
+    int fatSize = sectorsPerTable * sectorSize;
+    int rootSize = rootCapacity * sizeof(DirEntry);
+    int rootSectors = rootSize / sectorSize;
+    int dataSectors = sectorCount
         - bpb->ReservedSectorCount
-        - (bpb->SectorsPerTable * bpb->TableCount)
+        - (sectorsPerTable * bpb->TableCount)
         - rootSectors;
+
+    // TODO: up-pad rootSize if needed
+
+    assert(diskSize % 512 == 0);
+    assert(diskSize % sectorSize == 0);
+    assert(rootSize % sectorSize == 0);
+    assert(fatSize % sectorSize == 0);
 
     //
     // FATs, Root Directory, and Data Area
@@ -105,11 +125,11 @@ bool DiskImage::Create(
     // Allocate the necessary sections
     fileAllocTable = (char *) SafeAlloc(fatSize);
     rootDir = (char *) SafeAlloc(rootSize);
-    zeroSector = (char *) SafeAlloc(bpb->SectorSize);
+    zeroSector = (char *) SafeAlloc(sectorSize);
 
     memset(fileAllocTable, 0, fatSize);
     memset(rootDir, 0, rootSize);
-    memset(zeroSector, 0, bpb->SectorSize);
+    memset(zeroSector, 0, sectorSize);
 
     //
     // File Allocation Table (FAT12)
@@ -122,7 +142,7 @@ bool DiskImage::Create(
     //
     //     0        1        2      :: byte index
     // |........|++++....|++++++++| :: . = clust0, + = clust1
-    // |76543210|3210ba98|ba987654| :: bit index of clustID
+    // |76543210|3210ba98|ba987654| :: bit index
     //
     fileAllocTable[0] = mediaType;
     fileAllocTable[1] = (char) (((CLUSTER_END & 0x00F) << 4) | 0x0F);
@@ -137,9 +157,9 @@ bool DiskImage::Create(
     // The boot sector goes first, followed by any additional reserved sectors.
     // The boot sector is also a reserved sector, so we start this loop at 1.
     bytesWritten += SafeWrite(fp, &bootSect, sizeof(BootSector));
-    for (int i = 1; i < bpb->ReservedSectorCount; i++)
+    for (int i = 1; i < reservedCount; i++)
     {
-        bytesWritten += SafeWrite(fp, zeroSector, bpb->SectorSize);
+        bytesWritten += SafeWrite(fp, zeroSector, sectorSize);
     }
 
     // Next, we write the FATs. Typically there are two for redundancy.
@@ -155,7 +175,7 @@ bool DiskImage::Create(
     // Lastly, zero-out the data area.
     for (int i = 0; i < dataSectors; i++)
     {
-        bytesWritten += SafeWrite(fp, zeroSector, bpb->SectorSize);
+        bytesWritten += SafeWrite(fp, zeroSector, sectorSize);
     }
 
     //
@@ -163,31 +183,39 @@ bool DiskImage::Create(
     //
 
     // Sanity checks
-    assert(bytesWritten % bpb->SectorSize == 0);
+    assert(bytesWritten % sectorSize == 0);
     assert(bytesWritten == (size_t) diskSize);
 
     // User feedback
+    // TODO: turn this into 'fatfs info'
     char labelBuf[MAX_LABEL];
     GetLabel(labelBuf, bpb->Label);
 
     LogInfo("%s statistics:\n",
         path);
-    LogInfo("%d sectors, %d heads, %d sectors per track\n",
-        bpb->SectorCount, bpb->HeadCount, bpb->SectorsPerTrack);
-    LogInfo("%d byte sectors, %d byte clusters\n",
-        bpb->SectorSize, clusterSize);
-    LogInfo("%d reserved, %d hidden, and %d large sectors\n",
-        bpb->ReservedSectorCount, bpb->HiddenSectorCount, bpb->LargeSectorCount);
-    LogInfo("media type ID is 0x%02X\n",
+    LogInfo("%d %s, %d %s, %d %s per track\n",
+        PRINTF_PLURALIZE(bpb->SectorCount, "sector"),
+        PRINTF_PLURALIZE(bpb->HeadCount, "head"),
+        PRINTF_PLURALIZE(bpb->SectorsPerTrack, "sector"));
+    LogInfo("%d byte sectors, %d %s per cluster\n",
+        bpb->SectorSize,
+        PRINTF_PLURALIZE(bpb->SectorsPerCluster, "sector"));
+    LogInfo("%d reserved and %d hidden %s\n",
+        bpb->ReservedSectorCount,
+        PRINTF_PLURALIZE(bpb->HiddenSectorCount, "sector"));
+    LogInfo("media type is 0x%02X\n",
         bpb->MediaType);
     LogInfo("drive number is %d\n",
         bpb->DriveNumber);
-    LogInfo("extended boot signature is 0x%02X\n",
-        bpb->ExtendedBootSignature);
-    LogInfo("%d %d-bit FATs, %d sectors each\n",
-        bpb->TableCount, fatWidth, fatSize / bpb->SectorSize);
-    LogInfo("root directory capacity is %d, occupying %d sectors\n",
-        bpb->MaxRootDirEntryCount, rootSize / bpb->SectorSize);
+    LogInfo("signature byte is 0x%02X\n",
+        bpb->Signature);
+    LogInfo("%d %d-bit %s, occupying %d %s per FAT\n",
+        bpb->TableCount, fatWidth,
+        PLURALIZE(bpb->TableCount, "FAT"),
+        PRINTF_PLURALIZE(fatSize / bpb->SectorSize, "sector"));
+    LogInfo("root directory contains %d %s, occupying %d %s\n",
+        PRINTF_PLURALIZE(rootCapacity, "slot"),
+        PRINTF_PLURALIZE(rootSize / bpb->SectorSize, "sector"));
     LogInfo("volume ID is %08X, volume label is '%s'\n",
         bpb->VolumeId, labelBuf);
     LogInfo("%d bytes free\n",

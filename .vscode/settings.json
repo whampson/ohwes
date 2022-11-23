@@ -26,6 +26,7 @@
         }
     ],
     "files.associations": {
+        "*.h": "c",
         "numbers": "c",
         "stdbool.h": "c",
         "unistd.h": "c",
@@ -35,6 +36,7 @@
         "random": "c",
         "array": "c",
         "string_view": "c",
-        "initializer_list": "c"
+        "initializer_list": "c",
+        "__config": "cpp"
     }
 }

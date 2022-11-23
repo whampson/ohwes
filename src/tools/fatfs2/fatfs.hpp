@@ -32,6 +32,10 @@ void PrintGlobalHelp();
 // Some of these macros rely heavily on GCC syntax.
 // If you don't use GCC, well I don't have a solution for you.
 
+// String Utilities
+#define PLURALIZE(n, s)         (n == 1) ? s : s "s"
+#define PRINTF_PLURALIZE(n, s)  n, PLURALIZE(n, s)
+
 // Logging
 #define _Log(stream, level, ...)                                                                    \
 do {                                                                                                \

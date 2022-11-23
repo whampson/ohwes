@@ -1,4 +1,4 @@
-#include "fat12.hpp"
+#include "fat.hpp"
 
 static void GetString(char *dst, const char *src, int count, bool allowSpaces);
 

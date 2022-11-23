@@ -1,16 +1,27 @@
 #ifndef DISKIMAGE_H
 #define DISKIMAGE_H
 
-#include "fat12.hpp"
+#include "fat.hpp"
 
 class DiskImage
 {
 public:
     static bool Create(
         const char *path,
-        const char *label,
+        int sectorSize,
+        int sectorCount,
+        int headCount,
+        int sectorsPerTrack,
+        int sectorsPerCluster,
+        int mediaType,
+        int driveNumber,
+        int fatCount,
         int fatWidth,
-        int mediaType);
+        int rootCapacity,
+        int reservedCount,
+        int hiddenCount,
+        int volumeId,
+        const char *label);
 
     DiskImage(const char *path);
     ~DiskImage();
