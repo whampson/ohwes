@@ -5,22 +5,19 @@ extern "C" {
 
 #include "fatfs.hpp"
 
-typedef struct _CommandArgs
-{
+struct CommandArgs {
     int Argc;
     char * const *Argv;
-} CommandArgs;
+};
 
-typedef struct _Command Command;
-
-typedef struct _Command
-{
+struct Command;
+struct Command {
     int (*Func)(const Command *cmd, const CommandArgs *args);
     const char *Name;
     const char *Synopsis;
-    const char *Descripton;
+    const char *Description;
     const char *Options;
-} Command;
+};
 
 const Command * GetCommands(void);
 int GetCommandCount(void);

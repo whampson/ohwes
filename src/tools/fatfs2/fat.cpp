@@ -1,23 +1,156 @@
 #include "fat.hpp"
 
-static void GetString(char *dst, const char *src, int count, bool allowSpaces);
+static void ReadString(char *dst, const char *src, int count, bool allowSpaces);
+static void WriteString(char *dst, const char *src, int n);
+
+void InitBootSector(BootSector *bootSect, const BiosParamBlock *bpb)
+{
+    memset(bootSect, 0, sizeof(BootSector));
+    bootSect->BootSignature = BOOTSIG;
+    bootSect->BiosParams = *bpb;
+
+    static const char JumpCode[] = {
+    /* entry:      jmp     boot_code    */  '\xEB', '\x3C',
+    /*             nop                  */  '\x90'
+    };
+    static const char BootCode[] = {
+    /* boot_code:  pushw   %cs          */  "\x0E"
+    /*             popw    %ds          */  "\x1F"
+    /*             leaw    message, %si */  "\x8D\x36\x1C\x00"
+    /* print_loop: movb    $0x0e, %ah   */  "\xB4\x0E"
+    /*             movw    $0x07, %bx   */  "\xBB\x07\x00"
+    /*             lodsb                */  "\xAC"
+    /*             andb    %al, %al     */  "\x20\xC0"
+    /*             jz      key_press    */  "\x74\x04"
+    /*             int     $0x10        */  "\xCD\x10"
+    /*             jmp     print_loop   */  "\xEB\xF2"
+    /* key_press:  xorb    %ah, %ah     */  "\x30\xE4"
+    /*             int     $0x16        */  "\xCD\x16"
+    /*             int     $0x19        */  "\xCD\x19"
+    /* halt:       jmp     halt         */  "\xEB\xFE"
+    /* message:    .ascii               */  "\r\nThis disk is not bootable!"
+    /*             .asciz               */  "\r\nInsert a bootable disk and press any key to try again..."
+    };
+
+    static_assert(sizeof(JumpCode) <= sizeof(bootSect->JumpCode), "JumpCode is too large!");
+    static_assert(sizeof(BootCode) <= sizeof(BootCode), "BootCode is too large!");
+
+    memcpy(bootSect->BootCode, BootCode, sizeof(BootCode));
+    memcpy(bootSect->JumpCode, JumpCode, sizeof(JumpCode));
+    SetName(bootSect->OemName, PROG_NAME);
+}
+
+void InitFileAllocTable(void *fat, size_t fatSize, char mediaType, bool fat12)
+{
+    memset(fat, 0, fatSize);
+
+    //
+    // File Allocation Table (FAT12)
+    //
+    // Cluster 0:
+    //     [7:0] - Media Type ID
+    //    [11:9] - (padded with 1s)
+    // Cluster 1:
+    //    [11:0] - End-of-Chain marker
+    //
+    //     0        1        2      :: byte index
+    // |........|++++....|++++++++| :: . = clust0, + = clust1
+    // |76543210|3210ba98|ba987654| :: bit index
+    //
+    if (fat12) {
+        uint8_t *fat12 = (uint8_t *) fat;
+        fat12[0] = mediaType;
+        fat12[1] = (char) (((EOC_CLUSTER_12 & 0x00F) << 4) | 0x0F);
+        fat12[2] = (char) (((EOC_CLUSTER_12 & 0xFF0) >> 4));
+    }
+
+    //
+    // File Allocation Table (FAT16)
+    //
+    // Cluster 0:
+    //     [7:0] - Media Type ID
+    //    [15:9] - (padded with 1s)
+    // Cluster 1:
+    //    [15:0] - End-of-Chain marker
+    //
+    //     0        1        2        3      :: byte index
+    // |........|........|++++++++|++++++++| :: . = clust0, + = clust1
+    // |76543210|fedcba98|76543210|fedcba98| :: bit index
+    //
+    else {
+        uint16_t *fat16 = (uint16_t *) fat;
+        fat16[0] = 0xFF00 | mediaType;
+        fat16[1] = EOC_CLUSTER_16;
+    }
+}
+
+void MakeVolumeLabel(DirEntry *dst, const char *label)
+{
+    memset(dst, 0, sizeof(DirEntry));
+
+    time_t now = time(NULL);
+    dst->Attributes = ATTR_LABEL;
+    SetLabel(dst->Name, label);
+    SetDate(&dst->CreationDate, &now);
+    SetTime(&dst->CreationTime, &now);
+    SetDate(&dst->ModifiedDate, &now);
+    SetTime(&dst->ModifiedTime, &now);
+    SetDate(&dst->LastAccessDate, &now);
+}
 
 void GetName(char dst[MAX_NAME], const char *src)
 {
-    GetString(dst, src, NAME_LENGTH, false);
+    ReadString(dst, src, NAME_LENGTH, false);
 }
 
 void GetExtension(char dst[MAX_EXTENSION], const char *src)
 {
-    GetString(dst, src, EXTENSION_LENGTH, false);
+    ReadString(dst, src, EXTENSION_LENGTH, false);
 }
 
 void GetLabel(char dst[MAX_LABEL], const char *src)
 {
-    GetString(dst, src, LABEL_LENGTH, true);
+    ReadString(dst, src, LABEL_LENGTH, true);
 }
 
-static void GetString(char *dst, const char *src, int count, bool allowSpaces)
+void SetName(char dst[NAME_LENGTH], const char *src)
+{
+    WriteString(dst, src, NAME_LENGTH);
+}
+
+void SetExtension(char dst[EXTENSION_LENGTH], const char *src)
+{
+    WriteString(dst, src, EXTENSION_LENGTH);
+}
+
+void SetLabel(char dst[LABEL_LENGTH], const char *src)
+{
+    WriteString(dst, src, LABEL_LENGTH);
+}
+
+void SetDate(FatDate *dst, time_t *t)
+{
+    if (t == NULL) {
+        time(t);
+    }
+    tm *tm = localtime(t);
+    dst->Year = tm->tm_year - 80;
+    dst->Month = tm->tm_mon + 1;
+    dst->Day = tm->tm_mday;
+}
+
+void SetTime(FatTime *dst, time_t *t)
+{
+    if (t == NULL) {
+        time(t);
+    }
+    tm *tm = localtime(t);
+    dst->Hours = tm->tm_hour;
+    dst->Minutes = tm->tm_min;
+    dst->Seconds = tm->tm_sec / 2;
+}
+
+static void ReadString(char *dst, const char *src, int count, bool allowSpaces)
 {
     if (!allowSpaces)
     {
@@ -63,5 +196,16 @@ static void GetString(char *dst, const char *src, int count, bool allowSpaces)
             dst[i] = src[beg + i];
         }
         dst[i] = '\0';
+    }
+}
+
+static void WriteString(char *dst, const char *src, int n)
+{
+    int len = strlen(src);
+    strncpy(dst, src, n);
+
+    while (n - len > 0)
+    {
+        dst[len++] = ' ';
     }
 }

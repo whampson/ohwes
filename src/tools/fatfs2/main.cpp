@@ -1,6 +1,6 @@
 #include "Command.hpp"
 
-int g_bNoPrefix = false;
+int g_bPrefix = false;
 int g_bQuiet = false;
 int g_bQuietAll = false;
 int g_bVerbose = false;
@@ -17,11 +17,12 @@ void PrintGlobalHelp()
     printf("Usage: " PROG_NAME " [OPTIONS] COMMAND [ARGS]\n");
     printf("\n");
     printf("Commands:\n");
-    for (int i = 0; i < count; i++)
-        printf("    %-16s%s\n", cmds[i].Name, cmds[i].Descripton);
+    for (int i = 0; i < count; i++) {
+        printf("    %-16s%s\n", cmds[i].Name, cmds[i].Description);
+    }
     printf("\n");
     printf("Options:\n");
-    printf("    -P, --no-prefix Do not prefix output with the program name.\n");
+    printf("    -p, --prefix    Prefix output with the program name.\n");
     printf("    -q, --quiet     Do not output informational messages (overrides -v).\n");
     printf("                      Errors and warnings will still be printed.\n");
     printf("    -Q, --quiet-all Do not output any messages (overrides -v).\n");
@@ -29,21 +30,19 @@ void PrintGlobalHelp()
     printf("        --help      Display this help message and exit.\n");
     printf("        --version   Display version information and exit.\n");
     printf("\n");
-    printf("Run `fatfs help COMMAND` to get help about a specific command.\n");
+    printf("Run `" PROG_NAME " help COMMAND` to get help about a specific command.\n");
 }
 
 static int PrintHelp()
 {
-    if (s_CommandArgs.Argv == NULL)
-    {
+    if (s_CommandArgs.Argv == NULL) {
         PrintGlobalHelp();
         return STATUS_SUCCESS;
     }
 
     const Command *cmd = FindCommand(s_CommandArgs.Argv[0]);
-    if (!cmd)
-    {
-        BAD_COMMAND(s_CommandArgs.Argv[0]);
+    if (!cmd) {
+        LogError_BadCommand(s_CommandArgs.Argv[0]);
         return STATUS_ERROR;
     }
 
@@ -54,16 +53,15 @@ static int PrintHelp()
 static int PrintVersion()
 {
     printf("%s %s (%s)\n", PROG_NAME, PROG_VERSION, __DATE__);
-    printf("Copyright (C) 2022 Wes Hampson\n");
+    printf(PROG_COPYRIGHT "\n");
 
     return STATUS_SUCCESS;
 }
 
 static bool ParseCommandLine(int argc, char **argv)
 {
-    static struct option LongOptions[] =
-    {
-        { "no-prefix",  no_argument, 0, 'P' },
+    static struct option LongOptions[] = {
+        { "prefix",     no_argument, 0, 'p' },
         { "quiet",      no_argument, 0, 'q' },
         { "quiet-all",  no_argument, 0, 'Q' },
         { "verbose",    no_argument, 0, 'v' },
@@ -76,23 +74,21 @@ static bool ParseCommandLine(int argc, char **argv)
     opterr = 0;     // prevent default error messages
 
     bool success = true;
-    while (true)
-    {
+    while (true) {
         int optIdx = 0;
-        int c = getopt_long(argc, argv, "+:PqQv", LongOptions, &optIdx);
+        int c = getopt_long(argc, argv, "+:pqQv", LongOptions, &optIdx);
 
         if (c == -1 || !success)
             break;
 
-        switch (c)
-        {
+        switch (c) {
             case 0:
                 if (LongOptions[optIdx].flag != 0)
                     break;
                 assert(!"unhandled getopt_long case!");
                 break;
-            case 'P':
-                g_bNoPrefix = true;
+            case 'p':
+                g_bPrefix = true;
                 break;
             case 'q':
                 g_bQuiet = true;
@@ -106,9 +102,9 @@ static bool ParseCommandLine(int argc, char **argv)
                 break;
             case '?':
                 if (optopt != 0)
-                    BAD_OPT(optopt);
+                    LogError_BadOpt(optopt);
                 else
-                    BAD_LONGOPT(&argv[optind - 1][2]);  // remove leading '--'
+                    LogError_BadLongOpt(&argv[optind - 1][2]);  // remove leading '--'
                 success = false;
                 break;
             default:
@@ -117,13 +113,11 @@ static bool ParseCommandLine(int argc, char **argv)
         }
     }
 
-    if (g_bQuiet || g_bQuietAll)
-    {
+    if (g_bQuiet || g_bQuietAll) {
         g_bVerbose = false;
     }
 
-    if (optind < argc)
-    {
+    if (optind < argc) {
         s_CommandArgs.Argc = (argc - optind);
         s_CommandArgs.Argv = &argv[optind];
     }
@@ -133,37 +127,31 @@ static bool ParseCommandLine(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
+    // TODO: yank program file name from argv[0]
+
     if (!ParseCommandLine(argc, argv))
-    {
         return STATUS_INVALIDARG;
-    }
 
     if (s_bShowHelp)
-    {
         return PrintHelp();
-    }
-    if (s_bShowVersion)
-    {
-        return PrintVersion();
-    }
 
-    if (s_CommandArgs.Argc == 0)
-    {
-        MISSING_COMMAND();
+    if (s_bShowVersion)
+        return PrintVersion();
+
+    if (s_CommandArgs.Argc == 0) {
+        LogError_MissingCommand();
         return STATUS_INVALIDARG;
     }
 
     const Command *cmd = FindCommand(s_CommandArgs.Argv[0]);
-    if (!cmd)
-    {
-        BAD_COMMAND(s_CommandArgs.Argv[0]);
+    if (!cmd) {
+        LogError_BadCommand(s_CommandArgs.Argv[0]);
         return STATUS_ERROR;
     }
 
     int status = cmd->Func(cmd, &s_CommandArgs);
-    if (status != STATUS_SUCCESS)
-    {
-        LogVerbose("'%s' failed with exit code %d.\n", cmd->Name, status);
+    if (status != STATUS_SUCCESS) {
+        LogVerbose("'%s' failed with exit code %d\n", cmd->Name, status);
     }
 
     return status;

@@ -1,7 +1,5 @@
-#ifndef FAT_H
-#define FAT_H
-
-extern "C" {
+#ifndef FAT_HPP
+#define FAT_HPP
 
 #include "fatfs.hpp"
 
@@ -18,18 +16,27 @@ extern "C" {
 #define MEDIATYPE_FIXED     0xF8                    // Hard disk
 
 #define BOOTSIG             0xAA55                  // Boot sector signature
+#define BPBSIG_DOS41        0x29                    // DOS 4.1 BIOS Param Block
 
-#define OEMNAME             "fatfs   "              // Format utility identifier
+#define FIRST_CLUSTER       2
+#define LAST_CLUSTER_12     0xFF6
+#define LAST_CLUSTER_16     0xFFF6
+#define MAX_CLUSTER_12      (LAST_CLUSTER_12-FIRST_CLUSTER)
+#define MIN_CLUSTER_16      (MAX_CLUSTER_12+1)
+#define MAX_CLUSTER_16      (LAST_CLUSTER_16-FIRST_CLUSTER)
+#define BAD_CLUSTER_12      0xFF7
+#define BAD_CLUSTER_16      0xFFF7
+#define EOC_CLUSTER_12      0xFFF
+#define EOC_CLUSTER_16      0xFFFF
 
-#define FSTYPEID_FAT12      "FAT12   "              // FAT12 filesystem type identifier
-#define FSTYPEID_FAT16      "FAT16   "              // FAT16 filesystem type identifier
+#define MIN_SECTOR_SIZE     512
+#define MAX_SECTOR_SIZE     32768
 
-#define CLUSTER_FREE        0x000                   // Free cluster identifier
-#define CLUSTER_RESERVED    0x001                   // Reserved cluster identifier; do not use
-#define CLUSTER_FIRST       0x002                   // First valid data cluster number
-#define CLUSTER_LAST        0xFEF                   // Last valid data cluster number
-#define CLUSTER_BAD         0xFF7                   // Bad cluster marker
-#define CLUSTER_END         0xFFF                   // End-of-chain marker
+#define MIN_SEC_PER_CLUST   1
+#define MAX_SEC_PER_CLUST   128
+
+static_assert(MAX_CLUSTER_12 == 4084, "Bad max FAT12 cluster size!");
+static_assert(MAX_CLUSTER_16 == 65524, "Bad max FAT16 cluster size!");
 
 /**
  * BIOS Parameter Block
@@ -40,7 +47,7 @@ extern "C" {
  * https://jdebp.uk/FGA/bios-parameter-block.html
  * https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system#BPB
  */
-typedef struct _BiosParamBlock
+struct BiosParamBlock
 {
     // DOS 2.0 BPB
     uint16_t SectorSize;                // Size of a sector in bytes
@@ -55,17 +62,17 @@ typedef struct _BiosParamBlock
     // DOS 3.31 BPB
     uint16_t SectorsPerTrack;           // Number of sectors per physical track on disk
     uint16_t HeadCount;                 // Number of physical heads on disk
-    uint32_t HiddenSectorCount;         // Number of hidden sectors
+    uint32_t HiddenSectorCount;         // Number of hidden sectors, not supported unless disk is partitioned
     uint32_t SectorCountLarge;          // Total number of sectors on disk if 'SectorCount' exceeds 16 bits
 
-    // DOS 4.0 BPB
+    // DOS 4.1 BPB
     uint8_t DriveNumber;                // Disk drive number for BIOS I/O purposes
     uint8_t _Reserved;                  // Reserved; MSDOS uses this for chkdsk
     uint8_t Signature;                  // BPB version signature
     uint32_t VolumeId;                  // Volume serial number
     char Label[LABEL_LENGTH];           // Volume label
-    char FileSystemType[NAME_LENGTH];   // File system identifier
-} __attribute__ ((packed)) BiosParamBlock;
+    char FsType[NAME_LENGTH];   // File system identifier
+} __attribute__((packed));
 
 static_assert(offsetof(BiosParamBlock, SectorSize) == 0x00, "Bad SectorSize offset!");
 static_assert(offsetof(BiosParamBlock, SectorsPerCluster) == 0x02, "Bad SectorsPerCluster offset!");
@@ -84,21 +91,21 @@ static_assert(offsetof(BiosParamBlock, _Reserved) == 0x1A, "Bad _Reserved offset
 static_assert(offsetof(BiosParamBlock, Signature) == 0x1B, "Bad Signature offset!");
 static_assert(offsetof(BiosParamBlock, VolumeId) == 0x1C, "Bad VolumeId offset!");
 static_assert(offsetof(BiosParamBlock, Label) == 0x20, "Bad Label offset!");
-static_assert(offsetof(BiosParamBlock, FileSystemType) == 0x2B, "Bad FileSystemType offset!");
+static_assert(offsetof(BiosParamBlock, FsType) == 0x2B, "Bad FsType offset!");
 static_assert(sizeof(BiosParamBlock) == 51, "Bad BiosParamBlock size!");
 
 /**
  * Boot Sector
  * Contains the initial boot code and volume information.
  */
-typedef struct _BootSector
+struct BootSector
 {
     char JumpCode[3];                   // Small bit of code that jumps to boot loader code
     char OemName[NAME_LENGTH];          // Format utility identifier
     BiosParamBlock BiosParams;          // BIOS Parameter Block
     char BootCode[448];                 // Boot loader code
     uint16_t BootSignature;             // Boot sector signature, indicating whether the disk is bootable
-} BootSector;
+};
 
 static_assert(offsetof(BootSector, JumpCode) == 0x000, "Bad JumpCode offset!");
 static_assert(offsetof(BootSector, OemName) == 0x003, "Bad OemName offset!");
@@ -110,29 +117,29 @@ static_assert(sizeof(BootSector) == 512, "Bad BootSector size!");
 /**
  * Date
 */
-typedef struct _FatDate
+struct FatDate
 {
     uint16_t Day       : 5;             // Day of month; 1-31
     uint16_t Month     : 4;             // Month of year; 1-12
     uint16_t Year      : 7;             // Calendar year; 0-127 (0 = 1980)
-} FatDate;
+};
 static_assert(sizeof(FatDate) == 2, "Bad FatDate size!");
 
 /**
  * Time
 */
-typedef struct _FatTime
+struct FatTime
 {
     uint16_t Seconds   : 5;             // Seconds; 0-29 (secs/2)
     uint16_t Minutes   : 6;             // Minutes; 0-59
     uint16_t Hours     : 5;             // Hours; 0-23
-} FatTime;
+};
 static_assert(sizeof(FatTime) == 2, "Bad FatTime size!");
 
 /**
  * File Attributes
 */
-typedef enum _FileAttrs : char
+enum FileAttrs : char
 {
     ATTR_READONLY   = 1 << 0,           // Read-only
     ATTR_HIDDEN     = 1 << 1,           // Hidden
@@ -145,7 +152,7 @@ typedef enum _FileAttrs : char
                      |ATTR_SYSTEM
                      |ATTR_HIDDEN
                      |ATTR_READONLY
-} FileAttrs;
+};
 static_assert(sizeof(FileAttrs) == 1, "Bad FileAttrs size!");
 
 /**
@@ -153,7 +160,7 @@ static_assert(sizeof(FileAttrs) == 1, "Bad FileAttrs size!");
  * Contains timestamps, attributes, size, and location information about a file
  * or directory.
 */
-typedef struct _DirEntry
+struct DirEntry
 {
     char Name[NAME_LENGTH];
     char Extension[EXTENSION_LENGTH];
@@ -168,12 +175,24 @@ typedef struct _DirEntry
     FatDate ModifiedDate;
     uint16_t FirstCluster;
     uint32_t FileSize;
-} DirEntry;
+};
 static_assert(sizeof(DirEntry) == 32, "Bad DirEntry size!");
+
+void InitBootSector(BootSector *bootSect, const BiosParamBlock *bpb);
+void InitFileAllocTable(void *fat, size_t fatSize, char mediaType, bool fat12);
+
+void MakeVolumeLabel(DirEntry *dst, const char *label);
 
 void GetName(char dst[MAX_NAME], const char *src);
 void GetExtension(char dst[MAX_EXTENSION], const char *src);
 void GetLabel(char dst[MAX_LABEL], const char *src);
+
+void SetName(char dst[NAME_LENGTH], const char *src);
+void SetExtension(char dst[EXTENSION_LENGTH], const char *src);
+void SetLabel(char dst[LABEL_LENGTH], const char *src);
+
+void SetDate(FatDate *dst, time_t *t);
+void SetTime(FatTime *dst, time_t *t);
 
 #define HasAttribute(file,flag) (((file)->Attributes & (flag)) == (flag))
 
@@ -293,6 +312,4 @@ static inline bool IsParentDirectory(const DirEntry *e)
         && e->Name[2] == ' ';
 }
 
-}
-
-#endif // FAT_H
+#endif // FAT_HPP

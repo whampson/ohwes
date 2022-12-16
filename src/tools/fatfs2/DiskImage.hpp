@@ -3,36 +3,17 @@
 
 #include "fat.hpp"
 
-class DiskImage
-{
+class DiskImage {
 public:
-    static bool Create(
-        const char *path,
-        int sectorSize,
-        int sectorCount,
-        int headCount,
-        int sectorsPerTrack,
-        int sectorsPerCluster,
-        int mediaType,
-        int driveNumber,
-        int fatCount,
-        int fatWidth,
-        int rootCapacity,
-        int reservedCount,
-        int hiddenCount,
-        int volumeId,
-        const char *label);
+    static DiskImage * CreateNew(const char *path, const BiosParamBlock *bpb);
+    static DiskImage * Open(const char *path);
 
-    DiskImage(const char *path);
-    ~DiskImage();
+    void PrintDiskInfo() const { }
+
+    ~DiskImage() { LogInfo("DTOR()\n"); }
+    DiskImage() { LogInfo("CTOR()\n"); }
 
 private:
-    BootSector m_BootSect;
-    // uint32_t m_NumClusters;
-    // uint32_t *m_pClusterMap;
-    FILE *m_FilePtr;
-    char m_ImagePath[MAX_PATH];
-    bool m_IsValid;
 };
 
 #endif // DISKIMAGE_H
