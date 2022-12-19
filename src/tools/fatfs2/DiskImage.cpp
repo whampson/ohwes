@@ -374,7 +374,6 @@ int DiskImage::GetCluster(int index) const
         ? GetCluster12(m_Fat, fatSize, index)
         : GetCluster16(m_Fat, fatSize, index);
 
-    LogVeryVerbose("cluster %03X = %03X\n", index, value);
     if (value == -1) {
         LogWarning("attempt to read out-of-bounds cluster!\n");
     }

@@ -79,7 +79,7 @@ int GetCluster12(const char *fat, size_t fatSize, int index)
     //
 
     uint16_t pair = *((uint16_t *) &fat[i]);
-    if (i & 1) {
+    if (index & 1) {
         return pair >> 4;
     }
     return pair & 0x0FFF;
@@ -115,7 +115,7 @@ int SetCluster12(char *fat, size_t fatSize, int index, int value)
     //
 
     uint16_t pair = *((uint16_t *) &fat[i]);
-    if (i & 1) {
+    if (index & 1) {
         value <<= 4;
         pair &= 0x000F;
     }
