@@ -5,32 +5,32 @@
 
 static const Command s_pCommands[] = {
     { Create,   // similar to mkdosfs
-        "create", "create [OPTIONS] DISK [SECTORS]",
-        "Create a new FAT disk.",
-        "  -d NUMBER     Set the drive number to NUMBER\n"
-        "  -f COUNT      Create COUNT file allocation tables\n"
-        "  -F WIDTH      Select the FAT width (12, or 16)\n"
-        "  -g HEADS/SPT  Select the disk geometry (as heads/sectors_per_track)\n"
-        "  -i VOLID      Set the volume ID to VOLID (as a 32-bit hex number)\n"
-        "  -l LABEL      Set the volume label to LABEL (11 chars max)\n"
-        "  -m TYPE       Set the media type ID to TYPE\n"
-        "  -r COUNT      Create space for at least COUNT root directory entries\n"
-        "  -R COUNT      Create COUNT reserved sectors\n"
-        "  -s COUNT      Set the number of logical sectors per cluster to COUNT\n"
-        "  -S SIZE       Set the sector size to SIZE (power of 2, minimum 512)\n"
-        "  --no-align    Disable structure alignment\n"
-        "  --force       Overwrite the disk image file if it already exists\n"
-        "  --help        Show this help text\n",
+        "create", PROG_NAME " create [OPTIONS] DISK [NSECTORS]",
+        "Create a new FAT file system on the specified disk.",
+        "  -d NUMBER         Set the drive number to NUMBER\n"
+        "  -f COUNT          Create COUNT file allocation tables\n"
+        "  -F WIDTH          Select the FAT width (12, or 16)\n"
+        "  -g HEADS/SPT      Select the disk geometry (as heads/sectors_per_track)\n"
+        "  -i VOLID          Set the volume ID to VOLID (as a 32-bit hex number)\n"
+        "  -l LABEL          Set the volume label to LABEL (11 chars max)\n"
+        "  -m TYPE           Set the media type ID to TYPE\n"
+        "  -r COUNT          Create space for at least COUNT root directory entries\n"
+        "  -R COUNT          Create COUNT reserved sectors\n"
+        "  -s COUNT          Set the number of logical sectors per cluster to COUNT\n"
+        "  -S SIZE           Set the logical sector size to SIZE (power of 2, minimum 512)\n"
+        "  --force           Overwrite the disk image file if it already exists\n"
+        "  --no-align        Disable structure alignment\n"
+        "  --offset=SECTOR   Write the file system to a specific sector on disk\n"
     },
     { Help,
-        "help", "help [COMMAND]",
-        "Get help about a command, or generic help about " PROG_NAME ".",
+        "help", PROG_NAME " help [COMMAND]",
+        "Print the help menu for this tool or a specific command.",
         NULL
     },
     { Info,
-        "info", "info DISK [FILE]",
-        "Get info about a disk or file on disk.\n",
-        NULL
+        "info", PROG_NAME " info [OPTIONS] DISK [FILE]",
+        "Print information about a disk or a file on disk.",
+        "  --offset=SECTOR   Read the file system from a specific sector on disk\n"
     }
 };
 
@@ -55,20 +55,23 @@ const Command * FindCommand(const char *name)
     return NULL;
 }
 
-void PrintCommandHelp(const Command *cmd)
+int PrintCommandHelp(const Command *cmd)
 {
     if (cmd->Synopsis)
         printf("Usage: %s\n", cmd->Synopsis);
 
     if (cmd->Description)
-        printf("%s\n", cmd->Description);
+        printf("%s", cmd->Description);
 
     if (cmd->Options)
-        printf("\nOptions:\n%s\n", cmd->Options);
+        printf("\n\nOptions:\n%s\n", cmd->Options);
+
+    return STATUS_SUCCESS;
 }
 
 int Create(const Command *cmd, const CommandArgs *args)
 {
+    (void) cmd;
     const char *path = NULL;
 
     // Defaults for 3.5" double-sided 1440k floppy disk
@@ -90,14 +93,15 @@ int Create(const Command *cmd, const CommandArgs *args)
     int volumeId = time(NULL);
     const char *label = "";
 
-    int help = 0;
     int force = 0;
     int noAlign = 0;
+    int sectorOffset = 0;
 
     static struct option LongOptions[] = {
-        { "help", no_argument, &help, 1 },
+        GLOBAL_LONGOPTS,
         { "force", no_argument, &force, 1 },
         { "no-align", no_argument, &noAlign, 1 },
+        { "offset", required_argument, 0, 'o' },
         { 0, 0, 0, 0 }
     };
 
@@ -109,16 +113,13 @@ int Create(const Command *cmd, const CommandArgs *args)
         int optIdx = 0;
         int c = getopt_long(
             args->Argc, args->Argv,
-            "+:d:f:F:g:i:l:m:r:R:s:S:",
+            GLOBAL_OPTSTRING "d:f:F:g:i:l:m:r:R:s:S:",
             LongOptions, &optIdx);
 
-        if (c == -1)
-            break;
-
-        if (help) {
-            PrintCommandHelp(cmd);
+        if (ProcessGlobalOption(c)) {
             return STATUS_SUCCESS;
         }
+        if (c == -1) break;
 
         switch (c) {
             case 0: // long option
@@ -158,6 +159,9 @@ int Create(const Command *cmd, const CommandArgs *args)
             case 'm':
                 mediaType = (char) strtol(optarg, NULL, 0);
                 break;
+            case 'o':
+                sectorOffset = (unsigned int) strtol(optarg, NULL, 0);
+                break;
             case 'r':
                 rootDirCapacity = (int) strtol(optarg, NULL, 0);
                 break;
@@ -184,9 +188,6 @@ int Create(const Command *cmd, const CommandArgs *args)
                     LogError_MissingLongOptArg(&args->Argv[optind - 1][2]);
                 return STATUS_INVALIDARG;
                 break;
-            default:
-                assert(!"unhandled getopt_long case!");
-                break;
         }
     }
 
@@ -207,7 +208,6 @@ int Create(const Command *cmd, const CommandArgs *args)
                 break;
         }
     }
-
 
     CheckParam(path != NULL, "missing disk image file name\n")
     CheckParam(IsPow2(sectorSize), "sector size must be a power of 2\n");
@@ -290,6 +290,10 @@ int Create(const Command *cmd, const CommandArgs *args)
             if (fatWidth == 0) {
                 LogVerbose("selecting FAT12 because %d < %d clusters\n", clusters, MIN_CLUSTER_16);
             }
+            if (clusters < MIN_CLUSTER_12)  {
+                LogError("not enough clusters for FAT12\n");
+                return STATUS_ERROR;
+            }
             fatWidth = 12;
             fatSizeKnown = true;
         }
@@ -306,10 +310,10 @@ int Create(const Command *cmd, const CommandArgs *args)
         }
     } while (!fatSizeKnown);
 
-    if (clusters < 1) {
-        LogError("disk is too small\n");
-        return STATUS_ERROR;
-    }
+    // if (clusters < 1) {
+    //     LogError("disk is too small\n");
+    //     return STATUS_ERROR;
+    // }
 
     // Create the BPB
     BiosParamBlock bpb;
@@ -337,7 +341,7 @@ int Create(const Command *cmd, const CommandArgs *args)
     SetLabel(bpb.Label, label);
     SetName(bpb.FsType, (fatWidth == 12) ? "FAT12" : "FAT16");
 
-    bool success = DiskImage::CreateNew(path, &bpb);
+    bool success = DiskImage::CreateNew(path, &bpb, sectorOffset);
     if (!success) {
         LogError("failed to create disk\n");
         return STATUS_ERROR;
@@ -405,13 +409,15 @@ int Help(const Command *cmd, const CommandArgs *args)
 
 int Info(const Command *cmd, const CommandArgs *args)
 {
+    (void) cmd;
     const char *path = NULL;
     const char *file = NULL;
 
-    int help = 0;
+    int sectorOffset = 0;
 
     static struct option LongOptions[] = {
-        { "help", no_argument, &help, 1 },
+        GLOBAL_LONGOPTS,
+        { "offset", required_argument, 0, 'o' },
         { 0, 0, 0, 0 }
     };
 
@@ -423,18 +429,18 @@ int Info(const Command *cmd, const CommandArgs *args)
         int optIdx = 0;
         int c = getopt_long(
             args->Argc, args->Argv,
-            "+:",
+            GLOBAL_OPTSTRING,
             LongOptions, &optIdx);
 
-        if (c == -1)
-            break;
-
-        if (help) {
-            PrintCommandHelp(cmd);
+        if (ProcessGlobalOption(c)) {
             return STATUS_SUCCESS;
         }
+        if (c == -1) break;
 
         switch (c) {
+            case 'o':
+                sectorOffset = (unsigned int) strtol(optarg, NULL, 0);
+                break;
             case 0: // long option
                 if (LongOptions[optIdx].flag != 0)
                     break;
@@ -453,9 +459,6 @@ int Info(const Command *cmd, const CommandArgs *args)
                 else
                     LogError_MissingLongOptArg(&args->Argv[optind - 1][2]);
                 return STATUS_INVALIDARG;
-                break;
-            default:
-                assert(!"unhandled getopt_long case!");
                 break;
         }
     }
@@ -481,7 +484,7 @@ int Info(const Command *cmd, const CommandArgs *args)
 
     (void) file;
 
-    DiskImage *img = DiskImage::Open(path);
+    DiskImage *img = DiskImage::Open(path, sectorOffset);
     if (!img) {
         return STATUS_ERROR;
     }
@@ -499,10 +502,14 @@ int Info(const Command *cmd, const CommandArgs *args)
     int rootSectorCount = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
     int dataSectors = sectorCount - (bpb->ReservedSectorCount + (bpb->SectorsPerTable * bpb->TableCount) + rootSectorCount);
     int clusterCount = dataSectors / bpb->SectorsPerCluster;
-    bool fat12 = clusterCount <= MAX_CLUSTER_12;
+    int bytesTotal = clusterCount * bpb->SectorsPerCluster * bpb->SectorSize;
+    int bytesFree = img->CountFreeClusters() * bpb->SectorsPerCluster * bpb->SectorSize;
+    int bytesBad = img->CountBadClusters() * bpb->SectorsPerCluster * bpb->SectorSize;
 
     assert(sectorCount == img->GetSectorCount());
     assert(clusterCount == img->GetClusterCount());
+
+    bool fat12 = clusterCount <= MAX_CLUSTER_12;
 
     LogInfo("%s statistics:\n", GetFileName(path));
     LogInfo("%d %s, %d %s, %d %s per track\n",
@@ -533,8 +540,9 @@ int Info(const Command *cmd, const CommandArgs *args)
         else
             LogInfo(", volume has no label\n");
     }
-    // LogInfo("%d bytes free\n",
-    //     bytesFree);
+    LogInfo("%d bytes total\n", bytesTotal);
+    LogInfo("%d bytes free\n", bytesFree);
+    if (bytesBad) LogInfo("%d bytes in bad clusters\n", bytesBad);
 
     delete img;
     return STATUS_SUCCESS;

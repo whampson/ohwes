@@ -23,7 +23,7 @@ const Command * GetCommands(void);
 int GetCommandCount(void);
 
 const Command * FindCommand(const char *name);
-void PrintCommandHelp(const Command *cmd);
+int PrintCommandHelp(const Command *cmd);
 
 // int Add(const Command *cmd, const CommandArgs *args);
 // int Attr(const Command *cmd, const CommandArgs *args);

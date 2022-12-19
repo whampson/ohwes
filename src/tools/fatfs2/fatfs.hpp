@@ -24,13 +24,26 @@
 #define STATUS_INVALIDARG       1
 #define STATUS_ERROR            2
 
-extern int g_Prefix;
-extern int g_Quiet;
-extern int g_QuietAll;
-extern int g_Verbosity;
+extern int g_bShowHelp;
+extern int g_bShowVersion;
+extern int g_bUsePrefix;
+extern int g_nQuietness;
+extern int g_nVerbosity;
+
 extern const char *g_ProgramName;
 
-void PrintGlobalHelp();
+#define GLOBAL_OPTSTRING        "+:pqv"
+#define GLOBAL_LONGOPTS                                                         \
+    { "prefix",     no_argument, 0, 'p' },                                      \
+    { "quiet",      no_argument, 0, 'q' },                                      \
+    { "verbose",    no_argument, 0, 'v' },                                      \
+    { "help",       no_argument, &g_bShowHelp, true },                          \
+    { "version",    no_argument, &g_bShowVersion, true }
+
+int PrintHelp();
+int PrintGlobalHelp();
+int PrintVersion();
+bool ProcessGlobalOption(int c);
 
 // -----------------------------------------------------------------------------
 // String Utilities
@@ -38,6 +51,19 @@ void PrintGlobalHelp();
 
 #define Plural(n, s)                ((n == 1) ? s : s "s")
 #define PluralForPrintf(n, s)       n, Plural(n, s)
+
+static inline const char * GetFileName(const char *path)
+{
+	const char *p;
+    const char *name;
+
+    name = path;
+	if ((p = strrchr(path, '/')) != NULL) {
+	    name = p + 1;
+    }
+
+    return name;
+}
 
 // -----------------------------------------------------------------------------
 // Math Stuff
@@ -57,7 +83,7 @@ void PrintGlobalHelp();
 
 #define _Log(stream, level, ...)                                                \
 do {                                                                            \
-    if (g_Prefix) {                                                             \
+    if (g_bUsePrefix) {                                                         \
         fprintf(stream, "%s: ", g_ProgramName);                                 \
         if (level[0]) {                                                         \
             fprintf(stream, level ": " __VA_ARGS__);                            \
@@ -75,34 +101,34 @@ do {                                                                            
 
 #define LogVerbose(...)                                                         \
 do {                                                                            \
-    if (!g_Quiet && g_Verbosity > 0) {                                          \
+    if (g_nQuietness < 1 && g_nVerbosity >= 1) {                                \
         _Log(stdout, "", __VA_ARGS__);                                          \
     }                                                                           \
 } while (0)
 
 #define LogVeryVerbose(...)                                                     \
 do {                                                                            \
-    if (!g_Quiet && g_Verbosity > 1) {                                          \
+    if (g_nQuietness < 1 && g_nVerbosity >= 2) {                                \
         _Log(stdout, "", __VA_ARGS__);                                          \
     }                                                                           \
 } while (0)
 
 #define LogInfo(...)                                                            \
 do {                                                                            \
-    if (!g_Quiet) {                                                             \
+    if (g_nQuietness < 1) {                                                     \
         _Log(stdout, "", __VA_ARGS__);                                          \
     }                                                                           \
 } while (0)
 
 #define LogWarning(...)                                                         \
 do {                                                                            \
-    if (!g_QuietAll) {                                                          \
+    if (g_nQuietness < 2) {                                                     \
         _Log(stdout, "warning", __VA_ARGS__);                                   \
     }                                                                           \
 } while (0)
 #define LogError(...)                                                           \
 do {                                                                            \
-    if (!g_QuietAll) {                                                          \
+    if (g_nQuietness < 2) {                                                     \
         _Log(stderr, "error", __VA_ARGS__);                                     \
     }                                                                           \
 } while (0)
@@ -253,18 +279,5 @@ inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
         goto Cleanup;                                                           \
     }                                                                           \
 })
-
-static inline const char * GetFileName(const char *path)
-{
-	const char *p;
-    const char *name;
-
-    name = path;
-	if ((p = strrchr(path, '/')) != NULL) {
-	    name = p + 1;
-    }
-
-    return name;
-}
 
 #endif  // FATFS_H

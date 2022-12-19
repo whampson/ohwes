@@ -49,48 +49,100 @@ void InitBootSector(BootSector *bootSect, const BiosParamBlock *bpb)
     SetName(bootSect->OemName, PROG_NAME);
 }
 
-void InitFileAllocTable(void *fat, size_t fatSize, char mediaType, bool fat12)
+void InitFat12(char *fat, size_t fatSize, char mediaType)
 {
     memset(fat, 0, fatSize);
 
-    //
-    // File Allocation Table (FAT12)
-    //
-    // Cluster 0:
-    //     [7:0] - Media Type ID
-    //    [11:9] - (padded with 1s)
-    // Cluster 1:
-    //    [11:0] - End-of-Chain marker
+    SetCluster12(fat, fatSize, 0, mediaType);
+    SetCluster12(fat, fatSize, 1, CLUSTER_EOC);
+}
+
+void InitFat16(char *fat, size_t fatSize, char mediaType)
+{
+    memset(fat, 0, fatSize);
+
+    SetCluster16(fat, fatSize, 0, mediaType);
+    SetCluster16(fat, fatSize, 1, CLUSTER_EOC);
+}
+
+int GetCluster12(const char *fat, size_t fatSize, int index)
+{
+    size_t i = index + (index / 2);
+    if (i >= fatSize) {
+        return -1;
+    }
+
     //
     //     0        1        2      :: byte index
     // |........|++++....|++++++++| :: . = clust0, + = clust1
     // |76543210|3210ba98|ba987654| :: bit index
     //
-    if (fat12) {
-        uint8_t *fat12 = (uint8_t *) fat;
-        fat12[0] = mediaType;
-        fat12[1] = (char) (((EOC_CLUSTER_12 & 0x00F) << 4) | 0x0F);
-        fat12[2] = (char) (((EOC_CLUSTER_12 & 0xFF0) >> 4));
+
+    uint16_t pair = *((uint16_t *) &fat[i]);
+    if (i & 1) {
+        return pair >> 4;
+    }
+    return pair & 0x0FFF;
+}
+
+int GetCluster16(const char *fat, size_t fatSize, int index)
+{
+    size_t i = index * 2;
+    if (i >= fatSize) {
+        return -1;
     }
 
-    //
-    // File Allocation Table (FAT16)
-    //
-    // Cluster 0:
-    //     [7:0] - Media Type ID
-    //    [15:9] - (padded with 1s)
-    // Cluster 1:
-    //    [15:0] - End-of-Chain marker
     //
     //     0        1        2        3      :: byte index
     // |........|........|++++++++|++++++++| :: . = clust0, + = clust1
     // |76543210|fedcba98|76543210|fedcba98| :: bit index
     //
-    else {
-        uint16_t *fat16 = (uint16_t *) fat;
-        fat16[0] = 0xFF00 | mediaType;
-        fat16[1] = EOC_CLUSTER_16;
+
+    return *((uint16_t *) &fat[i]);
+}
+
+int SetCluster12(char *fat, size_t fatSize, int index, int value)
+{
+    size_t i = index + (index / 2);
+    if (i >= fatSize) {
+        return -1;
     }
+
+    //
+    //     0        1        2      :: byte index
+    // |........|++++....|++++++++| :: . = clust0, + = clust1
+    // |76543210|3210ba98|ba987654| :: bit index
+    //
+
+    uint16_t pair = *((uint16_t *) &fat[i]);
+    if (i & 1) {
+        value <<= 4;
+        pair &= 0x000F;
+    }
+    else {
+        value &= 0x0FFF;
+        pair &= 0xF000;
+    }
+
+    *((uint16_t *) &fat[i]) = pair | value;
+    return value;
+}
+
+int SetCluster16(char *fat, size_t fatSize, int index, int value)
+{
+    size_t i = index * 2;
+    if (i >= fatSize) {
+        return -1;
+    }
+
+    //
+    //     0        1        2        3      :: byte index
+    // |........|........|++++++++|++++++++| :: . = clust0, + = clust1
+    // |76543210|fedcba98|76543210|fedcba98| :: bit index
+    //
+
+    *((uint16_t *) &fat[i]) = value;
+    return value;
 }
 
 void MakeVolumeLabel(DirEntry *dst, const char *label)

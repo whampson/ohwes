@@ -21,13 +21,15 @@
 #define FIRST_CLUSTER       2
 #define LAST_CLUSTER_12     0xFF6
 #define LAST_CLUSTER_16     0xFFF6
+#define MIN_CLUSTER_12      1
 #define MAX_CLUSTER_12      (LAST_CLUSTER_12-FIRST_CLUSTER)
 #define MIN_CLUSTER_16      (MAX_CLUSTER_12+1)
 #define MAX_CLUSTER_16      (LAST_CLUSTER_16-FIRST_CLUSTER)
-#define BAD_CLUSTER_12      0xFF7
-#define BAD_CLUSTER_16      0xFFF7
-#define EOC_CLUSTER_12      0xFFF
-#define EOC_CLUSTER_16      0xFFFF
+
+#define CLUSTER_FREE        0
+#define CLUSTER_RESERVED    1
+#define CLUSTER_BAD         0xFFF7
+#define CLUSTER_EOC         0xFFFF
 
 #define MIN_SECTOR_SIZE     512
 #define MAX_SECTOR_SIZE     32768
@@ -180,7 +182,15 @@ static_assert(sizeof(DirEntry) == 32, "Bad DirEntry size!");
 
 void InitBiosParamBlock(BiosParamBlock *bpb);
 void InitBootSector(BootSector *bootSect, const BiosParamBlock *bpb);
-void InitFileAllocTable(void *fat, size_t fatSize, char mediaType, bool fat12);
+
+void InitFat12(char *fat, size_t fatSize, char mediaType);
+void InitFat16(char *fat, size_t fatSize, char mediaType);
+
+int GetCluster12(const char *fat, size_t fatSize, int index);
+int GetCluster16(const char *fat, size_t fatSize, int index);
+
+int SetCluster12(char *fat, size_t fatSize, int index, int value);
+int SetCluster16(char *fat, size_t fatSize, int index, int value);
 
 void MakeVolumeLabel(DirEntry *dst, const char *label);
 

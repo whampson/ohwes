@@ -2,11 +2,16 @@
 
 bool DiskImage::CreateNew(const char *path, const BiosParamBlock *bpb)
 {
+    return CreateNew(path, bpb, 0);
+}
+
+bool DiskImage::CreateNew(const char *path, const BiosParamBlock *bpb, int sector)
+{
     FILE *fp = NULL;
     void *sectorBuf = NULL;
     void *clusterBuf = NULL;
-    void *fat = NULL;
-    int bytesWritten = 0;
+    char *fat = NULL;
+    size_t bytesWritten = 0;
     bool success = true;
 
     if (bpb->SectorCount == 0 && bpb->SectorCountLarge == 0) {
@@ -35,11 +40,12 @@ bool DiskImage::CreateNew(const char *path, const BiosParamBlock *bpb)
         return false;
     }
 
+    size_t offset = sector * 512;
     int sectorSize = bpb->SectorSize;
     int sectorCount = (bpb->SectorCount) ? bpb->SectorCount : bpb->SectorCountLarge;
     int sectorsPerCluster = bpb->SectorsPerCluster;
     int clusterSize = sectorSize * sectorsPerCluster;
-    int diskSize = bpb->SectorCount * sectorSize;
+    size_t diskSize = (bpb->SectorCount * sectorSize) + offset;
     int resSectorCount = bpb->ReservedSectorCount;
     int fatSectorCount = bpb->SectorsPerTable;
     int fatSize = fatSectorCount * bpb->SectorSize;
@@ -61,6 +67,12 @@ bool DiskImage::CreateNew(const char *path, const BiosParamBlock *bpb)
     clusterBuf = (char *) SafeAlloc(clusterSize);
     fat = (char *) SafeAlloc(fatSize);
 
+    if (offset != 0) {
+        LogVerbose("creating FAT file system at sector %d (offset 0x%zX)\n", sector, offset);
+        fseek(fp, offset, SEEK_SET);
+        bytesWritten = ftell(fp);
+    }
+
     InitBootSector((BootSector *) sectorBuf, bpb);
     bytesWritten += SafeWrite(fp, sectorBuf, sectorSize);
 
@@ -68,15 +80,20 @@ bool DiskImage::CreateNew(const char *path, const BiosParamBlock *bpb)
         bytesWritten += SafeWrite(fp, sectorBuf, sectorSize);
     }
 
-    assert(bytesWritten == resSectorCount * sectorSize);
+    assert(bytesWritten == offset + resSectorCount * sectorSize);
 
-    InitFileAllocTable(fat, fatSize, bpb->MediaType, fat12);
+    if (fat12)
+        InitFat12(fat, fatSize, bpb->MediaType);
+    else
+        InitFat16(fat, fatSize, bpb->MediaType);
+
     for (int i = 0; i < bpb->TableCount; i++) {
         bytesWritten += SafeWrite(fp, fat, fatSize);
     }
 
     assert(bytesWritten % sectorSize == 0);
     assert(bytesWritten ==
+        offset +
         (resSectorCount
             + (fatSectorCount * fatCount))
         * sectorSize);
@@ -97,6 +114,7 @@ bool DiskImage::CreateNew(const char *path, const BiosParamBlock *bpb)
     }
 
     assert(bytesWritten ==
+        offset +
         (resSectorCount
             + (fatSectorCount * fatCount)
             + rootSectorCount)
@@ -116,6 +134,7 @@ bool DiskImage::CreateNew(const char *path, const BiosParamBlock *bpb)
     assert(bytesWritten == diskSize);
 
     assert(bytesWritten ==
+        offset +
         (resSectorCount
             + (fatSectorCount * fatCount)
             + rootSectorCount
@@ -133,6 +152,11 @@ Cleanup:
 }
 
 DiskImage * DiskImage::Open(const char *path)
+{
+    return Open(path, 0);
+}
+
+DiskImage * DiskImage::Open(const char *path, int sector)
 {
     // TODO: handle partioned disks?
 
@@ -153,9 +177,15 @@ DiskImage * DiskImage::Open(const char *path)
     unsigned char *root = NULL;
 
     bool success = true;
+    size_t offset = sector * 512;
 
     fp = SafeOpen(path, "rb+", &size);
-    SafeRIF(size >= 4096, "disk is too small\n");
+    SafeRIF(size + offset >= 4096, "disk is too small\n");
+
+    if (offset != 0) {
+        LogVerbose("looking for FAT file system at sector %d (offset 0x%zX)\n", sector, offset);
+        fseek(fp, offset, SEEK_SET);
+    }
 
     pos = 0;
     pos += SafeRead(fp, &bootSect, sizeof(BootSector));
@@ -220,7 +250,7 @@ DiskImage * DiskImage::Open(const char *path)
 
     img = new DiskImage();
     img->m_Boot = bootSect;
-    img->m_Fat = fat;
+    img->m_Fat = (char *) fat;
     img->m_Root = (DirEntry *) root;
     img->m_Path = path;
     img->m_File = fp;
@@ -248,6 +278,11 @@ DiskImage::~DiskImage()
     SafeFree(m_Fat);
     SafeFree(m_Root);
     SafeClose(m_File);
+}
+
+bool DiskImage::IsFat12() const
+{
+    return GetClusterCount() <= MAX_CLUSTER_12;
 }
 
 const BiosParamBlock * DiskImage::GetBPB() const
@@ -293,8 +328,55 @@ int DiskImage::GetClusterCount() const
     return dataSectors / bpb->SectorsPerCluster;
 }
 
-bool DiskImage::IsFat12() const
+int DiskImage::GetFatCapacity() const
 {
-    return GetClusterCount() <= MAX_CLUSTER_12;
+    const BiosParamBlock *bpb = GetBPB();
+    int fatSize = bpb->SectorsPerTable * GetSectorSize();
+    int fatCapacity = IsFat12()
+        ? ((fatSize / 3) * 2) - FIRST_CLUSTER
+        : (fatSize / 2) - FIRST_CLUSTER;
+
+    return fatCapacity;
 }
 
+int DiskImage::CountFreeClusters() const
+{
+    int free = 0;
+    for (int i = 0; i < GetClusterCount(); i++) {
+        int cluster = GetCluster(FIRST_CLUSTER + i);
+        if (cluster == CLUSTER_FREE) {
+            free++;
+        }
+    }
+
+    return free;
+}
+
+int DiskImage::CountBadClusters() const
+{
+    int bad = 0;
+    for (int i = 0; i < GetClusterCount(); i++) {
+        int cluster = GetCluster(FIRST_CLUSTER + i);
+        if (cluster == CLUSTER_BAD) {
+            bad++;
+        }
+    }
+
+    return bad;
+}
+
+int DiskImage::GetCluster(int index) const
+{
+    // TODO: validate index
+    const BiosParamBlock *bpb = GetBPB();
+    int fatSize = bpb->SectorsPerTable * GetSectorSize();
+    int value = IsFat12()
+        ? GetCluster12(m_Fat, fatSize, index)
+        : GetCluster16(m_Fat, fatSize, index);
+
+    LogVeryVerbose("cluster %03X = %03X\n", index, value);
+    if (value == -1) {
+        LogWarning("attempt to read out-of-bounds cluster!\n");
+    }
+    return value;
+}
