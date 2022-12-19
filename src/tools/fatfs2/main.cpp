@@ -1,13 +1,14 @@
 #include "Command.hpp"
 
-int g_bPrefix = false;
-int g_bQuiet = false;
-int g_bQuietAll = false;
-int g_bVerbose = false;
+int g_Prefix = false;
+int g_Quiet = false;
+int g_QuietAll = false;
+int g_Verbosity = 0;
+const char *g_ProgramName = PROG_NAME;
 
 static CommandArgs s_CommandArgs = { };
-static int s_bShowHelp = false;
-static int s_bShowVersion = false;
+static int s_ShowHelp = false;
+static int s_ShowVersion = false;
 
 void PrintGlobalHelp()
 {
@@ -65,10 +66,12 @@ static bool ParseCommandLine(int argc, char **argv)
         { "quiet",      no_argument, 0, 'q' },
         { "quiet-all",  no_argument, 0, 'Q' },
         { "verbose",    no_argument, 0, 'v' },
-        { "help",       no_argument, &s_bShowHelp, 1 },
-        { "version",    no_argument, &s_bShowVersion, 1 },
+        { "help",       no_argument, &s_ShowHelp, 1 },
+        { "version",    no_argument, &s_ShowVersion, 1 },
         { 0, 0, 0, 0 }
     };
+
+    g_ProgramName = GetFileName(argv[0]);
 
     optind = 0;     // reset option index
     opterr = 0;     // prevent default error messages
@@ -88,17 +91,17 @@ static bool ParseCommandLine(int argc, char **argv)
                 assert(!"unhandled getopt_long case!");
                 break;
             case 'p':
-                g_bPrefix = true;
+                g_Prefix = true;
                 break;
             case 'q':
-                g_bQuiet = true;
+                g_Quiet = true;
                 break;
             case 'Q':
-                g_bQuiet = true;
-                g_bQuietAll = true;
+                g_Quiet = true;
+                g_QuietAll = true;
                 break;
             case 'v':
-                g_bVerbose = true;
+                g_Verbosity++;
                 break;
             case '?':
                 if (optopt != 0)
@@ -113,8 +116,8 @@ static bool ParseCommandLine(int argc, char **argv)
         }
     }
 
-    if (g_bQuiet || g_bQuietAll) {
-        g_bVerbose = false;
+    if (g_Quiet || g_QuietAll) {
+        g_Verbosity = 0;
     }
 
     if (optind < argc) {
@@ -127,15 +130,13 @@ static bool ParseCommandLine(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-    // TODO: yank program file name from argv[0]
-
     if (!ParseCommandLine(argc, argv))
         return STATUS_INVALIDARG;
 
-    if (s_bShowHelp)
+    if (s_ShowHelp)
         return PrintHelp();
 
-    if (s_bShowVersion)
+    if (s_ShowVersion)
         return PrintVersion();
 
     if (s_CommandArgs.Argc == 0) {

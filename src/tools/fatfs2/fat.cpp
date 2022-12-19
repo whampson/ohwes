@@ -3,6 +3,15 @@
 static void ReadString(char *dst, const char *src, int count, bool allowSpaces);
 static void WriteString(char *dst, const char *src, int n);
 
+void InitBiosParamBlock(BiosParamBlock *bpb)
+{
+    memset(bpb, 0, sizeof(BiosParamBlock));
+    SetLabel(bpb->Label, "");
+    SetName(bpb->FsType, "");
+    bpb->Signature = BPBSIG_DOS41;
+    bpb->_Reserved = 0;
+}
+
 void InitBootSector(BootSector *bootSect, const BiosParamBlock *bpb)
 {
     memset(bootSect, 0, sizeof(BootSector));
@@ -169,7 +178,7 @@ static void ReadString(char *dst, const char *src, int count, bool allowSpaces)
     {
         // Trim leading/trailing space only
 
-        int beg = -1;
+        int beg = 0;
         int end = 0;
         int i;
 
@@ -182,16 +191,16 @@ static void ReadString(char *dst, const char *src, int count, bool allowSpaces)
             }
         }
 
-        for (i = count - 1; i >= 0; i--)
+        for (i = count; i > 0; i--)
         {
-            if (src[i] != ' ')
+            if (src[i - 1] != ' ')
             {
                 end = i;
                 break;
             }
         }
 
-        for (i = 0; i < end - beg + 1; i++)
+        for (i = 0; i < end - beg; i++)
         {
             dst[i] = src[beg + i];
         }
@@ -201,10 +210,10 @@ static void ReadString(char *dst, const char *src, int count, bool allowSpaces)
 
 static void WriteString(char *dst, const char *src, int n)
 {
-    int len = strlen(src);
+    int len = strnlen(src, n);
     strncpy(dst, src, n);
 
-    while (n - len > 0)
+    while (n >= len && n - len > 0)
     {
         dst[len++] = ' ';
     }

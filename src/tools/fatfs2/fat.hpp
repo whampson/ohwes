@@ -178,6 +178,7 @@ struct DirEntry
 };
 static_assert(sizeof(DirEntry) == 32, "Bad DirEntry size!");
 
+void InitBiosParamBlock(BiosParamBlock *bpb);
 void InitBootSector(BootSector *bootSect, const BiosParamBlock *bpb);
 void InitFileAllocTable(void *fat, size_t fatSize, char mediaType, bool fat12);
 

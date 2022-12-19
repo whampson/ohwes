@@ -5,15 +5,22 @@
 
 class DiskImage {
 public:
-    static DiskImage * CreateNew(const char *path, const BiosParamBlock *bpb);
+
+    static bool CreateNew(const char *path, const BiosParamBlock *bpb);
     static DiskImage * Open(const char *path);
 
-    void PrintDiskInfo() const { }
+    const BiosParamBlock * GetBPB() const;
+    void PrintDiskInfo() const;
 
-    ~DiskImage() { LogInfo("DTOR()\n"); }
-    DiskImage() { LogInfo("CTOR()\n"); }
+    ~DiskImage();
 
 private:
+    BootSector  m_Boot;
+    void        *m_Fat;
+    DirEntry    *m_Root;
+    const char  *m_Path;
+
+    DiskImage();
 };
 
 #endif // DISKIMAGE_H

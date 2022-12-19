@@ -65,8 +65,10 @@ int Create(const Command *cmd, const CommandArgs *args)
     const char *path = NULL;
 
     // Defaults for 3.5" double-sided 1440k floppy disk
-    // TODO: select geometry & drive number based on media type (0x80 for 0xF8)
-    // TODO: select defaults type based on geometry
+    // TODO: select geometry & drive number based on media type
+    //       drive number for media type 0xF8 should be 0x80 (hard disk)
+    // TODO: select media type based on geometry
+
     int sectorSize = 512;
     int sectorCount = 2880;
     int headCount = 2;
@@ -79,7 +81,7 @@ int Create(const Command *cmd, const CommandArgs *args)
     int rootDirCapacity = 224;
     int reservedSectorCount = 1;
     int volumeId = time(NULL);
-    const char *label = NULL;
+    const char *label = "";
 
     int help = 0;
     int force = 0;
@@ -239,8 +241,7 @@ int Create(const Command *cmd, const CommandArgs *args)
         rootDirCapacity = RoundUp(rootDirCapacity, sectorSize / sizeof(DirEntry));
     }
 
-    int rootSize = rootDirCapacity * sizeof(DirEntry);
-    int rootSectorCount = rootSize / sectorSize;
+    int rootSectorCount = Ceiling(rootDirCapacity * sizeof(DirEntry), sectorSize);
     int sectorsUsed = rootSectorCount + reservedSectorCount;
 
     int fatSize = 0;
@@ -283,17 +284,18 @@ int Create(const Command *cmd, const CommandArgs *args)
 
         if (maybeFat12 && clusters <= fatCapacity12) {
             if (fatWidth == 0) {
-                LogVerbose("selecting FAT12 because %d <= %d\n", clusters, MAX_CLUSTER_12);
+                LogVerbose("selecting FAT12 because %d < %d clusters\n", clusters, MIN_CLUSTER_16);
             }
             fatWidth = 12;
             fatSizeKnown = true;
         }
         else if (maybeFat16 && clusters <= fatCapacity16) {
             if (fatWidth == 0 && clusters >= MIN_CLUSTER_16) {
-                LogVerbose("selecting FAT16 because %d > %d\n", clusters, MAX_CLUSTER_12);
+                LogVerbose("selecting FAT16 because %d >= %d clusters\n", clusters, MIN_CLUSTER_16);
             }
             if (fatWidth == 16 && clusters < MIN_CLUSTER_16) {
-                LogWarning("disk may be misidentified as FAT12 because clusters < %d\n", MIN_CLUSTER_16);
+                LogError("not enough clusters for FAT16\n");
+                return STATUS_ERROR;
             }
             fatWidth = 16;
             fatSizeKnown = true;
@@ -306,7 +308,8 @@ int Create(const Command *cmd, const CommandArgs *args)
     }
 
     // Create the BPB
-    BiosParamBlock bpb = { };
+    BiosParamBlock bpb;
+    InitBiosParamBlock(&bpb);
     bpb.MediaType = mediaType;
     bpb.HeadCount = headCount;
     bpb.DriveNumber = driveNumber;
@@ -327,24 +330,14 @@ int Create(const Command *cmd, const CommandArgs *args)
         bpb.SectorCountLarge = sectorCount;
     }
 
-    bool hasCustomLabel = (label != NULL && label[0] != '\0');
-    SetLabel(bpb.Label, (hasCustomLabel) ? label : "NO NAME");
+    SetLabel(bpb.Label, label);
     SetName(bpb.FsType, (fatWidth == 12) ? "FAT12" : "FAT16");
 
-    DiskImage *img = DiskImage::CreateNew(path, &bpb);
-    if (!img) {
+    bool success = DiskImage::CreateNew(path, &bpb);
+    if (!success) {
+        LogError("failed to create disk\n");
         return STATUS_ERROR;
     }
-
-    // TODO: write volume label
-
-    delete img;
-
-    // User feedback
-    // TODO: turn this into 'fatfs info'
-
-    int clusterSize = sectorSize * sectorsPerCluster;
-    int bytesFree = clusters * clusterSize;
 
     char labelBuf[MAX_LABEL];
     GetLabel(labelBuf, bpb.Label);
@@ -368,11 +361,11 @@ int Create(const Command *cmd, const CommandArgs *args)
         clusters);
     LogInfo("root directory contains %d %s, occupying %d %s\n",
         PluralForPrintf(rootDirCapacity, "slot"),
-        PluralForPrintf(rootSize / bpb.SectorSize, "sector"));
+        PluralForPrintf(rootSectorCount, "sector"));
     LogInfo("volume ID is %08X, volume label is '%s'\n",
         bpb.VolumeId, labelBuf);
     LogInfo("%d bytes free\n",
-        bytesFree);
+        clusters * sectorsPerCluster * sectorSize);
 
     return STATUS_SUCCESS;
 }

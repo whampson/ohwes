@@ -24,10 +24,11 @@
 #define STATUS_INVALIDARG       1
 #define STATUS_ERROR            2
 
-extern int g_bPrefix;
-extern int g_bQuiet;
-extern int g_bQuietAll;
-extern int g_bVerbose;
+extern int g_Prefix;
+extern int g_Quiet;
+extern int g_QuietAll;
+extern int g_Verbosity;
+extern const char *g_ProgramName;
 
 void PrintGlobalHelp();
 
@@ -46,6 +47,9 @@ void PrintGlobalHelp();
 #define Align(x, n)             (((x) + (n) - 1) & ~((n) - 1))
 #define RoundDown(x, m)         (((x) / (m)) * (m))
 #define RoundUp(x, m)           ((((x) + (m) - 1) / (m)) * (m))
+#define Ceiling(x, y)           (((x) + (y) - 1) / (y))
+#define Min(x, y)               ((x) < (y) ? (x) : (y))
+#define Max(x, y)               ((x) > (y) ? (x) : (y))
 
 // -----------------------------------------------------------------------------
 // Logging
@@ -53,11 +57,12 @@ void PrintGlobalHelp();
 
 #define _Log(stream, level, ...)                                                \
 do {                                                                            \
-    if (g_bPrefix) {                                                            \
+    if (g_Prefix) {                                                             \
+        fprintf(stream, "%s: ", g_ProgramName);                                 \
         if (level[0]) {                                                         \
-            fprintf(stream, PROG_NAME ": " level ": " __VA_ARGS__);             \
+            fprintf(stream, level ": " __VA_ARGS__);                            \
         } else {                                                                \
-            fprintf(stream, PROG_NAME ": " __VA_ARGS__);                        \
+            fprintf(stream, __VA_ARGS__);                                       \
         }                                                                       \
     } else {                                                                    \
         if (level[0]) {                                                         \
@@ -70,27 +75,34 @@ do {                                                                            
 
 #define LogVerbose(...)                                                         \
 do {                                                                            \
-    if (!g_bQuiet && g_bVerbose) {                                              \
+    if (!g_Quiet && g_Verbosity > 0) {                                          \
+        _Log(stdout, "", __VA_ARGS__);                                          \
+    }                                                                           \
+} while (0)
+
+#define LogVeryVerbose(...)                                                     \
+do {                                                                            \
+    if (!g_Quiet && g_Verbosity > 1) {                                          \
         _Log(stdout, "", __VA_ARGS__);                                          \
     }                                                                           \
 } while (0)
 
 #define LogInfo(...)                                                            \
 do {                                                                            \
-    if (!g_bQuiet) {                                                            \
+    if (!g_Quiet) {                                                             \
         _Log(stdout, "", __VA_ARGS__);                                          \
     }                                                                           \
 } while (0)
 
 #define LogWarning(...)                                                         \
 do {                                                                            \
-    if (!g_bQuietAll) {                                                         \
+    if (!g_QuietAll) {                                                          \
         _Log(stdout, "warning", __VA_ARGS__);                                   \
     }                                                                           \
 } while (0)
 #define LogError(...)                                                           \
 do {                                                                            \
-    if (!g_bQuietAll) {                                                         \
+    if (!g_QuietAll) {                                                          \
         _Log(stderr, "error", __VA_ARGS__);                                     \
     }                                                                           \
 } while (0)
@@ -110,7 +122,7 @@ do {                                                                            
     if (isprint(optopt)) {                                                      \
         LogError("invalid option - %c\n", c);                                   \
     } else {                                                                    \
-        LogError("invalid option character - \\x%02X\n", c);                    \
+        LogError("invalid option character - \\x%02x\n", c);                    \
     }                                                                           \
 } while (0)
 
@@ -137,9 +149,9 @@ do {                                                                            
 // -----------------------------------------------------------------------------
 // Alloc/Free/Open/Close/Read/Write
 //
-// These macro functions are "Safe" in that they guard against NULL pointers
-// and jump to a common error-handling path when something goes wrong. To
-// facilitate this, these macro functions require the following:
+// The macro functions with the prefix "Safe" are safe in that they guard
+// against NULL pointers and jump to a common error-handling path when something
+// goes wrong. To facilitate this, these macro functions require the following:
 //   - a bool named 'success' to be defined
 //   - a label named 'Cleanup' to be defined
 //   - all pointer variables assigned with SafeAlloc to be initialized to NULL
@@ -148,6 +160,25 @@ do {                                                                            
 // resources that were previously allocated should be freed. An error message
 // will also be printed to the log.
 // -----------------------------------------------------------------------------
+
+inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
+{
+    FILE *fp = fopen(path, mode);
+    if (!fp) {
+        LogError("unable to open file '%s'\n", path);
+        *pOutLen = 0;
+        return NULL;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    size_t size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    LogVeryVerbose("opened '%s' with mode '%s', handle %p, size %zu\n",
+        path, mode, (void *) fp, size);
+
+    if (pOutLen) *pOutLen = size;
+    return fp;
+}
 
 #define SafeAlloc(size)                                                         \
 ({                                                                              \
@@ -168,23 +199,23 @@ do {                                                                            
     }                                                                           \
 })
 
-#define SafeOpen(path, mode)                                                    \
+#define SafeOpen(path, mode, pOutSize)                                          \
 ({                                                                              \
-    FILE *_fp = fopen(path, mode);                                              \
+    FILE *_fp = OpenFile(path, mode, pOutSize);                                 \
     if (!_fp) {                                                                 \
-        LogError("unable to open file '%s'\n", path);                           \
         success = false;                                                        \
         goto Cleanup;                                                           \
     }                                                                           \
-    LogVerbose("opened file '%s' with mode '%s'\n", path, mode);                \
     _fp;                                                                        \
 })
 
 #define SafeClose(fp)                                                           \
 ({                                                                              \
     if (fp) {                                                                   \
+        void *_fp = fp;                                                         \
         fclose(fp);                                                             \
         (fp) = NULL;                                                            \
+        LogVeryVerbose("closed file with handle %p\n", _fp);                    \
     }                                                                           \
 })
 
@@ -197,7 +228,7 @@ do {                                                                            
         success = false;                                                        \
         goto Cleanup;                                                           \
     }                                                                           \
-    LogVerbose("%d bytes read from file at offset 0x%08zx\n", (int) size, _i);  \
+    LogVeryVerbose("%zu bytes read from file at offset 0x%08zx\n", _b, _i);     \
     _b;                                                                         \
 })
 
@@ -210,8 +241,17 @@ do {                                                                            
         success = false;                                                        \
         goto Cleanup;                                                           \
     }                                                                           \
-    LogVerbose("%d bytes written to file at offset 0x%08zx\n", (int) size, _i); \
+    LogVeryVerbose("%zu bytes written to file at offset 0x%08zx\n", _b, _i);    \
     _b;                                                                         \
+})
+
+#define SafeRIF(cond,...)                                                       \
+({                                                                              \
+    if (!(cond)) {                                                              \
+        LogError(__VA_ARGS__);                                                  \
+        success = false;                                                        \
+        goto Cleanup;                                                           \
+    }                                                                           \
 })
 
 static inline const char * GetFileName(const char *path)
