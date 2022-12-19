@@ -1,10 +1,12 @@
 #include "Command.hpp"
 #include "DiskImage.hpp"
 
+#define CheckParam(x,...) if (!(x)) { LogError(__VA_ARGS__); return STATUS_INVALIDARG; }
+
 static const Command s_pCommands[] = {
     { Create,   // similar to mkdosfs
-        "create", "create [OPTIONS] TARGET [SECTORS]",
-        "Create a new FAT disk TARGET.",
+        "create", "create [OPTIONS] DISK [SECTORS]",
+        "Create a new FAT disk.",
         "  -d NUMBER     Set the drive number to NUMBER\n"
         "  -f COUNT      Create COUNT file allocation tables\n"
         "  -F WIDTH      Select the FAT width (12, or 16)\n"
@@ -23,6 +25,11 @@ static const Command s_pCommands[] = {
     { Help,
         "help", "help [COMMAND]",
         "Get help about a command, or generic help about " PROG_NAME ".",
+        NULL
+    },
+    { Info,
+        "info", "info DISK [FILE]",
+        "Get info about a disk or file on disk.\n",
         NULL
     }
 };
@@ -70,7 +77,7 @@ int Create(const Command *cmd, const CommandArgs *args)
     // TODO: select media type based on geometry
 
     int sectorSize = 512;
-    int sectorCount = 2880;
+    int sectorCount = 2880;     // TODO: unsigned?
     int headCount = 2;
     int sectorsPerTrack = 18;
     int sectorsPerCluster = 1;
@@ -201,7 +208,6 @@ int Create(const Command *cmd, const CommandArgs *args)
         }
     }
 
-#define CheckParam(x,...) if (!(x)) { LogError(__VA_ARGS__); return STATUS_INVALIDARG; }
 
     CheckParam(path != NULL, "missing disk image file name\n")
     CheckParam(IsPow2(sectorSize), "sector size must be a power of 2\n");
@@ -216,8 +222,6 @@ int Create(const Command *cmd, const CommandArgs *args)
     CheckParam(fatWidth == 0 || fatWidth == 12 || fatWidth == 16, "invalid FAT width, must be 12 or 16\n");
     CheckParam(rootDirCapacity > 0, "invalid root directory capacity\n");
     CheckParam(reservedSectorCount >= 1, "at least 1 reserved sector is required\n");
-
-#undef CheckParam
 
     // Test whether the file exists,
     // fail if it does and --force not specified
@@ -344,10 +348,10 @@ int Create(const Command *cmd, const CommandArgs *args)
 
     LogInfo("%s statistics:\n", GetFileName(path));
     LogInfo("%d %s, %d %s, %d %s per track\n",
-        PluralForPrintf(bpb.SectorCount, "sector"),
+        PluralForPrintf(sectorCount, "sector"),
         PluralForPrintf(bpb.HeadCount, "head"),
         PluralForPrintf(bpb.SectorsPerTrack, "sector"));
-    LogInfo("%d byte sectors, %d %s per cluster\n",
+    LogInfo("sector size is %d bytes, %d %s per cluster\n",
         bpb.SectorSize,
         PluralForPrintf(bpb.SectorsPerCluster, "sector"));
     LogInfo("%d reserved %s\n",
@@ -362,8 +366,11 @@ int Create(const Command *cmd, const CommandArgs *args)
     LogInfo("root directory contains %d %s, occupying %d %s\n",
         PluralForPrintf(rootDirCapacity, "slot"),
         PluralForPrintf(rootSectorCount, "sector"));
-    LogInfo("volume ID is %08X, volume label is '%s'\n",
-        bpb.VolumeId, labelBuf);
+    LogInfo("volume ID is %08X", bpb.VolumeId);
+    if (labelBuf[0] != '\0')
+        LogInfo(", volume label is '%s'\n", labelBuf);
+    else
+        LogInfo(", volume has no label\n");
     LogInfo("%d bytes free\n",
         clusters * sectorsPerCluster * sectorSize);
 
@@ -393,5 +400,142 @@ int Help(const Command *cmd, const CommandArgs *args)
             printf("    %-16s%s\n", cmds[i].Name, cmds[i].Description);
         }
     }
+    return STATUS_SUCCESS;
+}
+
+int Info(const Command *cmd, const CommandArgs *args)
+{
+    const char *path = NULL;
+    const char *file = NULL;
+
+    int help = 0;
+
+    static struct option LongOptions[] = {
+        { "help", no_argument, &help, 1 },
+        { 0, 0, 0, 0 }
+    };
+
+    optind = 0;     // getopt: reset option index
+    opterr = 0;     // getopt: prevent default error messages
+
+    // Parse option arguments
+    while (true) {
+        int optIdx = 0;
+        int c = getopt_long(
+            args->Argc, args->Argv,
+            "+:",
+            LongOptions, &optIdx);
+
+        if (c == -1)
+            break;
+
+        if (help) {
+            PrintCommandHelp(cmd);
+            return STATUS_SUCCESS;
+        }
+
+        switch (c) {
+            case 0: // long option
+                if (LongOptions[optIdx].flag != 0)
+                    break;
+                assert(!"unhandled getopt_long() case: non-flag long option");
+                break;
+            case '?':
+                if (optopt != 0)
+                    LogError_BadOpt(optopt);
+                else
+                    LogError_BadLongOpt(&args->Argv[optind - 1][2]);
+                return STATUS_INVALIDARG;
+                break;
+            case ':':
+                if (optopt != 0)
+                    LogError_MissingOptArg(optopt);
+                else
+                    LogError_MissingLongOptArg(&args->Argv[optind - 1][2]);
+                return STATUS_INVALIDARG;
+                break;
+            default:
+                assert(!"unhandled getopt_long case!");
+                break;
+        }
+    }
+
+    int pos = 0;
+    while (optind < args->Argc) {
+        optarg = args->Argv[optind++];
+        switch (pos++) {
+            case 0:
+                path = optarg;
+                break;
+            case 1:
+                file = optarg;
+                break;
+            default:
+                LogError_BadArg(optarg);
+                return STATUS_INVALIDARG;
+                break;
+        }
+    }
+
+    CheckParam(path != NULL, "missing disk image file name\n");
+
+    (void) file;
+
+    DiskImage *img = DiskImage::Open(path);
+    if (!img) {
+        return STATUS_ERROR;
+    }
+
+    if (file != NULL) {
+        // File info
+        // TODO
+        delete img;
+        return STATUS_SUCCESS;
+    }
+
+    // Disk info
+    const BiosParamBlock *bpb = img->GetBPB();
+    int sectorCount = (bpb->SectorCount) ? bpb->SectorCount : bpb->SectorCountLarge;
+    int rootSectorCount = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
+    int dataSectors = sectorCount - (bpb->ReservedSectorCount + (bpb->SectorsPerTable * bpb->TableCount) + rootSectorCount);
+    int clusterCount = dataSectors / bpb->SectorsPerCluster;
+    bool fat12 = clusterCount <= MAX_CLUSTER_12;
+
+    assert(sectorCount == img->GetSectorCount());
+    assert(clusterCount == img->GetClusterCount());
+
+    LogInfo("%s statistics:\n", GetFileName(path));
+    LogInfo("%d %s, %d %s, %d %s per track\n",
+        PluralForPrintf(sectorCount, "sector"),
+        PluralForPrintf(bpb->HeadCount, "head"),
+        PluralForPrintf(bpb->SectorsPerTrack, "sector"));
+    LogInfo("sector size is %d bytes, %d %s per cluster\n",
+        bpb->SectorSize,
+        PluralForPrintf(bpb->SectorsPerCluster, "sector"));
+    LogInfo("%d reserved %s\n",
+        PluralForPrintf(bpb->ReservedSectorCount, "sector"));
+    LogInfo("media type is 0x%02X, drive number is 0x%02X\n",
+        bpb->MediaType, bpb->DriveNumber);
+    LogInfo("%d %d-bit %s, %d %s per FAT, providing %d clusters\n",
+        bpb->TableCount, fat12 ? 12 : 16,
+        Plural(bpb->TableCount, "FAT"),
+        PluralForPrintf(bpb->SectorsPerTable, "sector"),
+        clusterCount);
+    LogInfo("root directory contains %d %s, occupying %d %s\n",
+        PluralForPrintf(bpb->RootDirCapacity, "slot"),
+        PluralForPrintf(rootSectorCount, "sector"));
+    if (bpb->Signature == BPBSIG_DOS41) {
+        char labelBuf[MAX_LABEL];
+        GetLabel(labelBuf, bpb->Label);
+        LogInfo("volume ID is %08X", bpb->VolumeId);
+        if (labelBuf[0] != '\0')
+            LogInfo(", volume label is '%s'\n", labelBuf);
+        else
+            LogInfo(", volume has no label\n");
+    }
+    // LogInfo("%d bytes free\n",
+    //     bytesFree);
+
+    delete img;
     return STATUS_SUCCESS;
 }

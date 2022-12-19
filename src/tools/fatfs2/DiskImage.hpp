@@ -10,7 +10,12 @@ public:
     static DiskImage * Open(const char *path);
 
     const BiosParamBlock * GetBPB() const;
-    void PrintDiskInfo() const;
+    int GetSectorSize() const;
+    int GetSectorCount() const;
+    int GetClusterSize() const;
+    int GetClusterCount() const;
+
+    bool IsFat12() const;
 
     ~DiskImage();
 
@@ -19,6 +24,7 @@ private:
     void        *m_Fat;
     DirEntry    *m_Root;
     const char  *m_Path;
+    FILE        *m_File;
 
     DiskImage();
 };

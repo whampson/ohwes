@@ -9,6 +9,32 @@ bool DiskImage::CreateNew(const char *path, const BiosParamBlock *bpb)
     int bytesWritten = 0;
     bool success = true;
 
+    if (bpb->SectorCount == 0 && bpb->SectorCountLarge == 0) {
+        LogError("invalid BPB - sector count cannot be zero\n");
+        return false;
+    }
+    if (bpb->SectorCount != 0 && bpb->SectorCountLarge != 0) {
+        LogError("invalid BPB - only one 'SectorCount' field may be set\n");
+        return false;
+    }
+    if (bpb->SectorsPerTable == 0) {
+        LogError("invalid BPB - need at least one sector per FAT\n");
+        // TODO: this field can be zero on FAT32, as long as the other one is set.
+        return false;
+    }
+    if (bpb->SectorSize < MIN_SECTOR_SIZE) {
+        LogError("invalid BPB - sector size must be at least 512\n");
+        return false;
+    }
+    if (!IsPow2(bpb->SectorSize)) {
+        LogError("invalid BPB - sector size must be a power of 2\n");
+        return false;
+    }
+    if (!IsPow2(bpb->SectorsPerCluster)) {
+        LogError("invalid BPB - sectors per cluster must be a power of 2\n");
+        return false;
+    }
+
     int sectorSize = bpb->SectorSize;
     int sectorCount = (bpb->SectorCount) ? bpb->SectorCount : bpb->SectorCountLarge;
     int sectorsPerCluster = bpb->SectorsPerCluster;
@@ -20,16 +46,14 @@ bool DiskImage::CreateNew(const char *path, const BiosParamBlock *bpb)
     int fatCount = bpb->TableCount;
     int rootSize = bpb->RootDirCapacity * sizeof(DirEntry);
     int rootSectorCount = Ceiling(rootSize, sectorSize);
-    int sectorsUsed = resSectorCount + (fatSectorCount * fatCount) + rootSectorCount;
-    int clustersFree = (sectorCount - Align(sectorsUsed, sectorsPerCluster)) / sectorsPerCluster;
-
-    assert(sectorSize % 512 == 0);
-
-    sectorsUsed += clustersFree * sectorsPerCluster;
-    assert(sectorsUsed <= sectorCount);
-
-    bool fat12 = clustersFree <= MAX_CLUSTER_12;
-    int extraSectors = sectorCount - sectorsUsed;
+    int dataSectors = sectorCount - (resSectorCount + (fatSectorCount * fatCount) + rootSectorCount);
+    int clusters = dataSectors / sectorsPerCluster;
+    int extraSectors = dataSectors - (clusters * sectorsPerCluster);
+    if (extraSectors) {
+        LogWarning("disk has %d %s unreachable by FAT\n",
+            PluralForPrintf(extraSectors, "sector"));
+    }
+    bool fat12 = clusters <= MAX_CLUSTER_12;
     bool hasCustomLabel = (bpb->Label[0] != ' ');
 
     fp = SafeOpen(path, "wb", NULL);
@@ -79,7 +103,7 @@ bool DiskImage::CreateNew(const char *path, const BiosParamBlock *bpb)
         * sectorSize);
 
     memset(clusterBuf, 0, clusterSize);
-    for (int i = 0; i < clustersFree; i++) {
+    for (int i = 0; i < clusters; i++) {
         bytesWritten += SafeWrite(fp, clusterBuf, clusterSize);
     }
 
@@ -95,7 +119,7 @@ bool DiskImage::CreateNew(const char *path, const BiosParamBlock *bpb)
         (resSectorCount
             + (fatSectorCount * fatCount)
             + rootSectorCount
-            + (clustersFree * sectorsPerCluster)
+            + (clusters * sectorsPerCluster)
             + extraSectors)
         * sectorSize);
 
@@ -110,6 +134,8 @@ Cleanup:
 
 DiskImage * DiskImage::Open(const char *path)
 {
+    // TODO: handle partioned disks?
+
     BootSector bootSect;
     BiosParamBlock *bpb;
 
@@ -128,7 +154,7 @@ DiskImage * DiskImage::Open(const char *path)
 
     bool success = true;
 
-    fp = SafeOpen(path, "rb", &size);
+    fp = SafeOpen(path, "rb+", &size);
     SafeRIF(size >= 4096, "disk is too small\n");
 
     pos = 0;
@@ -137,13 +163,22 @@ DiskImage * DiskImage::Open(const char *path)
 
     sectorSize = bpb->SectorSize;
 
-    SafeRIF(IsPow2(sectorSize), "BPB is corrupt (sector size = %d)\n", sectorSize);
-    SafeRIF(sectorSize >= MIN_SECTOR_SIZE, "BPB is corrupt (sector size = %d)\n", sectorSize);
-    SafeRIF(sectorSize <= MAX_SECTOR_SIZE, "BPB is corrupt (sector size = %d)\n", sectorSize);
-    SafeRIF(bpb->ReservedSectorCount > 0, "BPB is corrupt (reserved sector count = %d)\n", bpb->ReservedSectorCount);
-    SafeRIF(bpb->RootDirCapacity > 0, "BPB is corrupt (root directory capacity = %d)\n", bpb->RootDirCapacity);
-    SafeRIF(bpb->SectorsPerTable > 0, "BPB is corrupt (FAT sector count = %d)\n", bpb->SectorsPerTable);
-    SafeRIF(bpb->TableCount > 0, "BPB is corrupt (FAT count = %d)\n", bpb->TableCount);
+    SafeRIF(IsPow2(sectorSize),
+        "BPB is corrupt (sector size = %d)\n", sectorSize);
+    SafeRIF(sectorSize >= MIN_SECTOR_SIZE,
+        "BPB is corrupt (sector size = %d)\n", sectorSize);
+    SafeRIF(sectorSize <= MAX_SECTOR_SIZE,
+        "BPB is corrupt (sector size = %d)\n", sectorSize);
+    SafeRIF(bpb->SectorCount != 0 || (bpb->SectorCount == 0 && bpb->SectorCountLarge != 0),
+        "BPB is corrupt (sector count = %d\n", bpb->SectorCount);
+    SafeRIF(bpb->ReservedSectorCount > 0,
+        "BPB is corrupt (reserved sector count = %d)\n", bpb->ReservedSectorCount);
+    SafeRIF(bpb->RootDirCapacity > 0,
+        "BPB is corrupt (root directory capacity = %d)\n", bpb->RootDirCapacity);
+    SafeRIF(bpb->SectorsPerTable > 0,
+        "BPB is corrupt (FAT sector count = %d)\n", bpb->SectorsPerTable);
+    SafeRIF(bpb->TableCount > 0,
+        "BPB is corrupt (FAT count = %d)\n", bpb->TableCount);
 
     rootSectorCount = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), sectorSize);
 
@@ -188,14 +223,15 @@ DiskImage * DiskImage::Open(const char *path)
     img->m_Fat = fat;
     img->m_Root = (DirEntry *) root;
     img->m_Path = path;
+    img->m_File = fp;
 
 Cleanup:
+    SafeFree(sectorBuf);
     if (!success) {
         SafeFree(root);
         SafeFree(fat);
+        SafeClose(fp);
     }
-    SafeFree(sectorBuf);
-    SafeClose(fp);
 
     return (success) ? img : NULL;
 }
@@ -204,12 +240,14 @@ DiskImage::DiskImage()
 {
     m_Fat = NULL;
     m_Root = NULL;
+    m_File = NULL;
 }
 
 DiskImage::~DiskImage()
 {
     SafeFree(m_Fat);
     SafeFree(m_Root);
+    SafeClose(m_File);
 }
 
 const BiosParamBlock * DiskImage::GetBPB() const
@@ -217,57 +255,46 @@ const BiosParamBlock * DiskImage::GetBPB() const
     return &m_Boot.BiosParams;
 }
 
-void DiskImage::PrintDiskInfo() const
+int DiskImage::GetSectorSize() const
 {
     const BiosParamBlock *bpb = GetBPB();
-    int sectorSize = bpb->SectorSize;
-    int sectorCount = bpb->SectorCount;
-    int sectorsPerCluster = bpb->SectorsPerCluster;
-    int clusterSize = sectorSize * sectorsPerCluster;
-    int fatSize = bpb->SectorsPerTable * sectorSize;
-    int rootDirCapacity = bpb->RootDirCapacity;
-    int rootSectorCount = Ceiling(rootDirCapacity * sizeof(DirEntry), sectorSize);
-    int sectorsUsed = (bpb->ReservedSectorCount + (bpb->SectorsPerTable * bpb->TableCount) + rootSectorCount);
-    int sectorsUsedAligned = Align(sectorsUsed, sectorsPerCluster);
-    int clusters = (sectorCount - sectorsUsedAligned) / sectorsPerCluster;
-    int bytesFree = clusters * clusterSize;
 
-    int fatWidth = 0;
-    if (clusters < MAX_CLUSTER_12) {
-        fatWidth = 12;
-    }
-    else if (clusters < MAX_CLUSTER_16) {
-        fatWidth = 16;
-    }
-    else {
-        assert(!"unsupported FAT width!\n");
-    }
-
-    char labelBuf[MAX_LABEL];
-    GetLabel(labelBuf, bpb->Label);
-
-    LogInfo("%s statistics:\n", GetFileName(m_Path));
-    LogInfo("%d %s, %d %s, %d %s per track\n",
-        PluralForPrintf(bpb->SectorCount, "sector"),
-        PluralForPrintf(bpb->HeadCount, "head"),
-        PluralForPrintf(bpb->SectorsPerTrack, "sector"));
-    LogInfo("%d byte sectors, %d %s per cluster\n",
-        bpb->SectorSize,
-        PluralForPrintf(bpb->SectorsPerCluster, "sector"));
-    LogInfo("%d reserved %s\n",
-        PluralForPrintf(bpb->ReservedSectorCount, "sector"));
-    LogInfo("media type is 0x%02X, drive number is 0x%02X\n",
-        bpb->MediaType, bpb->DriveNumber);
-    LogInfo("%d %d-bit %s, %d %s per FAT, providing %d clusters\n",
-        bpb->TableCount, fatWidth,
-        Plural(bpb->TableCount, "FAT"),
-        PluralForPrintf(fatSize / bpb->SectorSize, "sector"),
-        clusters);
-    LogInfo("root directory contains %d %s, occupying %d %s\n",
-        PluralForPrintf(rootDirCapacity, "slot"),
-        PluralForPrintf(rootSectorCount, "sector"));
-    LogInfo("volume ID is %08X, volume label is '%s'\n",
-        bpb->VolumeId, labelBuf);
-    LogInfo("%d bytes free\n",
-        bytesFree);
+    return bpb->SectorSize;
 }
+
+int DiskImage::GetSectorCount() const
+{
+    const BiosParamBlock *bpb = GetBPB();
+    int count = bpb->SectorCount;
+    if (count == 0) {
+        count = bpb->SectorCountLarge;  // TODO: unsigned?
+    }
+
+    assert(count != 0);
+    return count;
+}
+
+int DiskImage::GetClusterSize() const
+{
+    const BiosParamBlock *bpb = GetBPB();
+
+    return bpb->SectorSize * bpb->SectorsPerCluster;
+}
+
+int DiskImage::GetClusterCount() const
+{
+    const BiosParamBlock *bpb = GetBPB();
+    int dataSectors =
+        GetSectorCount() -
+        (bpb->ReservedSectorCount +
+        (bpb->SectorsPerTable * bpb->TableCount) +
+        Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize));
+
+    return dataSectors / bpb->SectorsPerCluster;
+}
+
+bool DiskImage::IsFat12() const
+{
+    return GetClusterCount() <= MAX_CLUSTER_12;
+}
+
