@@ -11,6 +11,8 @@
 #define MAX_EXTENSION       (EXTENSION_LENGTH+1)    // Extension buffer length, including NULL terminator
 #define MAX_LABEL           (LABEL_LENGTH+1)        // Label buffer length, including NULL terminator
 #define MAX_PATH            512                     // File path length; completely arbitrary
+#define MAX_DATE            12                      // "Sep 31 1990"
+#define MAX_TIME            12                      // "12:34:56 PM"
 
 #define MEDIATYPE_1440K     0xF0                    // Standard 3.5" floppy disk
 #define MEDIATYPE_FIXED     0xF8                    // Hard disk
@@ -145,11 +147,11 @@ enum FileAttrs : char
 {
     ATTR_READONLY   = 1 << 0,           // Read-only
     ATTR_HIDDEN     = 1 << 1,           // Hidden
-    ATTR_SYSTEM     = 1 << 2,           // System, do not move
-    ATTR_LABEL      = 1 << 3,           // Directory volume label
+    ATTR_SYSTEM     = 1 << 2,           // System (do not move)
+    ATTR_LABEL      = 1 << 3,           // Label
     ATTR_DIRECTORY  = 1 << 4,           // Directory
-    ATTR_ARCHIVE    = 1 << 5,           // Dirty bit (used for backup utilities)
-    ATTR_DEVICE     = 1 << 6,           // Device file (not found on disk)
+    ATTR_ARCHIVE    = 1 << 5,           // Archived (used as a dirty bit for backup utilities)
+    ATTR_DEVICE     = 1 << 6,           // Device file (not usually found on disk)
     ATTR_LFN        = ATTR_LABEL        // Long File Name (special/hack)
                      |ATTR_SYSTEM
                      |ATTR_HIDDEN
@@ -195,14 +197,18 @@ int SetCluster16(char *fat, size_t fatSize, int index, int value);
 void MakeVolumeLabel(DirEntry *dst, const char *label);
 
 void GetName(char dst[MAX_NAME], const char *src);
-void GetExtension(char dst[MAX_EXTENSION], const char *src);
-void GetLabel(char dst[MAX_LABEL], const char *src);
-
 void SetName(char dst[NAME_LENGTH], const char *src);
+
+void GetExtension(char dst[MAX_EXTENSION], const char *src);
 void SetExtension(char dst[EXTENSION_LENGTH], const char *src);
+
+void GetLabel(char dst[MAX_LABEL], const char *src);
 void SetLabel(char dst[LABEL_LENGTH], const char *src);
 
+void GetDate(char dst[MAX_DATE], const FatDate *src);
 void SetDate(FatDate *dst, time_t *t);
+
+void GetTime(char dst[MAX_TIME], const FatTime *src);
 void SetTime(FatTime *dst, time_t *t);
 
 #define HasAttribute(file,flag) (((file)->Attributes & (flag)) == (flag))
@@ -225,7 +231,7 @@ static inline bool IsSystemFile(const DirEntry *e)
         && !HasAttribute(e, ATTR_LFN));
 }
 
-static inline bool IsVolumeLabel(const DirEntry *e)
+static inline bool IsLabel(const DirEntry *e)
 {
     return (HasAttribute(e, ATTR_LABEL)
         && !HasAttribute(e, ATTR_LFN));
@@ -240,6 +246,11 @@ static inline bool IsDeviceFile(const DirEntry *e)
 {
     // I'm not sure if this is even a thing
     return HasAttribute(e, ATTR_DEVICE);
+}
+
+static inline bool IsArchive(const DirEntry *e)
+{
+    return HasAttribute(e, ATTR_ARCHIVE);
 }
 
 static inline bool IsLongFileName(const DirEntry *e)
@@ -259,17 +270,17 @@ static inline bool IsFree(const DirEntry *e)
     return IsDeleted(e) || e->Name[0] == 0x00;
 }
 
-static inline bool IsFile(const DirEntry *e)
-{
-    return !IsFree(e)
-        && !IsLongFileName(e)
-        && !IsVolumeLabel(e);
-}
+// static inline bool IsFile(const DirEntry *e)
+// {
+//     return !IsFree(e)
+//         && !IsLongFileName(e)
+//         && !IsLabel(e);
+// }
 
-static inline bool IsRoot(const DirEntry *e)
-{
-    return IsDirectory(e) && e->FirstCluster == 0;
-}
+// static inline bool IsRoot(const DirEntry *e)
+// {
+//     return IsDirectory(e) && e->FirstCluster == 0;
+// }
 
 static inline bool IsCurrentDirectory(const DirEntry *e)
 {

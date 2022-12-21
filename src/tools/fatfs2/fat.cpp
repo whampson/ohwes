@@ -174,6 +174,40 @@ void GetLabel(char dst[MAX_LABEL], const char *src)
     ReadString(dst, src, LABEL_LENGTH, true);
 }
 
+void GetDate(char dst[MAX_DATE], const FatDate *src)
+{
+    char month[4];
+    switch (src->Month)
+    {
+        case 1: sprintf(month, "Jan"); break;
+        case 2: sprintf(month, "Feb"); break;
+        case 3: sprintf(month, "Mar"); break;
+        case 4: sprintf(month, "Apr"); break;
+        case 5: sprintf(month, "May"); break;
+        case 6: sprintf(month, "Jun"); break;
+        case 7: sprintf(month, "Jul"); break;
+        case 8: sprintf(month, "Aug"); break;
+        case 9: sprintf(month, "Sep"); break;
+        case 10:sprintf(month, "Oct"); break;
+        case 11:sprintf(month, "Nov"); break;
+        case 12:sprintf(month, "Dec"); break;
+        default:sprintf(month, "   "); break;
+    }
+
+    sprintf(dst, "%s%3d%5d",
+        month,
+        src->Day,
+        src->Year + 1980);
+}
+
+void GetTime(char dst[MAX_TIME], const FatTime *src)
+{
+    sprintf(dst, "%02d:%02d:%02d",
+        src->Hours,
+        src->Minutes,
+        src->Seconds << 1);
+}
+
 void SetName(char dst[NAME_LENGTH], const char *src)
 {
     WriteString(dst, src, NAME_LENGTH);

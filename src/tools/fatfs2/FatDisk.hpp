@@ -15,12 +15,14 @@ public:
     bool IsFat12() const;
 
     const BiosParamBlock * GetBPB() const;
+    const DirEntry * GetRoot() const;
 
     int GetSectorSize() const;
     int GetSectorCount() const;
     int GetClusterSize() const;
     int GetClusterCount() const;
     int GetFatCapacity() const;
+    int GetRootCapacity() const;
 
     int CountFreeClusters() const;
     int CountBadClusters() const;

@@ -293,6 +293,11 @@ const BiosParamBlock * FatDisk::GetBPB() const
     return &m_Boot.BiosParams;
 }
 
+const DirEntry * FatDisk::GetRoot() const
+{
+    return m_Root;
+}
+
 int FatDisk::GetSectorSize() const
 {
     const BiosParamBlock *bpb = GetBPB();
@@ -340,6 +345,13 @@ int FatDisk::GetFatCapacity() const
         : (fatSize / 2) - FIRST_CLUSTER;
 
     return fatCapacity;
+}
+
+int FatDisk::GetRootCapacity() const
+{
+    const BiosParamBlock *bpb = GetBPB();
+
+    return bpb->RootDirCapacity;
 }
 
 int FatDisk::CountFreeClusters() const
@@ -397,14 +409,14 @@ int FatDisk::SetCluster(int index, int value)
 {
     const BiosParamBlock *bpb = GetBPB();
     int fatSize = bpb->SectorsPerTable * GetSectorSize();
-    int value = IsFat12()
+    int oldValue = IsFat12()
         ? SetCluster12(m_Fat, fatSize, index, value)
         : SetCluster16(m_Fat, fatSize, index, value);
 
-    if (value == -1) {
+    if (oldValue == -1) {
         LogWarning("attempt to write out-of-bounds cluster! (cluster = %03X)\n",
             index);
     }
-    return value;
+    return oldValue;
 
 }

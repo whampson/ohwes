@@ -31,6 +31,15 @@ static const Command s_pCommands[] = {
         "info", PROG_NAME " info [OPTIONS] DISK [FILE]",
         "Print information about a disk or a file on disk",
         "  --offset=SECTOR   Read the file system from a specific sector on disk\n"
+    },
+    { List,
+        "list", PROG_NAME " list [OPTIONS] DISK [FILE]",
+        "Print the contents of a directory",
+        // "  -a                List all files; include hidden files\n"
+        // "  -b                Bare format; print file names only\n"
+        // "  -n                Show short names only\n"
+        // "  -r                List the contents of subdirectories\n"
+        "  --offset=SECTOR   Read the file system from a specific sector on disk\n"
     }
 };
 
@@ -539,6 +548,154 @@ int Info(const Command *cmd, const CommandArgs *args)
     LogInfo("%d bytes total\n", bytesTotal);
     LogInfo("%d bytes free\n", bytesFree);
     if (bytesBad) LogInfo("%d bytes in bad clusters\n", bytesBad);
+
+    delete disk;
+    return STATUS_SUCCESS;
+}
+
+int List(const Command *cmd, const CommandArgs *args)
+{
+    (void) cmd;
+    const char *path = NULL;
+    const char *file = NULL;
+
+    int sectorOffset = 0;
+
+    static struct option LongOptions[] = {
+        GLOBAL_LONGOPTS,
+        { "offset", required_argument, 0, 'o' },
+        { 0, 0, 0, 0 }
+    };
+
+    optind = 0;     // getopt: reset option index
+    opterr = 0;     // getopt: prevent default error messages
+
+    // Parse option arguments
+    while (true) {
+        int optIdx = 0;
+        int c = getopt_long(
+            args->Argc, args->Argv,
+            GLOBAL_OPTSTRING,
+            LongOptions, &optIdx);
+
+        if (ProcessGlobalOption(c)) {
+            return STATUS_SUCCESS;
+        }
+        if (c == -1) break;
+
+        switch (c) {
+            case 'o':
+                sectorOffset = (unsigned int) strtol(optarg, NULL, 0);
+                break;
+            case 0: // long option
+                if (LongOptions[optIdx].flag != 0)
+                    break;
+                assert(!"unhandled getopt_long() case: non-flag long option");
+                break;
+            case '?':
+                if (optopt != 0)
+                    LogError_BadOpt(optopt);
+                else
+                    LogError_BadLongOpt(&args->Argv[optind - 1][2]);
+                return STATUS_INVALIDARG;
+                break;
+            case ':':
+                if (optopt != 0)
+                    LogError_MissingOptArg(optopt);
+                else
+                    LogError_MissingLongOptArg(&args->Argv[optind - 1][2]);
+                return STATUS_INVALIDARG;
+                break;
+        }
+    }
+
+    int pos = 0;
+    while (optind < args->Argc) {
+        optarg = args->Argv[optind++];
+        switch (pos++) {
+            case 0:
+                path = optarg;
+                break;
+            case 1:
+                file = optarg;
+                break;
+            default:
+                LogError_BadArg(optarg);
+                return STATUS_INVALIDARG;
+                break;
+        }
+    }
+
+    CheckParam(path != NULL, "missing disk image file name\n");
+
+    (void) file;
+
+    FatDisk *disk = FatDisk::Open(path, sectorOffset);
+    if (!disk) {
+        return STATUS_ERROR;
+    }
+
+    // if (file != NULL) {
+    //     // File info
+    //     // TODO
+    //     delete disk;
+    //     return STATUS_SUCCESS;
+    // }
+
+    const DirEntry *e = disk->GetRoot();
+    int count = disk->GetRootCapacity();
+
+    for (int i = 0; i < count; i++, e++) {
+        if (IsFree(e) || IsLongFileName(e)) {
+            continue;
+        }
+
+        bool rdo = IsReadOnly(e);
+        bool hid = IsHidden(e);
+        bool sys = IsSystemFile(e);
+        bool lab = IsLabel(e);
+        bool dir = IsDirectory(e);
+        bool arc = IsArchive(e);
+        bool dev = IsDeviceFile(e);
+
+        char name[MAX_NAME];
+        char ext[MAX_EXTENSION];
+        char modDate[MAX_DATE];
+        char modTime[MAX_TIME];
+        char sizeOrType[12];
+
+        GetName(name, e->Name);
+        GetExtension(ext, e->Extension);
+        GetDate(modDate, &e->ModifiedDate);
+        GetTime(modTime, &e->ModifiedTime);
+
+        if (dir) {
+            sprintf(sizeOrType, "%-11s", " <DIR>");
+        }
+        else if (dev) {
+            sprintf(sizeOrType, "%-11s", " <DEVICE>");
+        }
+        else if (lab) {
+            sprintf(sizeOrType, "%-11s", " <LABEL>");
+        }
+        else {
+            sprintf(sizeOrType, "%11d", e->FileSize);
+        }
+
+        LogInfo("%c%c%c%c%c%c%c  %-8s %-3s %11s  %-11s %-11s\n",
+            dev ? 'V' : '-',    // Probably won't ever show up in a normal disk
+            arc ? 'A' : '-',
+            dir ? 'D' : '-',
+            lab ? 'L' : '-',
+            sys ? 'S' : '-',
+            hid ? 'H' : '-',
+            rdo ? 'R' : '-',
+            name, ext,
+            sizeOrType,
+            modDate, modTime
+            // TODO: longname
+            );
+    }
 
     delete disk;
     return STATUS_SUCCESS;
