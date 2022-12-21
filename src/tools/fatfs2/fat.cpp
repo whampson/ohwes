@@ -1,6 +1,6 @@
 #include "fat.hpp"
 
-static void ReadString(char *dst, const char *src, int count, bool allowSpaces);
+static void ReadString(char *dst, const char *src, int n, bool allowSpaces);
 static void WriteString(char *dst, const char *src, int n);
 
 void InitBiosParamBlock(BiosParamBlock *bpb)
@@ -68,7 +68,7 @@ void InitFat16(char *fat, size_t fatSize, char mediaType)
 int GetCluster12(const char *fat, size_t fatSize, int index)
 {
     size_t i = index + (index / 2);
-    if (i >= fatSize) {
+    if ((i + 1) >= fatSize) {
         return -1;
     }
 
@@ -88,7 +88,7 @@ int GetCluster12(const char *fat, size_t fatSize, int index)
 int GetCluster16(const char *fat, size_t fatSize, int index)
 {
     size_t i = index * 2;
-    if (i >= fatSize) {
+    if ((i + 1) >= fatSize) {
         return -1;
     }
 
@@ -104,7 +104,7 @@ int GetCluster16(const char *fat, size_t fatSize, int index)
 int SetCluster12(char *fat, size_t fatSize, int index, int value)
 {
     size_t i = index + (index / 2);
-    if (i >= fatSize) {
+    if ((i + 1) >= fatSize) {
         return -1;
     }
 
@@ -131,7 +131,7 @@ int SetCluster12(char *fat, size_t fatSize, int index, int value)
 int SetCluster16(char *fat, size_t fatSize, int index, int value)
 {
     size_t i = index * 2;
-    if (i >= fatSize) {
+    if ((i + 1) >= fatSize) {
         return -1;
     }
 
@@ -211,12 +211,12 @@ void SetTime(FatTime *dst, time_t *t)
     dst->Seconds = tm->tm_sec / 2;
 }
 
-static void ReadString(char *dst, const char *src, int count, bool allowSpaces)
+static void ReadString(char *dst, const char *src, int n, bool allowSpaces)
 {
     if (!allowSpaces)
     {
         int i = 0;
-        for (; i < count; i++)
+        for (; i < n; i++)
         {
             if (src[i] == ' ' || src[i] == '\0')
             {
@@ -234,7 +234,7 @@ static void ReadString(char *dst, const char *src, int count, bool allowSpaces)
         int end = 0;
         int i;
 
-        for (i = 0; i < count; i++)
+        for (i = 0; i < n; i++)
         {
             if (src[i] != ' ')
             {
@@ -243,7 +243,7 @@ static void ReadString(char *dst, const char *src, int count, bool allowSpaces)
             }
         }
 
-        for (i = count; i > 0; i--)
+        for (i = n; i > 0; i--)
         {
             if (src[i - 1] != ' ')
             {

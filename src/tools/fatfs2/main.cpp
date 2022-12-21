@@ -40,19 +40,17 @@ int PrintGlobalHelp()
     int count = GetCommandCount();
 
     printf("Usage: " PROG_NAME " [OPTIONS] COMMAND [ARGS]\n");
-    printf("\n");
-    printf("Commands:\n");
+    printf("\nCommands:\n");
     for (int i = 0; i < count; i++) {
-        printf("    %-16s%s\n", cmds[i].Name, cmds[i].Description);
+        printf("  %-18s%s\n", cmds[i].Name, cmds[i].Description);
     }
-    printf("Options:\n");
-    printf("    -p, --prefix    Prefix output with the program name.\n");
-    printf("    -q, --quiet     Suppress output (overrides -v).\n");
-    printf("    -v, --verbose   Make the operation more talkative.\n");
-    printf("        --help      Display this help message and exit.\n");
-    printf("        --version   Display version information and exit.\n");
-    printf("\n");
-    printf("Run `" PROG_NAME " help COMMAND` to get help about a specific command.\n");
+    printf("\nGlobal Options:\n");
+    printf("  -p, --prefix      Prefix output with the program name\n");
+    printf("  -q, --quiet       Suppress output (overrides -v)\n");
+    printf("  -v, --verbose     Make the operation more talkative\n");
+    printf("      --help        Display this help message and exit\n");
+    printf("      --version     Display version information and exit\n");
+    printf("\nRun `" PROG_NAME " help COMMAND` to get help about a specific command.\n");
 
     return STATUS_SUCCESS;
 }
@@ -81,7 +79,7 @@ bool ProcessGlobalOption(int c)
         return true;
     }
 
-    return false;;
+    return false;
 }
 
 int main(int argc, char **argv)

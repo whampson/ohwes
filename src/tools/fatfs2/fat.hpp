@@ -73,7 +73,7 @@ struct BiosParamBlock
     uint8_t Signature;                  // BPB version signature
     uint32_t VolumeId;                  // Volume serial number
     char Label[LABEL_LENGTH];           // Volume label
-    char FsType[NAME_LENGTH];   // File system identifier
+    char FsType[NAME_LENGTH];           // File system identifier
 } __attribute__((packed));
 
 static_assert(offsetof(BiosParamBlock, SectorSize) == 0x00, "Bad SectorSize offset!");
@@ -168,7 +168,7 @@ struct DirEntry
     char Extension[EXTENSION_LENGTH];
     FileAttrs Attributes;
     uint8_t _Reserved1;     // varies by system, do not use
-    uint8_t _Reserved2;     // fine creation time, 10ms increments, 0-199
+    uint8_t _Reserved2;     // TODO: fine creation time, 10ms increments, 0-199
     FatTime CreationTime;
     FatDate CreationDate;
     FatDate LastAccessDate;
@@ -207,88 +207,58 @@ void SetTime(FatTime *dst, time_t *t);
 
 #define HasAttribute(file,flag) (((file)->Attributes & (flag)) == (flag))
 
-/**
- * Check if a directory entry is marked read-only.
-*/
 static inline bool IsReadOnly(const DirEntry *e)
 {
     return (HasAttribute(e, ATTR_READONLY)
         && !HasAttribute(e, ATTR_LFN));
 }
 
-/**
- * Check if a directory entry is marked hidden.
-*/
 static inline bool IsHidden(const DirEntry *e)
 {
     return (HasAttribute(e, ATTR_HIDDEN)
         && !HasAttribute(e, ATTR_LFN));
 }
 
-/**
- * Check if a directory entry is marked as a system file.
-*/
 static inline bool IsSystemFile(const DirEntry *e)
 {
     return (HasAttribute(e, ATTR_SYSTEM)
         && !HasAttribute(e, ATTR_LFN));
 }
 
-/**
- * Check if a directory entry is a volume label.
-*/
 static inline bool IsVolumeLabel(const DirEntry *e)
 {
     return (HasAttribute(e, ATTR_LABEL)
         && !HasAttribute(e, ATTR_LFN));
 }
 
-/**
- * Check if a directory entry points to a directory.
-*/
 static inline bool IsDirectory(const DirEntry *e)
 {
     return HasAttribute(e, ATTR_DIRECTORY);
 }
 
-/**
- * Check if a directory entry is a device file.
-*/
 static inline bool IsDeviceFile(const DirEntry *e)
 {
     // I'm not sure if this is even a thing
     return HasAttribute(e, ATTR_DEVICE);
 }
 
-/**
- * Check if a directory entry is actually a long file name.
-*/
 static inline bool IsLongFileName(const DirEntry *e)
 {
     return HasAttribute(e, ATTR_LFN)
         && e->FirstCluster == 0;
 }
 
-/**
- * Check if a directory entry is marked as deleted.
-*/
 static inline bool IsDeleted(const DirEntry *e)
 {
     unsigned char c = e->Name[0];
     return c == 0x05 || c == 0xE5;
 }
 
-/**
- * Check if a directory entry is free and available for use.
-*/
 static inline bool IsFree(const DirEntry *e)
 {
     return IsDeleted(e) || e->Name[0] == 0x00;
 }
 
-/**
- * Check if a directory entry points to a valid file.
-*/
 static inline bool IsFile(const DirEntry *e)
 {
     return !IsFree(e)
@@ -296,26 +266,17 @@ static inline bool IsFile(const DirEntry *e)
         && !IsVolumeLabel(e);
 }
 
-/**
- * Check if a directory entry is the drive root.
-*/
 static inline bool IsRoot(const DirEntry *e)
 {
     return IsDirectory(e) && e->FirstCluster == 0;
 }
 
-/**
- * Check if a directory entry points to the current directory (.).
-*/
 static inline bool IsCurrentDirectory(const DirEntry *e)
 {
     return e->Name[0] == '.'
         && e->Name[1] == ' ';
 }
 
-/**
- * Check if a directory entry points to the parent directory (..).
-*/
 static inline bool IsParentDirectory(const DirEntry *e)
 {
     return e->Name[0] == '.'

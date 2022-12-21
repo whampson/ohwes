@@ -1,16 +1,16 @@
-#ifndef DISKIMAGE_H
-#define DISKIMAGE_H
+#ifndef FATDISK_H
+#define FATDISK_H
 
 #include "fat.hpp"
 
-class DiskImage {       // FatDisk?
+class FatDisk {       // FatDisk?
 public:
 
     static bool CreateNew(const char *path, const BiosParamBlock *bpb);
     static bool CreateNew(const char *path, const BiosParamBlock *bpb, int sector);
 
-    static DiskImage * Open(const char *path);
-    static DiskImage * Open(const char *path, int sector);
+    static FatDisk * Open(const char *path);
+    static FatDisk * Open(const char *path, int sector);
 
     bool IsFat12() const;
 
@@ -28,9 +28,11 @@ public:
     int GetCluster(int index) const;
 
     // Danger area!
-    int MarkCluster(int index, int value);
+    int MarkClusterBad(int index);
+    int MarkClusterFree(int index);
+    int SetCluster(int index, int value);
 
-    ~DiskImage();
+    ~FatDisk();
 
 private:
     BootSector  m_Boot;
@@ -39,7 +41,7 @@ private:
     const char  *m_Path;
     FILE        *m_File;
 
-    DiskImage();
+    FatDisk();
 };
 
-#endif // DISKIMAGE_H
+#endif // FATDISK_H

@@ -1,12 +1,12 @@
 #include "Command.hpp"
-#include "DiskImage.hpp"
+#include "FatDisk.hpp"
 
 #define CheckParam(x,...) if (!(x)) { LogError(__VA_ARGS__); return STATUS_INVALIDARG; }
 
 static const Command s_pCommands[] = {
     { Create,   // similar to mkdosfs
         "create", PROG_NAME " create [OPTIONS] DISK [NSECTORS]",
-        "Create a new FAT file system on the specified disk.",
+        "Create a new FAT file system on the specified disk",
         "  -d NUMBER         Set the drive number to NUMBER\n"
         "  -f COUNT          Create COUNT file allocation tables\n"
         "  -F WIDTH          Select the FAT width (12, or 16)\n"
@@ -24,12 +24,12 @@ static const Command s_pCommands[] = {
     },
     { Help,
         "help", PROG_NAME " help [COMMAND]",
-        "Print the help menu for this tool or a specific command.",
+        "Print the help menu for this tool or a specific command",
         NULL
     },
     { Info,
         "info", PROG_NAME " info [OPTIONS] DISK [FILE]",
-        "Print information about a disk or a file on disk.",
+        "Print information about a disk or a file on disk",
         "  --offset=SECTOR   Read the file system from a specific sector on disk\n"
     }
 };
@@ -61,10 +61,10 @@ int PrintCommandHelp(const Command *cmd)
         printf("Usage: %s\n", cmd->Synopsis);
 
     if (cmd->Description)
-        printf("%s", cmd->Description);
+        printf("%s.\n", cmd->Description);
 
     if (cmd->Options)
-        printf("\n\nOptions:\n%s\n", cmd->Options);
+        printf("\nOptions:\n%s\n", cmd->Options);
 
     return STATUS_SUCCESS;
 }
@@ -310,11 +310,6 @@ int Create(const Command *cmd, const CommandArgs *args)
         }
     } while (!fatSizeKnown);
 
-    // if (clusters < 1) {
-    //     LogError("disk is too small\n");
-    //     return STATUS_ERROR;
-    // }
-
     // Create the BPB
     BiosParamBlock bpb;
     InitBiosParamBlock(&bpb);
@@ -341,7 +336,7 @@ int Create(const Command *cmd, const CommandArgs *args)
     SetLabel(bpb.Label, label);
     SetName(bpb.FsType, (fatWidth == 12) ? "FAT12" : "FAT16");
 
-    bool success = DiskImage::CreateNew(path, &bpb, sectorOffset);
+    bool success = FatDisk::CreateNew(path, &bpb, sectorOffset);
     if (!success) {
         LogError("failed to create disk\n");
         return STATUS_ERROR;
@@ -401,8 +396,9 @@ int Help(const Command *cmd, const CommandArgs *args)
         int count = GetCommandCount();
         printf("\nCommands:\n");
         for (int i = 0; i < count; i++) {
-            printf("    %-16s%s\n", cmds[i].Name, cmds[i].Description);
+            printf("  %-18s%s\n", cmds[i].Name, cmds[i].Description);
         }
+        printf("\n");
     }
     return STATUS_SUCCESS;
 }
@@ -484,30 +480,30 @@ int Info(const Command *cmd, const CommandArgs *args)
 
     (void) file;
 
-    DiskImage *img = DiskImage::Open(path, sectorOffset);
-    if (!img) {
+    FatDisk *disk = FatDisk::Open(path, sectorOffset);
+    if (!disk) {
         return STATUS_ERROR;
     }
 
     if (file != NULL) {
         // File info
         // TODO
-        delete img;
+        delete disk;
         return STATUS_SUCCESS;
     }
 
     // Disk info
-    const BiosParamBlock *bpb = img->GetBPB();
+    const BiosParamBlock *bpb = disk->GetBPB();
     int sectorCount = (bpb->SectorCount) ? bpb->SectorCount : bpb->SectorCountLarge;
     int rootSectorCount = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
     int dataSectors = sectorCount - (bpb->ReservedSectorCount + (bpb->SectorsPerTable * bpb->TableCount) + rootSectorCount);
     int clusterCount = dataSectors / bpb->SectorsPerCluster;
     int bytesTotal = clusterCount * bpb->SectorsPerCluster * bpb->SectorSize;
-    int bytesFree = img->CountFreeClusters() * bpb->SectorsPerCluster * bpb->SectorSize;
-    int bytesBad = img->CountBadClusters() * bpb->SectorsPerCluster * bpb->SectorSize;
+    int bytesFree = disk->CountFreeClusters() * bpb->SectorsPerCluster * bpb->SectorSize;
+    int bytesBad = disk->CountBadClusters() * bpb->SectorsPerCluster * bpb->SectorSize;
 
-    assert(sectorCount == img->GetSectorCount());
-    assert(clusterCount == img->GetClusterCount());
+    assert(sectorCount == disk->GetSectorCount());
+    assert(clusterCount == disk->GetClusterCount());
 
     bool fat12 = clusterCount <= MAX_CLUSTER_12;
 
@@ -544,6 +540,6 @@ int Info(const Command *cmd, const CommandArgs *args)
     LogInfo("%d bytes free\n", bytesFree);
     if (bytesBad) LogInfo("%d bytes in bad clusters\n", bytesBad);
 
-    delete img;
+    delete disk;
     return STATUS_SUCCESS;
 }
