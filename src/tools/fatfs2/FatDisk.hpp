@@ -3,47 +3,60 @@
 
 #include "fat.hpp"
 
-class FatDisk {       // FatDisk?
+class FatDisk {
 public:
-
     static bool CreateNew(const char *path, const BiosParamBlock *bpb);
-    static bool CreateNew(const char *path, const BiosParamBlock *bpb, int sector);
+    static bool CreateNew(const char *path, const BiosParamBlock *bpb, uint32_t sector);
 
     static FatDisk * Open(const char *path);
-    static FatDisk * Open(const char *path, int sector);
+    static FatDisk * Open(const char *path, uint32_t sector);
 
     bool IsFat12() const;
+    bool IsFat16() const;
 
     const BiosParamBlock * GetBPB() const;
-    const DirEntry * GetRoot() const;
 
-    int GetSectorSize() const;
-    int GetSectorCount() const;
-    int GetClusterSize() const;
-    int GetClusterCount() const;
-    int GetFatCapacity() const;
-    int GetRootCapacity() const;
+    uint32_t GetDiskSize() const;
+    uint32_t GetFileSize(const DirEntry *f) const;
 
-    int CountFreeClusters() const;
-    int CountBadClusters() const;
+    uint32_t GetSectorSize() const;
+    uint32_t GetSectorCount() const;
+    uint32_t GetClusterSize() const;
+    uint32_t GetClusterCount() const;
+    uint32_t GetFatCapacity() const;
+    uint32_t GetRootCapacity() const;
 
-    int GetCluster(int index) const;
+    uint32_t CountFreeClusters() const;
+    uint32_t CountBadClusters() const;
 
     // Danger area!
-    int MarkClusterBad(int index);
-    int MarkClusterFree(int index);
-    int SetCluster(int index, int value);
+    uint32_t MarkClusterBad(uint32_t index);
+    uint32_t MarkClusterFree(uint32_t index);
+
+    uint32_t GetCluster(uint32_t index) const;
+    uint32_t SetCluster(uint32_t index, uint32_t value);
+
+    bool ReadSector(char *dst, uint32_t index) const;
+    bool ReadCluster(char *dst, uint32_t index) const;
+    bool ReadFile(char *dst, const DirEntry *file) const;
+
+    bool FindFile(DirEntry *dst, const char *path) const;
 
     ~FatDisk();
 
 private:
-    BootSector  m_Boot;
-    char        *m_Fat;
-    DirEntry    *m_Root;
-    const char  *m_Path;
-    FILE        *m_File;
+    size_t      m_BaseAddr;     // offset in file of FAT filesystem
+    BootSector  m_Boot;         // boot sector
+    char        *m_Fat;         // file allocation table
+    const char  *m_Path;        // file path
+    FILE        *m_File;        // file pointer
 
     FatDisk();
+
+    // Dummy DirEntry used to identify the root directory
+    DirEntry GetRootToken() const;
+
+    bool WalkPath(DirEntry *out, char *path, const DirEntry *base) const;
 };
 
 #endif // FATDISK_H

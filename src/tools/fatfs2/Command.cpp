@@ -487,70 +487,81 @@ int Info(const Command *cmd, const CommandArgs *args)
 
     CheckParam(path != NULL, "missing disk image file name\n");
 
-    (void) file;
-
     FatDisk *disk = FatDisk::Open(path, sectorOffset);
     if (!disk) {
         return STATUS_ERROR;
     }
 
-    if (file != NULL) {
-        // File info
-        // TODO
+    if (file == NULL) {
+        // Disk info
+        const BiosParamBlock *bpb = disk->GetBPB();
+        uint32_t sectorCount = (bpb->SectorCount) ? bpb->SectorCount : bpb->SectorCountLarge;
+        uint32_t rootSectorCount = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
+        uint32_t dataSectors = sectorCount -
+            (bpb->ReservedSectorCount + (bpb->SectorsPerTable * bpb->TableCount) + rootSectorCount);
+        uint32_t clusterCount = dataSectors / bpb->SectorsPerCluster;
+        uint32_t clusterSize = bpb->SectorsPerCluster * bpb->SectorSize;
+        uint32_t bytesTotal = clusterCount * clusterSize;
+        uint32_t bytesFree = disk->CountFreeClusters() * clusterSize;
+        uint32_t bytesBad = disk->CountBadClusters() * clusterSize;
+
+        assert(sectorCount == disk->GetSectorCount());
+        assert(clusterCount == disk->GetClusterCount());
+
+        bool fat12 = clusterCount <= MAX_CLUSTER_12;
+
+        LogInfo("%s statistics:\n", GetFileName(path));
+        LogInfo("%d %s, %d %s, %d %s per track\n",
+            PluralForPrintf(sectorCount, "sector"),
+            PluralForPrintf(bpb->HeadCount, "head"),
+            PluralForPrintf(bpb->SectorsPerTrack, "sector"));
+        LogInfo("sector size is %d bytes, %d %s per cluster\n",
+            bpb->SectorSize,
+            PluralForPrintf(bpb->SectorsPerCluster, "sector"));
+        LogInfo("%d reserved %s\n",
+            PluralForPrintf(bpb->ReservedSectorCount, "sector"));
+        LogInfo("media type is 0x%02X, drive number is 0x%02X\n",
+            bpb->MediaType, bpb->DriveNumber);
+        LogInfo("%d %d-bit %s, %d %s per FAT, providing %d clusters\n",
+            bpb->TableCount, fat12 ? 12 : 16,
+            Plural(bpb->TableCount, "FAT"),
+            PluralForPrintf(bpb->SectorsPerTable, "sector"),
+            clusterCount);
+        LogInfo("root directory contains %d %s, occupying %d %s\n",
+            PluralForPrintf(bpb->RootDirCapacity, "slot"),
+            PluralForPrintf(rootSectorCount, "sector"));
+        if (bpb->Signature == BPBSIG_DOS41) {
+            char labelBuf[MAX_LABEL];
+            GetLabel(labelBuf, bpb->Label);
+            LogInfo("volume ID is %08X", bpb->VolumeId);
+            if (labelBuf[0] != '\0')
+                LogInfo(", volume label is '%s'\n", labelBuf);
+            else
+                LogInfo(", volume has no label\n");
+        }
+        LogInfo("%d bytes free\n", bytesFree);
+        LogInfo("%d bytes total\n", bytesTotal);
+        if (bytesBad) LogInfo("%d bytes in bad clusters\n", bytesBad);
+
         delete disk;
         return STATUS_SUCCESS;
     }
 
-    // Disk info
-    const BiosParamBlock *bpb = disk->GetBPB();
-    int sectorCount = (bpb->SectorCount) ? bpb->SectorCount : bpb->SectorCountLarge;
-    int rootSectorCount = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
-    int dataSectors = sectorCount - (bpb->ReservedSectorCount + (bpb->SectorsPerTable * bpb->TableCount) + rootSectorCount);
-    int clusterCount = dataSectors / bpb->SectorsPerCluster;
-    int bytesTotal = clusterCount * bpb->SectorsPerCluster * bpb->SectorSize;
-    int bytesFree = disk->CountFreeClusters() * bpb->SectorsPerCluster * bpb->SectorSize;
-    int bytesBad = disk->CountBadClusters() * bpb->SectorsPerCluster * bpb->SectorSize;
+    bool success = true;
 
-    assert(sectorCount == disk->GetSectorCount());
-    assert(clusterCount == disk->GetClusterCount());
-
-    bool fat12 = clusterCount <= MAX_CLUSTER_12;
-
-    LogInfo("%s statistics:\n", GetFileName(path));
-    LogInfo("%d %s, %d %s, %d %s per track\n",
-        PluralForPrintf(sectorCount, "sector"),
-        PluralForPrintf(bpb->HeadCount, "head"),
-        PluralForPrintf(bpb->SectorsPerTrack, "sector"));
-    LogInfo("sector size is %d bytes, %d %s per cluster\n",
-        bpb->SectorSize,
-        PluralForPrintf(bpb->SectorsPerCluster, "sector"));
-    LogInfo("%d reserved %s\n",
-        PluralForPrintf(bpb->ReservedSectorCount, "sector"));
-    LogInfo("media type is 0x%02X, drive number is 0x%02X\n",
-        bpb->MediaType, bpb->DriveNumber);
-    LogInfo("%d %d-bit %s, %d %s per FAT, providing %d clusters\n",
-        bpb->TableCount, fat12 ? 12 : 16,
-        Plural(bpb->TableCount, "FAT"),
-        PluralForPrintf(bpb->SectorsPerTable, "sector"),
-        clusterCount);
-    LogInfo("root directory contains %d %s, occupying %d %s\n",
-        PluralForPrintf(bpb->RootDirCapacity, "slot"),
-        PluralForPrintf(rootSectorCount, "sector"));
-    if (bpb->Signature == BPBSIG_DOS41) {
-        char labelBuf[MAX_LABEL];
-        GetLabel(labelBuf, bpb->Label);
-        LogInfo("volume ID is %08X", bpb->VolumeId);
-        if (labelBuf[0] != '\0')
-            LogInfo(", volume label is '%s'\n", labelBuf);
-        else
-            LogInfo(", volume has no label\n");
+    DirEntry f;
+    bool found = disk->FindFile(&f, file);
+    if (!found) {
+        LogError("file not found - %s\n", file);
+        success = false;
+        goto Cleanup;
     }
-    LogInfo("%d bytes total\n", bytesTotal);
-    LogInfo("%d bytes free\n", bytesFree);
-    if (bytesBad) LogInfo("%d bytes in bad clusters\n", bytesBad);
 
+    LogInfo("file size = %d\n", f.FileSize);
+
+Cleanup:
     delete disk;
-    return STATUS_SUCCESS;
+    return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }
 
 int List(const Command *cmd, const CommandArgs *args)
@@ -628,23 +639,40 @@ int List(const Command *cmd, const CommandArgs *args)
 
     CheckParam(path != NULL, "missing disk image file name\n");
 
-    (void) file;
-
     FatDisk *disk = FatDisk::Open(path, sectorOffset);
     if (!disk) {
         return STATUS_ERROR;
     }
 
-    // if (file != NULL) {
-    //     // File info
-    //     // TODO
-    //     delete disk;
-    //     return STATUS_SUCCESS;
-    // }
+    int count = 0;
+    int fileCount = 0;
+    int dirCount = 0;
+    int size = 0;
+    bool success = true;
+    char *fileBuf = NULL;
+    DirEntry *e = NULL;
 
-    const DirEntry *e = disk->GetRoot();
-    int count = disk->GetRootCapacity();
+    if (file == NULL) {
+        file = "/";
+    }
 
+    DirEntry f;
+    SafeRIF(disk->FindFile(&f, file), "file not found - %s\n", file);
+
+    if (IsDirectory(&f)) {
+        size = disk->GetFileSize(&f);
+        fileBuf = (char *) SafeAlloc(size);
+        SafeRIF(disk->ReadFile(fileBuf, &f), "failed to read file - %s\n", file);
+
+        e = (DirEntry *) fileBuf;
+        count = size / sizeof(DirEntry);
+    }
+    else {
+        e = &f;
+        count = 1;
+    }
+
+    size = 0;
     for (int i = 0; i < count; i++, e++) {
         if (IsFree(e) || IsLongFileName(e)) {
             continue;
@@ -658,45 +686,66 @@ int List(const Command *cmd, const CommandArgs *args)
         bool arc = IsArchive(e);
         bool dev = IsDeviceFile(e);
 
+        const int MaxSizeOrType = 11;   // enough to hold 4294967295 = 2^31
+
         char name[MAX_NAME];
         char ext[MAX_EXTENSION];
+        char shortName[MAX_SHORTNAME];
+        char label[MAX_LABEL];
         char modDate[MAX_DATE];
         char modTime[MAX_TIME];
-        char sizeOrType[12];
+        char sizeOrType[MaxSizeOrType];
 
         GetName(name, e->Name);
         GetExtension(ext, e->Extension);
+        GetShortName(shortName, e);
+        GetLabel(label, e->Name);
         GetDate(modDate, &e->ModifiedDate);
         GetTime(modTime, &e->ModifiedTime);
 
-        if (dir) {
-            sprintf(sizeOrType, "%-11s", " <DIR>");
-        }
-        else if (dev) {
-            sprintf(sizeOrType, "%-11s", " <DEVICE>");
+        if (dev) {
+            sprintf(sizeOrType, "<DEVICE>");
         }
         else if (lab) {
-            sprintf(sizeOrType, "%-11s", " <LABEL>");
+            sprintf(sizeOrType, "<LABEL>");
+        }
+        else if (dir) {
+            sprintf(sizeOrType, "<DIR>");
+            dirCount++;
         }
         else {
-            sprintf(sizeOrType, "%11d", e->FileSize);
+            size += disk->GetFileSize(e);
+            sprintf(sizeOrType, "%*d", MaxSizeOrType - 1, e->FileSize);
+            fileCount++;
         }
 
-        LogInfo("%c%c%c%c%c%c%c  %-8s %-3s %11s  %-11s %-11s\n",
-            dev ? 'V' : '-',    // Probably won't ever show up in a normal disk
+        // attr  name/ext/label  size/type  modDate modTime  shortname/longname
+        LogInfo("%c%c%c%c%c%c%c  %-*s%-*s  %-*s  %s %s %s\n",
+            dev ? 'V' : '-',    // probably won't ever show up in a normal disk
             arc ? 'A' : '-',
             dir ? 'D' : '-',
             lab ? 'L' : '-',
             sys ? 'S' : '-',
             hid ? 'H' : '-',
             rdo ? 'R' : '-',
-            name, ext,
-            sizeOrType,
-            modDate, modTime
+            (!lab) ? NAME_LENGTH + 1 : LABEL_LENGTH + 1,
+            (!lab) ? name : label,
+            (!lab) ? EXTENSION_LENGTH : 0,
+            (!lab) ? ext : "",
+            MaxSizeOrType - 1, sizeOrType,
+            modDate, modTime,
+            shortName
             // TODO: longname
             );
     }
 
+    LogInfo("%10d %-5s%11d bytes\n",
+        PluralForPrintf(fileCount, "file"), size);
+    LogInfo("%10d %-4s\n",
+        PluralForPrintf(dirCount, "dir"));
+
+Cleanup:
+    SafeFree(fileBuf);
     delete disk;
-    return STATUS_SUCCESS;
+    return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }

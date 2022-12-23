@@ -3,22 +3,24 @@
 
 #include "fatfs.hpp"
 
-#define NAME_LENGTH         8                       // Name buffer length
-#define EXTENSION_LENGTH    3                       // Filename extension buffer length
-#define LABEL_LENGTH        11                      // Volume label buffer length
+#define NAME_LENGTH         8
+#define EXTENSION_LENGTH    3
+#define LABEL_LENGTH        11
+#define SHORTNAME_LENGTH    (NAME_LENGTH+1+EXTENSION_LENGTH)
 
-#define MAX_NAME            (NAME_LENGTH+1)         // Name buffer length, including NULL terminator
-#define MAX_EXTENSION       (EXTENSION_LENGTH+1)    // Extension buffer length, including NULL terminator
-#define MAX_LABEL           (LABEL_LENGTH+1)        // Label buffer length, including NULL terminator
-#define MAX_PATH            512                     // File path length; completely arbitrary
-#define MAX_DATE            12                      // "Sep 31 1990"
-#define MAX_TIME            12                      // "12:34:56 PM"
+#define MAX_NAME            (NAME_LENGTH+1)
+#define MAX_EXTENSION       (EXTENSION_LENGTH+1)
+#define MAX_LABEL           (LABEL_LENGTH+1)
+#define MAX_SHORTNAME       (SHORTNAME_LENGTH+1)
+#define MAX_PATH            512
+#define MAX_DATE            13          // "Sep 24, 1991"
+#define MAX_TIME            12          // "12:34:56 PM"
 
-#define MEDIATYPE_1440K     0xF0                    // Standard 3.5" floppy disk
-#define MEDIATYPE_FIXED     0xF8                    // Hard disk
+#define MEDIATYPE_1440K     0xF0
+#define MEDIATYPE_FIXED     0xF8
 
-#define BOOTSIG             0xAA55                  // Boot sector signature
-#define BPBSIG_DOS41        0x29                    // DOS 4.1 BIOS Param Block
+#define BOOTSIG             0xAA55
+#define BPBSIG_DOS41        0x29
 
 #define FIRST_CLUSTER       2
 #define LAST_CLUSTER_12     0xFF6
@@ -188,16 +190,18 @@ void InitBootSector(BootSector *bootSect, const BiosParamBlock *bpb);
 void InitFat12(char *fat, size_t fatSize, char mediaType);
 void InitFat16(char *fat, size_t fatSize, char mediaType);
 
-int GetCluster12(const char *fat, size_t fatSize, int index);
-int GetCluster16(const char *fat, size_t fatSize, int index);
+uint32_t GetCluster12(const char *fat, size_t fatSize, uint32_t index);
+uint32_t GetCluster16(const char *fat, size_t fatSize, uint32_t index);
 
-int SetCluster12(char *fat, size_t fatSize, int index, int value);
-int SetCluster16(char *fat, size_t fatSize, int index, int value);
+uint32_t SetCluster12(char *fat, size_t fatSize, uint32_t index, uint32_t value);
+uint32_t SetCluster16(char *fat, size_t fatSize, uint32_t index, uint32_t value);
 
 void MakeVolumeLabel(DirEntry *dst, const char *label);
 
 void GetName(char dst[MAX_NAME], const char *src);
 void SetName(char dst[NAME_LENGTH], const char *src);
+
+void GetShortName(char dst[MAX_SHORTNAME], const DirEntry *src);
 
 void GetExtension(char dst[MAX_EXTENSION], const char *src);
 void SetExtension(char dst[EXTENSION_LENGTH], const char *src);
@@ -270,17 +274,10 @@ static inline bool IsFree(const DirEntry *e)
     return IsDeleted(e) || e->Name[0] == 0x00;
 }
 
-// static inline bool IsFile(const DirEntry *e)
-// {
-//     return !IsFree(e)
-//         && !IsLongFileName(e)
-//         && !IsLabel(e);
-// }
-
-// static inline bool IsRoot(const DirEntry *e)
-// {
-//     return IsDirectory(e) && e->FirstCluster == 0;
-// }
+static inline bool IsRoot(const DirEntry *e)
+{
+    return IsDirectory(e) && e->FirstCluster == 0;
+}
 
 static inline bool IsCurrentDirectory(const DirEntry *e)
 {

@@ -65,12 +65,10 @@ void InitFat16(char *fat, size_t fatSize, char mediaType)
     SetCluster16(fat, fatSize, 1, CLUSTER_EOC);
 }
 
-int GetCluster12(const char *fat, size_t fatSize, int index)
+uint32_t GetCluster12(const char *fat, size_t fatSize, uint32_t index)
 {
     size_t i = index + (index / 2);
-    if ((i + 1) >= fatSize) {
-        return -1;
-    }
+    assert(i + 1 < fatSize);
 
     //
     //     0        1        2      :: byte index
@@ -85,12 +83,10 @@ int GetCluster12(const char *fat, size_t fatSize, int index)
     return pair & 0x0FFF;
 }
 
-int GetCluster16(const char *fat, size_t fatSize, int index)
+uint32_t GetCluster16(const char *fat, size_t fatSize, uint32_t index)
 {
     size_t i = index * 2;
-    if ((i + 1) >= fatSize) {
-        return -1;
-    }
+    assert(i + 1 < fatSize);
 
     //
     //     0        1        2        3      :: byte index
@@ -101,18 +97,10 @@ int GetCluster16(const char *fat, size_t fatSize, int index)
     return *((uint16_t *) &fat[i]);
 }
 
-int SetCluster12(char *fat, size_t fatSize, int index, int value)
+uint32_t SetCluster12(char *fat, size_t fatSize, uint32_t index, uint32_t value)
 {
     size_t i = index + (index / 2);
-    if ((i + 1) >= fatSize) {
-        return -1;
-    }
-
-    //
-    //     0        1        2      :: byte index
-    // |........|++++....|++++++++| :: . = clust0, + = clust1
-    // |76543210|3210ba98|ba987654| :: bit index
-    //
+    assert(i + 1 < fatSize);
 
     uint16_t pair = *((uint16_t *) &fat[i]);
     if (index & 1) {
@@ -128,18 +116,10 @@ int SetCluster12(char *fat, size_t fatSize, int index, int value)
     return value;
 }
 
-int SetCluster16(char *fat, size_t fatSize, int index, int value)
+uint32_t SetCluster16(char *fat, size_t fatSize, uint32_t index, uint32_t value)
 {
     size_t i = index * 2;
-    if ((i + 1) >= fatSize) {
-        return -1;
-    }
-
-    //
-    //     0        1        2        3      :: byte index
-    // |........|........|++++++++|++++++++| :: . = clust0, + = clust1
-    // |76543210|fedcba98|76543210|fedcba98| :: bit index
-    //
+    assert(i + 1 < fatSize);
 
     *((uint16_t *) &fat[i]) = value;
     return value;
@@ -174,6 +154,24 @@ void GetLabel(char dst[MAX_LABEL], const char *src)
     ReadString(dst, src, LABEL_LENGTH, true);
 }
 
+void GetShortName(char dst[MAX_SHORTNAME], const DirEntry *e)
+{
+    char name[MAX_NAME];
+    char ext[MAX_EXTENSION];
+
+    GetName(name, e->Name);
+    GetExtension(ext, e->Extension);
+
+    if (ext[0] != '\0') {
+        snprintf(dst, MAX_SHORTNAME, "%s.%s", name, ext);
+    }
+    else {
+        snprintf(dst, MAX_SHORTNAME, "%s", name);
+    }
+
+    assert(MAX_SHORTNAME >= MAX_NAME + MAX_EXTENSION - 1);
+}
+
 void GetDate(char dst[MAX_DATE], const FatDate *src)
 {
     char month[4];
@@ -194,7 +192,7 @@ void GetDate(char dst[MAX_DATE], const FatDate *src)
         default:sprintf(month, "   "); break;
     }
 
-    sprintf(dst, "%s%3d%5d",
+    snprintf(dst, MAX_DATE, "%s%3d%5d",
         month,
         src->Day,
         src->Year + 1980);
@@ -202,7 +200,7 @@ void GetDate(char dst[MAX_DATE], const FatDate *src)
 
 void GetTime(char dst[MAX_TIME], const FatTime *src)
 {
-    sprintf(dst, "%02d:%02d:%02d",
+    snprintf(dst, MAX_TIME, "%02d:%02d:%02d",
         src->Hours,
         src->Minutes,
         src->Seconds << 1);

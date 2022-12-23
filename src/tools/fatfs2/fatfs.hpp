@@ -57,7 +57,7 @@ static inline const char * GetFileName(const char *path)
 	const char *p;
     const char *name;
 
-    name = path;
+    name = path;    // TODO: handle backslash too
 	if ((p = strrchr(path, '/')) != NULL) {
 	    name = p + 1;
     }
@@ -73,7 +73,7 @@ static inline const char * GetFileName(const char *path)
 #define Align(x, n)             (((x) + (n) - 1) & ~((n) - 1))
 #define RoundDown(x, m)         (((x) / (m)) * (m))
 #define RoundUp(x, m)           ((((x) + (m) - 1) / (m)) * (m))
-#define Ceiling(x, y)           (((x) + (y) - 1) / (y))
+#define Ceiling(x, y)           (((x) + (y) - 1) / (y))     // TODO: rename, cdiv?
 #define Min(x, y)               ((x) < (y) ? (x) : (y))
 #define Max(x, y)               ((x) > (y) ? (x) : (y))
 
@@ -173,18 +173,41 @@ do {                                                                            
 } while (0)
 
 // -----------------------------------------------------------------------------
-// Alloc/Free/Open/Close/Read/Write
-//
 // The macro functions with the prefix "Safe" are safe in that they guard
 // against NULL pointers and jump to a common error-handling path when something
 // goes wrong. To facilitate this, these macro functions require the following:
 //   - a bool named 'success' to be defined
 //   - a label named 'Cleanup' to be defined
-//   - all pointer variables assigned with SafeAlloc to be initialized to NULL
+//   - all pointers assigned with "Safe" functions to be initialized to NULL
 // When an error occurs (such as a bad file open request), 'success' will be set
 // to false and control flow will jump to the 'Cleanup' label. Here, any
 // resources that were previously allocated should be freed. An error message
 // will also be printed to the log.
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// Return If False
+// -----------------------------------------------------------------------------
+
+// #define RIF(cond,...)                                                           \
+// ({                                                                              \
+//     if (!(cond)) {                                                              \
+//         LogError(__VA_ARGS__);                                                  \
+//         return false;                                                           \
+//     }                                                                           \
+// })
+
+#define SafeRIF(cond,...)                                                       \
+({                                                                              \
+    if (!(cond)) {                                                              \
+        LogError(__VA_ARGS__);                                                  \
+        success = false;                                                        \
+        goto Cleanup;                                                           \
+    }                                                                           \
+})
+
+// -----------------------------------------------------------------------------
+// Alloc/Free/Open/Close/Read/Write
 // -----------------------------------------------------------------------------
 
 inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
@@ -209,11 +232,7 @@ inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
 #define SafeAlloc(size)                                                         \
 ({                                                                              \
     void *_ptr = malloc(size);                                                  \
-    if (!_ptr) {                                                                \
-        LogError("out of memory!\n");                                           \
-        success = false;                                                        \
-        goto Cleanup;                                                           \
-    }                                                                           \
+    SafeRIF(_ptr, "out of memory!\n");                                          \
     _ptr;                                                                       \
 })
 
@@ -249,11 +268,7 @@ inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
 ({                                                                              \
     size_t _i = ftell(fp);                                                      \
     size_t _b = fread(ptr, 1, size, fp);                                        \
-    if (ferror(fp)) {                                                           \
-        LogError("unable to read file\n");                                      \
-        success = false;                                                        \
-        goto Cleanup;                                                           \
-    }                                                                           \
+    SafeRIF(!ferror(fp), "unable to read file\n");                              \
     LogVeryVerbose("%zu bytes read from file at offset 0x%08zx\n", _b, _i);     \
     _b;                                                                         \
 })
@@ -262,22 +277,9 @@ inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
 ({                                                                              \
     size_t _i = ftell(fp);                                                      \
     size_t _b = fwrite(ptr, 1, size, fp);                                       \
-    if (ferror(fp)) {                                                           \
-        LogError("unable to write file\n");                                     \
-        success = false;                                                        \
-        goto Cleanup;                                                           \
-    }                                                                           \
+    SafeRIF(!ferror(fp), "unable to write file\n");                             \
     LogVeryVerbose("%zu bytes written to file at offset 0x%08zx\n", _b, _i);    \
     _b;                                                                         \
-})
-
-#define SafeRIF(cond,...)                                                       \
-({                                                                              \
-    if (!(cond)) {                                                              \
-        LogError(__VA_ARGS__);                                                  \
-        success = false;                                                        \
-        goto Cleanup;                                                           \
-    }                                                                           \
 })
 
 #endif  // FATFS_H
