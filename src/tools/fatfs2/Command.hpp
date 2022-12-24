@@ -1,7 +1,5 @@
-#ifndef COMMAND_H
-#define COMMAND_H
-
-extern "C" {
+#ifndef COMMAND_HPP
+#define COMMAND_HPP
 
 #include "fatfs.hpp"
 
@@ -40,6 +38,4 @@ int List(const Command *cmd, const CommandArgs *args);
 // int Touch(const Command *cmd, const CommandArgs *args);
 // int Type(const Command *cmd, const CommandArgs *args);
 
-}
-
-#endif  // COMMAND_H
+#endif  // COMMAND_HPP

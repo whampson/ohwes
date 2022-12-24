@@ -320,7 +320,7 @@ int Create(const Command *cmd, const CommandArgs *args)
     } while (!fatSizeKnown);
 
     // Create the BPB
-    BiosParamBlock bpb;
+    struct BiosParamBlock bpb;
     InitBiosParamBlock(&bpb);
     bpb.MediaType = mediaType;
     bpb.HeadCount = headCount;
@@ -342,8 +342,8 @@ int Create(const Command *cmd, const CommandArgs *args)
         bpb.SectorCountLarge = sectorCount;
     }
 
-    SetLabel(bpb.Label, label);
-    SetName(bpb.FsType, (fatWidth == 12) ? "FAT12" : "FAT16");
+    WriteLabel(bpb.Label, label);
+    WriteName(bpb.FsType, (fatWidth == 12) ? "FAT12" : "FAT16");
 
     bool success = FatDisk::CreateNew(path, &bpb, sectorOffset);
     if (!success) {
@@ -352,7 +352,7 @@ int Create(const Command *cmd, const CommandArgs *args)
     }
 
     char labelBuf[MAX_LABEL];
-    GetLabel(labelBuf, bpb.Label);
+    ReadLabel(labelBuf, bpb.Label);
 
     LogInfo("%s statistics:\n", GetFileName(path));
     LogInfo("%d %s, %d %s, %d %s per track\n",
@@ -532,7 +532,7 @@ int Info(const Command *cmd, const CommandArgs *args)
             PluralForPrintf(rootSectorCount, "sector"));
         if (bpb->Signature == BPBSIG_DOS41) {
             char labelBuf[MAX_LABEL];
-            GetLabel(labelBuf, bpb->Label);
+            ReadLabel(labelBuf, bpb->Label);
             LogInfo("volume ID is %08X", bpb->VolumeId);
             if (labelBuf[0] != '\0')
                 LogInfo(", volume label is '%s'\n", labelBuf);
@@ -558,6 +558,7 @@ int Info(const Command *cmd, const CommandArgs *args)
     }
 
     LogInfo("file size = %d\n", f.FileSize);
+    // TODO: finish
 
 Cleanup:
     delete disk;
@@ -644,26 +645,27 @@ int List(const Command *cmd, const CommandArgs *args)
         return STATUS_ERROR;
     }
 
+    bool success = true;
+    char *fileBuf = NULL;
+    const DirEntry *e = NULL;
     int count = 0;
     int fileCount = 0;
     int dirCount = 0;
-    int size = 0;
-    bool success = true;
-    char *fileBuf = NULL;
-    DirEntry *e = NULL;
+    int bytesFree = 0;
+    int bytesTotal = 0;
+    DirEntry f;
 
     if (file == NULL) {
         file = "/";
     }
 
-    DirEntry f;
     SafeRIF(disk->FindFile(&f, file), "file not found - %s\n", file);
 
     if (IsDirectory(&f)) {
-        size = disk->GetFileSize(&f);
+        uint32_t size = disk->GetFileSize(&f);
         fileBuf = (char *) SafeAlloc(size);
-        SafeRIF(disk->ReadFile(fileBuf, &f), "failed to read file - %s\n", file);
 
+        SafeRIF(disk->ReadFile(fileBuf, &f), "failed to read file - %s\n", file);
         e = (DirEntry *) fileBuf;
         count = size / sizeof(DirEntry);
     }
@@ -672,55 +674,73 @@ int List(const Command *cmd, const CommandArgs *args)
         count = 1;
     }
 
-    size = 0;
     for (int i = 0; i < count; i++, e++) {
-        if (IsFree(e) || IsLongFileName(e)) {
+        if (IsFree(e)) {
             continue;
+        }
+
+        const int MaxSizeOrType = 11;   // enough to hold 4294967295 = 2^31
+
+        char name[MAX_NAME];
+        char ext[MAX_EXT];
+        wchar_t fullName[MAX_LFN];
+        char shortName[MAX_SFN];
+        char label[MAX_LABEL];
+        char modDate[MAX_DATE];
+        char modTime[MAX_TIME];
+        char sizeOrType[MaxSizeOrType];
+        bool hasLfn = false;
+
+        // Gotta get the LFN first because it'll move the DirEntry pointer
+        if (IsLongFileName(e)) {
+            const DirEntry *next = GetLongFileName(fullName, e);
+            i += (int) (next - e);
+            e = next;
+            hasLfn = true;
         }
 
         bool rdo = IsReadOnly(e);
         bool hid = IsHidden(e);
         bool sys = IsSystemFile(e);
-        bool lab = IsLabel(e);
+        bool lab = IsLabel(e);      // TODO: skip these?
         bool dir = IsDirectory(e);
         bool arc = IsArchive(e);
         bool dev = IsDeviceFile(e);
 
-        const int MaxSizeOrType = 11;   // enough to hold 4294967295 = 2^31
+        ReadName(name, e->Name);
+        ReadExt(ext, e->Extension);
+        ReadLabel(label, e->Name);
+        GetShortFileName(shortName, e);
 
-        char name[MAX_NAME];
-        char ext[MAX_EXTENSION];
-        char shortName[MAX_SHORTNAME];
-        char label[MAX_LABEL];
-        char modDate[MAX_DATE];
-        char modTime[MAX_TIME];
-        char sizeOrType[MaxSizeOrType];
+        struct tm modified = { };
+        GetModifiedTime(&modified, e);
+        FormatDate(modDate, &modified);
+        FormatTime(modTime, &modified);
 
-        GetName(name, e->Name);
-        GetExtension(ext, e->Extension);
-        GetShortName(shortName, e);
-        GetLabel(label, e->Name);
-        GetDate(modDate, &e->ModifiedDate);
-        GetTime(modTime, &e->ModifiedTime);
+        if (!hasLfn) {
+            mbstowcs(fullName, shortName, MAX_SFN);
+        }
 
         if (dev) {
             sprintf(sizeOrType, "<DEVICE>");
         }
         else if (lab) {
             sprintf(sizeOrType, "<LABEL>");
+            mbstowcs(fullName, label, MAX_LABEL);
         }
         else if (dir) {
             sprintf(sizeOrType, "<DIR>");
             dirCount++;
         }
         else {
-            size += disk->GetFileSize(e);
-            sprintf(sizeOrType, "%*d", MaxSizeOrType - 1, e->FileSize);
+            uint32_t size = disk->GetFileSize(e);
+            sprintf(sizeOrType, "%*u", MaxSizeOrType - 1, size);
+            bytesTotal += size;
             fileCount++;
         }
 
-        // attr  name/ext/label  size/type  modDate modTime  shortname/longname
-        LogInfo("%c%c%c%c%c%c%c  %-*s%-*s  %-*s  %s %s %s\n",
+        // attr  name/ext/label  size/type  modDate modTime shortname/longname
+        LogInfo("%c%c%c%c%c%c%c %-*s%-*s %-*s %s %s %ls\n",
             dev ? 'V' : '-',    // probably won't ever show up in a normal disk
             arc ? 'A' : '-',
             dir ? 'D' : '-',
@@ -730,19 +750,19 @@ int List(const Command *cmd, const CommandArgs *args)
             rdo ? 'R' : '-',
             (!lab) ? NAME_LENGTH + 1 : LABEL_LENGTH + 1,
             (!lab) ? name : label,
-            (!lab) ? EXTENSION_LENGTH : 0,
+            (!lab) ? EXT_LENGTH : 0,
             (!lab) ? ext : "",
             MaxSizeOrType - 1, sizeOrType,
             modDate, modTime,
-            shortName
-            // TODO: longname
-            );
+            fullName);
     }
 
-    LogInfo("%10d %-5s%11d bytes\n",
-        PluralForPrintf(fileCount, "file"), size);
-    LogInfo("%10d %-4s\n",
-        PluralForPrintf(dirCount, "dir"));
+    bytesFree = disk->CountFreeClusters() * disk->GetClusterSize();
+
+    LogInfo("%10u %-5s %10u bytes\n",
+        PluralForPrintf(fileCount, "file"), bytesTotal);
+    LogInfo("%10u %-5s %10u bytes free\n",
+        PluralForPrintf(dirCount, "dir"), bytesFree);
 
 Cleanup:
     SafeFree(fileBuf);

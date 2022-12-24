@@ -82,6 +82,36 @@ bool ProcessGlobalOption(int c)
     return false;
 }
 
+void FormatDate(char dst[MAX_DATE], const struct tm *src)
+{
+    char month[4];
+    switch (src->tm_mon)
+    {
+        case 0: sprintf(month, "Jan"); break;
+        case 1: sprintf(month, "Feb"); break;
+        case 2: sprintf(month, "Mar"); break;
+        case 3: sprintf(month, "Apr"); break;
+        case 4: sprintf(month, "May"); break;
+        case 5: sprintf(month, "Jun"); break;
+        case 6: sprintf(month, "Jul"); break;
+        case 7: sprintf(month, "Aug"); break;
+        case 8: sprintf(month, "Sep"); break;
+        case 9: sprintf(month, "Oct"); break;
+        case 10:sprintf(month, "Nov"); break;
+        case 11:sprintf(month, "Dec"); break;
+        default: sprintf(month, "   "); break;
+    }
+
+    snprintf(dst, MAX_DATE, "%3s %2d %4d",
+        month, src->tm_mday, src->tm_year + 1900);
+}
+
+void FormatTime(char dst[MAX_TIME], const struct tm *src)
+{
+    snprintf(dst, MAX_TIME, "%02d:%02d",
+        src->tm_hour, src->tm_min);
+}
+
 int main(int argc, char **argv)
 {
     g_ProgramName = GetFileName(argv[0]);
@@ -112,7 +142,7 @@ int main(int argc, char **argv)
                 if (optopt != 0)
                     LogError_BadOpt(optopt);
                 else
-                    LogError_BadLongOpt(&argv[optind - 1][2]);  // remove leading '--'
+                    LogError_BadLongOpt(&argv[optind - 1][2]);
                 return STATUS_INVALIDARG;
                 break;
             case 0:

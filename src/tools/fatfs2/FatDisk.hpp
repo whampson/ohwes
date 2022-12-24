@@ -1,7 +1,7 @@
-#ifndef FATDISK_H
-#define FATDISK_H
+#ifndef FATDISK_HPP
+#define FATDISK_HPP
 
-#include "fat.hpp"
+#include "fatfs.hpp"
 
 class FatDisk {
 public:
@@ -51,12 +51,16 @@ private:
     const char  *m_Path;        // file path
     FILE        *m_File;        // file pointer
 
+    // TODO: use EOC mark from FAT
+    // TODO: bits [15:14] of FAT[1] on FAT16 are flags
+    //   0x8000 - CleanShut  - 0 is "dirty", disk not dismounted properly
+    //   0x4000 - HardError  - 0 is "error", I/O errors or bad clusters encountered
+
     FatDisk();
 
-    // Dummy DirEntry used to identify the root directory
-    DirEntry GetRootToken() const;
+    DirEntry GetRootDirEntry() const;
 
     bool WalkPath(DirEntry *out, char *path, const DirEntry *base) const;
 };
 
-#endif // FATDISK_H
+#endif // FATDISK_HPP

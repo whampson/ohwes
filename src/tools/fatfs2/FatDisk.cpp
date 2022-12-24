@@ -74,7 +74,7 @@ bool FatDisk::CreateNew(const char *path, const BiosParamBlock *bpb, uint32_t se
         bytesWritten = ftell(fp);
     }
 
-    InitBootSector((BootSector *) sectorBuf, bpb);
+    InitBootSector((BootSector *) sectorBuf, bpb, PROG_NAME);
     bytesWritten += SafeWrite(fp, sectorBuf, sectorSize);
 
     for (uint32_t i = 1; i < resSectorCount; i++) {
@@ -104,7 +104,8 @@ bool FatDisk::CreateNew(const char *path, const BiosParamBlock *bpb, uint32_t se
     for (uint32_t i = 0; i < rootSectorCount; i++) {
         if (hasCustomLabel && i == 0) {
             DirEntry volLabel;
-            MakeVolumeLabel(&volLabel, bpb->Label);
+            InitDirEntry(&volLabel);
+            volLabel.Attributes = ATTR_LABEL;
             memcpy(sectorBuf, &volLabel, sizeof(DirEntry));
             bytesWritten += SafeWrite(fp, sectorBuf, sectorSize);
             memset(sectorBuf, 0, sectorSize);
@@ -422,24 +423,16 @@ uint32_t FatDisk::MarkClusterFree(uint32_t index)
 
 uint32_t FatDisk::GetCluster(uint32_t index) const
 {
-    const BiosParamBlock *bpb = GetBPB();
-    uint32_t fatSize = bpb->SectorsPerTable * bpb->SectorSize;
-    uint32_t value = IsFat12()
-        ? GetCluster12(m_Fat, fatSize, index)
-        : GetCluster16(m_Fat, fatSize, index);
-
-    return value;
+    return IsFat12()
+        ? GetCluster12(m_Fat, index)
+        : GetCluster16(m_Fat, index);
 }
 
 uint32_t FatDisk::SetCluster(uint32_t index, uint32_t value)
 {
-    const BiosParamBlock *bpb = GetBPB();
-    uint32_t fatSize = bpb->SectorsPerTable * bpb->SectorSize;
-    uint32_t oldValue = IsFat12()
-        ? SetCluster12(m_Fat, fatSize, index, value)
-        : SetCluster16(m_Fat, fatSize, index, value);
-
-    return oldValue;
+    return IsFat12()
+        ? SetCluster12(m_Fat, index, value)
+        : SetCluster16(m_Fat, index, value);
 }
 
 bool FatDisk::ReadSector(char *dst, uint32_t index) const
@@ -559,10 +552,10 @@ bool FatDisk::WalkPath(DirEntry *dst, char *path, const DirEntry *base) const
             continue;
         }
 
-        char shortName[MAX_SHORTNAME];
-        GetShortName(shortName, e);
+        char shortName[MAX_SFN];
+        GetShortFileName(shortName, e);
 
-        if (strncasecmp(shortName, nameToFind, MAX_SHORTNAME) == 0) {
+        if (strncasecmp(shortName, nameToFind, MAX_SFN) == 0) {
             success = WalkPath(dst, NULL, e); // NULL for recusive call
             break;
         }

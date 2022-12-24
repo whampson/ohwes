@@ -1,5 +1,5 @@
-#ifndef FATFS_H
-#define FATFS_H
+#ifndef FATFS_HPP
+#define FATFS_HPP
 
 #include <assert.h>
 #include <inttypes.h>
@@ -12,6 +12,8 @@
 #include <time.h>
 #include <getopt.h>
 
+#include "fat.h"
+
 // -----------------------------------------------------------------------------
 // Global Defines
 // -----------------------------------------------------------------------------
@@ -23,6 +25,10 @@
 #define STATUS_SUCCESS          0
 #define STATUS_INVALIDARG       1
 #define STATUS_ERROR            2
+
+#define MAX_PATH                512
+#define MAX_DATE                14      // "Sept 21, 1991"
+#define MAX_TIME                9       // "12:34 PM"
 
 extern int g_bShowHelp;
 extern int g_bShowVersion;
@@ -44,6 +50,9 @@ int PrintHelp();
 int PrintGlobalHelp();
 int PrintVersion();
 bool ProcessGlobalOption(int c);
+
+void FormatDate(char dst[MAX_DATE], const struct tm *src);
+void FormatTime(char dst[MAX_TIME], const struct tm *src);
 
 // -----------------------------------------------------------------------------
 // String Utilities
@@ -172,6 +181,11 @@ do {                                                                            
     LogError("missing argument for '%s'\n", str);                               \
 } while (0)
 
+#define LogError_FileNotFound(str)                                              \
+do {                                                                            \
+    LogError("file not found - %s\n", str);                                     \
+} while (0)
+
 // -----------------------------------------------------------------------------
 // The macro functions with the prefix "Safe" are safe in that they guard
 // against NULL pointers and jump to a common error-handling path when something
@@ -189,14 +203,6 @@ do {                                                                            
 // Return If False
 // -----------------------------------------------------------------------------
 
-// #define RIF(cond,...)                                                           \
-// ({                                                                              \
-//     if (!(cond)) {                                                              \
-//         LogError(__VA_ARGS__);                                                  \
-//         return false;                                                           \
-//     }                                                                           \
-// })
-
 #define SafeRIF(cond,...)                                                       \
 ({                                                                              \
     if (!(cond)) {                                                              \
@@ -209,6 +215,21 @@ do {                                                                            
 // -----------------------------------------------------------------------------
 // Alloc/Free/Open/Close/Read/Write
 // -----------------------------------------------------------------------------
+
+#define SafeAlloc(size)                                                         \
+({                                                                              \
+    void *_ptr = malloc(size);                                                  \
+    SafeRIF(_ptr, "out of memory!\n");                                          \
+    _ptr;                                                                       \
+})
+
+#define SafeFree(ptr)                                                           \
+({                                                                              \
+    if (ptr) {                                                                  \
+        free(ptr);                                                              \
+        (ptr) = NULL;                                                           \
+    }                                                                           \
+})
 
 inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
 {
@@ -228,21 +249,6 @@ inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
     if (pOutLen) *pOutLen = size;
     return fp;
 }
-
-#define SafeAlloc(size)                                                         \
-({                                                                              \
-    void *_ptr = malloc(size);                                                  \
-    SafeRIF(_ptr, "out of memory!\n");                                          \
-    _ptr;                                                                       \
-})
-
-#define SafeFree(ptr)                                                           \
-({                                                                              \
-    if (ptr) {                                                                  \
-        free(ptr);                                                              \
-        (ptr) = NULL;                                                           \
-    }                                                                           \
-})
 
 #define SafeOpen(path, mode, pOutSize)                                          \
 ({                                                                              \
@@ -282,4 +288,4 @@ inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
     _b;                                                                         \
 })
 
-#endif  // FATFS_H
+#endif  // FATFS_HPP
