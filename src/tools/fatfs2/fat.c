@@ -6,6 +6,8 @@
 
 static int ReadString(char *dst, const char *src, int n)
 {
+    // TODO: need to be more clear about what these are doing
+
     int beg = 0;
     int end = 0;
     int i;
@@ -31,7 +33,10 @@ static int ReadString(char *dst, const char *src, int n)
     }
 
     // copy trimmed string
-    strncpy(dst, &src[beg], end - beg);
+    for (i = 0; i < end - beg; i++)
+    {
+        dst[i] = src[beg + i];
+    }
 
     dst[i] = '\0';
     return i;
@@ -39,6 +44,8 @@ static int ReadString(char *dst, const char *src, int n)
 
 static int WriteString(char *dst, const char *src, int n)
 {
+    // TODO: need to be more clear about what these are doing
+
     int len = strnlen(src, n);
     strncpy(dst, src, n);
 
@@ -340,7 +347,7 @@ void SetShortFileName(DirEntry *dst, const char *src)
 
     // 0xE5 is a valid KANJI lead byte, but it needs to be replaced with
     // 0x05 to distinguish it from the 'deleted' marker.
-    if (name[0] == 0xE5) {
+    if (((uint8_t) name[0]) == 0xE5) {
         name[0] = 0x05;
     }
 
@@ -373,7 +380,7 @@ const DirEntry * GetLongFileName(wchar_t dst[MAX_LFN], const DirEntry *srcTable)
         wchar_t *pChar = &dst[bucket];
 
     #define YankChars(buf, n)                                               \
-        for (int i = 0; i < ((n) << 1); i++, pChar++) {                     \
+        for (int i = 0; i < (n); i++, pChar++) {                            \
             *pChar = (wchar_t) (buf)[i];                                    \
             if (*pChar != 0 && *pChar != 0xFFFF) count++;                   \
         }                                                                   \

@@ -340,7 +340,7 @@ static inline bool IsLongFileName(const DirEntry *src)
 
 static inline bool IsDeleted(const DirEntry *src)
 {
-    return src->Name[0] == 0xE5;
+    return ((uint8_t) src->Name[0]) == 0xE5;
 }
 
 static inline bool IsFree(const DirEntry *src)

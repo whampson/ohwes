@@ -374,7 +374,7 @@ uint32_t FatDisk::GetRootCapacity() const
     return GetBPB()->RootDirCapacity;
 }
 
-DirEntry FatDisk::GetRootToken() const
+DirEntry FatDisk::GetRootDirEntry() const
 {
     DirEntry e;
     memset(&e, 0, sizeof(DirEntry));
@@ -520,7 +520,7 @@ bool FatDisk::FindFile(DirEntry *dst, const char *path) const
     char pathCopy[MAX_PATH];
     strncpy(pathCopy, path, MAX_PATH);
 
-    DirEntry root = GetRootToken();
+    DirEntry root = GetRootDirEntry();
     return WalkPath(dst, pathCopy, &root);
 }
 
