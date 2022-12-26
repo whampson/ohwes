@@ -33,9 +33,10 @@ static const Command s_pCommands[] = {
     { List,
         "list", PROG_NAME " list [OPTIONS] DISK [FILE]",
         "Print the contents of a directory",
-        // "  -a                List all files; include hidden files\n"
-        // "  -b                Bare format; print file names only\n"
-        // "  -n                Show short names only\n"
+        "  -a                List all files; include hidden files and volume labels\n"
+        "  -A                Show file attributes\n"
+        "  -b                Bare format; print file names only\n"
+        "  -n                Show short names only\n"
         // "  -r                List the contents of subdirectories\n"
         "  --offset=SECTOR   Read the file system from a specific sector on disk\n"
     },

@@ -7,6 +7,10 @@ int List(const Command *cmd, const CommandArgs *args)
     const char *path = NULL;
     const char *file = NULL;
 
+    bool showAll = false;
+    bool showAttr = false;
+    bool bareFormat = false;
+    bool shortNamesOnly = false;
     int sectorOffset = 0;
 
     static struct option LongOptions[] = {
@@ -23,7 +27,7 @@ int List(const Command *cmd, const CommandArgs *args)
         int optIdx = 0;
         int c = getopt_long(
             args->Argc, args->Argv,
-            GLOBAL_OPTSTRING,
+            GLOBAL_OPTSTRING "aAbn",
             LongOptions, &optIdx);
 
         if (ProcessGlobalOption(c)) {
@@ -32,6 +36,18 @@ int List(const Command *cmd, const CommandArgs *args)
         if (c == -1) break;
 
         switch (c) {
+            case 'a':
+                showAll = true;
+                break;
+            case 'A':
+                showAttr = true;
+                break;
+            case 'b':
+                bareFormat = true;
+                break;
+            case 'n':
+                shortNamesOnly = true;
+                break;
             case 'o':
                 sectorOffset = (unsigned int) strtol(optarg, NULL, 0);
                 break;
@@ -119,6 +135,7 @@ int List(const Command *cmd, const CommandArgs *args)
 
         const int MaxSizeOrType = 11;   // enough to hold 4294967295 = 2^31
 
+        char lineBuf[512] = { };
         char name[MAX_NAME];
         char ext[MAX_EXTENSION];
         wchar_t fullName[MAX_LONGNAME];
@@ -131,6 +148,10 @@ int List(const Command *cmd, const CommandArgs *args)
 
         // Gotta get the LFN first because it'll move the DirEntry pointer
         if (IsLongFileName(e)) {
+            if (shortNamesOnly) {
+                continue;
+            }
+
             const DirEntry *next = GetLongName(fullName, e);
             i += (int) (next - e);
             e = next;
@@ -140,10 +161,14 @@ int List(const Command *cmd, const CommandArgs *args)
         bool rdo = IsReadOnly(e);
         bool hid = IsHidden(e);
         bool sys = IsSystemFile(e);
-        bool lab = IsLabel(e);      // TODO: skip these?
+        bool lab = IsLabel(e);
         bool dir = IsDirectory(e);
         bool arc = IsArchive(e);
         bool dev = IsDeviceFile(e);
+
+        if (!showAll && (hid || lab || sys)) {
+            continue;
+        }
 
         ReadFatString(label, e->Label, LABEL_LENGTH);
         ReadFatString(name, e->Label, NAME_LENGTH);
@@ -177,30 +202,38 @@ int List(const Command *cmd, const CommandArgs *args)
             fileCount++;
         }
 
-        // attr  name/ext/label  size/type  modDate modTime shortname/longname
-        LogInfo("%c%c%c%c%c%c%c %-*s%-*s %-*s %s %s %ls\n",
-            dev ? 'V' : '-',    // probably won't ever show up in a normal disk
-            arc ? 'A' : '-',
-            dir ? 'D' : '-',
-            lab ? 'L' : '-',
-            sys ? 'S' : '-',
-            hid ? 'H' : '-',
-            rdo ? 'R' : '-',
-            (!lab) ? NAME_LENGTH + 1 : LABEL_LENGTH + 1,
-            (!lab) ? name : label,
-            (!lab) ? EXTENSION_LENGTH : 0,
-            (!lab) ? ext : "",
-            MaxSizeOrType - 1, sizeOrType,
-            modDate, modTime,
-            fullName);
+        char *ptr = lineBuf;
+        if (showAttr) {
+            ptr += sprintf(ptr, "%c%c%c%c%c%c%c ",
+                dev ? 'V' : '-',    // probably won't ever show up in a normal disk
+                arc ? 'A' : '-',
+                dir ? 'D' : '-',
+                lab ? 'L' : '-',
+                sys ? 'S' : '-',
+                hid ? 'H' : '-',
+                rdo ? 'R' : '-');
+        }
+
+        if (!bareFormat) {
+            ptr += sprintf(ptr, "%-*s%-*s  %-*s %s %s ",
+                (!lab) ? NAME_LENGTH + 1 : LABEL_LENGTH + 1,
+                (!lab) ? name : label,
+                (!lab) ? EXTENSION_LENGTH : 0,
+                (!lab) ? ext : "",
+                MaxSizeOrType - 1, sizeOrType,
+                modDate, modTime);
+        }
+
+        LogInfo("%s%ls\n", lineBuf, fullName);
     }
 
-    bytesFree = disk->CountFreeClusters() * disk->GetClusterSize();
-
-    LogInfo("%10u %-5s %10u bytes\n",
-        PluralForPrintf(fileCount, "file"), bytesTotal);
-    LogInfo("%10u %-5s %10u bytes free\n",
-        PluralForPrintf(dirCount, "dir"), bytesFree);
+    if (!bareFormat) {
+        bytesFree = disk->CountFreeClusters() * disk->GetClusterSize();
+        LogInfo("%10u %-5s %10u bytes\n",
+            PluralForPrintf(fileCount, "file"), bytesTotal);
+        LogInfo("%10u %-5s %10u bytes free\n",
+            PluralForPrintf(dirCount, "dir"), bytesFree);
+    }
 
 Cleanup:
     SafeFree(fileBuf);
