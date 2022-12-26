@@ -3,6 +3,11 @@
 
 #include "fatfs.hpp"
 
+#define CheckParam(x,...)                                                       \
+do {                                                                            \
+    if (!(x)) { LogError(__VA_ARGS__); return STATUS_INVALIDARG; }              \
+} while (0)
+
 struct CommandArgs {
     int Argc;
     char * const *Argv;
