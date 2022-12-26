@@ -4,10 +4,8 @@
 // String Functions
 // -----------------------------------------------------------------------------
 
-static int ReadString(char *dst, const char *src, int n)
+int ReadFatString(char *dst, const char *src, int n)
 {
-    // TODO: need to be more clear about what these are doing
-
     int beg = 0;
     int end = 0;
     int i;
@@ -38,53 +36,24 @@ static int ReadString(char *dst, const char *src, int n)
         dst[i] = src[beg + i];
     }
 
+    assert(i <= n);
+
     dst[i] = '\0';
     return i;
 }
 
-static int WriteString(char *dst, const char *src, int n)
+int WriteFatString(char *dst, const char *src, int n)
 {
-    // TODO: need to be more clear about what these are doing
-
     int len = strnlen(src, n);
     strncpy(dst, src, n);
 
+    // pad with trailing spaces
     while (n >= len && n - len > 0)
     {
         dst[len++] = ' ';
     }
 
     return len;
-}
-
-int ReadName(char dst[MAX_NAME], const char *src)
-{
-    return ReadString(dst, src, NAME_LENGTH);
-}
-
-int ReadExt(char dst[MAX_EXT], const char *src)
-{
-    return ReadString(dst, src, EXT_LENGTH);
-}
-
-int ReadLabel(char dst[MAX_LABEL], const char *src)
-{
-    return ReadString(dst, src, LABEL_LENGTH);
-}
-
-int WriteName(char dst[MAX_NAME], const char *src)
-{
-    return WriteString(dst, src, NAME_LENGTH);
-}
-
-int WriteExt(char dst[MAX_EXT], const char *src)
-{
-    return WriteString(dst, src, EXT_LENGTH);
-}
-
-int WriteLabel(char dst[MAX_LABEL], const char *src)
-{
-    return WriteString(dst, src, LABEL_LENGTH);
 }
 
 // -----------------------------------------------------------------------------
@@ -94,8 +63,9 @@ int WriteLabel(char dst[MAX_LABEL], const char *src)
 void InitBiosParamBlock(BiosParamBlock *bpb)
 {
     memset(bpb, 0, sizeof(BiosParamBlock));
-    WriteLabel(bpb->Label, "");
-    WriteName(bpb->FsType, "");
+
+    WriteFatString(bpb->Label, "", LABEL_LENGTH);
+    WriteFatString(bpb->FsType, "", NAME_LENGTH);
     bpb->Signature = BPBSIG_DOS41;
     bpb->_Reserved = 0;
 }
@@ -141,7 +111,7 @@ inline void InitBootSector(
 
     memcpy(bootSect->BootCode, BootCode, sizeof(BootCode));
     memcpy(bootSect->JumpCode, JumpCode, sizeof(JumpCode));
-    WriteName(bootSect->OemName, oemName);
+    WriteFatString(bootSect->OemName, oemName, NAME_LENGTH);
 }
 
 // -----------------------------------------------------------------------------
@@ -307,13 +277,15 @@ void SetAccessedTime(DirEntry *dst, const struct tm *src)
     SetDate(&dst->AccessedDate, src);
 }
 
-void GetShortFileName(char dst[MAX_SFN], const DirEntry *src)
+char * GetShortName(char dst[MAX_SHORTNAME], const DirEntry *src)
 {
     char name[MAX_NAME];
-    char ext[MAX_EXT];
+    char ext[MAX_EXTENSION];
 
-    ReadName(name, src->Name);
-    ReadExt(ext, src->Extension);
+    assert(MAX_SHORTNAME >= NAME_LENGTH + EXTENSION_LENGTH + 1);
+
+    ReadFatString(name, src->Label, NAME_LENGTH);
+    ReadFatString(ext, &src->Label[NAME_LENGTH], EXTENSION_LENGTH);
 
     // 0xE5 is a valid KANJI lead byte, but it's been replaced with
     // 0x05 to distinguish it from the 'deleted' marker. Let's fix that!
@@ -322,44 +294,80 @@ void GetShortFileName(char dst[MAX_SFN], const DirEntry *src)
     }
 
     if (ext[0] != '\0') {
-        snprintf(dst, MAX_SFN, "%s.%s", name, ext);
+        snprintf(dst, MAX_SHORTNAME, "%s.%s", name, ext);
     }
     else {
-        snprintf(dst, MAX_SFN, "%s", name);
+        snprintf(dst, MAX_SHORTNAME, "%s", name);
     }
 
-    assert(MAX_SFN >= MAX_NAME + MAX_EXT - 1);
+    return dst;
 }
 
-void SetShortFileName(DirEntry *dst, const char *src)
+bool SetShortName(DirEntry *dst, const char *src)
 {
-    // TODO: uppercase
-    // TODO: filter valid chars?
+    char srcCopy[MAX_SHORTNAME];
+    memset(srcCopy, '\0', MAX_SHORTNAME);
 
-    char srcCopy[MAX_SFN];
-    strncpy(srcCopy, src, MAX_SFN);
+    char *name = srcCopy;
+    char *ext = "";
+    bool dotSeen = false;
+    size_t nameLen = 0;
+    size_t extLen = 0;
 
-    char *name = strtok(srcCopy, ".");
-    char *ext = strtok(NULL, ".");
-    if (ext == NULL) {
-        ext = "";
+    for (int i = 0; i < SHORTNAME_LENGTH; i++) {
+        unsigned char c = src[i];
+        if (c == '\0') break;
+
+        bool valid = isalnum(c);
+        valid |= (c > 0x7F);
+        valid |= (c == '$' || c == '%' || c == '\'' || c == '-' ||
+                  c == '_' || c == '@' || c == '~' || c == '`' ||
+                  c == '!' || c == '(' || c == ')' || c == '{' ||
+                  c == '}' || c == '^' || c == '#' || c == '&');
+        valid |= (c == '.' && !dotSeen);
+        valid |= (c == ' ' && i != 0);
+
+        if (!valid) return false;
+
+        if (c == '.') {
+            dotSeen = true;
+            srcCopy[i] = '\0';
+            ext = &srcCopy[i + 1];
+            continue;
+        }
+
+        srcCopy[i] = toupper(c);
+
+        if (!dotSeen)
+            nameLen++;
+        else
+            extLen++;
     }
+
+    if (nameLen == 0 || nameLen > NAME_LENGTH || extLen > EXTENSION_LENGTH) {
+        return false;
+    }
+
+    assert(strlen(name) == nameLen);
+    assert(strlen(ext) == extLen);
 
     // 0xE5 is a valid KANJI lead byte, but it needs to be replaced with
     // 0x05 to distinguish it from the 'deleted' marker.
-    if (((uint8_t) name[0]) == 0xE5) {
+    if (((unsigned char) name[0]) == 0xE5) {
         name[0] = 0x05;
     }
 
-    WriteName(dst->Name, name);
-    WriteExt(dst->Extension, ext);
+    WriteFatString(dst->Label, name, NAME_LENGTH);
+    WriteFatString(&dst->Label[NAME_LENGTH], ext, EXTENSION_LENGTH);
+
+    return true;
 }
 
 // -----------------------------------------------------------------------------
 // Long File Name
 // -----------------------------------------------------------------------------
 
-const DirEntry * GetLongFileName(wchar_t dst[MAX_LFN], const DirEntry *srcTable)
+const DirEntry * GetLongName(wchar_t dst[MAX_LONGNAME], const DirEntry *srcTable)
 {
     const LongFileName *lfn = (const LongFileName *) srcTable;
     if (IsDeleted(srcTable) || !IsLongFileName(srcTable) || !lfn->FirstInChain) {

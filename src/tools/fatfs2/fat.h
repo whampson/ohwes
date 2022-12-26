@@ -24,16 +24,17 @@ extern "C" {
 #include <time.h>
 
 #define NAME_LENGTH                 8
-#define EXT_LENGTH                  3
+#define EXTENSION_LENGTH            3
 #define LABEL_LENGTH                11
-#define SFN_LENGTH                  (NAME_LENGTH+1+EXT_LENGTH)
-#define LFN_LENGTH                  260
+#define SHORTNAME_LENGTH            (LABEL_LENGTH+1)
+#define LONGNAME_LENGTH             260
 
 #define MAX_NAME                    (NAME_LENGTH+1)
-#define MAX_EXT                     (EXT_LENGTH+1)
+#define MAX_EXTENSION               (EXTENSION_LENGTH+1)
 #define MAX_LABEL                   (LABEL_LENGTH+1)
-#define MAX_SFN                     (SFN_LENGTH+1)
-#define MAX_LFN                     (LFN_LENGTH+1)
+#define MAX_SHORTNAME               (SHORTNAME_LENGTH+1)
+#define MAX_LONGNAME                (LONGNAME_LENGTH+1)
+
 #define MEDIATYPE_1440K             0xF0
 #define MEDIATYPE_FIXED             0xF8
 
@@ -67,14 +68,28 @@ static_assert(MAX_CLUSTER_16 == 65524, "Bad max FAT16 cluster size!");
 // String Functions
 // -----------------------------------------------------------------------------
 
-int ReadName(char dst[MAX_NAME], const char *src);
-int WriteName(char dst[MAX_NAME], const char *src);
+/**
+ * Reads at most n characters into dst from src. Leading and trailing spaces
+ * will be trimmed. A NUL terminator will be added to dst. The number of
+ * characters written into dst will be returned.
+ *
+ * The FAT file system stores ASCII strings padded with trailing spaces and no
+ * NUL terminator. Use this function to create a standard C string from a FAT
+ * string.
+ */
+int ReadFatString(char *dst, const char *src, int n);
 
-int ReadExt(char dst[MAX_EXT], const char *src);
-int WriteExt(char dst[MAX_EXT], const char *src);
+/**
+ * Writes n characters into dst from src. If src is less than n characters, dst
+ * will be padded with spaces. No NUL terminator will be added to dst. The
+ * number of characters written will be returned.
+ *
+ * The FAT file system stores ASCII strings padded with trailing spaces and no
+ * NUL terminator. Use this function to create a FAT string from a standard C
+ * string.
+ */
+int WriteFatString(char *dst, const char *src, int n);
 
-int ReadLabel(char dst[MAX_LABEL], const char *src);
-int WriteLabel(char dst[MAX_LABEL], const char *src);
 
 // -----------------------------------------------------------------------------
 // BIOS Parameter Block
@@ -207,7 +222,7 @@ typedef struct FatTime
 } FatTime;
 static_assert(sizeof(FatTime) == 2, "Bad FatTime size!");
 
-void GetDate(struct tm *dst, const FatDate *src);
+void GetDate(struct tm *dst, const FatDate *src);       // TODO: return dst?
 void SetDate(FatDate *dst, const struct tm *src);
 
 void GetTime(struct tm *dst, const FatTime *src);
@@ -235,8 +250,6 @@ enum FileAttrs
                       ATTR_READONLY
 };
 
-// TODO: logic operators? (C++)
-
 // -----------------------------------------------------------------------------
 // Directory Entry
 // -----------------------------------------------------------------------------
@@ -247,8 +260,7 @@ enum FileAttrs
 */
 typedef struct DirEntry
 {
-    char Name[NAME_LENGTH];         // File name
-    char Extension[EXT_LENGTH];     // File extension
+    char Label[LABEL_LENGTH];       // File name and extension or volume label
     uint8_t Attributes;             // File attributes
     uint8_t _Reserved1;             // Reserved; varies by system
     uint8_t _Reserved2;             // Reserved; used for fine creation time, 10ms increments: 0-199
@@ -274,8 +286,27 @@ void SetModifiedTime(DirEntry *dst, const struct tm *src);
 time_t GetAccessedTime(struct tm *dst, const DirEntry *src);
 void SetAccessedTime(DirEntry *dst, const struct tm *src);
 
-void GetShortFileName(char dst[MAX_SFN], const DirEntry *src);
-void SetShortFileName(DirEntry *dst, const char *src);
+/**
+ * Gets the short file name from a directory entry. Returns a pointer to dst
+ * for convenience.
+*/
+char * GetShortName(char dst[MAX_SHORTNAME], const DirEntry *src);
+
+/**
+ * Sets the short file name in a directory entry. Returns a boolean value
+ * indicating whether the input string was a valid short name.
+ *
+ * A short file name is limited to 8 characters, followed by an optional dot (.)
+ * and an extension of up to 3 characters. This function will return false if
+ * any of these limits are exceeded, or if an invalid character is found in
+ * either the name or extension. A short name may consist of any combination of
+ * letters, digits, characters with a code point value greater than 127, or the
+ * following symbols: $ % ' - _ @ ~ ` ! ( ) { } ^ # &
+ *
+ * All letters will be converted to uppercase and their original case will be
+ * lost.
+*/
+bool SetShortName(DirEntry *dst, const char *src);
 
 static inline bool HasAttribute(const DirEntry *src, uint8_t attr)
 {
@@ -340,12 +371,12 @@ static inline bool IsLongFileName(const DirEntry *src)
 
 static inline bool IsDeleted(const DirEntry *src)
 {
-    return ((uint8_t) src->Name[0]) == 0xE5;
+    return ((uint8_t) src->Label[0]) == 0xE5;
 }
 
 static inline bool IsFree(const DirEntry *src)
 {
-    return IsDeleted(src) || src->Name[0] == 0x00;
+    return IsDeleted(src) || src->Label[0] == 0x00;
 }
 
 static inline bool IsRoot(const DirEntry *src)
@@ -355,16 +386,16 @@ static inline bool IsRoot(const DirEntry *src)
 
 static inline bool IsCurrentDirectory(const DirEntry *src)
 {
-    char buf[MAX_SFN];
-    GetShortFileName(buf, src);
+    char buf[MAX_SHORTNAME];
+    GetShortName(buf, src);
 
     return strcmp(buf, ".") == 0;
 }
 
 static inline bool IsParentDirectory(const DirEntry *src)
 {
-    char buf[MAX_SFN];
-    GetShortFileName(buf, src);
+    char buf[MAX_SHORTNAME];
+    GetShortName(buf, src);
 
     return strcmp(buf, "..") == 0;
 }
@@ -429,8 +460,8 @@ static_assert(offsetof(LongFileName, Name3) == 0x1C, "Bad Name3 offset!");
 // be returned.
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-const DirEntry * GetLongFileName(wchar_t dst[MAX_LFN], const DirEntry *srcTable);
-// const DirEntry * SetLongFileName(DirEntry *dstTable, wchar_t *src);
+const DirEntry * GetLongName(wchar_t dst[MAX_LONGNAME], const DirEntry *srcTable);
+// const DirEntry * SetLongName(DirEntry *dstTable, wchar_t *src);
 
 #ifdef __cplusplus
 }       // extern "C"

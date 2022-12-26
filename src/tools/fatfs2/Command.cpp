@@ -40,6 +40,11 @@ static const Command s_pCommands[] = {
         // "  -n                Show short names only\n"
         // "  -r                List the contents of subdirectories\n"
         "  --offset=SECTOR   Read the file system from a specific sector on disk\n"
+    },
+    { Test,
+        "test", PROG_NAME " test",
+        "Run the test suite",
+        NULL
     }
 };
 
@@ -342,8 +347,8 @@ int Create(const Command *cmd, const CommandArgs *args)
         bpb.SectorCountLarge = sectorCount;
     }
 
-    WriteLabel(bpb.Label, label);
-    WriteName(bpb.FsType, (fatWidth == 12) ? "FAT12" : "FAT16");
+    WriteFatString(bpb.Label, label, LABEL_LENGTH);
+    WriteFatString(bpb.FsType, (fatWidth == 12) ? "FAT12" : "FAT16", NAME_LENGTH);
 
     bool success = FatDisk::CreateNew(path, &bpb, sectorOffset);
     if (!success) {
@@ -352,7 +357,7 @@ int Create(const Command *cmd, const CommandArgs *args)
     }
 
     char labelBuf[MAX_LABEL];
-    ReadLabel(labelBuf, bpb.Label);
+    ReadFatString(labelBuf, bpb.Label, LABEL_LENGTH);
 
     LogInfo("%s statistics:\n", GetFileName(path));
     LogInfo("%d %s, %d %s, %d %s per track\n",
@@ -532,7 +537,7 @@ int Info(const Command *cmd, const CommandArgs *args)
             PluralForPrintf(rootSectorCount, "sector"));
         if (bpb->Signature == BPBSIG_DOS41) {
             char labelBuf[MAX_LABEL];
-            ReadLabel(labelBuf, bpb->Label);
+            ReadFatString(labelBuf, bpb->Label, LABEL_LENGTH);
             LogInfo("volume ID is %08X", bpb->VolumeId);
             if (labelBuf[0] != '\0')
                 LogInfo(", volume label is '%s'\n", labelBuf);
@@ -682,9 +687,9 @@ int List(const Command *cmd, const CommandArgs *args)
         const int MaxSizeOrType = 11;   // enough to hold 4294967295 = 2^31
 
         char name[MAX_NAME];
-        char ext[MAX_EXT];
-        wchar_t fullName[MAX_LFN];
-        char shortName[MAX_SFN];
+        char ext[MAX_EXTENSION];
+        wchar_t fullName[MAX_LONGNAME];
+        char shortName[MAX_SHORTNAME];
         char label[MAX_LABEL];
         char modDate[MAX_DATE];
         char modTime[MAX_TIME];
@@ -693,7 +698,7 @@ int List(const Command *cmd, const CommandArgs *args)
 
         // Gotta get the LFN first because it'll move the DirEntry pointer
         if (IsLongFileName(e)) {
-            const DirEntry *next = GetLongFileName(fullName, e);
+            const DirEntry *next = GetLongName(fullName, e);
             i += (int) (next - e);
             e = next;
             hasLfn = true;
@@ -707,10 +712,10 @@ int List(const Command *cmd, const CommandArgs *args)
         bool arc = IsArchive(e);
         bool dev = IsDeviceFile(e);
 
-        ReadName(name, e->Name);
-        ReadExt(ext, e->Extension);
-        ReadLabel(label, e->Name);
-        GetShortFileName(shortName, e);
+        ReadFatString(label, e->Label, LABEL_LENGTH);
+        ReadFatString(name, e->Label, NAME_LENGTH);
+        ReadFatString(ext, &e->Label[NAME_LENGTH], EXTENSION_LENGTH);
+        GetShortName(shortName, e);
 
         struct tm modified = { };
         GetModifiedTime(&modified, e);
@@ -718,7 +723,7 @@ int List(const Command *cmd, const CommandArgs *args)
         FormatTime(modTime, &modified);
 
         if (!hasLfn) {
-            mbstowcs(fullName, shortName, MAX_SFN);
+            mbstowcs(fullName, shortName, MAX_SHORTNAME);
         }
 
         if (dev) {
@@ -750,7 +755,7 @@ int List(const Command *cmd, const CommandArgs *args)
             rdo ? 'R' : '-',
             (!lab) ? NAME_LENGTH + 1 : LABEL_LENGTH + 1,
             (!lab) ? name : label,
-            (!lab) ? EXT_LENGTH : 0,
+            (!lab) ? EXTENSION_LENGTH : 0,
             (!lab) ? ext : "",
             MaxSizeOrType - 1, sizeOrType,
             modDate, modTime,

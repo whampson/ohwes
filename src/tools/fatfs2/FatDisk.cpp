@@ -552,11 +552,11 @@ bool FatDisk::WalkPath(DirEntry *dst, char *path, const DirEntry *base) const
             continue;
         }
 
-        char shortName[MAX_SFN];
-        GetShortFileName(shortName, e);
+        char shortName[MAX_SHORTNAME];
+        GetShortName(shortName, e);
 
-        if (strncasecmp(shortName, nameToFind, MAX_SFN) == 0) {
-            success = WalkPath(dst, NULL, e); // NULL for recusive call
+        if (strncasecmp(shortName, nameToFind, MAX_SHORTNAME) == 0) {
+            success = WalkPath(dst, NULL, e); // NULL for recursive call
             break;
         }
     }
