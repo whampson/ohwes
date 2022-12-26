@@ -275,19 +275,23 @@ inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
 
 #define SafeRead(fp, ptr, size)                                                 \
 ({                                                                              \
+    void *_fp = fp;                                                             \
     size_t _i = ftell(fp);                                                      \
     size_t _b = fread(ptr, 1, size, fp);                                        \
     SafeRIF(!ferror(fp), "unable to read file\n");                              \
-    LogVeryVerbose("%zu bytes read from file at offset 0x%08zx\n", _b, _i);     \
+    LogVeryVerbose("%zu bytes read from file handle %p at offset 0x%08zx\n",    \
+        _b, _fp, _i);                                                           \
     _b;                                                                         \
 })
 
 #define SafeWrite(fp, ptr, size)                                                \
 ({                                                                              \
+    void *_fp = fp;                                                             \
     size_t _i = ftell(fp);                                                      \
     size_t _b = fwrite(ptr, 1, size, fp);                                       \
     SafeRIF(!ferror(fp), "unable to write file\n");                             \
-    LogVeryVerbose("%zu bytes written to file at offset 0x%08zx\n", _b, _i);    \
+    LogVeryVerbose("%zu bytes written to file handle %p at offset 0x%08zx\n",   \
+        _b, _fp, _i);                                                           \
     _b;                                                                         \
 })
 

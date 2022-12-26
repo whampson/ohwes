@@ -40,7 +40,9 @@ bool FatDisk::CreateNew(const char *path, const BiosParamBlock *bpb, uint32_t se
         return false;
     }
 
-    size_t baseAddr = sector * 512;   // Assume 512-byte sectors
+    // Assume 512-byte sectors until the BPB tells us otherwise
+    size_t baseAddr = sector * 512;
+
     uint32_t sectorSize = bpb->SectorSize;
     uint32_t sectorCount = (bpb->SectorCount) ? bpb->SectorCount : bpb->SectorCountLarge;
     uint32_t sectorsPerCluster = bpb->SectorsPerCluster;
@@ -178,9 +180,10 @@ FatDisk * FatDisk::Open(const char *path, uint32_t sector)
     char *fat = NULL;
     char *root = NULL;
 
-    bool success = true;
-    size_t baseAddr = sector * 512;   // Assume 512-byte sectors
+    // Assume 512-byte sectors until the BPB tells us otherwise
+    size_t baseAddr = sector * 512;
 
+    bool success = true;
     fp = SafeOpen(path, "rb+", &size);
     SafeRIF(size + baseAddr >= 4096, "disk is too small\n");
 
@@ -306,23 +309,9 @@ uint32_t FatDisk::GetDiskSize() const
 
 uint32_t FatDisk::GetFileSize(const DirEntry *f) const
 {
-    uint32_t size = 0;
-
-    if (IsRoot(f)) {
-        size = GetRootCapacity() * sizeof(DirEntry);
-    }
-    else if (IsDirectory(f)) {
-        uint32_t cluster = f->FirstCluster;
-        do {
-            size += GetClusterSize();
-            cluster = GetCluster(cluster);
-        } while (!IsEOC(cluster));
-    }
-    else {
-        size = f->FileSize;
-    }
-
-    return size;
+    return IsDirectory(f)
+        ? GetFileAllocSize(f)
+        : f->FileSize;
 }
 
 uint32_t FatDisk::GetFileAllocSize(const DirEntry *f) const
@@ -496,7 +485,7 @@ bool FatDisk::ReadSector(char *dst, uint32_t index) const
 
     uint32_t seekAddr = m_Base + (index * SectorSize);
     if (seekAddr + SectorSize > DiskSize) {
-        LogError("attempt to read out-of-bounds sector (index = %d)\n", index);
+        LogError("attempt to read out-of-bounds sector (index = %u)\n", index);
         return false;
     }
 
@@ -532,6 +521,7 @@ bool FatDisk::ReadCluster(char *dst, uint32_t index) const
     assert(seekAddr + ClusterSize <= DiskSize);
 
     bool success = true;
+    LogVeryVerbose("reading cluster %0*X...\n", IsFat12() ? 3 : 4, index);
     fseek(m_File, seekAddr, SEEK_SET);
     SafeRead(m_File, dst, ClusterSize);
 
@@ -542,6 +532,8 @@ Cleanup:
 bool FatDisk::ReadFile(char *dst, const DirEntry *file) const
 {
     if (IsRoot(file)) {
+        LogVeryVerbose("reading root directory...\n");
+
         bool success = true;
         const BiosParamBlock *bpb = GetBPB();
         int count = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
@@ -556,14 +548,13 @@ bool FatDisk::ReadFile(char *dst, const DirEntry *file) const
         return success;
     }
 
-    if (!IsValidFile(file) || (file->FirstCluster == 0 && file->FileSize != 0)) {
-        LogWarning("attempt to read a label, device, deleted, or invalid file\n");
-        return false;
-    }
+    char sfn[MAX_SHORTNAME];
+    GetShortName(sfn, file);
+    LogVeryVerbose("reading file '%s'...\n", sfn);
 
-    if (file->FileSize == 0) {
-        dst[0] = '\0';
-        return true;
+    if (!IsValidFile(file) || (file->FirstCluster == 0 && file->FileSize != 0)) {
+        LogError("attempt to read a label, device, deleted, or invalid file\n");
+        return false;
     }
 
     uint32_t cluster = file->FirstCluster;
@@ -596,7 +587,7 @@ bool FatDisk::WalkPath(DirEntry *dst, char *path, const DirEntry *base) const
         return true;
     }
 
-    if (base == NULL || !HasAttribute(base, ATTR_DIRECTORY)) {
+    if (base == NULL || !IsDirectory(base)) {
         LogError("attempt to walk path on non-directory\n");
         return false;
     }
@@ -612,7 +603,7 @@ bool FatDisk::WalkPath(DirEntry *dst, char *path, const DirEntry *base) const
 
     e = dirTable;
     for (int i = 0; i < count; i++, e++) {
-        if (IsFree(e) || IsLongFileName(e)) {
+        if (IsFree(e) || IsLongFileName(e) || IsLabel(e)) {
             continue;
         }
 

@@ -91,7 +91,6 @@ int Type(const Command *cmd, const CommandArgs *args)
     }
 
     CheckParam(path != NULL, "missing disk image file name\n");
-    CheckParam(file != NULL, "missing file name\n");
 
     FatDisk *disk = FatDisk::Open(path, sectorOffset);
     if (!disk) {
@@ -104,19 +103,38 @@ int Type(const Command *cmd, const CommandArgs *args)
     uint32_t allocSize;
     DirEntry f;
 
+    if (file == NULL) {
+        file = "/";
+    }
+
     SafeRIF(disk->FindFile(&f, file), "file not found - %s\n", file);
-    SafeRIF(!IsDirectory(&f), "'%s' is a directory\n", file);
-    SafeRIF(!IsLabel(&f) && !IsDeviceFile(&f), "not a file - %s\n", file);
+    SafeRIF(!IsDeviceFile(&f), "'%s' is a device file\n", file);
 
-    // TODO: if directory, list files?
-
-    size = disk->GetFileSize(&f);
     allocSize = disk->GetFileAllocSize(&f);
+    size = disk->GetFileSize(&f);
+    if (size > allocSize) {
+        LogWarning("stored file size is larger than file allocation size\n");
+    }
 
-    fileBuf = (char *) SafeAlloc(allocSize);
+    fileBuf = (char *) SafeAlloc(allocSize+1);  // +1 to account for added NUL
     SafeRIF(disk->ReadFile(fileBuf, &f), "failed to read file - %s\n", file);
 
-    LogInfo("%*s\n", size, fileBuf);
+    if (IsDirectory(&f)) {
+        uint32_t count = size / sizeof(DirEntry);
+        const DirEntry *e = (DirEntry *) fileBuf;
+
+        for (uint32_t i = 0; i < count; i++, e++) {
+            if (!IsValidFile(e))
+                continue;
+            char shortName[MAX_SHORTNAME];
+            GetShortName(shortName, e);
+            LogInfo("%s\n", shortName);
+        }
+    }
+    else {
+        fileBuf[size] = '\0';
+        LogInfo("%s\n", fileBuf);
+    }
 
 Cleanup:
     SafeFree(fileBuf);

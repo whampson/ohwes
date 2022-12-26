@@ -116,7 +116,7 @@ int List(const Command *cmd, const CommandArgs *args)
     }
 
     SafeRIF(disk->FindFile(&f, file), "file not found - %s\n", file);
-    SafeRIF(!IsLabel(&f) && !IsDeviceFile(&f), "not a file - %s\n", file);
+    SafeRIF(!IsDeviceFile(&f), "'%s' is a device file\n", file);
 
     if (IsDirectory(&f)) {
         uint32_t size = disk->GetFileSize(&f);
@@ -149,7 +149,7 @@ int List(const Command *cmd, const CommandArgs *args)
         char sizeOrType[MaxSizeOrType];
         bool hasLfn = false;
 
-        // Gotta get the LFN first because it'll move the DirEntry pointer
+        // get the LFN first because it'll move the DirEntry pointer
         if (IsLongFileName(e)) {
             if (shortNamesOnly) {
                 continue;
