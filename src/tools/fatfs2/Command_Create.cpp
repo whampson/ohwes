@@ -192,13 +192,13 @@ int Create(const Command *cmd, const CommandArgs *args)
         int sectorsUsedAligned = Align(sectorsUsed, sectorsPerCluster);
         clusters = (sectorCount - sectorsUsedAligned) / sectorsPerCluster;
 
-        int fatCapacity12 = ((fatSize / 3) * 2) - FIRST_CLUSTER;
-        int fatCapacity16 = (fatSize / 2) - FIRST_CLUSTER;
+        int fatCapacity12 = ((fatSize / 3) * 2) - CLUSTER_FIRST;
+        int fatCapacity16 = (fatSize / 2) - CLUSTER_FIRST;
 
         bool maybeFat12 = (fatWidth == 0 || fatWidth == 12);
         bool maybeFat16 = (fatWidth == 0 || fatWidth == 16);
 
-        if (clusters > MAX_CLUSTER_12 && fatCapacity12 > MAX_CLUSTER_12) {
+        if (clusters > MAX_CLUSTERS_12 && fatCapacity12 > MAX_CLUSTERS_12) {
             // TODO: we could squeeze extra clusters out of the 12-bit FAT
             // by properly handling the sector boundaries
             if (fatWidth == 12) {
@@ -208,7 +208,7 @@ int Create(const Command *cmd, const CommandArgs *args)
             maybeFat12 = false;
         }
 
-        if (clusters > MAX_CLUSTER_16 && fatCapacity16 > MAX_CLUSTER_16) {
+        if (clusters > MAX_CLUSTERS_16 && fatCapacity16 > MAX_CLUSTERS_16) {
             if (fatWidth == 16) {
                 LogError("too many clusters for FAT16\n");
             }
@@ -220,9 +220,9 @@ int Create(const Command *cmd, const CommandArgs *args)
 
         if (maybeFat12 && clusters <= fatCapacity12) {
             if (fatWidth == 0) {
-                LogVerbose("selecting FAT12 because %d < %d clusters\n", clusters, MIN_CLUSTER_16);
+                LogVerbose("selecting FAT12 because %d < %d clusters\n", clusters, MIN_CLUSTERS_16);
             }
-            if (clusters < MIN_CLUSTER_12)  {
+            if (clusters < MIN_CLUSTERS_12)  {
                 LogError("not enough clusters for FAT12\n");
                 return STATUS_ERROR;
             }
@@ -230,10 +230,10 @@ int Create(const Command *cmd, const CommandArgs *args)
             fatSizeKnown = true;
         }
         else if (maybeFat16 && clusters <= fatCapacity16) {
-            if (fatWidth == 0 && clusters >= MIN_CLUSTER_16) {
-                LogVerbose("selecting FAT16 because %d >= %d clusters\n", clusters, MIN_CLUSTER_16);
+            if (fatWidth == 0 && clusters >= MIN_CLUSTERS_16) {
+                LogVerbose("selecting FAT16 because %d >= %d clusters\n", clusters, MIN_CLUSTERS_16);
             }
-            if (fatWidth == 16 && clusters < MIN_CLUSTER_16) {
+            if (fatWidth == 16 && clusters < MIN_CLUSTERS_16) {
                 LogError("not enough clusters for FAT16\n");
                 return STATUS_ERROR;
             }

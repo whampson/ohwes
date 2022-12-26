@@ -44,7 +44,12 @@ static const Command s_pCommands[] = {
         "test", PROG_NAME " test",
         "Run the test suite",
         NULL
-    }
+    },
+    { Type,
+        "type", PROG_NAME " type DISK FILE",
+        "Print the contents of a file",
+        NULL
+    },
 };
 
 const Command * GetCommands()

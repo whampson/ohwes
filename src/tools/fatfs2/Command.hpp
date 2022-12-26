@@ -40,9 +40,8 @@ int List(const Command *cmd, const CommandArgs *args);
 // int Move(const Command *cmd, const CommandArgs *args);
 // int Remove(const Command *cmd, const CommandArgs *args);
 // int Rename(const Command *cmd, const CommandArgs *args);
-// int Touch(const Command *cmd, const CommandArgs *args);
-// int Type(const Command *cmd, const CommandArgs *args);
-
 int Test(const Command *cmd, const CommandArgs *args);
+// int Touch(const Command *cmd, const CommandArgs *args);
+int Type(const Command *cmd, const CommandArgs *args);
 
 #endif  // COMMAND_HPP

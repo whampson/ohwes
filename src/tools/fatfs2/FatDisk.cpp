@@ -59,7 +59,7 @@ bool FatDisk::CreateNew(const char *path, const BiosParamBlock *bpb, uint32_t se
         LogWarning("disk has %d %s unreachable by FAT\n",
             PluralForPrintf(extraSectors, "sector"));
     }
-    bool fat12 = clusters <= MAX_CLUSTER_12;
+    bool fat12 = clusters <= MAX_CLUSTERS_12;
     bool hasCustomLabel = (bpb->Label[0] != ' ');
 
     fp = SafeOpen(path, "wb", NULL);
@@ -84,9 +84,9 @@ bool FatDisk::CreateNew(const char *path, const BiosParamBlock *bpb, uint32_t se
     assert(bytesWritten == baseAddr + resSectorCount * sectorSize);
 
     if (fat12)
-        InitFat12(fat, fatSize, bpb->MediaType);
+        InitFat12(fat, fatSize, bpb->MediaType, CLUSTER_EOC_12);
     else
-        InitFat16(fat, fatSize, bpb->MediaType);
+        InitFat16(fat, fatSize, bpb->MediaType, CLUSTER_EOC_16);
 
     for (uint32_t i = 0; i < bpb->TableCount; i++) {
         bytesWritten += SafeWrite(fp, fat, fatSize);
@@ -166,7 +166,7 @@ FatDisk * FatDisk::Open(const char *path, uint32_t sector)
     BiosParamBlock *bpb;
 
     FILE *fp = NULL;
-    FatDisk *img = NULL;
+    FatDisk *disk = NULL;
 
     size_t pos;
     size_t size;
@@ -175,8 +175,8 @@ FatDisk * FatDisk::Open(const char *path, uint32_t sector)
     uint32_t rootSectorCount;
 
     void *sectorBuf = NULL;
-    unsigned char *fat = NULL;
-    unsigned char *root = NULL;
+    char *fat = NULL;
+    char *root = NULL;
 
     bool success = true;
     size_t baseAddr = sector * 512;   // Assume 512-byte sectors
@@ -216,8 +216,8 @@ FatDisk * FatDisk::Open(const char *path, uint32_t sector)
     rootSectorCount = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), sectorSize);
 
     sectorBuf = SafeAlloc(sectorSize);
-    fat = (unsigned char *) SafeAlloc(bpb->SectorsPerTable * sectorSize);
-    root = (unsigned char *) SafeAlloc(rootSectorCount * sectorSize);
+    fat = (char *) SafeAlloc(bpb->SectorsPerTable * sectorSize);
+    root = (char *) SafeAlloc(rootSectorCount * sectorSize);
 
     if (sectorSize - pos > 0) {
         // skip the rest of the boot sector
@@ -243,7 +243,7 @@ FatDisk * FatDisk::Open(const char *path, uint32_t sector)
     pos += (bpb->TableCount - 1) * bpb->SectorsPerTable * sectorSize;
     fseek(fp, pos, SEEK_SET);
 
-    if (fat[0] != bpb->MediaType) {
+    if (((uint8_t) fat[0]) != bpb->MediaType) {
         LogWarning("media type ID mismatch (FAT = 0x%02X, BPB = 0x%02X)\n",
             fat[0], bpb->MediaType);
     }
@@ -252,12 +252,10 @@ FatDisk * FatDisk::Open(const char *path, uint32_t sector)
         pos += SafeRead(fp, root + i * sectorSize, sectorSize);
     }
 
-    img = new FatDisk();
-    img->m_BaseAddr = baseAddr;
-    img->m_Boot = bootSect;
-    img->m_Fat = (char *) fat;
-    img->m_Path = path;
-    img->m_File = fp;
+    disk = new FatDisk(path, fp, baseAddr, &bootSect, fat);
+
+    LogVerbose("opened FAT%d disk '%s' at offset 0x%zx; media type = 0x%02X, EOC = %X\n",
+        disk->IsFat12() ? 12 : 16, path, baseAddr, (uint8_t) fat[0], disk->GetClusterEocNumber());
 
 Cleanup:
     SafeFree(sectorBuf);
@@ -267,13 +265,16 @@ Cleanup:
         SafeClose(fp);
     }
 
-    return (success) ? img : NULL;
+    return (success) ? disk : NULL;
 }
 
-FatDisk::FatDisk()
+FatDisk::FatDisk(const char *path, FILE *file, size_t base, BootSector *boot, char *fat)
 {
-    m_Fat = NULL;
-    m_File = NULL;
+    m_Path = path;
+    m_File = file;
+    m_Base = base;
+    m_Boot = *boot;
+    m_Fat = fat;
 }
 
 FatDisk::~FatDisk()
@@ -284,13 +285,13 @@ FatDisk::~FatDisk()
 
 bool FatDisk::IsFat12() const
 {
-    return GetClusterCount() <= MAX_CLUSTER_12;
+    return GetClusterCount() <= MAX_CLUSTERS_12;
 }
 
 bool FatDisk::IsFat16() const
 {
-    return GetClusterCount() >= MIN_CLUSTER_16
-        && GetClusterCount() <= MAX_CLUSTER_16;
+    return GetClusterCount() >= MIN_CLUSTERS_16
+        && GetClusterCount() <= MAX_CLUSTERS_16;
 }
 
 const BiosParamBlock * FatDisk::GetBPB() const
@@ -305,7 +306,7 @@ uint32_t FatDisk::GetDiskSize() const
 
 uint32_t FatDisk::GetFileSize(const DirEntry *f) const
 {
-    size_t size = 0;
+    uint32_t size = 0;
 
     if (IsRoot(f)) {
         size = GetRootCapacity() * sizeof(DirEntry);
@@ -315,11 +316,33 @@ uint32_t FatDisk::GetFileSize(const DirEntry *f) const
         do {
             size += GetClusterSize();
             cluster = GetCluster(cluster);
-        } while (cluster != CLUSTER_EOC);
+        } while (!IsEOC(cluster));
     }
     else {
         size = f->FileSize;
     }
+
+    return size;
+}
+
+uint32_t FatDisk::GetFileAllocSize(const DirEntry *f) const
+{
+    if (IsRoot(f)) {
+        return GetRootCapacity() * sizeof(DirEntry);
+    }
+
+    if (!IsValidFile(f) || f->FirstCluster == 0) {
+        return 0;
+    }
+
+    uint32_t size = 0;
+    uint32_t cluster = f->FirstCluster;
+
+    // count the number of clusters in the chain
+    do {
+        size += GetClusterSize();
+        cluster = GetCluster(cluster);
+    } while (!IsEOC(cluster));
 
     return size;
 }
@@ -363,8 +386,8 @@ uint32_t FatDisk::GetFatCapacity() const
     const BiosParamBlock *bpb = GetBPB();
     uint32_t fatSize = bpb->SectorsPerTable * bpb->SectorSize;
     uint32_t fatCapacity = IsFat12()
-        ? ((fatSize / 3) * 2) - FIRST_CLUSTER
-        : (fatSize / 2) - FIRST_CLUSTER;
+        ? ((fatSize / 3) * 2) - CLUSTER_FIRST
+        : (fatSize / 2) - CLUSTER_FIRST;
 
     return fatCapacity;
 }
@@ -389,8 +412,7 @@ uint32_t FatDisk::CountFreeClusters() const
 {
     uint32_t free = 0;
     for (uint32_t i = 0; i < GetClusterCount(); i++) {
-        uint32_t cluster = GetCluster(FIRST_CLUSTER + i);
-        if (cluster == CLUSTER_FREE) {
+        if (IsClusterFree(CLUSTER_FIRST + i)) {
             free++;
         }
     }
@@ -402,8 +424,7 @@ uint32_t FatDisk::CountBadClusters() const
 {
     uint32_t bad = 0;
     for (uint32_t i = 0; i < GetClusterCount(); i++) {
-        uint32_t cluster = GetCluster(FIRST_CLUSTER + i);
-        if (cluster == CLUSTER_BAD) {
+        if (IsClusterBad(CLUSTER_FIRST + i)) {
             bad++;
         }
     }
@@ -411,9 +432,19 @@ uint32_t FatDisk::CountBadClusters() const
     return bad;
 }
 
+bool FatDisk::IsClusterBad(uint32_t index) const
+{
+    return GetCluster(index) == GetClusterBadNumber();
+}
+
+bool FatDisk::IsClusterFree(uint32_t index) const
+{
+    return GetCluster(index) == CLUSTER_FREE;
+}
+
 uint32_t FatDisk::MarkClusterBad(uint32_t index)
 {
-    return SetCluster(index, CLUSTER_BAD);
+    return SetCluster(index, GetClusterBadNumber());
 }
 
 uint32_t FatDisk::MarkClusterFree(uint32_t index)
@@ -421,8 +452,23 @@ uint32_t FatDisk::MarkClusterFree(uint32_t index)
     return SetCluster(index, CLUSTER_FREE);
 }
 
+uint32_t FatDisk::GetClusterEocNumber() const
+{
+    return IsFat12()
+        ? GetCluster12(m_Fat, 1)
+        : GetCluster16(m_Fat, 1);
+}
+
+uint32_t FatDisk::GetClusterBadNumber() const
+{
+    return IsFat12()
+        ? CLUSTER_BAD_12
+        : CLUSTER_BAD_16;
+}
+
 uint32_t FatDisk::GetCluster(uint32_t index) const
 {
+    // TODO: check limit violation
     return IsFat12()
         ? GetCluster12(m_Fat, index)
         : GetCluster16(m_Fat, index);
@@ -430,9 +476,17 @@ uint32_t FatDisk::GetCluster(uint32_t index) const
 
 uint32_t FatDisk::SetCluster(uint32_t index, uint32_t value)
 {
+    // TODO: check limit violation
     return IsFat12()
         ? SetCluster12(m_Fat, index, value)
         : SetCluster16(m_Fat, index, value);
+}
+
+bool FatDisk::IsEOC(int clustNum) const
+{
+    return IsFat12()
+        ? (clustNum >= CLUSTER_EOC_12_LO && clustNum <= CLUSTER_EOC_12_HI)
+        : (clustNum >= CLUSTER_EOC_16_LO && clustNum <= CLUSTER_EOC_16_HI);
 }
 
 bool FatDisk::ReadSector(char *dst, uint32_t index) const
@@ -440,7 +494,7 @@ bool FatDisk::ReadSector(char *dst, uint32_t index) const
     const uint32_t SectorSize = GetSectorSize();
     const uint32_t DiskSize = GetDiskSize();
 
-    uint32_t seekAddr = m_BaseAddr + (index * SectorSize);
+    uint32_t seekAddr = m_Base + (index * SectorSize);
     if (seekAddr + SectorSize > DiskSize) {
         LogError("attempt to read out-of-bounds sector (index = %d)\n", index);
         return false;
@@ -459,7 +513,7 @@ bool FatDisk::ReadCluster(char *dst, uint32_t index) const
     const uint32_t ClusterSize = GetClusterSize();
     const uint32_t DiskSize = GetDiskSize();
 
-    if ((index - FIRST_CLUSTER) > GetClusterCount()) {
+    if ((index - CLUSTER_FIRST) > GetClusterCount()) {
         LogError("attempt to read out-of-bounds cluster (index = %0*X)\n",
             IsFat12() ? 3 : 4,
             index);
@@ -471,9 +525,9 @@ bool FatDisk::ReadCluster(char *dst, uint32_t index) const
         (bpb->SectorsPerTable * bpb->TableCount) +
         Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
 
-    uint32_t seekAddr = m_BaseAddr +
+    uint32_t seekAddr = m_Base +
         (fsDataSectors * bpb->SectorSize) +
-        ((index - FIRST_CLUSTER) * ClusterSize);
+        ((index - CLUSTER_FIRST) * ClusterSize);
 
     assert(seekAddr + ClusterSize <= DiskSize);
 
@@ -487,9 +541,8 @@ Cleanup:
 
 bool FatDisk::ReadFile(char *dst, const DirEntry *file) const
 {
-    bool success = true;
-
     if (IsRoot(file)) {
+        bool success = true;
         const BiosParamBlock *bpb = GetBPB();
         int count = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
         int base = bpb->ReservedSectorCount + (bpb->SectorsPerTable * bpb->TableCount);
@@ -503,10 +556,21 @@ bool FatDisk::ReadFile(char *dst, const DirEntry *file) const
         return success;
     }
 
+    if (!IsValidFile(file) || (file->FirstCluster == 0 && file->FileSize != 0)) {
+        LogWarning("attempt to read a label, device, deleted, or invalid file\n");
+        return false;
+    }
+
+    if (file->FileSize == 0) {
+        dst[0] = '\0';
+        return true;
+    }
+
     uint32_t cluster = file->FirstCluster;
     int i = 0;
 
-    while (success && cluster != CLUSTER_EOC) {
+    bool success = true;
+    while (success && !IsEOC(cluster)) {
         success = ReadCluster(dst + (i * GetClusterSize()), cluster);
         cluster = GetCluster(cluster);
         i++;

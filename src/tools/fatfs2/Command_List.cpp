@@ -98,6 +98,8 @@ int List(const Command *cmd, const CommandArgs *args)
     }
 
     // TODO: split up function
+    // TODO: recurse
+    // TOOD: show allocation size (-s ?)
 
     bool success = true;
     char *fileBuf = NULL;
@@ -114,6 +116,7 @@ int List(const Command *cmd, const CommandArgs *args)
     }
 
     SafeRIF(disk->FindFile(&f, file), "file not found - %s\n", file);
+    SafeRIF(!IsLabel(&f) && !IsDeviceFile(&f), "not a file - %s\n", file);
 
     if (IsDirectory(&f)) {
         uint32_t size = disk->GetFileSize(&f);

@@ -97,7 +97,7 @@ int Info(const Command *cmd, const CommandArgs *args)
         assert(sectorCount == disk->GetSectorCount());
         assert(clusterCount == disk->GetClusterCount());
 
-        bool fat12 = clusterCount <= MAX_CLUSTER_12;
+        bool fat12 = clusterCount <= MAX_CLUSTERS_12;
 
         LogInfo("%s statistics:\n", GetFileName(path));
         LogInfo("%d %s, %d %s, %d %s per track\n",

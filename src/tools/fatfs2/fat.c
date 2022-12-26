@@ -118,20 +118,26 @@ inline void InitBootSector(
 // File Allocation Table
 // -----------------------------------------------------------------------------
 
-void InitFat12(char *fat, size_t sizeBytes, uint8_t mediaType)
+void InitFat12(char *fat, size_t sizeBytes, uint8_t mediaType, uint32_t eoc)
 {
     memset(fat, 0, sizeBytes);
 
-    SetCluster12(fat, 0, mediaType);
-    SetCluster12(fat, 1, CLUSTER_EOC);
+    assert((eoc & 0xFFF) >= CLUSTER_EOC_12_LO);
+    assert((eoc & 0xFFF) <= CLUSTER_EOC_12_HI);
+
+    SetCluster12(fat, 0, 0x0F00 | mediaType);
+    SetCluster12(fat, 1, eoc);
 }
 
-void InitFat16(char *fat, size_t sizeBytes, uint8_t mediaType)
+void InitFat16(char *fat, size_t sizeBytes, uint8_t mediaType, uint32_t eoc)
 {
     memset(fat, 0, sizeBytes);
 
-    SetCluster16(fat, 0, mediaType);
-    SetCluster16(fat, 1, CLUSTER_EOC);
+    assert((eoc & 0xFFFF) >= CLUSTER_EOC_16_LO);
+    assert((eoc & 0xFFFF) <= CLUSTER_EOC_16_HI);
+
+    SetCluster16(fat, 0, 0xFF00 | mediaType);
+    SetCluster16(fat, 1, eoc);  // TODO: flags in bits [15:14]
 }
 
 uint32_t GetCluster12(const char *fat, uint32_t index)
@@ -143,7 +149,9 @@ uint32_t GetCluster12(const char *fat, uint32_t index)
     //
 
     size_t i = index + (index / 2);
+    // printf("reading 12-bit FAT at offset %zu (cluster = %03X)\n", i, index);
     uint16_t pair = *((uint16_t *) &fat[i]);
+
     if (index & 1) {
         return pair >> 4;
     }
@@ -159,13 +167,14 @@ uint32_t GetCluster16(const char *fat, uint32_t index)
     //
 
     size_t i = index * 2;
+    // printf("reading 16-bit FAT at offset %zu (cluster = %04X)\n", i, index);
     return *((uint16_t *) &fat[i]);
 }
 
 uint32_t SetCluster12(char *fat, uint32_t index, uint32_t value)
 {
     size_t i = index + (index / 2);
-
+    // printf("writing 12-bit FAT at offset %zu (cluster = %03X)\n", i, index);
     uint16_t pair = *((uint16_t *) &fat[i]);
     if (index & 1) {
         value <<= 4;
@@ -183,6 +192,7 @@ uint32_t SetCluster12(char *fat, uint32_t index, uint32_t value)
 uint32_t SetCluster16(char *fat, uint32_t index, uint32_t value)
 {
     size_t i = index * 2;
+    // printf("writing 16-bit FAT at offset %zu (cluster = %04X)\n", i, index);
     *((uint16_t *) &fat[i]) = value;
     return value;
 }

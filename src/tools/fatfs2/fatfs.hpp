@@ -220,6 +220,8 @@ do {                                                                            
 ({                                                                              \
     void *_ptr = malloc(size);                                                  \
     SafeRIF(_ptr, "out of memory!\n");                                          \
+    LogVeryVerbose("alloc'd %zu bytes at address %p\n",                         \
+        (size_t) size, (void *) _ptr);                                          \
     _ptr;                                                                       \
 })
 
@@ -227,6 +229,7 @@ do {                                                                            
 ({                                                                              \
     if (ptr) {                                                                  \
         free(ptr);                                                              \
+        LogVeryVerbose("freed memory at address %p\n", (void *) ptr);           \
         (ptr) = NULL;                                                           \
     }                                                                           \
 })

@@ -9,6 +9,16 @@
 #ifndef FAT_H
 #define FAT_H
 
+// TODO: prefix functions with "Fat" or "Fat_" or "FAT_"
+// FatInitBootSector();
+// Fat_InitBootSector();
+// FAT_InitBootSector();
+//
+// FAT_NAME_LENGTH
+// FAT_MAX_NAME
+// FAT_SHORTNAME_LENGTH
+// FAT_CLUSTER_EOC_12
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -23,10 +33,14 @@ extern "C" {
 #include <string.h>
 #include <time.h>
 
+// -----------------------------------------------------------------------------
+// Buffer Lengths and Limits
+// -----------------------------------------------------------------------------
+
 #define NAME_LENGTH                 8
 #define EXTENSION_LENGTH            3
 #define LABEL_LENGTH                11
-#define SHORTNAME_LENGTH            (LABEL_LENGTH+1)
+#define SHORTNAME_LENGTH            (NAME_LENGTH+1+EXTENSION_LENGTH)
 #define LONGNAME_LENGTH             260
 
 #define MAX_NAME                    (NAME_LENGTH+1)
@@ -35,25 +49,29 @@ extern "C" {
 #define MAX_SHORTNAME               (SHORTNAME_LENGTH+1)
 #define MAX_LONGNAME                (LONGNAME_LENGTH+1)
 
-#define MEDIATYPE_1440K             0xF0
-#define MEDIATYPE_FIXED             0xF8
+// -----------------------------------------------------------------------------
+// BIOS Parameter Block Magic Numbers
+// -----------------------------------------------------------------------------
 
 #define BOOTSIG                     0xAA55
 #define BPBSIG_DOS40                0x28
 #define BPBSIG_DOS41                0x29
 
-#define FIRST_CLUSTER               2
-#define LAST_CLUSTER_12             0xFF6
-#define LAST_CLUSTER_16             0xFFF6
-#define MIN_CLUSTER_12              1
-#define MAX_CLUSTER_12              (LAST_CLUSTER_12-FIRST_CLUSTER)
-#define MIN_CLUSTER_16              (MAX_CLUSTER_12+1)
-#define MAX_CLUSTER_16              (LAST_CLUSTER_16-FIRST_CLUSTER)
+// -----------------------------------------------------------------------------
+// Media Type IDs
+// -----------------------------------------------------------------------------
 
-#define CLUSTER_FREE                0
-#define CLUSTER_RESERVED            1
-#define CLUSTER_BAD                 0xFFF7
-#define CLUSTER_EOC                 0xFFFF
+#define MEDIATYPE_1440K             0xF0
+#define MEDIATYPE_FIXED             0xF8
+
+// -----------------------------------------------------------------------------
+// Sector and Cluster Limits
+// -----------------------------------------------------------------------------
+
+#define MIN_CLUSTERS_12             1
+#define MAX_CLUSTERS_12             4084
+#define MIN_CLUSTERS_16             (MAX_CLUSTERS_12+1)
+#define MAX_CLUSTERS_16             65524
 
 #define MIN_SECTOR_SIZE             512
 #define MAX_SECTOR_SIZE             32768
@@ -61,8 +79,21 @@ extern "C" {
 #define MIN_SEC_PER_CLUST           1
 #define MAX_SEC_PER_CLUST           128
 
-static_assert(MAX_CLUSTER_12 == 4084, "Bad max FAT12 cluster size!");
-static_assert(MAX_CLUSTER_16 == 65524, "Bad max FAT16 cluster size!");
+// -----------------------------------------------------------------------------
+// Important Cluster Numbers
+// -----------------------------------------------------------------------------
+
+#define CLUSTER_FREE                0
+#define CLUSTER_RESERVED            1
+#define CLUSTER_FIRST               2
+#define CLUSTER_BAD_12              0xFF7
+#define CLUSTER_BAD_16              0xFFF7
+#define CLUSTER_EOC_12_LO           0xFF8
+#define CLUSTER_EOC_12_HI           0xFFF
+#define CLUSTER_EOC_12              (CLUSTER_EOC_12_HI)
+#define CLUSTER_EOC_16_LO           0xFFF8
+#define CLUSTER_EOC_16_HI           0xFFFF
+#define CLUSTER_EOC_16              (CLUSTER_EOC_16_HI)
 
 // -----------------------------------------------------------------------------
 // String Functions
@@ -187,8 +218,8 @@ void InitBootSector(
 // File Allocation Table
 // -----------------------------------------------------------------------------
 
-void InitFat12(char *fat, size_t sizeBytes, uint8_t mediaType);
-void InitFat16(char *fat, size_t sizeBytes, uint8_t mediaType);
+void InitFat12(char *fat, size_t sizeBytes, uint8_t mediaType, uint32_t eoc);
+void InitFat16(char *fat, size_t sizeBytes, uint8_t mediaType, uint32_t eoc);
 
 uint32_t GetCluster12(const char *fat, uint32_t index);
 uint32_t GetCluster16(const char *fat, uint32_t index);
@@ -377,6 +408,14 @@ static inline bool IsDeleted(const DirEntry *src)
 static inline bool IsFree(const DirEntry *src)
 {
     return IsDeleted(src) || src->Label[0] == 0x00;
+}
+
+static inline bool IsValidFile(const DirEntry *src)
+{
+    return !IsFree(src)
+        && !IsLongFileName(src)
+        && !IsDeviceFile(src)
+        && !IsLabel(src);
 }
 
 static inline bool IsRoot(const DirEntry *src)
