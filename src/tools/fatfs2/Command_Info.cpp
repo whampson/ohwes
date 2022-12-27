@@ -85,7 +85,7 @@ int Info(const Command *cmd, const CommandArgs *args)
         // Disk info
         const BiosParamBlock *bpb = disk->GetBPB();
         uint32_t sectorCount = (bpb->SectorCount) ? bpb->SectorCount : bpb->SectorCountLarge;
-        uint32_t rootSectorCount = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
+        uint32_t rootSectorCount = CeilDiv(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
         uint32_t dataSectors = sectorCount -
             (bpb->ReservedSectorCount + (bpb->SectorsPerTable * bpb->TableCount) + rootSectorCount);
         uint32_t clusterCount = dataSectors / bpb->SectorsPerCluster;

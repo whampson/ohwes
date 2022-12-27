@@ -53,7 +53,7 @@ bool FatDisk::CreateNew(const char *path, const BiosParamBlock *bpb, uint32_t se
     uint32_t fatSize = fatSectorCount * bpb->SectorSize;
     uint32_t fatCount = bpb->TableCount;
     uint32_t rootSize = bpb->RootDirCapacity * sizeof(DirEntry);
-    uint32_t rootSectorCount = Ceiling(rootSize, sectorSize);
+    uint32_t rootSectorCount = CeilDiv(rootSize, sectorSize);
     uint32_t dataSectors = sectorCount - (resSectorCount + (fatSectorCount * fatCount) + rootSectorCount);
     uint32_t clusters = dataSectors / sectorsPerCluster;
     uint32_t extraSectors = dataSectors - (clusters * sectorsPerCluster);
@@ -216,7 +216,7 @@ FatDisk * FatDisk::Open(const char *path, uint32_t sector)
     SafeRIF(bpb->TableCount > 0,
         "BPB is corrupt (FAT count = %d)\n", bpb->TableCount);
 
-    rootSectorCount = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), sectorSize);
+    rootSectorCount = CeilDiv(bpb->RootDirCapacity * sizeof(DirEntry), sectorSize);
 
     sectorBuf = SafeAlloc(sectorSize);
     fat = (char *) SafeAlloc(bpb->SectorsPerTable * sectorSize);
@@ -365,7 +365,7 @@ uint32_t FatDisk::GetClusterCount() const
     const BiosParamBlock *bpb = GetBPB();
     uint32_t fsDataSectors = bpb->ReservedSectorCount +
         (bpb->SectorsPerTable * bpb->TableCount) +
-        Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
+        CeilDiv(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
 
     return (GetSectorCount() - fsDataSectors) / bpb->SectorsPerCluster;
 }
@@ -512,7 +512,7 @@ bool FatDisk::ReadCluster(char *dst, uint32_t index) const
     const BiosParamBlock *bpb = GetBPB();
     uint32_t fsDataSectors = bpb->ReservedSectorCount +
         (bpb->SectorsPerTable * bpb->TableCount) +
-        Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
+        CeilDiv(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
 
     uint32_t seekAddr = m_Base +
         (fsDataSectors * bpb->SectorSize) +
@@ -536,7 +536,7 @@ bool FatDisk::ReadFile(char *dst, const DirEntry *file) const
 
         bool success = true;
         const BiosParamBlock *bpb = GetBPB();
-        int count = Ceiling(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
+        int count = CeilDiv(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
         int base = bpb->ReservedSectorCount + (bpb->SectorsPerTable * bpb->TableCount);
         int i = 0;
 
@@ -606,6 +606,8 @@ bool FatDisk::WalkPath(DirEntry *dst, char *path, const DirEntry *base) const
         if (IsFree(e) || IsLongFileName(e) || IsLabel(e)) {
             continue;
         }
+
+        // TODO: lfn
 
         char shortName[MAX_SHORTNAME];
         GetShortName(shortName, e);

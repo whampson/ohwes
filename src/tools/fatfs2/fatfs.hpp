@@ -80,9 +80,7 @@ static inline const char * GetFileName(const char *path)
 
 #define IsPow2(x)               (!((x) & ((x) - 1)))
 #define Align(x, n)             (((x) + (n) - 1) & ~((n) - 1))
-#define RoundDown(x, m)         (((x) / (m)) * (m))
-#define RoundUp(x, m)           ((((x) + (m) - 1) / (m)) * (m))
-#define Ceiling(x, y)           (((x) + (y) - 1) / (y))     // TODO: rename, cdiv?
+#define CeilDiv(x, y)           (((x) + (y) - 1) / (y))
 #define Min(x, y)               ((x) < (y) ? (x) : (y))
 #define Max(x, y)               ((x) > (y) ? (x) : (y))
 

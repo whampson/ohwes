@@ -172,13 +172,13 @@ int Create(const Command *cmd, const CommandArgs *args)
         LogVerbose("disabling alignment for small disk\n");
     }
 
+    int rootSectorCount = CeilDiv(rootDirCapacity * sizeof(DirEntry), sectorSize);
+    int sectorsUsed = rootSectorCount + reservedSectorCount;
+
     if (!noAlign) {
         sectorCount = Align(sectorCount, sectorsPerCluster);
-        rootDirCapacity = RoundUp(rootDirCapacity, sectorSize / sizeof(DirEntry));
+        rootDirCapacity = (rootSectorCount * sectorSize) / sizeof(DirEntry);
     }
-
-    int rootSectorCount = Ceiling(rootDirCapacity * sizeof(DirEntry), sectorSize);
-    int sectorsUsed = rootSectorCount + reservedSectorCount;
 
     int fatSize = 0;
     int clusters = 0;
