@@ -1,5 +1,9 @@
 #include "fat.h"
 
+#include <ctype.h>
+#include <stdio.h>
+#include <wchar.h>
+
 // -----------------------------------------------------------------------------
 // String Functions
 // -----------------------------------------------------------------------------
@@ -251,6 +255,7 @@ time_t GetCreationTime(struct tm *dst, const DirEntry *src)
     GetDate(dst, &src->CreationDate);
     GetTime(dst, &src->CreationTime);
     // TODO: include fine creation time
+    // need to find a way to get ms (platform independent)
 
     return mktime(dst);
 }
@@ -274,6 +279,8 @@ void SetCreationTime(DirEntry *dst, const struct tm *src)
 {
     SetDate(&dst->CreationDate, src);
     SetTime(&dst->CreationTime, src);
+    // TODO: include fine creation time
+    // need to find a way to get ms (platform independent)
 }
 
 void SetModifiedTime(DirEntry *dst, const struct tm *src)
@@ -316,7 +323,7 @@ char * GetShortName(char dst[MAX_SHORTNAME], const DirEntry *src)
 bool SetShortName(DirEntry *dst, const char *src)
 {
     char srcCopy[MAX_SHORTNAME];
-    memset(srcCopy, '\0', MAX_SHORTNAME);
+    memset(srcCopy, '\0', sizeof(srcCopy));
 
     char *name = srcCopy;
     char *ext = "";
@@ -324,9 +331,27 @@ bool SetShortName(DirEntry *dst, const char *src)
     size_t nameLen = 0;
     size_t extLen = 0;
 
-    for (int i = 0; i < SHORTNAME_LENGTH; i++) {
+    // trim leading spaces
+    while (isspace(*src)) {
+        src++;
+    }
+
+    // trim trailing spaces
+    const char *end = src + strlen(src) - 1;
+    while(end > src && isspace(*end)) {
+        end--;
+    }
+
+    size_t len = end - src + 1;
+    if (len == 0 || len > SHORTNAME_LENGTH) {
+        return false;
+    }
+
+    for (size_t i = 0; i < len; i++) {
         unsigned char c = src[i];
         if (c == '\0') break;
+
+        // Not Allowed: " * / : < > ? \ | + , . ; = [ ]
 
         bool valid = isalnum(c);
         valid |= (c > 0x7F);
@@ -377,6 +402,22 @@ bool SetShortName(DirEntry *dst, const char *src)
 // Long File Name
 // -----------------------------------------------------------------------------
 
+const int ChunkLength = 13;
+const int MaxChainLength = 20;
+const int Name1Length = 5;
+const int Name2Length = 6;
+const int Name3Length = 2;
+
+static void InitLongFileNameLink(LongFileName *lfnLink, int seq)
+{
+    memset(lfnLink, 0, sizeof(LongFileName));
+    memset(&lfnLink->Name1, 0xFF, sizeof(lfnLink->Name1));
+    memset(&lfnLink->Name1, 0xFF, sizeof(lfnLink->Name2));
+    memset(&lfnLink->Name1, 0xFF, sizeof(lfnLink->Name3));
+    lfnLink->Attributes = ATTR_LFN;
+    lfnLink->SequenceNumber = seq;
+}
+
 const DirEntry * GetLongName(wchar_t dst[MAX_LONGNAME], const DirEntry *srcTable)
 {
     const LongFileName *lfn = (const LongFileName *) srcTable;
@@ -384,11 +425,15 @@ const DirEntry * GetLongName(wchar_t dst[MAX_LONGNAME], const DirEntry *srcTable
         return srcTable;
     }
 
+    int len = 0;
     int count = 0;
-    do {
-        const int ChunkLength = 13;
-        const int MaxChainLength = 20;
 
+    uint8_t key = (uint8_t) (time(NULL) & 0xFF);
+    uint8_t cksum = key;
+    uint8_t lastsum = 0;
+    uint8_t compsum = 0;
+
+    do {
         // MS spec limits the chain length to 20, but theoretically we could
         // have 63 links in the chain given the number of bits available.
         // TODO: should we allow 63 links (total 819 chars)?
@@ -396,33 +441,141 @@ const DirEntry * GetLongName(wchar_t dst[MAX_LONGNAME], const DirEntry *srcTable
 
         int bucket = (lfn->SequenceNumber - 1) * ChunkLength;
         wchar_t *pChar = &dst[bucket];
+        bool nulSeen = false;
 
     #define YankChars(buf, n)                                               \
         for (int i = 0; i < (n); i++, pChar++) {                            \
+            if (nulSeen) break;                                             \
             *pChar = (wchar_t) (buf)[i];                                    \
-            if (*pChar != 0 && *pChar != 0xFFFF) count++;                   \
+            if (*pChar == 0) {                                              \
+                nulSeen = true;                                             \
+                break;                                                      \
+            }                                                               \
+            len++;                                                          \
         }                                                                   \
 
-        YankChars(lfn->Name1, 5);
-        YankChars(lfn->Name2, 6);
-        YankChars(lfn->Name3, 2);
+        YankChars(lfn->Name1, Name1Length);
+        YankChars(lfn->Name2, Name2Length);
+        YankChars(lfn->Name3, Name3Length);
 
     #undef YankChars
 
+        // The checksum byte in every LFN chain entry should match the computed
+        // checksum of the shortname entry that follows the chain. To check this
+        // efficiently, we're going to keep a rolling XOR of all the checksum
+        // bytes beginning with a "random" key. If the number of chain links is
+        // odd, we XOR the last checksum byte again. At the end, we should end
+        // up with the initial key if all the checksum bytes matched. We then
+        // re-compute the checksum of the shortname entry and compare this
+        // against the last checksum byte we saw (which should be valid given
+        // that our XOR test passed).
+
+        cksum ^= lfn->Checksum;
+        lastsum = lfn->Checksum;
+        count++;
+
     } while ((lfn++)->SequenceNumber > 1);
 
-    // TODO: checksum
+    if ((count & 1)) {
+        cksum ^= lastsum;
+    }
 
-    dst[count] = L'\0';
-    return (const DirEntry *) lfn;
+    // Grab the shortname entry and compute the checksum.
+    const DirEntry *e = (const DirEntry *) lfn;
+    compsum = GetShortNameChecksum(e);
+
+    if (cksum != key || (lastsum != compsum)) {
+        // Mismatch! Return empty string
+        len = 0;
+    }
+
+    dst[len] = L'\0';
+    return e;
 }
 
-const DirEntry * SetLongName(DirEntry *dstTable, wchar_t *src)
+bool SetLongName(DirEntry **ppDstTable, const wchar_t *src, const DirEntry *sfnEntry)
 {
-    (void) dstTable;
-    (void) src;
+    wchar_t srcCopy[MAX_LONGNAME];
+    memset(srcCopy, 0, sizeof(srcCopy));
 
-    assert(false);  // TODO
-    return NULL;
+    // trim leading spaces
+    while (iswspace(*src)) {
+        src++;
+    }
+
+    // trim trailing spaces and dots
+    const wchar_t *end = src + wcslen(src) - 1;
+    while(end > src && (iswspace(*end) || *end == L'.')) {
+        end--;
+    }
+
+    size_t len = end - src + 1;
+    if (len == 0 || len > LONGNAME_LENGTH) {
+        return false;
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        wchar_t c = src[i];
+        if (c == L'\0') break;
+
+        // Not Allowed: " * / : < > ? \ |
+
+        bool valid = isalnum(c);
+        valid |= (c == L' ');
+        valid |= (c > 0x7F);
+        valid |= (c != L'"' && c != L'*' && c != L'/' &&
+                  c != L':' && c != L'<' && c != L'>' &&
+                  c != L'?' && c != L'`' && c != L'|');
+
+        if (!valid) return false;
+        srcCopy[i] = c;
+    }
+
+    uint8_t cksum = GetShortNameChecksum(sfnEntry);
+
+    int linkCount = (len + ChunkLength - 1) / ChunkLength;
+    assert(linkCount <= MaxChainLength);
+
+    for (int seq = linkCount; seq > 0; seq--, (*ppDstTable)++) {
+        LongFileName *lfn = (LongFileName *) *ppDstTable;
+        InitLongFileNameLink(lfn, seq);
+        int bucket = (seq - 1) * ChunkLength;
+        if (seq == linkCount) {
+            lfn->FirstInChain = 1;
+        }
+        lfn->Checksum = cksum;
+
+        const wchar_t *pChar = &srcCopy[bucket];
+        bool nulSeen = false;
+
+    #define PutChars(buf, n)                                                \
+        for (int i = 0; i < (n); i++, pChar++) {                            \
+            if (nulSeen) break;                                             \
+            buf[i] = (uint16_t) *pChar;                                     \
+            if (*pChar == 0) break;                                         \
+        }                                                                   \
+
+        PutChars(lfn->Name1, Name1Length);
+        PutChars(lfn->Name2, Name2Length);
+        PutChars(lfn->Name3, Name3Length);
+
+    #undef PutChars
+
+    }
+
+    *((DirEntry *) *ppDstTable) = *sfnEntry;
+    return true;
 }
 
+uint8_t GetShortNameChecksum(const DirEntry *src)
+{
+    uint8_t sum = 0;
+    uint8_t *pChar = (uint8_t *) &src->Label;
+
+    for (int len = LABEL_LENGTH; len != 0; len--) {
+        // just a bit rotate right
+        sum = ((sum & 1) ? 0x80 : 0) + (sum >> 1) + *pChar++;
+    }
+
+    return sum;
+}

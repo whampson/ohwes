@@ -1,5 +1,5 @@
 /*******************************************************************************
- *    File: fat.hpp
+ *    File: fat.h
  *  Author: Wes Hampson
  * Created: 18 Nov 2022
  *
@@ -9,27 +9,14 @@
 #ifndef FAT_H
 #define FAT_H
 
-// TODO: prefix functions with "Fat" or "Fat_" or "FAT_"
-// FatInitBootSector();
-// Fat_InitBootSector();
-// FAT_InitBootSector();
-//
-// FAT_NAME_LENGTH
-// FAT_MAX_NAME
-// FAT_SHORTNAME_LENGTH
-// FAT_CLUSTER_EOC_12
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <assert.h>
 #include <inttypes.h>
-#include <ctype.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -41,7 +28,7 @@ extern "C" {
 #define EXTENSION_LENGTH            3
 #define LABEL_LENGTH                11
 #define SHORTNAME_LENGTH            (NAME_LENGTH+1+EXTENSION_LENGTH)
-#define LONGNAME_LENGTH             260
+#define LONGNAME_LENGTH             255
 
 #define MAX_NAME                    (NAME_LENGTH+1)
 #define MAX_EXTENSION               (EXTENSION_LENGTH+1)
@@ -253,7 +240,7 @@ typedef struct FatTime
 } FatTime;
 static_assert(sizeof(FatTime) == 2, "Bad FatTime size!");
 
-void GetDate(struct tm *dst, const FatDate *src);       // TODO: return dst?
+void GetDate(struct tm *dst, const FatDate *src);
 void SetDate(FatDate *dst, const struct tm *src);
 
 void GetTime(struct tm *dst, const FatTime *src);
@@ -325,7 +312,7 @@ char * GetShortName(char dst[MAX_SHORTNAME], const DirEntry *src);
 
 /**
  * Sets the short file name in a directory entry. Returns a boolean value
- * indicating whether the input string was a valid short name.
+ * indicating whether the input string is a valid short name.
  *
  * A short file name is limited to 8 characters, followed by an optional dot (.)
  * and an extension of up to 3 characters. This function will return false if
@@ -487,20 +474,43 @@ static_assert(offsetof(LongFileName, Name2) == 0x0E, "Bad Name2 offset!");
 static_assert(offsetof(LongFileName, FirstCluster) == 0x1A, "Bad FirstCluster offset!");
 static_assert(offsetof(LongFileName, Name3) == 0x1C, "Bad Name3 offset!");
 
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// WARNING: these functions will read AT MOST 19 * sizeof(DirEntry) bytes ahead
-// of the src pointer. Please ensure that src points to a buffer containing an
-// entire directory table (not a single DirEntry!) and that src points to the
-// first entry in an LFN chain. If successful, the advanced pointer, which
-// should point to the shortname DirEntry, will be returned. However, if the src
-// pointer is not a valid LFN chain first entry, src will be returned and dst
-// will be unmodified. If a checksum mismatch is found while reading the LFN,
-// dst will contain an empty string and a pointer to the shortname entry will
-// be returned.
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+/**
+ * Extracts a long file name from a directory table. Returns a pointer to the
+ * corresponding short name DirEntry.
+ *
+ * WARNING: this function will read AT MOST 19 * sizeof(DirEntry) bytes ahead
+ * of the src pointer. Please ensure that src points to a buffer containing an
+ * entire directory table (not a single DirEntry!) and that src points to the
+ * first entry in an LFN chain. If successful, the advanced pointer will be
+ * returned, which should point to the corresponding short name directory entry.
+ * However, if the src pointer is not a valid LFN chain first entry, src will
+ * be returned (not advanced) and dst will be unmodified. If a checksum
+ * mismatch is found while reading the LFN, dst will contain an empty string and
+ * the advanced pointer pointing to the short name entry will be returned.
+*/
 const DirEntry * GetLongName(wchar_t dst[MAX_LONGNAME], const DirEntry *srcTable);
-// const DirEntry * SetLongName(DirEntry *dstTable, wchar_t *src);
+
+/**
+ * Creates a long file name chain in a directory table, effectively setting the
+ * long file name for a particular DirEntry. Returns a boolean indicating
+ * whether the input string is a valid long file name. If successful, the
+ * destination pointer will be advanced and sfnEntry will be copied to the new
+ * pointer address. The directory table pointer and data will not be modified if
+ * the long file name is invalid. Please initialize sfnEntry and set the desired
+ * short file name before calling this function; it will NOT automatically pick
+ * a short name for you.
+ *
+ * WARNING: this function will write AT MOST 20 * sizeof(DirEntry) bytes ahead
+ * of the dst pointer. Please ensure that dst points to a buffer containing an
+ * entire directory table, not a single DirEntry!
+*/
+bool SetLongName(DirEntry **ppDstTable, const wchar_t *src, const DirEntry *sfnEntry);
+
+/**
+ * Computes a checksum of a short file name, used for validating long file name
+ * entries.
+*/
+uint8_t GetShortNameChecksum(const DirEntry *src);
 
 #ifdef __cplusplus
 }       // extern "C"
