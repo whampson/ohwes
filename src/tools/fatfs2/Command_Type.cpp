@@ -7,10 +7,6 @@ int Type(const Command *cmd, const CommandArgs *args)
     const char *path = NULL;
     const char *file = NULL;
 
-    bool showAll = false;
-    bool showAttr = false;
-    bool bareFormat = false;
-    bool shortNamesOnly = false;
     int sectorOffset = 0;
 
     static struct option LongOptions[] = {
@@ -27,7 +23,7 @@ int Type(const Command *cmd, const CommandArgs *args)
         int optIdx = 0;
         int c = getopt_long(
             args->Argc, args->Argv,
-            GLOBAL_OPTSTRING "aAbn",
+            GLOBAL_OPTSTRING,
             LongOptions, &optIdx);
 
         if (ProcessGlobalOption(c)) {
@@ -36,18 +32,6 @@ int Type(const Command *cmd, const CommandArgs *args)
         if (c == -1) break;
 
         switch (c) {
-            case 'a':
-                showAll = true;
-                break;
-            case 'A':
-                showAttr = true;
-                break;
-            case 'b':
-                bareFormat = true;
-                break;
-            case 'n':
-                shortNamesOnly = true;
-                break;
             case 'o':
                 sectorOffset = (unsigned int) strtol(optarg, NULL, 0);
                 break;
