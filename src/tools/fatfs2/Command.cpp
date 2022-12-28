@@ -38,6 +38,7 @@ static const Command s_pCommands[] = {
         "  -b                Bare format; print file names only\n"
         "  -n                Show short names only\n"
         // "  -r                List the contents of subdirectories\n"
+        "  -s                Show file allocation size\n"
         "  --offset=SECTOR   Read the file system from a specific sector on disk\n"
     },
     { Test,

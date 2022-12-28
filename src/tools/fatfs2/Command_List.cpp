@@ -11,6 +11,7 @@ int List(const Command *cmd, const CommandArgs *args)
     bool showAttr = false;
     bool bareFormat = false;
     bool shortNamesOnly = false;
+    bool showAllocSize = false;
     int sectorOffset = 0;
 
     static struct option LongOptions[] = {
@@ -27,7 +28,7 @@ int List(const Command *cmd, const CommandArgs *args)
         int optIdx = 0;
         int c = getopt_long(
             args->Argc, args->Argv,
-            GLOBAL_OPTSTRING "aAbn",
+            GLOBAL_OPTSTRING "aAbns",
             LongOptions, &optIdx);
 
         if (ProcessGlobalOption(c)) {
@@ -50,6 +51,9 @@ int List(const Command *cmd, const CommandArgs *args)
                 break;
             case 'o':
                 sectorOffset = (unsigned int) strtol(optarg, NULL, 0);
+                break;
+            case 's':
+                showAllocSize = true;
                 break;
             case 0: // long option
                 if (LongOptions[optIdx].flag != 0)
@@ -104,11 +108,16 @@ int List(const Command *cmd, const CommandArgs *args)
     bool success = true;
     char *fileBuf = NULL;
     const DirEntry *e = NULL;
-    int count = 0;
+    int dirEntryCount = 0;
     int fileCount = 0;
     int dirCount = 0;
-    int bytesFree = 0;
-    int bytesTotal = 0;
+    int numShown = 0;
+    size_t bytesFree = 0;
+    size_t bytesTotal = 0;
+    size_t bytesAllocd = 0;
+    size_t diskTotal = 0;
+    size_t fileSize = 0;
+    size_t fileAllocSize = 0;
     DirEntry f;
 
     if (file == NULL) {
@@ -124,14 +133,14 @@ int List(const Command *cmd, const CommandArgs *args)
 
         SafeRIF(disk->ReadFile(fileBuf, &f), "failed to read file - %s\n", file);
         e = (DirEntry *) fileBuf;
-        count = size / sizeof(DirEntry);
+        dirEntryCount = size / sizeof(DirEntry);
     }
     else {
         e = &f;
-        count = 1;
+        dirEntryCount = 1;
     }
 
-    for (int i = 0; i < count; i++, e++) {
+    for (int i = 0; i < dirEntryCount; i++, e++) {
         if (IsFree(e)) {
             continue;
         }
@@ -147,6 +156,7 @@ int List(const Command *cmd, const CommandArgs *args)
         char modDate[MAX_DATE];
         char modTime[MAX_TIME];
         char sizeOrType[MaxSizeOrType];
+        char allocSize[MaxSizeOrType];
         bool hasLfn = false;
 
         // get the LFN first because it'll move the DirEntry pointer
@@ -158,7 +168,7 @@ int List(const Command *cmd, const CommandArgs *args)
             const DirEntry *next = GetLongName(fullName, e);
             i += (int) (next - e);
             e = next;
-            hasLfn = true;
+            hasLfn = (fullName[0] != L'\0');
         }
 
         bool rdo = IsReadOnly(e);
@@ -187,6 +197,10 @@ int List(const Command *cmd, const CommandArgs *args)
             mbstowcs(fullName, shortName, MAX_SHORTNAME);
         }
 
+        if (showAllocSize) {
+            sprintf(allocSize, "");
+        }
+
         if (dev) {
             sprintf(sizeOrType, "<DEVICE>");
         }
@@ -199,10 +213,15 @@ int List(const Command *cmd, const CommandArgs *args)
             dirCount++;
         }
         else {
-            uint32_t size = disk->GetFileSize(e);
-            sprintf(sizeOrType, "%*u", MaxSizeOrType - 1, size);
-            bytesTotal += size;
             fileCount++;
+            fileSize = disk->GetFileSize(e);
+            bytesTotal += fileSize;
+            sprintf(sizeOrType, "%*zu", MaxSizeOrType - 1, fileSize);
+            if (showAllocSize) {
+                fileAllocSize = disk->GetFileAllocSize(e);
+                bytesAllocd += fileAllocSize;
+                sprintf(allocSize, "%*zu", MaxSizeOrType - 1, fileAllocSize);
+            }
         }
 
         char *ptr = lineBuf;
@@ -218,23 +237,45 @@ int List(const Command *cmd, const CommandArgs *args)
         }
 
         if (!bareFormat) {
-            ptr += sprintf(ptr, "%-*s%-*s  %-*s %s %s ",
+            ptr += sprintf(ptr, "%-*s%-*s  %-*s ",
                 (!lab) ? NAME_LENGTH + 1 : LABEL_LENGTH + 1,
                 (!lab) ? name : label,
                 (!lab) ? EXTENSION_LENGTH : 0,
                 (!lab) ? ext : "",
-                MaxSizeOrType - 1, sizeOrType,
+                MaxSizeOrType - 1, sizeOrType);
+
+            if (showAllocSize) {
+                ptr += sprintf(ptr, "%-*s ", MaxSizeOrType - 1, allocSize);
+            }
+
+            ptr += sprintf(ptr, "%s %s ",
                 modDate, modTime);
+
         }
 
         LogInfo("%s%ls\n", lineBuf, fullName);
+        numShown++;
     }
 
-    if (!bareFormat) {
-        bytesFree = disk->CountFreeClusters() * disk->GetClusterSize();
-        LogInfo("%10u %-5s %10u bytes\n",
+    if (bareFormat) goto Cleanup;
+    SafeRIF(numShown != 0, "file not found - %s\n", file);
+
+    bytesFree = disk->CountFreeClusters() * disk->GetClusterSize();
+    diskTotal = disk->GetClusterCount() * disk->GetClusterSize();
+
+    if (showAllocSize) {
+        int used = ((diskTotal - bytesFree) * 100) / diskTotal;
+        LogInfo("%10u %-5s %10zu bytes\n",
             PluralForPrintf(fileCount, "file"), bytesTotal);
-        LogInfo("%10u %-5s %10u bytes free\n",
+        LogInfo("%10u %-5s %10zu bytes allocated\n",
+            PluralForPrintf(dirCount, "dir"), bytesAllocd);
+        LogInfo("%16s %10zu bytes free\n", "", bytesFree);
+        LogInfo("%16s %10zu total disk space, %3d%% used\n", "", diskTotal, used);
+    }
+    else {
+        LogInfo("%10u %-5s %10zu bytes\n",
+            PluralForPrintf(fileCount, "file"), bytesTotal);
+        LogInfo("%10u %-5s %10zu bytes free\n",
             PluralForPrintf(dirCount, "dir"), bytesFree);
     }
 
