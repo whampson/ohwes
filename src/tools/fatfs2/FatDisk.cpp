@@ -1,5 +1,7 @@
 #include "FatDisk.hpp"
 
+#include <wchar.h>
+
 bool FatDisk::CreateNew(const char *path, const BiosParamBlock *bpb)
 {
     return CreateNew(path, bpb, 0);
@@ -581,38 +583,54 @@ bool FatDisk::FindFile(DirEntry *dst, const char *path) const
 
 bool FatDisk::WalkPath(DirEntry *dst, char *path, const DirEntry *base) const
 {
+    wchar_t wNameToFind[MAX_PATH];
     char *nameToFind = strtok(path, "/\\");
+
     if (nameToFind == NULL) {
         memcpy(dst, base, sizeof(DirEntry));
         return true;
     }
 
     if (base == NULL || !IsDirectory(base)) {
-        LogError("attempt to walk path on non-directory\n");
         return false;
     }
 
     int count = GetFileSize(base) / sizeof(DirEntry);
 
     bool success = false;
-    DirEntry *e = NULL;
+    const DirEntry *e = NULL;
     DirEntry *dirTable = NULL;
+
+    mbstowcs(wNameToFind, nameToFind, MAX_PATH);
 
     dirTable = (DirEntry *) SafeAlloc(count * sizeof(DirEntry));
     SafeRIF(ReadFile((char *) dirTable, base), "failed to read directory\n");
 
     e = dirTable;
     for (int i = 0; i < count; i++, e++) {
-        if (IsFree(e) || IsLongFileName(e) || IsLabel(e)) {
+        if (IsFree(e) || IsLabel(e)) {
             continue;
         }
 
-        // TODO: lfn
+        wchar_t longName[MAX_LONGNAME];
+        longName[0] = L'\0';
+
+        if (IsLongFileName(e)) {
+            const DirEntry *next = GetLongName(longName, e);
+            i += (int) (next - e);
+            e = next;
+        }
+        bool hasLfn = (longName[0] != L'\0');
 
         char shortName[MAX_SHORTNAME];
         GetShortName(shortName, e);
 
         if (strncasecmp(shortName, nameToFind, MAX_SHORTNAME) == 0) {
+            success = WalkPath(dst, NULL, e); // NULL for recursive call
+            break;
+        }
+
+        if (hasLfn && wcsncmp(longName, wNameToFind, MAX_LONGNAME) == 0) {
             success = WalkPath(dst, NULL, e); // NULL for recursive call
             break;
         }
