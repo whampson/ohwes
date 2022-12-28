@@ -309,24 +309,24 @@ uint32_t FatDisk::GetDiskSize() const
     return GetSectorCount() * GetSectorSize();
 }
 
-uint32_t FatDisk::GetFileSize(const DirEntry *file) const
+uint32_t FatDisk::GetFileSize(const DirEntry *pFile) const
 {
-    return IsDirectory(file)
-        ? GetFileAllocSize(file)
-        : file->FileSize;
+    return IsDirectory(pFile)
+        ? GetFileAllocSize(pFile)
+        : pFile->FileSize;
 }
 
-uint32_t FatDisk::GetFileAllocSize(const DirEntry *file) const
+uint32_t FatDisk::GetFileAllocSize(const DirEntry *pFile) const
 {
-    if (IsRoot(file)) {
+    if (IsRoot(pFile)) {
         return GetRootCapacity() * sizeof(DirEntry);
     }
 
-    if (!IsValidFile(file) || file->FirstCluster == 0) {
+    if (!IsValidFile(pFile) || pFile->FirstCluster == 0) {
         return 0;
     }
 
-    return CountClusters(file) * GetClusterSize();
+    return CountClusters(pFile) * GetClusterSize();
 }
 
 uint32_t FatDisk::GetSectorSize() const
@@ -414,14 +414,14 @@ uint32_t FatDisk::CountBadClusters() const
     return bad;
 }
 
-uint32_t FatDisk::CountClusters(const DirEntry *file) const
+uint32_t FatDisk::CountClusters(const DirEntry *pFile) const
 {
-    if (IsRoot(file)) {
+    if (IsRoot(pFile)) {
         return 0;
     }
 
     uint32_t count = 0;
-    uint32_t cluster = file->FirstCluster;
+    uint32_t cluster = pFile->FirstCluster;
 
     do {
         count++;
@@ -488,7 +488,7 @@ bool FatDisk::IsEOC(int clustNum) const
         : (clustNum >= CLUSTER_EOC_16_LO && clustNum <= CLUSTER_EOC_16_HI);
 }
 
-bool FatDisk::ReadSector(char *dst, uint32_t index) const
+bool FatDisk::ReadSector(char *pBuf, uint32_t index) const
 {
     const uint32_t SectorSize = GetSectorSize();
     const uint32_t DiskSize = GetDiskSize();
@@ -501,13 +501,13 @@ bool FatDisk::ReadSector(char *dst, uint32_t index) const
 
     bool success = true;
     fseek(m_File, seekAddr, SEEK_SET);
-    SafeRead(m_File, dst, SectorSize);
+    SafeRead(m_File, pBuf, SectorSize);
 
 Cleanup:
     return success;
 }
 
-bool FatDisk::ReadCluster(char *dst, uint32_t index) const
+bool FatDisk::ReadCluster(char *pBuf, uint32_t index) const
 {
     const uint32_t ClusterSize = GetClusterSize();
     const uint32_t DiskSize = GetDiskSize();
@@ -533,15 +533,15 @@ bool FatDisk::ReadCluster(char *dst, uint32_t index) const
     bool success = true;
     LogVeryVerbose("reading cluster %0*X...\n", IsFat12() ? 3 : 4, index);
     fseek(m_File, seekAddr, SEEK_SET);
-    SafeRead(m_File, dst, ClusterSize);
+    SafeRead(m_File, pBuf, ClusterSize);
 
 Cleanup:
     return success;
 }
 
-bool FatDisk::ReadFile(char *dst, const DirEntry *file) const
+bool FatDisk::ReadFile(char *pBuf, const DirEntry *pFile) const
 {
-    if (IsRoot(file)) {
+    if (IsRoot(pFile)) {
         LogVeryVerbose("reading root directory...\n");
 
         bool success = true;
@@ -551,7 +551,7 @@ bool FatDisk::ReadFile(char *dst, const DirEntry *file) const
         int i = 0;
 
         while (success && i < count) {
-            success = ReadSector(dst + (i * GetSectorSize()), base + i);
+            success = ReadSector(pBuf + (i * GetSectorSize()), base + i);
             i++;
         }
 
@@ -559,20 +559,20 @@ bool FatDisk::ReadFile(char *dst, const DirEntry *file) const
     }
 
     char sfn[MAX_SHORTNAME];
-    GetShortName(sfn, file);
+    GetShortName(sfn, pFile);
     LogVeryVerbose("reading file '%s'...\n", sfn);
 
-    if (!IsValidFile(file) || (file->FirstCluster == 0 && file->FileSize != 0)) {
+    if (!IsValidFile(pFile) || (pFile->FirstCluster == 0 && pFile->FileSize != 0)) {
         LogError("attempt to read a label, device, deleted, or invalid file\n");
         return false;
     }
 
-    uint32_t cluster = file->FirstCluster;
+    uint32_t cluster = pFile->FirstCluster;
     int i = 0;
 
     bool success = true;
     while (success && !IsEOC(cluster)) {
-        success = ReadCluster(dst + (i * GetClusterSize()), cluster);
+        success = ReadCluster(pBuf + (i * GetClusterSize()), cluster);
         cluster = GetCluster(cluster);
         i++;
     }
@@ -580,68 +580,88 @@ bool FatDisk::ReadFile(char *dst, const DirEntry *file) const
     return success;
 }
 
-bool FatDisk::FindFile(DirEntry *dst, const char *path) const
+bool FatDisk::FindFile(DirEntry *pFile, DirEntry *pParent, const char *path) const
 {
     char pathCopy[MAX_PATH];
     strncpy(pathCopy, path, MAX_PATH);
 
     DirEntry root = GetRootDirEntry();
-    return WalkPath(dst, pathCopy, &root);
+    return WalkPath(pFile, pParent, pathCopy, &root);
 }
 
-bool FatDisk::WalkPath(DirEntry *dst, char *path, const DirEntry *base) const
+bool FatDisk::FindFileInDir(const DirEntry **ppFile, const DirEntry *pDirTable,
+    uint32_t sizeBytes, const char *name) const
 {
-    wchar_t wNameToFind[MAX_PATH];
-    char *nameToFind = strtok(path, "/\\");
+    wchar_t wName[MAX_PATH];
+    mbstowcs(wName, name, MAX_PATH);
 
-    if (nameToFind == NULL) {
-        memcpy(dst, base, sizeof(DirEntry));
-        return true;
-    }
+    const DirEntry *e = pDirTable;
+    int count = sizeBytes / sizeof(DirEntry);
 
-    if (base == NULL || !IsDirectory(base)) {
-        return false;
-    }
-
-    int count = GetFileSize(base) / sizeof(DirEntry);
-
-    bool success = false;
-    const DirEntry *e = NULL;
-    DirEntry *dirTable = NULL;
-
-    mbstowcs(wNameToFind, nameToFind, MAX_PATH);
-
-    dirTable = (DirEntry *) SafeAlloc(count * sizeof(DirEntry));
-    SafeRIF(ReadFile((char *) dirTable, base), "failed to read directory\n");
-
-    e = dirTable;
     for (int i = 0; i < count; i++, e++) {
-        if (IsFree(e) || IsLabel(e)) {
+        if (IsFree(e) /*|| IsLabel(e)*/) {
             continue;
         }
 
+        char shortName[MAX_SHORTNAME];
         wchar_t longName[MAX_LONGNAME];
         longName[0] = L'\0';
 
         if (IsLongFileName(e)) {
-            const DirEntry *next = GetLongName(longName, e);
-            i += (int) (next - e);
-            e = next;
+            const DirEntry *sfnEntry = GetLongName(longName, e);
+            i += (int) (sfnEntry - e);
+            e = sfnEntry;
         }
-        bool hasLfn = (longName[0] != L'\0');
 
-        char shortName[MAX_SHORTNAME];
+        bool hasLfn = (longName[0] != L'\0');
         GetShortName(shortName, e);
 
-        if (strncasecmp(shortName, nameToFind, MAX_SHORTNAME) == 0) {
-            success = WalkPath(dst, NULL, e); // NULL for recursive call
-            break;
+        if (strncasecmp(shortName, name, MAX_SHORTNAME) == 0) {
+            *ppFile = e;
+            return true;
         }
 
-        if (hasLfn && wcsncmp(longName, wNameToFind, MAX_LONGNAME) == 0) {
-            success = WalkPath(dst, NULL, e); // NULL for recursive call
-            break;
+        if (hasLfn && wcsncmp(longName, wName, MAX_LONGNAME) == 0) {
+            *ppFile = e;
+            return true;
         }
+    }
+
+    return false;
+}
+
+bool FatDisk::WalkPath(DirEntry *pFile, DirEntry *pParent,
+    char *path, const DirEntry *pBase) const
+{
+    char *nameToFind = strtok(path, "/\\");
+
+    if (nameToFind == NULL) {
+        if (pFile != NULL) {
+            memcpy(pFile, pBase, sizeof(DirEntry));
+        }
+        return true;
+    }
+
+    if (pBase == NULL || !IsDirectory(pBase)) {
+        return false;
+    }
+
+    if (pParent != NULL) {
+        memcpy(pParent, pBase, sizeof(DirEntry));
+    }
+
+    bool success = false;
+    const DirEntry *found = NULL;
+    DirEntry *dirTable = NULL;
+    uint32_t sizeBytes;
+
+    sizeBytes = GetFileAllocSize(pBase);
+    dirTable = (DirEntry *) SafeAlloc(sizeBytes);
+    SafeRIF(ReadFile((char *) dirTable, pBase), "failed to read directory\n");
+
+    success = FindFileInDir(&found, dirTable, sizeBytes, nameToFind);
+    if (success) {
+        success = WalkPath(pFile, pParent, NULL, found);  // NULL for recursive call
     }
 
 Cleanup:

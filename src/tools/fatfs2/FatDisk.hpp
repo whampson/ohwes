@@ -17,8 +17,8 @@ public:
     const BiosParamBlock * GetBPB() const;
 
     uint32_t GetDiskSize() const;
-    uint32_t GetFileSize(const DirEntry *file) const;
-    uint32_t GetFileAllocSize(const DirEntry *file) const;
+    uint32_t GetFileSize(const DirEntry *pFile) const;
+    uint32_t GetFileAllocSize(const DirEntry *pFile) const;
 
     uint32_t GetSectorSize() const;
     uint32_t GetSectorCount() const;
@@ -29,12 +29,12 @@ public:
 
     uint32_t CountFreeClusters() const;
     uint32_t CountBadClusters() const;
-    uint32_t CountClusters(const DirEntry *file) const;
+    uint32_t CountClusters(const DirEntry *pFile) const;
+
+    bool IsEOC(int clustNum) const;
 
     bool IsClusterBad(uint32_t index) const;
     bool IsClusterFree(uint32_t index) const;
-
-    bool IsEOC(int clustNum) const;
 
     // Danger area!
     uint32_t MarkClusterBad(uint32_t index);
@@ -43,11 +43,13 @@ public:
     uint32_t GetCluster(uint32_t index) const;
     uint32_t SetCluster(uint32_t index, uint32_t value);
 
-    bool ReadSector(char *dst, uint32_t index) const;
-    bool ReadCluster(char *dst, uint32_t index) const;
-    bool ReadFile(char *dst, const DirEntry *file) const;
+    bool ReadSector(char *pBuf, uint32_t index) const;
+    bool ReadCluster(char *pBuf, uint32_t index) const;
+    bool ReadFile(char *pBuf, const DirEntry *pFile) const;
 
-    bool FindFile(DirEntry *dst, const char *path) const;
+    bool FindFile(DirEntry *pFile, DirEntry *pParent, const char *path) const;
+    bool FindFileInDir(const DirEntry **ppFile, const DirEntry *pDirTable,
+        uint32_t sizeBytes, const char *path) const;
 
     ~FatDisk();
 
@@ -69,7 +71,8 @@ private:
     uint32_t GetClusterBadNumber() const;
     DirEntry GetRootDirEntry() const;
 
-    bool WalkPath(DirEntry *out, char *path, const DirEntry *base) const;
+    bool WalkPath(DirEntry *pFile, DirEntry *pParent, char *path,
+        const DirEntry *pBase) const;
 };
 
 #endif // FATDISK_HPP
