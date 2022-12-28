@@ -309,33 +309,24 @@ uint32_t FatDisk::GetDiskSize() const
     return GetSectorCount() * GetSectorSize();
 }
 
-uint32_t FatDisk::GetFileSize(const DirEntry *f) const
+uint32_t FatDisk::GetFileSize(const DirEntry *file) const
 {
-    return IsDirectory(f)
-        ? GetFileAllocSize(f)
-        : f->FileSize;
+    return IsDirectory(file)
+        ? GetFileAllocSize(file)
+        : file->FileSize;
 }
 
-uint32_t FatDisk::GetFileAllocSize(const DirEntry *f) const
+uint32_t FatDisk::GetFileAllocSize(const DirEntry *file) const
 {
-    if (IsRoot(f)) {
+    if (IsRoot(file)) {
         return GetRootCapacity() * sizeof(DirEntry);
     }
 
-    if (!IsValidFile(f) || f->FirstCluster == 0) {
+    if (!IsValidFile(file) || file->FirstCluster == 0) {
         return 0;
     }
 
-    uint32_t size = 0;
-    uint32_t cluster = f->FirstCluster;
-
-    // count the number of clusters in the chain
-    do {
-        size += GetClusterSize();
-        cluster = GetCluster(cluster);
-    } while (!IsEOC(cluster));
-
-    return size;
+    return CountClusters(file) * GetClusterSize();
 }
 
 uint32_t FatDisk::GetSectorSize() const
@@ -421,6 +412,23 @@ uint32_t FatDisk::CountBadClusters() const
     }
 
     return bad;
+}
+
+uint32_t FatDisk::CountClusters(const DirEntry *file) const
+{
+    if (IsRoot(file)) {
+        return 0;
+    }
+
+    uint32_t count = 0;
+    uint32_t cluster = file->FirstCluster;
+
+    do {
+        count++;
+        cluster = GetCluster(cluster);
+    } while (!IsEOC(cluster));
+
+    return count;
 }
 
 bool FatDisk::IsClusterBad(uint32_t index) const

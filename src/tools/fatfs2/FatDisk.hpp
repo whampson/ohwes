@@ -17,8 +17,8 @@ public:
     const BiosParamBlock * GetBPB() const;
 
     uint32_t GetDiskSize() const;
-    uint32_t GetFileSize(const DirEntry *f) const;
-    uint32_t GetFileAllocSize(const DirEntry *f) const;
+    uint32_t GetFileSize(const DirEntry *file) const;
+    uint32_t GetFileAllocSize(const DirEntry *file) const;
 
     uint32_t GetSectorSize() const;
     uint32_t GetSectorCount() const;
@@ -29,9 +29,12 @@ public:
 
     uint32_t CountFreeClusters() const;
     uint32_t CountBadClusters() const;
+    uint32_t CountClusters(const DirEntry *file) const;
 
     bool IsClusterBad(uint32_t index) const;
     bool IsClusterFree(uint32_t index) const;
+
+    bool IsEOC(int clustNum) const;
 
     // Danger area!
     uint32_t MarkClusterBad(uint32_t index);
@@ -65,8 +68,6 @@ private:
     uint32_t GetClusterEocNumber() const;
     uint32_t GetClusterBadNumber() const;
     DirEntry GetRootDirEntry() const;
-
-    bool IsEOC(int clustNum) const;
 
     bool WalkPath(DirEntry *out, char *path, const DirEntry *base) const;
 };
