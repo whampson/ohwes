@@ -2,6 +2,17 @@
 #include "FatDisk.hpp"
 
 static const Command s_pCommands[] = {
+    { Attr,
+        "attr", PROG_NAME " attr DISK [OPTIONS] FILE",
+        "View or change file attributes",
+        "  -a, -A            Set/clear the ARCHIVE bit\n"
+        "  -h, -H            Set/clear the HIDDEN bit\n"
+        // "  -l, -L            Set/clear the VOLUME_LABEL bit\n"
+        "  -r, -R            Set/clear the READONLY bit\n"
+        "  -s, -S            Set/clear the SYSTEM bit\n"
+        "  -v, -V            Set/clear the DEVICE bit\n"
+        "  --offset=SECTOR   Read the file system from a specific sector on disk\n"
+    },
     { Create,   // similar to mkdosfs
         "create", PROG_NAME " create [OPTIONS] DISK [NSECTORS]",
         "Create a new FAT file system on the specified disk",
@@ -45,6 +56,12 @@ static const Command s_pCommands[] = {
         "test", PROG_NAME " test",
         "Run the test suite",
         NULL
+    },
+    { Touch,
+        "touch", PROG_NAME " touch DISK [OPTIONS] FILE",
+        "Change file access and modification times",
+        "  -a                Change file access time only"
+        "  -m                Change file modification time only"
     },
     { Type,
         "type", PROG_NAME " type DISK FILE",

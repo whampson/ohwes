@@ -31,7 +31,13 @@ public:
     uint32_t CountBadClusters() const;
     uint32_t CountClusters(const DirEntry *pFile) const;
 
-    bool IsEOC(int clustNum) const;
+    uint32_t FindNextFreeCluster() const;
+
+    bool IsEOC(uint32_t clustNum) const;
+    // bool IsClusterNumberBad(uint32_t clustNum) const;
+    // bool IsClusterNumberReserved(uint32_t clustNum) const;
+    // bool GetClusterNumberEOC() const;
+    // bool GetClusterNumberBad() const;
 
     bool IsClusterBad(uint32_t index) const;
     bool IsClusterFree(uint32_t index) const;
@@ -47,9 +53,13 @@ public:
     bool ReadCluster(char *pBuf, uint32_t index) const;
     bool ReadFile(char *pBuf, const DirEntry *pFile) const;
 
+    bool WriteSector(uint32_t index, const char *pBuf) const;
+    bool WriteCluster(uint32_t index, const char *pBuf) const;
+    bool WriteFile(DirEntry *pFile, const char *pBuf, uint32_t sizeBytes);
+
     bool FindFile(DirEntry *pFile, DirEntry *pParent, const char *path) const;
-    bool FindFileInDir(const DirEntry **ppFile, const DirEntry *pDirTable,
-        uint32_t sizeBytes, const char *path) const;
+    bool FindFileInDir(DirEntry **ppFile, const DirEntry *pDirTable,
+        uint32_t sizeBytes, const char *name) const;
 
     ~FatDisk();
 

@@ -124,7 +124,7 @@ int List(const Command *cmd, const CommandArgs *args)
         file = "/";
     }
 
-    SafeRIF(disk->FindFile(&f, file), "file not found - %s\n", file);
+    SafeRIF(disk->FindFile(&f, NULL, file), "file not found - %s\n", file);
     SafeRIF(!IsDeviceFile(&f), "'%s' is a device file\n", file);
 
     if (IsDirectory(&f)) {
@@ -138,6 +138,7 @@ int List(const Command *cmd, const CommandArgs *args)
     else {
         e = &f;
         dirEntryCount = 1;
+        showAll = 1;    // always show listing for a single file
     }
 
     for (int i = 0; i < dirEntryCount; i++, e++) {
@@ -227,10 +228,10 @@ int List(const Command *cmd, const CommandArgs *args)
         char *ptr = lineBuf;
         if (showAttr) {
             ptr += sprintf(ptr, "%c%c%c%c%c%c%c ",
+                lab ? 'L' : '-',    // TODO: keep showing this?
                 dev ? 'V' : '-',    // probably won't ever show up in a normal disk
-                arc ? 'A' : '-',
                 dir ? 'D' : '-',
-                lab ? 'L' : '-',
+                arc ? 'A' : '-',
                 sys ? 'S' : '-',
                 hid ? 'H' : '-',
                 rdo ? 'R' : '-');

@@ -29,7 +29,7 @@ const Command * FindCommand(const char *name);
 int PrintCommandHelp(const Command *cmd);
 
 // int Add(const Command *cmd, const CommandArgs *args);
-// int Attr(const Command *cmd, const CommandArgs *args);
+int Attr(const Command *cmd, const CommandArgs *args);
 int Create(const Command *cmd, const CommandArgs *args);
 // int Copy(const Command *cmd, const CommandArgs *args);
 // int Extract(const Command *cmd, const CommandArgs *args);
@@ -41,7 +41,7 @@ int List(const Command *cmd, const CommandArgs *args);
 // int Remove(const Command *cmd, const CommandArgs *args);
 // int Rename(const Command *cmd, const CommandArgs *args);
 int Test(const Command *cmd, const CommandArgs *args);
-// int Touch(const Command *cmd, const CommandArgs *args);
+int Touch(const Command *cmd, const CommandArgs *args);
 int Type(const Command *cmd, const CommandArgs *args);
 
 #endif  // COMMAND_HPP

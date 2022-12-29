@@ -68,11 +68,14 @@ static void PrintFileInfo(const FatDisk *disk, const DirEntry *pFile)
     GetShortName(shortNameBuf, pFile);
 
     LogInfo("%s statistics:\n", shortNameBuf);
-    LogInfo(" File size: %u %s\n",
-        PluralForPrintf(disk->GetFileSize(pFile), "byte"));
-    LogInfo("Alloc size: %u bytes (%d %s)\n",
-        disk->GetFileAllocSize(pFile),
-        PluralForPrintf(disk->CountClusters(pFile), "cluster"));
+
+    if (!IsDeviceFile(pFile) && !IsLabel(pFile)) {
+        LogInfo(" File size: %u %s\n",
+            PluralForPrintf(disk->GetFileSize(pFile), "byte"));
+        LogInfo("Alloc size: %u bytes (%d %s)\n",
+            disk->GetFileAllocSize(pFile),
+            PluralForPrintf(disk->CountClusters(pFile), "cluster"));
+    }
 
     GetCreationTime(timestamp, pFile);
     FormatDate(dateBuf, timestamp);
@@ -88,34 +91,37 @@ static void PrintFileInfo(const FatDisk *disk, const DirEntry *pFile)
     FormatDate(dateBuf, timestamp);
     LogInfo("  Accessed: %s\n", dateBuf);
 
-    LogInfo("Attributes: ");
-    if (HasAttribute(pFile, ATTR_READONLY)) LogInfo("Read-Only,");
-    if (HasAttribute(pFile, ATTR_HIDDEN))   LogInfo("Hidden, ");
-    if (HasAttribute(pFile, ATTR_SYSTEM))   LogInfo("System, ");
-    if (HasAttribute(pFile, ATTR_DIRECTORY))LogInfo("Directory, ");
-    if (HasAttribute(pFile, ATTR_DEVICE))   LogInfo("Device File, ");
-    if (HasAttribute(pFile, ATTR_ARCHIVE))  LogInfo("Achive, ");
+    LogInfo("Attributes:\n");
+    if (HasAttribute(pFile, ATTR_READONLY)) LogInfo("    Read-Only\n");
+    if (HasAttribute(pFile, ATTR_HIDDEN))   LogInfo("    Hidden\n");
+    if (HasAttribute(pFile, ATTR_SYSTEM))   LogInfo("    System\n");
+    if (HasAttribute(pFile, ATTR_ARCHIVE))  LogInfo("    Archive\n");
+    if (HasAttribute(pFile, ATTR_DIRECTORY))LogInfo("    Directory\n");
+    if (HasAttribute(pFile, ATTR_DEVICE))   LogInfo("    Device File\n");
+    if (HasAttribute(pFile, ATTR_LABEL))    LogInfo("    Volume Label\n");
 
-    LogInfo("\n  Clusters:\n");
-    cluster = pFile->FirstCluster;
-    index = 0;
+    if (!IsDeviceFile(pFile) && !IsLabel(pFile)) {
+        LogInfo("  Clusters:\n");
+        cluster = pFile->FirstCluster;
+        index = 0;
 
-    ptr = lineBuf;
-    ptr += sprintf(lineBuf, "    ");
+        ptr = lineBuf;
+        ptr += sprintf(lineBuf, "    ");
 
-    do {
-        if (index != 0 && (index % 8) == 0) {
+        do {
+            if (index != 0 && (index % 8) == 0) {
+                LogInfo("%s\n", lineBuf);
+                ptr = lineBuf;
+                ptr += sprintf(lineBuf, "    ");
+            }
+            ptr += sprintf(ptr, "%04X ", cluster);
+            cluster = disk->GetCluster(cluster);
+            index++;
+        } while (!disk->IsEOC(cluster));
+
+        if ((index % 8) != 0) {
             LogInfo("%s\n", lineBuf);
-            ptr = lineBuf;
-            ptr += sprintf(lineBuf, "    ");
         }
-        ptr += sprintf(ptr, "%04X ", cluster);
-        cluster = disk->GetCluster(cluster);
-        index++;
-    } while (!disk->IsEOC(cluster));
-
-    if ((index % 8) != 0) {
-        LogInfo("%s\n", lineBuf);
     }
 }
 
@@ -208,7 +214,7 @@ int Info(const Command *cmd, const CommandArgs *args)
         DirEntry f;
         const DirEntry *pFile = &f;
 
-        SafeRIF(disk->FindFile(&f, file), "file not found - %s\n", file);
+        SafeRIF(disk->FindFile(&f, NULL, file), "file not found - %s\n", file);
 
         if (IsRoot(pFile)) {
             PrintDiskInfo(path, disk);

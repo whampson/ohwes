@@ -1,12 +1,14 @@
 #include "Command.hpp"
 #include "FatDisk.hpp"
 
-int Type(const Command *cmd, const CommandArgs *args)
+int Touch(const Command *cmd, const CommandArgs *args)
 {
     (void) cmd;
     const char *path = NULL;
     const char *file = NULL;
 
+    int accTime = 1;
+    int modTime = 1;
     int sectorOffset = 0;
 
     static struct option LongOptions[] = {
@@ -23,7 +25,7 @@ int Type(const Command *cmd, const CommandArgs *args)
         int optIdx = 0;
         int c = getopt_long(
             args->Argc, args->Argv,
-            GLOBAL_OPTSTRING,
+            GLOBAL_OPTSTRING "am",
             LongOptions, &optIdx);
 
         if (ProcessGlobalOption(c)) {
@@ -32,6 +34,12 @@ int Type(const Command *cmd, const CommandArgs *args)
         if (c == -1) break;
 
         switch (c) {
+            case 'a':
+                modTime = 0;
+                break;
+            case 'm':
+                accTime = 0;
+                break;
             case 'o':
                 sectorOffset = (unsigned int) strtol(optarg, NULL, 0);
                 break;
@@ -75,6 +83,7 @@ int Type(const Command *cmd, const CommandArgs *args)
     }
 
     CheckParam(path != NULL, "missing disk image file name\n");
+    CheckParam(file != NULL, "missing file name\n");
 
     FatDisk *disk = FatDisk::Open(path, sectorOffset);
     if (!disk) {
@@ -82,46 +91,32 @@ int Type(const Command *cmd, const CommandArgs *args)
     }
 
     bool success = true;
-    char *fileBuf = NULL;
-    uint32_t size;
-    uint32_t allocSize;
     DirEntry f;
+    time_t t;
+    struct tm tm;
 
     if (file == NULL) {
         file = "/";
     }
 
     SafeRIF(disk->FindFile(&f, NULL, file), "file not found - %s\n", file);
-    SafeRIF(!IsDeviceFile(&f), "'%s' is a device file\n", file);
+    SafeRIF(!IsRoot(&f), "cannot touch root directory because it does not have a timestamp\n");
 
-    allocSize = disk->GetFileAllocSize(&f);
-    size = disk->GetFileSize(&f);
-    if (size > allocSize) {
-        LogWarning("stored file size is larger than file allocation size\n");
+    t = time(NULL);
+    localtime_r(&t, &tm);
+
+    if (modTime) {
+        SetModifiedTime(&f, &tm);
+    }
+    if (accTime) {
+        SetAccessedTime(&f, &tm);
     }
 
-    fileBuf = (char *) SafeAlloc(allocSize+1);  // +1 to account for added NUL
-    SafeRIF(disk->ReadFile(fileBuf, &f), "failed to read file - %s\n", file);
+    // TODO: write
 
-    if (IsDirectory(&f)) {
-        uint32_t count = size / sizeof(DirEntry);
-        const DirEntry *e = (DirEntry *) fileBuf;
 
-        for (uint32_t i = 0; i < count; i++, e++) {
-            if (!IsValidFile(e))
-                continue;
-            char shortName[MAX_SHORTNAME];
-            GetShortName(shortName, e);
-            LogInfo("%s\n", shortName);
-        }
-    }
-    else {
-        fileBuf[size] = '\0';
-        LogInfo("%s\n", fileBuf);
-    }
 
 Cleanup:
-    SafeFree(fileBuf);
     delete disk;
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }

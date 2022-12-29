@@ -153,7 +153,6 @@ uint32_t GetCluster12(const char *fat, uint32_t index)
     //
 
     size_t i = index + (index / 2);
-    // printf("reading 12-bit FAT at offset %zu (cluster = %03X)\n", i, index);
     uint16_t pair = *((uint16_t *) &fat[i]);
 
     if (index & 1) {
@@ -171,14 +170,14 @@ uint32_t GetCluster16(const char *fat, uint32_t index)
     //
 
     size_t i = index * 2;
-    // printf("reading 16-bit FAT at offset %zu (cluster = %04X)\n", i, index);
     return *((uint16_t *) &fat[i]);
 }
 
 uint32_t SetCluster12(char *fat, uint32_t index, uint32_t value)
 {
+    uint32_t oldValue = GetCluster12(fat, index);
+
     size_t i = index + (index / 2);
-    // printf("writing 12-bit FAT at offset %zu (cluster = %03X)\n", i, index);
     uint16_t pair = *((uint16_t *) &fat[i]);
     if (index & 1) {
         value <<= 4;
@@ -188,17 +187,19 @@ uint32_t SetCluster12(char *fat, uint32_t index, uint32_t value)
         value &= 0x0FFF;
         pair &= 0xF000;
     }
-
     *((uint16_t *) &fat[i]) = pair | value;
-    return value;
+
+    return oldValue;
 }
 
 uint32_t SetCluster16(char *fat, uint32_t index, uint32_t value)
 {
+    uint32_t oldValue = GetCluster16(fat, index);
+
     size_t i = index * 2;
-    // printf("writing 16-bit FAT at offset %zu (cluster = %04X)\n", i, index);
     *((uint16_t *) &fat[i]) = value;
-    return value;
+
+    return oldValue;
 }
 
 // -----------------------------------------------------------------------------

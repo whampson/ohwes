@@ -417,6 +417,12 @@ uint32_t FatDisk::CountBadClusters() const
 uint32_t FatDisk::CountClusters(const DirEntry *pFile) const
 {
     if (IsRoot(pFile)) {
+        // root directory does not take up clusters
+        return 0;
+    }
+
+    if (pFile->FirstCluster == CLUSTER_FREE) {
+        // file is not on disk
         return 0;
     }
 
@@ -429,6 +435,18 @@ uint32_t FatDisk::CountClusters(const DirEntry *pFile) const
     } while (!IsEOC(cluster));
 
     return count;
+}
+
+uint32_t FatDisk::FindNextFreeCluster() const
+{
+    for (uint32_t i = 0; i < GetClusterCount(); i++) {
+        uint32_t clustNum = CLUSTER_FIRST + i;
+        if (IsClusterFree(clustNum)) {
+            return clustNum;
+        }
+    }
+
+    return GetClusterEocNumber();
 }
 
 bool FatDisk::IsClusterBad(uint32_t index) const
@@ -476,16 +494,18 @@ uint32_t FatDisk::GetCluster(uint32_t index) const
 uint32_t FatDisk::SetCluster(uint32_t index, uint32_t value)
 {
     // TODO: check limit violation
+    LogInfo("setting cluster %04X to %04X\n", index, value);
     return IsFat12()
         ? SetCluster12(m_Fat, index, value)
         : SetCluster16(m_Fat, index, value);
 }
 
-bool FatDisk::IsEOC(int clustNum) const
+bool FatDisk::IsEOC(uint32_t clustNum) const
 {
-    return IsFat12()
-        ? (clustNum >= CLUSTER_EOC_12_LO && clustNum <= CLUSTER_EOC_12_HI)
-        : (clustNum >= CLUSTER_EOC_16_LO && clustNum <= CLUSTER_EOC_16_HI);
+    return (clustNum == CLUSTER_RESERVED)
+        || IsFat12()
+            ? (clustNum >= CLUSTER_EOC_12_LO && clustNum <= CLUSTER_EOC_12_HI)
+            : (clustNum >= CLUSTER_EOC_16_LO && clustNum <= CLUSTER_EOC_16_HI);
 }
 
 bool FatDisk::ReadSector(char *pBuf, uint32_t index) const
@@ -513,8 +533,7 @@ bool FatDisk::ReadCluster(char *pBuf, uint32_t index) const
     const uint32_t DiskSize = GetDiskSize();
 
     if ((index - CLUSTER_FIRST) > GetClusterCount()) {
-        LogError("attempt to read out-of-bounds cluster (index = %0*X)\n",
-            IsFat12() ? 3 : 4,
+        LogError("attempt to read out-of-bounds cluster (index = %04X)\n",
             index);
         return false;
     }
@@ -531,7 +550,7 @@ bool FatDisk::ReadCluster(char *pBuf, uint32_t index) const
     assert(seekAddr + ClusterSize <= DiskSize);
 
     bool success = true;
-    LogVeryVerbose("reading cluster %0*X...\n", IsFat12() ? 3 : 4, index);
+    LogVeryVerbose("reading cluster %04X...\n", index);
     fseek(m_File, seekAddr, SEEK_SET);
     SafeRead(m_File, pBuf, ClusterSize);
 
@@ -580,6 +599,174 @@ bool FatDisk::ReadFile(char *pBuf, const DirEntry *pFile) const
     return success;
 }
 
+bool FatDisk::WriteSector(uint32_t index, const char *pBuf) const
+{
+    const uint32_t SectorSize = GetSectorSize();
+    const uint32_t DiskSize = GetDiskSize();
+
+    uint32_t seekAddr = m_Base + (index * SectorSize);
+    if (seekAddr + SectorSize > DiskSize) {
+        LogError("attempt to write out-of-bounds sector (index = %u)\n", index);
+        return false;
+    }
+
+    bool success = true;
+    fseek(m_File, seekAddr, SEEK_SET);
+    SafeWrite(m_File, pBuf, SectorSize);
+
+Cleanup:
+    return success;
+}
+
+bool FatDisk::WriteCluster(uint32_t index, const char *pBuf) const
+{
+    const uint32_t ClusterSize = GetClusterSize();
+    const uint32_t DiskSize = GetDiskSize();
+
+    if ((index - CLUSTER_FIRST) > GetClusterCount()) {
+        LogError("attempt to write out-of-bounds cluster (index = %04X)\n",
+            index);
+        return false;
+    }
+
+    const BiosParamBlock *bpb = GetBPB();
+    uint32_t fsDataSectors = bpb->ReservedSectorCount +
+        (bpb->SectorsPerTable * bpb->TableCount) +
+        CeilDiv(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
+
+    uint32_t seekAddr = m_Base +
+        (fsDataSectors * bpb->SectorSize) +
+        ((index - CLUSTER_FIRST) * ClusterSize);
+
+    assert(seekAddr + ClusterSize <= DiskSize);
+
+    bool success = true;
+    LogVeryVerbose("writing cluster %04X...\n", index);
+    fseek(m_File, seekAddr, SEEK_SET);
+    SafeWrite(m_File, pBuf, ClusterSize);
+
+Cleanup:
+    return success;
+}
+
+bool FatDisk::WriteFile(DirEntry *pFile, const char *pBuf, uint32_t sizeBytes)
+{
+    if (IsRoot(pFile)) {
+        LogVeryVerbose("writing root directory...\n");
+
+        bool success = true;
+        const BiosParamBlock *bpb = GetBPB();
+        int count = CeilDiv(bpb->RootDirCapacity * sizeof(DirEntry), bpb->SectorSize);
+        int base = bpb->ReservedSectorCount + (bpb->SectorsPerTable * bpb->TableCount);
+        int i = 0;
+
+        while (success && i < count) {
+            success = WriteSector(base + i, pBuf + (i * GetSectorSize()));
+            i++;
+        }
+
+        return success;
+    }
+
+    char sfn[MAX_SHORTNAME];
+    GetShortName(sfn, pFile);
+    LogVeryVerbose("writing file '%s'...\n", sfn);
+
+    if (!IsValidFile(pFile) /*|| (pFile->FirstCluster == 0 && pFile->FileSize != 0)*/) {
+        LogError("attempt to write a label, device, deleted, or invalid file\n");
+        return false;
+    }
+
+    uint32_t newCount = CeilDiv(sizeBytes, GetClusterSize());
+    uint32_t existingCount = CountClusters(pFile);
+    uint32_t totalCount = Max(newCount, existingCount);
+
+    if (newCount > CountFreeClusters()) {
+        LogError("not enough space on disk!\n");
+        return false;
+    }
+
+    bool newFile = (existingCount == 0);
+    uint32_t firstCluster = pFile->FirstCluster;
+    if (newFile) {
+        firstCluster = FindNextFreeCluster();
+    }
+
+    // Now we need to write the file and update the cluster chain. We have two
+    // approaches:
+    //   1) Overwrite existing clusters for this file and invalidate any
+    //      clusters in the chain that were not reused.
+    //   2) Write the file to a brand new location on disk, then go back and
+    //      invalidate all of the old clusters.
+
+    bool success = true;
+    char *clusterBuf = NULL;
+    uint32_t cluster = firstCluster;
+    uint32_t bytesWritten = 0;
+
+    time_t now = time(NULL);
+    struct tm *tm = localtime(&now);
+
+    clusterBuf = (char *) SafeAlloc(GetClusterSize());
+
+    for (uint32_t i = 0; i < totalCount; i++) {
+        uint32_t oldValue = GetCluster(cluster);
+        LogInfo("cluster %04X current value is %04X\n", cluster, oldValue);
+        // TODO: ensure old value is not bad or reserved
+
+        if (i < newCount) {
+            assert(!IsEOC(cluster));
+
+            // mark the current cluster as RESERVED to indicate
+            // that it is currently being written
+            uint32_t next = SetCluster(cluster, CLUSTER_RESERVED);
+
+            // figure out how may bytes we're writing into the cluster
+            uint32_t size = Min(sizeBytes - bytesWritten, GetClusterSize());
+            memcpy(clusterBuf, pBuf, size);
+
+            // write the cluster
+            SafeRIF(WriteCluster(cluster, clusterBuf), "failed to write cluster %04X\n", cluster);
+            pBuf += size;
+
+            // figure out what the next cluster should be
+            if (i == newCount - 1) {
+                // last cluster, mark it as EOC
+                SetCluster(cluster, GetClusterEocNumber());
+                next = oldValue;    // preserve old value so we can invalidate old clusters
+            }
+            else if (IsEOC(next) || next == CLUSTER_FREE) {
+                // cluster was already EOC or free, but we have more to write,
+                // so we need to find the next free cluster
+                next = FindNextFreeCluster();
+                SetCluster(cluster, next);
+            }
+            else {
+                // we keep the original next cluster number
+                SetCluster(cluster, next);
+            }
+
+            cluster = next;
+        }
+        else {
+            // file size reduced, mark old clusters as free
+            SetCluster(cluster, CLUSTER_FREE);
+            cluster = oldValue;
+        }
+    }
+
+    // Lastly, update the dir entry
+    SetModifiedTime(pFile, tm);
+    SetAccessedTime(pFile, tm);
+
+    pFile->FirstCluster = firstCluster;
+    pFile->FileSize = sizeBytes;
+
+Cleanup:
+    SafeFree(clusterBuf);
+    return success;
+}
+
 bool FatDisk::FindFile(DirEntry *pFile, DirEntry *pParent, const char *path) const
 {
     char pathCopy[MAX_PATH];
@@ -589,7 +776,7 @@ bool FatDisk::FindFile(DirEntry *pFile, DirEntry *pParent, const char *path) con
     return WalkPath(pFile, pParent, pathCopy, &root);
 }
 
-bool FatDisk::FindFileInDir(const DirEntry **ppFile, const DirEntry *pDirTable,
+bool FatDisk::FindFileInDir(DirEntry **ppFile, const DirEntry *pDirTable,
     uint32_t sizeBytes, const char *name) const
 {
     wchar_t wName[MAX_PATH];
@@ -617,12 +804,12 @@ bool FatDisk::FindFileInDir(const DirEntry **ppFile, const DirEntry *pDirTable,
         GetShortName(shortName, e);
 
         if (strncasecmp(shortName, name, MAX_SHORTNAME) == 0) {
-            *ppFile = e;
+            *ppFile = (DirEntry *) e;
             return true;
         }
 
         if (hasLfn && wcsncmp(longName, wName, MAX_LONGNAME) == 0) {
-            *ppFile = e;
+            *ppFile = (DirEntry *) e;
             return true;
         }
     }
@@ -651,7 +838,7 @@ bool FatDisk::WalkPath(DirEntry *pFile, DirEntry *pParent,
     }
 
     bool success = false;
-    const DirEntry *found = NULL;
+    DirEntry *found = NULL;
     DirEntry *dirTable = NULL;
     uint32_t sizeBytes;
 
