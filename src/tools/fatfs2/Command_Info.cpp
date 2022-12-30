@@ -117,7 +117,7 @@ static void PrintFileInfo(const FatDisk *disk, const DirEntry *pFile)
             ptr += sprintf(ptr, "%04X ", cluster);
             cluster = disk->GetCluster(cluster);
             index++;
-        } while (!disk->IsEOC(cluster));
+        } while (!disk->IsClusterNumberEOC(cluster));
 
         if ((index % 8) != 0) {
             LogInfo("%s\n", lineBuf);

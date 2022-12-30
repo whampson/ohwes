@@ -6,7 +6,8 @@
 class FatDisk {
 public:
     static bool CreateNew(const char *path, const BiosParamBlock *bpb);
-    static bool CreateNew(const char *path, const BiosParamBlock *bpb, uint32_t sector);
+    static bool CreateNew(const char *path, const BiosParamBlock *bpb,
+        uint32_t sector);
 
     static FatDisk * Open(const char *path);
     static FatDisk * Open(const char *path, uint32_t sector);
@@ -33,16 +34,15 @@ public:
 
     uint32_t FindNextFreeCluster() const;
 
-    bool IsEOC(uint32_t clustNum) const;
-    // bool IsClusterNumberBad(uint32_t clustNum) const;
-    // bool IsClusterNumberReserved(uint32_t clustNum) const;
-    // bool GetClusterNumberEOC() const;
-    // bool GetClusterNumberBad() const;
+    bool IsClusterNumberEOC(uint32_t clustNum) const;
+    bool IsClusterNumberBad(uint32_t clustNum) const;
+
+    uint32_t GetClusterNumberEOC() const;
+    uint32_t GetClusterNumberBad() const;
 
     bool IsClusterBad(uint32_t index) const;
     bool IsClusterFree(uint32_t index) const;
 
-    // Danger area!
     uint32_t MarkClusterBad(uint32_t index);
     uint32_t MarkClusterFree(uint32_t index);
 
@@ -64,22 +64,20 @@ public:
     ~FatDisk();
 
 private:
-    const char  *m_Path;        // file path
-    FILE        *m_File;        // file pointer
-    size_t      m_Base;         // byte offset in disk of FAT filesystem
-    BootSector  m_Boot;         // boot sector
-    char        *m_Fat;         // file allocation table
-
-    // TODO: use EOC mark from FAT
-    // TODO: bits [15:14] of FAT[1] on FAT16 are flags
-    //   0x8000 - CleanShut  - 0 is "dirty", disk not dismounted properly
-    //   0x4000 - HardError  - 0 is "error", I/O errors or bad clusters encountered
+    const char  *m_path;        // file path
+    FILE        *m_file;        // file pointer
+    size_t      m_base;         // byte offset in disk of FAT filesystem
+    BootSector  m_boot;         // boot sector
+    char        *m_fat;         // file allocation table
+    bool        m_bDirty;       // disk not dismounted properly
+    bool        m_bHardError;   // I/O errors or bad clusters encountered
 
     FatDisk(const char *path, FILE *file, size_t base, BootSector *boot, char *fat);
 
-    uint32_t GetClusterEocNumber() const;
-    uint32_t GetClusterBadNumber() const;
     DirEntry GetRootDirEntry() const;
+
+    bool ReadRoot(char *pBuf) const;
+    bool WriteRoot(const char *pBuf) const;
 
     bool WalkPath(DirEntry *pFile, DirEntry *pParent, char *path,
         const DirEntry *pBase) const;
