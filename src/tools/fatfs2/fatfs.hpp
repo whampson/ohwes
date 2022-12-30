@@ -35,21 +35,60 @@ extern int g_bShowVersion;
 extern int g_bUsePrefix;
 extern int g_nQuietness;
 extern int g_nVerbosity;
+extern uint32_t g_nSectorOffset;
 
 extern const char *g_ProgramName;
 
-#define GLOBAL_OPTSTRING        "+:pqv"
+extern "C" int optidx;
+
+#define LONGOPT_OFFSET_TOKEN    0x0FF5E7
 #define GLOBAL_LONGOPTS                                                         \
-    { "prefix",     no_argument, 0, 'p' },                                      \
-    { "quiet",      no_argument, 0, 'q' },                                      \
-    { "verbose",    no_argument, 0, 'v' },                                      \
-    { "help",       no_argument, &g_bShowHelp, true },                          \
-    { "version",    no_argument, &g_bShowVersion, true }
+    { "offset",         required_argument, 0, LONGOPT_OFFSET_TOKEN },           \
+    { "prefix",         no_argument, &g_bUsePrefix, true },                     \
+    { "quiet",          no_argument, &g_nQuietness, 1 },                        \
+    { "quiet-all",      no_argument, &g_nQuietness, 2 },                        \
+    { "verbose",        no_argument, &g_nVerbosity, 1 },                        \
+    { "very-verbose",   no_argument, &g_nVerbosity, 2 },                        \
+    { "help",           no_argument, &g_bShowHelp, true },                      \
+    { "version",        no_argument, &g_bShowVersion, true }
+
+#define ProcessGlobalOption(argv, longopts, optchar)                            \
+do {                                                                            \
+    switch (optchar) {                                                          \
+        case LONGOPT_OFFSET_TOKEN:                                              \
+            g_nSectorOffset = (uint32_t) strtol(optarg, NULL, 0);               \
+            break;                                                              \
+        case 0:                                                                 \
+            if ((longopts)[optidx].flag != 0)                                   \
+                break;                                                          \
+            assert(!"unhandled getopt_long() case: non-flag long option");      \
+            break;                                                              \
+        case '?':                                                               \
+            if (optopt != 0)                                                    \
+                LogError_BadOpt(optopt);                                        \
+            else                                                                \
+                LogError_BadLongOpt(&(argv)[optind - 1][2]);                    \
+            return STATUS_INVALIDARG;                                           \
+        case ':':                                                               \
+            if (optopt != 0)                                                    \
+                LogError_MissingOptArg(optopt);                                 \
+            else                                                                \
+                LogError_MissingLongOptArg(&(argv)[optind - 1][2]);             \
+            return STATUS_INVALIDARG;                                           \
+    }                                                                           \
+    if (g_bShowHelp) {                                                          \
+        PrintHelp();                                                            \
+        return STATUS_SUCCESS;                                                  \
+    }                                                                           \
+    if (g_bShowVersion) {                                                       \
+        PrintVersion();                                                         \
+        return STATUS_SUCCESS;                                                  \
+    }                                                                           \
+} while (0)     // some people might call this evil...
 
 int PrintHelp();
 int PrintGlobalHelp();
 int PrintVersion();
-bool ProcessGlobalOption(int c);
 
 void FormatDate(char dst[MAX_DATE], const struct tm *src);
 void FormatTime(char dst[MAX_TIME], const struct tm *src);

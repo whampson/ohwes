@@ -255,17 +255,17 @@ void SetTime(FatTime *dst, const struct tm *src);
 */
 enum FileAttrs
 {
-    ATTR_READONLY   = 1 << 0,           // Read-Only
-    ATTR_HIDDEN     = 1 << 1,           // Hidden
-    ATTR_SYSTEM     = 1 << 2,           // System File
-    ATTR_LABEL      = 1 << 3,           // Volume Label
-    ATTR_DIRECTORY  = 1 << 4,           // Directory
-    ATTR_ARCHIVE    = 1 << 5,           // Archived (used as a dirty bit for backup utilities)
-    ATTR_DEVICE     = 1 << 6,           // Device file (not usually found on disk)
-    ATTR_LFN        = ATTR_LABEL  |     // Long File Name
-                      ATTR_SYSTEM |
-                      ATTR_HIDDEN |
-                      ATTR_READONLY
+    ATTR_READONLY   = 1 << 0,       // Read-Only
+    ATTR_HIDDEN     = 1 << 1,       // Hidden
+    ATTR_SYSTEM     = 1 << 2,       // System File
+    ATTR_LABEL      = 1 << 3,       // Volume Label
+    ATTR_DIRECTORY  = 1 << 4,       // Directory
+    ATTR_ARCHIVE    = 1 << 5,       // Archived (dirty bit for backup tools)
+    ATTR_DEVICE     = 1 << 6,       // Device file (not usually found on disk)
+    ATTR_LFN        = ATTR_LABEL    // Long File Name
+                    | ATTR_SYSTEM
+                    | ATTR_HIDDEN
+                    | ATTR_READONLY
 };
 
 // -----------------------------------------------------------------------------

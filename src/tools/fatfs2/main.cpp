@@ -5,8 +5,11 @@ int g_bShowVersion = false;
 int g_bUsePrefix = false;
 int g_nQuietness = 0;
 int g_nVerbosity = 0;
+uint32_t g_nSectorOffset = 0;
 
 const char *g_ProgramName = PROG_NAME;
+
+int optidx = 0;
 
 static CommandArgs s_CommandArgs = { };
 
@@ -40,46 +43,28 @@ int PrintGlobalHelp()
     int count = GetCommandCount();
 
     printf("Usage: " PROG_NAME " [OPTIONS] COMMAND [ARGS]\n");
+    printf("FAT File System disk image manipulation tool.\n");
     printf("\nCommands:\n");
     for (int i = 0; i < count; i++) {
         printf("  %-18s%s\n", cmds[i].Name, cmds[i].Description);
     }
     printf("\nGlobal Options:\n");
     printf("  -p, --prefix      Prefix output with the program name\n");
-    printf("  -q, --quiet       Suppress output (overrides -v)\n");
+    printf("  -q, --quiet       Suppress informational output, keep errors (overrides -v)\n");
+    printf("      --quiet-all   Suppress all output (overrides -v)\n");
     printf("  -v, --verbose     Make the operation more talkative\n");
+    printf("      --very-verbose Extra chatty output\n");
     printf("      --help        Display this help message and exit\n");
     printf("      --version     Display version information and exit\n");
-    printf("\nRun `" PROG_NAME " help COMMAND` to get help about a specific command.\n");
+    printf("\nGlobal long options can be supplied anywhere in the argument string, while their\n");
+    printf("short option counterparts can only occur before COMMAND. This is done to avoid\n");
+    printf("potential conflicts with command-specific options.\n");
+    printf("\nTo get help about a command, run `" PROG_NAME " help COMMAND` or `" PROG_NAME " COMMAND --help`.\n");
+
+    // TODO: --offset=SECTOR
+    // TODO: print these with command-specific help w/o the short opts
 
     return STATUS_SUCCESS;
-}
-
-bool ProcessGlobalOption(int c)
-{
-    switch (c) {
-        case 'p':
-            g_bUsePrefix = true;
-            break;
-        case 'q':
-            g_nQuietness += 1;
-            break;
-        case 'v':
-            g_nVerbosity += 1;
-            break;
-    }
-
-    if (g_bShowHelp) {
-        PrintHelp();
-        return true;
-    }
-
-    if (g_bShowVersion) {
-        PrintVersion();
-        return true;
-    }
-
-    return false;
 }
 
 void FormatDate(char dst[MAX_DATE], const struct tm *src)
@@ -121,34 +106,29 @@ int main(int argc, char **argv)
         { 0, 0, 0, 0 }
     };
 
-    optind = 0;     // reset option index
-    opterr = 0;     // prevent default error messages
+    optind = 0;     // getopt: reset option index
+    opterr = 0;     // getopt: prevent default error messages
+    optidx = 0;     // reset option index
 
     // Parse option arguments
     while (true) {
-        int optIdx = 0;
         int c = getopt_long(
             argc, argv,
-            GLOBAL_OPTSTRING,
-            LongOptions, &optIdx);
+            "+:pqv",
+            LongOptions, &optidx);
 
-        if (ProcessGlobalOption(c)) {
-            return STATUS_SUCCESS;
-        }
         if (c == -1) break;
+        ProcessGlobalOption(argv, LongOptions, c);
 
         switch (c) {
-            case '?':
-                if (optopt != 0)
-                    LogError_BadOpt(optopt);
-                else
-                    LogError_BadLongOpt(&argv[optind - 1][2]);
-                return STATUS_INVALIDARG;
+            case 'p':
+                g_bUsePrefix = true;
                 break;
-            case 0:
-                if (LongOptions[optIdx].flag != 0)
-                    break;
-                assert(!"unhandled getopt_long case!");
+            case 'q':
+                g_nQuietness += 1;
+                break;
+            case 'v':
+                g_nVerbosity += 1;
                 break;
         }
     }

@@ -7,7 +7,7 @@ static const Command s_pCommands[] = {
         "View or change file attributes",
         "  -a, -A            Set/clear the ARCHIVE bit\n"
         "  -h, -H            Set/clear the HIDDEN bit\n"
-        // "  -l, -L            Set/clear the VOLUME_LABEL bit\n"
+        "  -l, -L            Set/clear the VOLUME_LABEL bit\n"
         "  -r, -R            Set/clear the READONLY bit\n"
         "  -s, -S            Set/clear the SYSTEM bit\n"
         "  -v, -V            Set/clear the DEVICE bit\n"
@@ -59,7 +59,7 @@ static const Command s_pCommands[] = {
     },
     { Touch,
         "touch", PROG_NAME " touch DISK [OPTIONS] FILE",
-        "Change file access and modification times",
+        "Change file access and/or modification times",
         "  -a                Change file access time only"
         "  -m                Change file modification time only"
     },

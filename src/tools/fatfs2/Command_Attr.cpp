@@ -13,29 +13,26 @@ int Attr(const Command *cmd, const CommandArgs *args)
     int updateRdo = -1;
     int updateSys = -1;
     int updateDev = -1;
-    int sectorOffset = 0;
+    int updateLab = -1;
 
     static struct option LongOptions[] = {
         GLOBAL_LONGOPTS,
-        { "offset", required_argument, 0, 'o' },
         { 0, 0, 0, 0 }
     };
 
     optind = 0;     // getopt: reset option index
     opterr = 0;     // getopt: prevent default error messages
+    optidx = 0;     // reset option index
 
     // Parse option arguments
     while (true) {
-        int optIdx = 0;
         int c = getopt_long(
             args->Argc, args->Argv,
-            GLOBAL_OPTSTRING "aAhHrIiRsS",
-            LongOptions, &optIdx);
+            "+:aAhHrlLRsSvV",
+            LongOptions, &optidx);
 
-        if (ProcessGlobalOption(c)) {
-            return STATUS_SUCCESS;
-        }
         if (c == -1) break;
+        ProcessGlobalOption(args->Argv, LongOptions, c);
 
         switch (c) {
             case 'a':
@@ -54,6 +51,14 @@ int Attr(const Command *cmd, const CommandArgs *args)
                 update = 1;
                 updateHid = 0;
                 break;
+            case 'l':
+                update = 1;
+                updateLab = 1;
+                break;
+            case 'L':
+                update = 1;
+                updateLab = 0;
+                break;
             case 'r':
                 update = 1;
                 updateRdo = 1;
@@ -70,35 +75,13 @@ int Attr(const Command *cmd, const CommandArgs *args)
                 update = 1;
                 updateSys = 0;
                 break;
-            case 'i':       // TODO: make this -v
+            case 'v':
                 update = 1;
                 updateDev = 1;
                 break;
-            case 'I':       // TODO: make this -V
+            case 'V':
                 update = 1;
                 updateDev = 0;
-                break;
-            case 'o':
-                sectorOffset = (unsigned int) strtol(optarg, NULL, 0);
-                break;
-            case 0: // long option
-                if (LongOptions[optIdx].flag != 0)
-                    break;
-                assert(!"unhandled getopt_long() case: non-flag long option");
-                break;
-            case '?':
-                if (optopt != 0)
-                    LogError_BadOpt(optopt);
-                else
-                    LogError_BadLongOpt(&args->Argv[optind - 1][2]);
-                return STATUS_INVALIDARG;
-                break;
-            case ':':
-                if (optopt != 0)
-                    LogError_MissingOptArg(optopt);
-                else
-                    LogError_MissingLongOptArg(&args->Argv[optind - 1][2]);
-                return STATUS_INVALIDARG;
                 break;
         }
     }
@@ -123,7 +106,7 @@ int Attr(const Command *cmd, const CommandArgs *args)
     CheckParam(path != NULL, "missing disk image file name\n");
     CheckParam(file != NULL, "missing file name\n");
 
-    FatDisk *disk = FatDisk::Open(path, sectorOffset);
+    FatDisk *disk = FatDisk::Open(path, g_nSectorOffset);
     if (!disk) {
         return STATUS_ERROR;
     }
@@ -162,7 +145,7 @@ int Attr(const Command *cmd, const CommandArgs *args)
         char lineBuf[80];
         char *ptr = lineBuf;
         ptr += sprintf(ptr, "%c%c%c%c%c%c%c %s",
-            lab ? 'L' : '-',    // TODO: allow ability to change this?
+            lab ? 'L' : '-',
             dev ? 'V' : '-',
             dir ? 'D' : '-',    // TODO: allow ability to change this?
             arc ? 'A' : '-',
@@ -215,6 +198,12 @@ int Attr(const Command *cmd, const CommandArgs *args)
             SetAttribute(pFile, ATTR_DEVICE);
         else
             ClearAttribute(pFile, ATTR_DEVICE);
+    }
+    if (updateLab != -1) {
+        if (updateLab == 1)
+            SetAttribute(pFile, ATTR_LABEL);
+        else
+            ClearAttribute(pFile, ATTR_LABEL);
     }
 
     SafeRIF(disk->WriteFile(pParent, (const char *) dirTable, tableSizeBytes),

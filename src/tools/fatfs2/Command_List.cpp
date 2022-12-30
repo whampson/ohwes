@@ -12,29 +12,25 @@ int List(const Command *cmd, const CommandArgs *args)
     bool bareFormat = false;
     bool shortNamesOnly = false;
     bool showAllocSize = false;
-    int sectorOffset = 0;
 
     static struct option LongOptions[] = {
         GLOBAL_LONGOPTS,
-        { "offset", required_argument, 0, 'o' },
         { 0, 0, 0, 0 }
     };
 
     optind = 0;     // getopt: reset option index
     opterr = 0;     // getopt: prevent default error messages
+    optidx = 0;     // reset option index
 
     // Parse option arguments
     while (true) {
-        int optIdx = 0;
         int c = getopt_long(
             args->Argc, args->Argv,
-            GLOBAL_OPTSTRING "aAbns",
-            LongOptions, &optIdx);
+            "+:aAbns",
+            LongOptions, &optidx);
 
-        if (ProcessGlobalOption(c)) {
-            return STATUS_SUCCESS;
-        }
         if (c == -1) break;
+        ProcessGlobalOption(args->Argv, LongOptions, c);
 
         switch (c) {
             case 'a':
@@ -49,30 +45,8 @@ int List(const Command *cmd, const CommandArgs *args)
             case 'n':
                 shortNamesOnly = true;
                 break;
-            case 'o':
-                sectorOffset = (unsigned int) strtol(optarg, NULL, 0);
-                break;
             case 's':
                 showAllocSize = true;
-                break;
-            case 0: // long option
-                if (LongOptions[optIdx].flag != 0)
-                    break;
-                assert(!"unhandled getopt_long() case: non-flag long option");
-                break;
-            case '?':
-                if (optopt != 0)
-                    LogError_BadOpt(optopt);
-                else
-                    LogError_BadLongOpt(&args->Argv[optind - 1][2]);
-                return STATUS_INVALIDARG;
-                break;
-            case ':':
-                if (optopt != 0)
-                    LogError_MissingOptArg(optopt);
-                else
-                    LogError_MissingLongOptArg(&args->Argv[optind - 1][2]);
-                return STATUS_INVALIDARG;
                 break;
         }
     }
@@ -96,14 +70,13 @@ int List(const Command *cmd, const CommandArgs *args)
 
     CheckParam(path != NULL, "missing disk image file name\n");
 
-    FatDisk *disk = FatDisk::Open(path, sectorOffset);
+    FatDisk *disk = FatDisk::Open(path, g_nSectorOffset);
     if (!disk) {
         return STATUS_ERROR;
     }
 
     // TODO: split up function
     // TODO: recurse
-    // TOOD: show allocation size (-s ?)
 
     bool success = true;
     char *fileBuf = NULL;
@@ -125,7 +98,7 @@ int List(const Command *cmd, const CommandArgs *args)
     }
 
     SafeRIF(disk->FindFile(&f, NULL, file), "file not found - %s\n", file);
-    SafeRIF(!IsDeviceFile(&f), "'%s' is a device file\n", file);
+    // SafeRIF(!IsDeviceFile(&f), "'%s' is a device file\n", file);
 
     if (IsDirectory(&f)) {
         uint32_t size = disk->GetFileSize(&f);

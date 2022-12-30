@@ -27,38 +27,29 @@ int Create(const Command *cmd, const CommandArgs *args)
 
     int force = 0;
     int noAlign = 0;
-    int sectorOffset = 0;
 
     static struct option LongOptions[] = {
         GLOBAL_LONGOPTS,
         { "force", no_argument, &force, 1 },
         { "no-align", no_argument, &noAlign, 1 },
-        { "offset", required_argument, 0, 'o' },
         { 0, 0, 0, 0 }
     };
 
     optind = 0;     // getopt: reset option index
     opterr = 0;     // getopt: prevent default error messages
+    optidx = 0;     // reset option index
 
     // Parse option arguments
     while (true) {
-        int optIdx = 0;
         int c = getopt_long(
             args->Argc, args->Argv,
-            GLOBAL_OPTSTRING "d:f:F:g:i:l:m:r:R:s:S:",
-            LongOptions, &optIdx);
+            "+:d:f:F:g:i:l:m:r:R:s:S:",
+            LongOptions, &optidx);
 
-        if (ProcessGlobalOption(c)) {
-            return STATUS_SUCCESS;
-        }
         if (c == -1) break;
+        ProcessGlobalOption(args->Argv, LongOptions, c);
 
         switch (c) {
-            case 0: // long option
-                if (LongOptions[optIdx].flag != 0)
-                    break;
-                assert(!"unhandled getopt_long() case: non-flag long option");
-                break;
             case 'd':
                 driveNumber = (char) strtol(optarg, NULL, 0);
                 break;
@@ -91,9 +82,6 @@ int Create(const Command *cmd, const CommandArgs *args)
             case 'm':
                 mediaType = (char) strtol(optarg, NULL, 0);
                 break;
-            case 'o':
-                sectorOffset = (unsigned int) strtol(optarg, NULL, 0);
-                break;
             case 'r':
                 rootDirCapacity = (int) strtol(optarg, NULL, 0);
                 break;
@@ -105,20 +93,6 @@ int Create(const Command *cmd, const CommandArgs *args)
                 break;
             case 'S':
                 sectorSize = (int) strtol(optarg, NULL, 0);
-                break;
-            case '?':
-                if (optopt != 0)
-                    LogError_BadOpt(optopt);
-                else
-                    LogError_BadLongOpt(&args->Argv[optind - 1][2]);
-                return STATUS_INVALIDARG;
-                break;
-            case ':':
-                if (optopt != 0)
-                    LogError_MissingOptArg(optopt);
-                else
-                    LogError_MissingLongOptArg(&args->Argv[optind - 1][2]);
-                return STATUS_INVALIDARG;
                 break;
         }
     }
@@ -268,7 +242,7 @@ int Create(const Command *cmd, const CommandArgs *args)
     WriteFatString(bpb.Label, label, LABEL_LENGTH);
     WriteFatString(bpb.FsType, (fatWidth == 12) ? "FAT12" : "FAT16", NAME_LENGTH);
 
-    bool success = FatDisk::CreateNew(path, &bpb, sectorOffset);
+    bool success = FatDisk::CreateNew(path, &bpb, g_nSectorOffset);
     if (!success) {
         LogError("failed to create disk\n");
         return STATUS_ERROR;
