@@ -1,11 +1,12 @@
 #include "Command.hpp"
 #include "FatDisk.hpp"
 
-int Type(const Command *cmd, const CommandArgs *args)
+int Extract(const Command *cmd, const CommandArgs *args)
 {
     (void) cmd;
-    const char *path = NULL;
-    const char *file = NULL;
+    const char *diskPath = NULL;
+    const char *filePath = NULL;
+    const char *outPath = NULL;
 
     static struct option LongOptions[] = {
         GLOBAL_LONGOPTS,
@@ -32,10 +33,13 @@ int Type(const Command *cmd, const CommandArgs *args)
         optarg = args->Argv[optind++];
         switch (pos++) {
             case 0:
-                path = optarg;
+                diskPath = optarg;
                 break;
             case 1:
-                file = optarg;
+                filePath = optarg;
+                break;
+            case 2:
+                outPath = optarg;
                 break;
             default:
                 LogError_BadArg(optarg);
@@ -44,25 +48,32 @@ int Type(const Command *cmd, const CommandArgs *args)
         }
     }
 
-    CheckParam(path != NULL, "missing disk image file name\n");
+    CheckParam(diskPath != NULL, "missing disk image file name\n");
+    CheckParam(filePath != NULL, "missing file name\n");
+    if (outPath == NULL) {
+        outPath = GetFileName(filePath);
+    }
 
-    FatDisk *disk = FatDisk::Open(path, g_nSectorOffset);
+    // TODO: --force to allow overwrite
+    if (FileExists(outPath)) {
+        LogError("%s exists\n", outPath);
+        return STATUS_ERROR;
+    }
+
+    FatDisk *disk = FatDisk::Open(diskPath, g_nSectorOffset);
     if (!disk) {
         return STATUS_ERROR;
     }
 
     bool success = true;
     char *fileBuf = NULL;
+    FILE *fp = NULL;
     uint32_t fileSize;
     uint32_t allocSize;
     DirEntry f;
 
-    if (file == NULL) {
-        file = "/";
-    }
-
-    SafeRIF(disk->FindFile(&f, NULL, file), "file not found - %s\n", file);
-    SafeRIF(!IsDeviceFile(&f), "'%s' is a device file\n", file);
+    SafeRIF(disk->FindFile(&f, NULL, filePath), "file not found - %s\n", filePath);
+    SafeRIF(!IsDeviceFile(&f), "'%s' is a device file\n", filePath);
 
     allocSize = disk->GetFileAllocSize(&f);
     fileSize = disk->GetFileSize(&f);
@@ -71,25 +82,14 @@ int Type(const Command *cmd, const CommandArgs *args)
     }
 
     fileBuf = (char *) SafeAlloc(allocSize);
-    SafeRIF(disk->ReadFile(fileBuf, &f), "failed to read file - %s\n", file);
+    SafeRIF(disk->ReadFile(fileBuf, &f), "failed to read file - %s\n", filePath);
+    SafeRIF(!IsDirectory(&f), "cannot extract a directory (yet...)\n");
 
-    if (IsDirectory(&f)) {
-        uint32_t count = allocSize / sizeof(DirEntry);
-        const DirEntry *e = (DirEntry *) fileBuf;
-
-        for (uint32_t i = 0; i < count; i++, e++) {
-            if (!IsValidFile(e))
-                continue;
-            char shortName[MAX_SHORTNAME];
-            GetShortName(shortName, e);
-            LogInfo("%s\n", shortName);
-        }
-    }
-    else {
-        LogInfo("%.*s", fileSize, fileBuf);
-    }
+    fp = SafeOpen(outPath, "wb", NULL);
+    SafeWrite(fp, fileBuf, fileSize);
 
 Cleanup:
+    SafeClose(fp);
     SafeFree(fileBuf);
     delete disk;
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;

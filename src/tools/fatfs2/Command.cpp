@@ -31,6 +31,12 @@ static const Command s_pCommands[] = {
         "  --no-align        Disable structure alignment\n"
         "  --offset=SECTOR   Write the file system to a specific sector on disk\n"
     },
+    { Extract,
+        "extract", PROG_NAME " extract DISK FILE [TARGET]",
+        "Extract a file from the disk",
+        // TODO: --force, -r
+        NULL
+    },
     { Help,
         "help", PROG_NAME " help [COMMAND]",
         "Print the help menu for this tool or a specific command",

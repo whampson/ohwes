@@ -41,6 +41,13 @@ extern const char *g_ProgramName;
 
 extern "C" int optidx;
 
+int PrintHelp();
+int PrintGlobalHelp();
+int PrintVersion();
+
+void FormatDate(char dst[MAX_DATE], const struct tm *src);
+void FormatTime(char dst[MAX_TIME], const struct tm *src);
+
 #define LONGOPT_OFFSET_TOKEN    0x0FF5E7
 #define GLOBAL_LONGOPTS                                                         \
     { "offset",         required_argument, 0, LONGOPT_OFFSET_TOKEN },           \
@@ -85,13 +92,6 @@ do {                                                                            
         return STATUS_SUCCESS;                                                  \
     }                                                                           \
 } while (0)     // some people might call this evil...
-
-int PrintHelp();
-int PrintGlobalHelp();
-int PrintVersion();
-
-void FormatDate(char dst[MAX_DATE], const struct tm *src);
-void FormatTime(char dst[MAX_TIME], const struct tm *src);
 
 // -----------------------------------------------------------------------------
 // String Utilities
@@ -276,7 +276,7 @@ inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
     FILE *fp = fopen(path, mode);
     if (!fp) {
         LogError("unable to open file '%s'\n", path);
-        *pOutLen = 0;
+        if (pOutLen) *pOutLen = 0;
         return NULL;
     }
 
@@ -331,5 +331,18 @@ inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
         _b, _fp, _i);                                                           \
     _b;                                                                         \
 })
+
+// -----------------------------------------------------------------------------
+// More File Stuff
+// -----------------------------------------------------------------------------
+
+static inline bool FileExists(const char *path)
+{
+    FILE *fp = fopen(path, "r");
+    bool exists = (fp != NULL);
+
+    fclose(fp);
+    return exists;
+}
 
 #endif  // FATFS_HPP

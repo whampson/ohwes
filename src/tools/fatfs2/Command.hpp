@@ -32,7 +32,7 @@ int PrintCommandHelp(const Command *cmd);
 int Attr(const Command *cmd, const CommandArgs *args);
 int Create(const Command *cmd, const CommandArgs *args);
 // int Copy(const Command *cmd, const CommandArgs *args);
-// int Extract(const Command *cmd, const CommandArgs *args);
+int Extract(const Command *cmd, const CommandArgs *args);
 int Help(const Command *cmd, const CommandArgs *args);
 int Info(const Command *cmd, const CommandArgs *args);
 int List(const Command *cmd, const CommandArgs *args);

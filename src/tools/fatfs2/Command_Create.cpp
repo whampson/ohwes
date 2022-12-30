@@ -131,14 +131,9 @@ int Create(const Command *cmd, const CommandArgs *args)
 
     // Test whether the file exists,
     // fail if it does and --force not specified
-    FILE *fp = fopen(path, "r");
-    if (fp != NULL) {
-        if (!force) {
-            LogError("%s exists\n", path);
-            fclose(fp);
-            return STATUS_ERROR;
-        }
-        fclose(fp);
+    if (FileExists(path) && !force) {
+        LogError("%s exists\n", path);
+        return STATUS_ERROR;
     }
 
     if (sectorCount <= 4096) {
