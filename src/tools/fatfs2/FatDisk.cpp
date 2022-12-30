@@ -485,7 +485,12 @@ uint32_t FatDisk::GetClusterBadNumber() const
 
 uint32_t FatDisk::GetCluster(uint32_t index) const
 {
-    // TODO: check limit violation
+    if (index >= CLUSTER_FIRST && (index - CLUSTER_FIRST) > GetClusterCount()) {
+        // ok to read clusters 0 and 1
+        LogError("attempt to read out-of-bounds cluster in FAT (index = %04X)\n", index);
+        return GetClusterEocNumber();
+    }
+
     return IsFat12()
         ? GetCluster12(m_Fat, index)
         : GetCluster16(m_Fat, index);
@@ -493,8 +498,12 @@ uint32_t FatDisk::GetCluster(uint32_t index) const
 
 uint32_t FatDisk::SetCluster(uint32_t index, uint32_t value)
 {
-    // TODO: check limit violation
-    LogInfo("setting cluster %04X to %04X\n", index, value);
+    if (index < CLUSTER_FIRST || (index - CLUSTER_FIRST) > GetClusterCount()) {
+        // not ok to write clusters 0 and 1
+        LogError("attempt to write out-of-bounds cluster in FAT (index = %04X)\n", index);
+        return GetClusterEocNumber();
+    }
+
     return IsFat12()
         ? SetCluster12(m_Fat, index, value)
         : SetCluster16(m_Fat, index, value);
@@ -502,8 +511,12 @@ uint32_t FatDisk::SetCluster(uint32_t index, uint32_t value)
 
 bool FatDisk::IsEOC(uint32_t clustNum) const
 {
-    return (clustNum == CLUSTER_RESERVED)
-        || IsFat12()
+    if (clustNum < CLUSTER_FIRST || clustNum == GetClusterBadNumber()) {
+        // treat clusters 0 and 1, and (BAD) as EOC
+        return true;
+    }
+
+    return IsFat12()
             ? (clustNum >= CLUSTER_EOC_12_LO && clustNum <= CLUSTER_EOC_12_HI)
             : (clustNum >= CLUSTER_EOC_16_LO && clustNum <= CLUSTER_EOC_16_HI);
 }
@@ -582,14 +595,14 @@ bool FatDisk::ReadFile(char *pBuf, const DirEntry *pFile) const
     LogVeryVerbose("reading file '%s'...\n", sfn);
 
     if (!IsValidFile(pFile) || (pFile->FirstCluster == 0 && pFile->FileSize != 0)) {
-        LogError("attempt to read a label, device, deleted, or invalid file\n");
+        LogError("attempt to read a deleted or invalid file, device, or volume label\n");
         return false;
     }
 
-    uint32_t cluster = pFile->FirstCluster;
     int i = 0;
-
     bool success = true;
+
+    uint32_t cluster = pFile->FirstCluster;
     while (success && !IsEOC(cluster)) {
         success = ReadCluster(pBuf + (i * GetClusterSize()), cluster);
         cluster = GetCluster(cluster);
@@ -761,6 +774,8 @@ bool FatDisk::WriteFile(DirEntry *pFile, const char *pBuf, uint32_t sizeBytes)
 
     pFile->FirstCluster = firstCluster;
     pFile->FileSize = sizeBytes;
+
+    // TODO: DON'T FORGET TO WRITE THE FAT!!
 
 Cleanup:
     SafeFree(clusterBuf);

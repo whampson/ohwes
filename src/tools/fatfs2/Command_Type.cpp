@@ -53,7 +53,7 @@ int Type(const Command *cmd, const CommandArgs *args)
 
     bool success = true;
     char *fileBuf = NULL;
-    uint32_t size;
+    uint32_t fileSize;
     uint32_t allocSize;
     DirEntry f;
 
@@ -65,16 +65,16 @@ int Type(const Command *cmd, const CommandArgs *args)
     SafeRIF(!IsDeviceFile(&f), "'%s' is a device file\n", file);
 
     allocSize = disk->GetFileAllocSize(&f);
-    size = disk->GetFileSize(&f);
-    if (size > allocSize) {
+    fileSize = disk->GetFileSize(&f);
+    if (fileSize > allocSize) {
         LogWarning("stored file size is larger than file allocation size\n");
     }
 
-    fileBuf = (char *) SafeAlloc(allocSize+1);  // +1 to account for added NUL
+    fileBuf = (char *) SafeAlloc(allocSize);
     SafeRIF(disk->ReadFile(fileBuf, &f), "failed to read file - %s\n", file);
 
     if (IsDirectory(&f)) {
-        uint32_t count = size / sizeof(DirEntry);
+        uint32_t count = allocSize / sizeof(DirEntry);
         const DirEntry *e = (DirEntry *) fileBuf;
 
         for (uint32_t i = 0; i < count; i++, e++) {
@@ -86,8 +86,7 @@ int Type(const Command *cmd, const CommandArgs *args)
         }
     }
     else {
-        fileBuf[size] = '\0';
-        LogInfo("%s\n", fileBuf);
+        LogInfo("%.*s\n", fileSize, fileBuf);
     }
 
 Cleanup:
