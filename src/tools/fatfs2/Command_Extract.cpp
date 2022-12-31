@@ -8,8 +8,11 @@ int Extract(const Command *cmd, const CommandArgs *args)
     const char *filePath = NULL;
     const char *outPath = NULL;
 
+    int force = 0;
+
     static struct option LongOptions[] = {
         GLOBAL_LONGOPTS,
+        { "force", no_argument, &force, 1 },
         { 0, 0, 0, 0 }
     };
 
@@ -54,8 +57,7 @@ int Extract(const Command *cmd, const CommandArgs *args)
         outPath = GetFileName(filePath);
     }
 
-    // TODO: --force to allow overwrite
-    if (FileExists(outPath)) {
+    if (FileExists(outPath) && !force) {
         LogError("%s exists\n", outPath);
         return STATUS_ERROR;
     }

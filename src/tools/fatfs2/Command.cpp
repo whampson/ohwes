@@ -34,8 +34,8 @@ static const Command s_pCommands[] = {
     { Extract,
         "extract", PROG_NAME " extract DISK FILE [TARGET]",
         "Extract a file from the disk",
-        // TODO: --force, -r
-        NULL
+        // TODO: -r
+        "  --force           Overwrite the target file if it already exists\n"
     },
     { Help,
         "help", PROG_NAME " help [COMMAND]",
