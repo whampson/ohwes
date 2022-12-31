@@ -66,8 +66,8 @@ static const Command s_pCommands[] = {
     { Touch,
         "touch", PROG_NAME " touch DISK [OPTIONS] FILE",
         "Change file access and/or modification times",
-        "  -a                Change file access time only"
-        "  -m                Change file modification time only"
+        "  -a                Change file access time only\n"
+        "  -m                Change file modification time only\n"
     },
     { Type,
         "type", PROG_NAME " type DISK FILE",

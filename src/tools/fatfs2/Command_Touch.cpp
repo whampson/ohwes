@@ -66,6 +66,12 @@ int Touch(const Command *cmd, const CommandArgs *args)
 
     bool success = true;
     DirEntry f;
+    DirEntry p;
+    DirEntry *pFile = &f;
+    DirEntry *pParent = &p;
+    DirEntry *dirTable = NULL;
+    uint32_t tableSizeBytes;
+
     time_t t;
     struct tm tm;
 
@@ -73,22 +79,34 @@ int Touch(const Command *cmd, const CommandArgs *args)
         file = "/";
     }
 
-    SafeRIF(disk->FindFile(&f, NULL, file), "file not found - %s\n", file);
+    const char *fileName = GetFileName(file);
+
+    SafeRIF(disk->FindFile(pFile, pParent, file), "file not found - %s\n", file);
     SafeRIF(!IsRoot(&f), "cannot touch root directory because it does not have a timestamp\n");
+
+    tableSizeBytes = disk->GetFileAllocSize(pParent);
+    dirTable = (DirEntry *) SafeAlloc(tableSizeBytes);
+    SafeRIF(disk->ReadFile((char *) dirTable, pParent),
+        "failed to read directory table\n");
+
+    SafeRIF(disk->FindFileInDir(&pFile, dirTable, tableSizeBytes, fileName),
+        "could not find file in dir!\n");
+
+    // sanity check, should match value returned from first call to ReadFile()
+    assert(memcmp(pFile, &f, sizeof(DirEntry)) == 0);
 
     t = time(NULL);
     localtime_r(&t, &tm);
 
     if (modTime) {
-        SetModifiedTime(&f, &tm);
+        SetModifiedTime(pFile, &tm);
     }
     if (accTime) {
-        SetAccessedTime(&f, &tm);
+        SetAccessedTime(pFile, &tm);
     }
 
-    // TODO: write
-
-
+    SafeRIF(disk->WriteFile(pParent, (const char *) dirTable, tableSizeBytes),
+        "failed to write directory table\n");
 
 Cleanup:
     delete disk;
