@@ -58,7 +58,7 @@ int Extract(const Command *cmd, const CommandArgs *args)
     }
 
     if (FileExists(outPath) && !force) {
-        LogError("%s exists\n", outPath);
+        LogError("'%s' exists\n", outPath);
         return STATUS_ERROR;
     }
 

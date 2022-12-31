@@ -132,7 +132,7 @@ int Create(const Command *cmd, const CommandArgs *args)
     // Test whether the file exists,
     // fail if it does and --force not specified
     if (FileExists(path) && !force) {
-        LogError("%s exists\n", path);
+        LogError("'%s' exists\n", path);
         return STATUS_ERROR;
     }
 

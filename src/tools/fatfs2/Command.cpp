@@ -2,6 +2,11 @@
 #include "FatDisk.hpp"
 
 static const Command s_pCommands[] = {
+    { Add,
+        "add", PROG_NAME " add DISK [OPTIONS] FILE [TARGET]",
+        "Add a file to the disk",
+        "  --force           Overwrite the target file if it already exists\n"
+    },
     { Attr,
         "attr", PROG_NAME " attr DISK [OPTIONS] FILE",
         "View or change file attributes",
@@ -32,7 +37,7 @@ static const Command s_pCommands[] = {
         "  --offset=SECTOR   Write the file system to a specific sector on disk\n"
     },
     { Extract,
-        "extract", PROG_NAME " extract DISK FILE [TARGET]",
+        "extract", PROG_NAME " extract DISK [OPTIONS] FILE [TARGET]",
         "Extract a file from the disk",
         // TODO: -r
         "  --force           Overwrite the target file if it already exists\n"

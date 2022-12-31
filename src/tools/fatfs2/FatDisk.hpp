@@ -79,6 +79,9 @@ private:
     bool ReadRoot(char *pBuf) const;
     bool WriteRoot(const char *pBuf) const;
 
+    // bool ReadFAT();
+    bool WriteFAT() const;
+
     bool WalkPath(DirEntry *pFile, DirEntry *pParent, char *path,
         const DirEntry *pBase) const;
 };

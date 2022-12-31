@@ -28,7 +28,7 @@ int GetCommandCount(void);
 const Command * FindCommand(const char *name);
 int PrintCommandHelp(const Command *cmd);
 
-// int Add(const Command *cmd, const CommandArgs *args);
+int Add(const Command *cmd, const CommandArgs *args);
 int Attr(const Command *cmd, const CommandArgs *args);
 int Create(const Command *cmd, const CommandArgs *args);
 // int Copy(const Command *cmd, const CommandArgs *args);

@@ -703,6 +703,28 @@ bool FatDisk::WriteRoot(const char *pBuf) const
     return success;
 }
 
+bool FatDisk::WriteFAT() const
+{
+    bool success = true;
+    const BiosParamBlock *bpb = GetBPB();
+    int base = bpb->ReservedSectorCount;
+    int sectorCount = bpb->SectorsPerTable;
+    int tableCount = bpb->TableCount;
+
+    int n = 0;
+    while (success && n < tableCount) {
+        int i = 0;
+        LogVeryVerbose("writing file allocation table...\n");
+        while (success && i < sectorCount) {
+            success = WriteSector(base + i, m_fat + (i * GetSectorSize()));
+            i++;
+        }
+        base += sectorCount;
+        n++;
+    }
+    return success;
+}
+
 bool FatDisk::WriteFile(DirEntry *pFile, const char *pBuf, uint32_t sizeBytes)
 {
     if (IsRoot(pFile)) {
@@ -733,13 +755,6 @@ bool FatDisk::WriteFile(DirEntry *pFile, const char *pBuf, uint32_t sizeBytes)
         firstCluster = FindNextFreeCluster();
     }
 
-    // Now we need to write the file and update the cluster chain. We have two
-    // approaches:
-    //   1) Overwrite existing clusters for this file and invalidate any
-    //      clusters in the chain that were not reused.
-    //   2) Write the file to a brand new location on disk, then go back and
-    //      invalidate all of the old clusters.
-
     bool success = true;
     char *clusterBuf = NULL;
     uint32_t cluster = firstCluster;
@@ -754,55 +769,66 @@ bool FatDisk::WriteFile(DirEntry *pFile, const char *pBuf, uint32_t sizeBytes)
         uint32_t oldValue = GetCluster(cluster);
         // TODO: ensure old value is not bad or reserved
 
-        if (i < newCount) {
-            assert(!IsClusterNumberEOC(cluster));
+        if (i >= newCount) {
+            // File size reduced, mark old clusters as free
+            SetCluster(cluster, CLUSTER_FREE);
+            cluster = oldValue;
+            continue;
+        }
 
-            // mark the current cluster as RESERVED to indicate
-            // that it is currently being written
-            uint32_t next = SetCluster(cluster, CLUSTER_RESERVED);
+        assert(!IsClusterNumberEOC(cluster));
 
-            // figure out how may bytes we're writing into the cluster
-            uint32_t size = Min(sizeBytes - bytesWritten, GetClusterSize());
-            memcpy(clusterBuf, pBuf, size);
+        // Indicate that the cluster is currently being written
+        uint32_t next = SetCluster(cluster, CLUSTER_RESERVED);
 
-            // write the cluster
-            SafeRIF(WriteCluster(cluster, clusterBuf), "failed to write cluster %04X\n", cluster);
-            pBuf += size;
+        // Grab the existing cluster data
+        SafeRIF(ReadCluster(clusterBuf, cluster),
+            "failed to read cluster %04X\n", cluster);
 
-            // figure out what the next cluster should be
-            if (i == newCount - 1) {
-                // last cluster, mark it as EOC
-                SetCluster(cluster, GetClusterNumberEOC());
-                next = oldValue;    // preserve old value so we can invalidate old clusters
-            }
-            else if (IsClusterNumberEOC(next) || next == CLUSTER_FREE) {
-                // cluster was already EOC or free, but we have more to write,
-                // so we need to find the next free cluster
-                next = FindNextFreeCluster();
-                SetCluster(cluster, next);
-            }
-            else {
-                // we keep the original next cluster number
-                SetCluster(cluster, next);
-            }
+        // Figure out how may bytes we're writing into the cluster buffer
+        uint32_t size = Min(sizeBytes - bytesWritten, GetClusterSize());
 
+        // Copy file data into the cluster buffer
+        memcpy(clusterBuf, pBuf, size);
+
+        // Write the cluster
+        SafeRIF(WriteCluster(cluster, clusterBuf),
+            "failed to write cluster %04X\n", cluster);
+
+        // Advance the file pointer
+        pBuf += size;
+        bytesWritten += size;
+
+        // Figure out what the next cluster should be
+        if (i == newCount - 1) {
+            // This is the last cluster, mark it as EOC and preserve the old
+            // value so we can free the clusters no longer in use
+            SetCluster(cluster, GetClusterNumberEOC());
+            cluster = oldValue;
+        }
+        else if (IsClusterNumberEOC(next) || next == CLUSTER_FREE) {
+            // Cluster was already EOC or free, but we have more to write,
+            // so we need to find the next free cluster
+            next = FindNextFreeCluster();
+            SetCluster(cluster, next);
             cluster = next;
         }
         else {
-            // file size reduced, mark old clusters as free
-            SetCluster(cluster, CLUSTER_FREE);
-            cluster = oldValue;
+            // Cluster already in-use for the file we're overwriting,
+            // so just keep it as is
+            SetCluster(cluster, next);
+            cluster = next;
         }
     }
 
-    // Lastly, update the dir entry
+    // Update the dir entry
+    pFile->FirstCluster = firstCluster;
+    pFile->FileSize = sizeBytes;
     SetModifiedTime(pFile, tm);
     SetAccessedTime(pFile, tm);
 
-    pFile->FirstCluster = firstCluster;
-    pFile->FileSize = sizeBytes;
-
-    // TODO: DON'T FORGET TO WRITE THE FAT!!
+    // Write the FAT
+    SafeRIF(WriteFAT(), "failed to write FAT\n");
 
 Cleanup:
     SafeFree(clusterBuf);
