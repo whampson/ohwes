@@ -105,8 +105,10 @@ int Touch(const Command *cmd, const CommandArgs *args)
         SetAccessedTime(pFile, &tm);
     }
 
-    SafeRIF(disk->WriteFile(pParent, (const char *) dirTable, tableSizeBytes),
-        "failed to write directory table\n");
+    // !!! TODO: FIXME
+
+    // SafeRIF(disk->WriteFile(pParent, (const char *) dirTable, tableSizeBytes),
+    //     "failed to write directory table\n");
 
 Cleanup:
     delete disk;

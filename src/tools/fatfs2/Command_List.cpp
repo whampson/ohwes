@@ -232,7 +232,6 @@ int List(const Command *cmd, const CommandArgs *args)
     }
 
     if (bareFormat) goto Cleanup;
-    SafeRIF(numShown != 0, "file not found - %s\n", file);
 
     bytesFree = disk->CountFreeClusters() * disk->GetClusterSize();
     diskTotal = disk->GetClusterCount() * disk->GetClusterSize();

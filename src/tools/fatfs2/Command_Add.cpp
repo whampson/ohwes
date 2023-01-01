@@ -98,6 +98,7 @@ int Add(const Command *cmd, const CommandArgs *args)
     SafeRIF(disk->ReadFile((char *) pDirTable, pParent),
         "failed to read directory\n");
 
+    // TODO: dont modify state within an assert lol
     assert(disk->FindFileInDir(&pFile, pDirTable, dirSize, dstFileName));
     assert(memcmp(pFile, &f, sizeof(DirEntry)) == 0);
 
@@ -112,10 +113,13 @@ int Add(const Command *cmd, const CommandArgs *args)
         // TODO: add to dir table
     }
 
-    SafeRIF(disk->WriteFile(pFile, pFileBuf, (uint32_t) fileSize),
-        "failed to write file\n");
-    SafeRIF(disk->WriteFile(pParent, (const char *) pDirTable, dirSize),
-        "failed to write directory\n");
+
+    // !!! TODO: FIXME
+
+    // SafeRIF(disk->WriteFile(pFile, pFileBuf, (uint32_t) fileSize),
+    //     "failed to write file\n");
+    // SafeRIF(disk->WriteFile(pParent, (const char *) pDirTable, dirSize),
+    //     "failed to write directory\n");
 
 Cleanup:
     SafeFree(pFileBuf);

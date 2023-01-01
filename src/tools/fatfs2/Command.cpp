@@ -6,6 +6,7 @@ static const Command s_pCommands[] = {
         "add", PROG_NAME " add DISK [OPTIONS] FILE [TARGET]",
         "Add a file to the disk",
         "  --force           Overwrite the target file if it already exists\n"
+        // TODO: add multiple
     },
     { Attr,
         "attr", PROG_NAME " attr DISK [OPTIONS] FILE",
@@ -39,7 +40,8 @@ static const Command s_pCommands[] = {
     { Extract,
         "extract", PROG_NAME " extract DISK [OPTIONS] FILE [TARGET]",
         "Extract a file from the disk",
-        // TODO: -r
+        // TODO: wildcards?
+        // TODO: "  -r                Extract the contents of a directory\n"
         "  --force           Overwrite the target file if it already exists\n"
     },
     { Help,
@@ -59,9 +61,14 @@ static const Command s_pCommands[] = {
         "  -A                Show file attributes\n"
         "  -b                Bare format; print file names only\n"
         "  -n                Show short names only\n"
-        // "  -r                List the contents of subdirectories\n"
+        // TODO: "  -r                List the contents of subdirectories\n"
         "  -s                Show file allocation size\n"
         "  --offset=SECTOR   Read the file system from a specific sector on disk\n"
+    },
+    { Mkdir,
+        "mkdir", PROG_NAME " mkdir [OPTIONS] DISK PATH",
+        "Create a new directory",
+        "  -p                Create intermediate directories as required\n"
     },
     { Test,
         "test", PROG_NAME " test",

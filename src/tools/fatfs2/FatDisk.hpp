@@ -46,20 +46,23 @@ public:
     uint32_t MarkClusterBad(uint32_t index);
     uint32_t MarkClusterFree(uint32_t index);
 
-    uint32_t GetCluster(uint32_t index) const;
-    uint32_t SetCluster(uint32_t index, uint32_t value);
+    uint32_t GetCluster(uint32_t index) const;                  // TODO: rename GetClusterNumber?
+    uint32_t SetCluster(uint32_t index, uint32_t value);        // TODO: rename SetClusterNumber?
 
-    bool ReadSector(char *pBuf, uint32_t index) const;
-    bool ReadCluster(char *pBuf, uint32_t index) const;
+    bool ReadSector(char *pBuf, uint32_t index) const;          // TODO: private?
+    bool ReadCluster(char *pBuf, uint32_t index) const;         // TODO: private?
     bool ReadFile(char *pBuf, const DirEntry *pFile) const;
 
-    bool WriteSector(uint32_t index, const char *pBuf) const;
-    bool WriteCluster(uint32_t index, const char *pBuf) const;
-    bool WriteFile(DirEntry *pFile, const char *pBuf, uint32_t sizeBytes);
+    bool WriteSector(uint32_t index, const char *pBuf) const;   // TODO: private?
+    bool WriteCluster(uint32_t index, const char *pBuf) const;  // TODO: private?
+    bool WriteFile(const DirEntry *pFile, const char *pBuf);
 
     bool FindFile(DirEntry *pFile, DirEntry *pParent, const char *path) const;
     bool FindFileInDir(DirEntry **ppFile, const DirEntry *pDirTable,
         uint32_t sizeBytes, const char *name) const;
+
+    bool CreateDirectory(DirEntry *pDir, DirEntry *pParent, const char *name);
+    // TODO: bool CreateFile(DirEntry *pFile, DirEntry *pParent, const char *name);
 
     ~FatDisk();
 
@@ -69,7 +72,7 @@ private:
     size_t      m_base;         // byte offset in disk of FAT filesystem
     BootSector  m_boot;         // boot sector
     char        *m_fat;         // file allocation table
-    bool        m_bDirty;       // disk not dismounted properly
+    bool        m_bDirty;       // disk has pending writes (or was not dismounted properly if set on open)
     bool        m_bHardError;   // I/O errors or bad clusters encountered
 
     FatDisk(const char *path, FILE *file, size_t base, BootSector *boot, char *fat);

@@ -297,6 +297,17 @@ FatDisk::FatDisk(const char *path, FILE *file, size_t base, BootSector *boot, ch
 
 FatDisk::~FatDisk()
 {
+    // TODO: write FAT and clear dirty bit
+
+    bool success = true;
+    if (m_bDirty) {
+        // Write the FAT
+        SafeRIF(WriteFAT(), "failed to write FAT\n");
+    }
+
+    LogInfo("dtor()\n");
+
+Cleanup:
     SafeFree(m_fat);
     SafeClose(m_file);
 }
@@ -725,7 +736,7 @@ bool FatDisk::WriteFAT() const
     return success;
 }
 
-bool FatDisk::WriteFile(DirEntry *pFile, const char *pBuf, uint32_t sizeBytes)
+bool FatDisk::WriteFile(const DirEntry *pFile, const char *pBuf)
 {
     if (IsRoot(pFile)) {
         return WriteRoot(pBuf);
@@ -735,33 +746,37 @@ bool FatDisk::WriteFile(DirEntry *pFile, const char *pBuf, uint32_t sizeBytes)
     GetShortName(sfn, pFile);
     LogVeryVerbose("writing file '%s'...\n", sfn);
 
-    if (!IsValidFile(pFile)) {
+    if (!IsValidFile(pFile) || (pFile->FirstCluster == 0 && pFile->FileSize != 0)) {
         LogError("attempt to write a label, device, deleted, or invalid file\n");
         return false;
     }
 
-    uint32_t newCount = CeilDiv(sizeBytes, GetClusterSize());
+    uint32_t fileSize = IsDirectory(pFile)
+        ? GetFileAllocSize(pFile)
+        : pFile->FileSize;
+
+    uint32_t newCount = CeilDiv(fileSize, GetClusterSize());
     uint32_t existingCount = CountClusters(pFile);
     uint32_t totalCount = Max(newCount, existingCount);
+
+    LogInfo("newCount = %d, existingCount = %d, totalCount = %d\n",
+        newCount, existingCount, totalCount);
 
     if (newCount > CountFreeClusters()) {
         LogError("not enough space on disk!\n");
         return false;
     }
 
-    bool newFile = (existingCount == 0);
+    // bool newFile = (existingCount == 0);
     uint32_t firstCluster = pFile->FirstCluster;
-    if (newFile) {
-        firstCluster = FindNextFreeCluster();
-    }
+    // if (newFile) {
+    //     firstCluster = FindNextFreeCluster();
+    // }
 
     bool success = true;
     char *clusterBuf = NULL;
     uint32_t cluster = firstCluster;
     uint32_t bytesWritten = 0;
-
-    time_t now = time(NULL);
-    struct tm *tm = localtime(&now);
 
     clusterBuf = (char *) SafeAlloc(GetClusterSize());
 
@@ -786,7 +801,7 @@ bool FatDisk::WriteFile(DirEntry *pFile, const char *pBuf, uint32_t sizeBytes)
             "failed to read cluster %04X\n", cluster);
 
         // Figure out how may bytes we're writing into the cluster buffer
-        uint32_t size = Min(sizeBytes - bytesWritten, GetClusterSize());
+        uint32_t size = Min(fileSize - bytesWritten, GetClusterSize());
 
         // Copy file data into the cluster buffer
         memcpy(clusterBuf, pBuf, size);
@@ -821,14 +836,11 @@ bool FatDisk::WriteFile(DirEntry *pFile, const char *pBuf, uint32_t sizeBytes)
         }
     }
 
-    // Update the dir entry
-    pFile->FirstCluster = firstCluster;
-    pFile->FileSize = sizeBytes;
-    SetModifiedTime(pFile, tm);
-    SetAccessedTime(pFile, tm);
+    // indicate that we need to write the FAT later
+    // TODO: is this safe or should we write the FAT immediately?
+    m_bDirty = true;
 
-    // Write the FAT
-    SafeRIF(WriteFAT(), "failed to write FAT\n");
+    // TODO: write FAT with dirty bit set
 
 Cleanup:
     SafeFree(clusterBuf);
@@ -872,12 +884,12 @@ bool FatDisk::FindFileInDir(DirEntry **ppFile, const DirEntry *pDirTable,
         GetShortName(shortName, e);
 
         if (strncasecmp(shortName, name, MAX_SHORTNAME) == 0) {
-            *ppFile = (DirEntry *) e;
+            if (ppFile) *ppFile = (DirEntry *) e;
             return true;
         }
 
         if (hasLfn && wcsncmp(longName, wName, MAX_LONGNAME) == 0) {
-            *ppFile = (DirEntry *) e;
+            if (ppFile) *ppFile = (DirEntry *) e;
             return true;
         }
     }
@@ -921,5 +933,93 @@ bool FatDisk::WalkPath(DirEntry *pFile, DirEntry *pParent,
 
 Cleanup:
     SafeFree(dirTable);
+    return success;
+}
+
+bool FatDisk::CreateDirectory(DirEntry *pDir, DirEntry *pParent, const char *name)
+{
+    bool success = true;
+
+    uint32_t dirSize;
+    uint32_t parentDirSize;
+    uint32_t parentDirCount;
+    DirEntry *pParentDirTable = NULL;
+    DirEntry *pDirTable = NULL;
+    DirEntry *pDirEntry;
+    bool slotFound = false;
+
+    char sfn[MAX_SHORTNAME];
+    GetShortName(sfn, pParent);
+    LogVeryVerbose("creating directory '%s' in '%s'...\n", name, sfn);
+
+    // Get the parent directory table
+    parentDirSize = GetFileAllocSize(pParent);
+    parentDirCount = parentDirSize / sizeof(DirEntry);
+    pParentDirTable = (DirEntry *) SafeAlloc(parentDirSize);
+    SafeRIF(ReadFile((char *) pParentDirTable, pParent),
+        "failed to read parent directory\n");
+
+    // Look for a free slot
+    pDirEntry = pParentDirTable;
+    for (uint32_t i = 0; i < parentDirCount; i++, pDirEntry++) {
+        if (IsFree(pDirEntry)) {
+            slotFound = true;
+            break;
+        }
+    }
+
+    // TODO: allocate a new cluster, unless it's the root
+    SafeRIF(slotFound, "not enough space in directory!\n");
+
+    // Initialize the directory entry for the new directory
+    InitDirEntry(pDirEntry);
+    SetAttribute(pDirEntry, ATTR_DIRECTORY);
+    SafeRIF(SetShortName(pDirEntry, name),
+        "invalid short name - '%s'\n", name);  // TODO: lfn
+    pDirEntry->FirstCluster = FindNextFreeCluster();
+    SafeRIF(!IsClusterNumberEOC(pDirEntry->FirstCluster),
+        "not enough space on disk!\n");
+
+    // Update timestamps on . entry for parent dir
+    pParent->AccessedDate = pDirEntry->AccessedDate;
+    pParent->ModifiedDate = pDirEntry->ModifiedDate;
+    pParent->ModifiedTime = pDirEntry->ModifiedTime;
+
+    if (!IsRoot(pParent)) {
+        // Root does not have a . entry
+        // TODO: set volume label entry?
+        pParentDirTable[0] = *pParent;
+        SetLabel(&pParentDirTable[0], ".");
+    }
+
+    // Write the parent directory
+    SafeRIF(WriteFile(pParent, (char *) pParentDirTable),
+        "failed to write parent directory\n");
+
+    // Allocate the new directory table
+    dirSize = GetClusterSize();
+    pDirTable = (DirEntry *) SafeAlloc(dirSize);
+    memset(pDirTable, 0, dirSize);
+
+    // Create the . and .. entries
+    pDirTable[0] = *pDirEntry;
+    pDirTable[1] = *pParent;
+    SetLabel(&pDirTable[0], ".");
+    SetLabel(&pDirTable[1], "..");
+    // . and .. entries must have identical timestamps to the new 8.3 entry.
+    // per the MS FAT spec
+    pDirTable[1].CreationDate = pDirEntry->CreationDate;
+    pDirTable[1].CreationTime = pDirEntry->CreationTime;
+
+    // Write the new directory file
+    SafeRIF(WriteFile(pDirEntry, (char *) pDirTable),
+        "failed to write directory\n");
+
+    // Copy the new dir entry to our output pointer
+    *pDir = *pDirEntry;
+
+Cleanup:
+    SafeFree(pDirTable);
+    SafeFree(pParentDirTable);
     return success;
 }

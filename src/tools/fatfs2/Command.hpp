@@ -36,7 +36,7 @@ int Extract(const Command *cmd, const CommandArgs *args);
 int Help(const Command *cmd, const CommandArgs *args);
 int Info(const Command *cmd, const CommandArgs *args);
 int List(const Command *cmd, const CommandArgs *args);
-// int Mkdir(const Command *cmd, const CommandArgs *args);
+int Mkdir(const Command *cmd, const CommandArgs *args);
 // int Move(const Command *cmd, const CommandArgs *args);
 // int Remove(const Command *cmd, const CommandArgs *args);
 // int Rename(const Command *cmd, const CommandArgs *args);
