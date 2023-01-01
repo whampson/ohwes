@@ -304,6 +304,9 @@ void SetModifiedTime(DirEntry *dst, const struct tm *src);
 time_t GetAccessedTime(struct tm *dst, const DirEntry *src);
 void SetAccessedTime(DirEntry *dst, const struct tm *src);
 
+char * GetLabel(char dst[MAX_LABEL], const DirEntry *src);
+void SetLabel(DirEntry *dst, const char *src);
+
 /**
  * Gets the short file name from a directory entry. Returns a pointer to dst
  * for convenience.

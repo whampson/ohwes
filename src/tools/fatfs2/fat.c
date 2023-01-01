@@ -295,6 +295,18 @@ void SetAccessedTime(DirEntry *dst, const struct tm *src)
     SetDate(&dst->AccessedDate, src);
 }
 
+char * GetLabel(char dst[MAX_LABEL], const DirEntry *src)
+{
+    ReadFatString(dst, src->Label, LABEL_LENGTH);
+
+    return dst;
+}
+
+void SetLabel(DirEntry *dst, const char *src)
+{
+    WriteFatString(dst->Label, src, LABEL_LENGTH);
+}
+
 char * GetShortName(char dst[MAX_SHORTNAME], const DirEntry *src)
 {
     char name[MAX_NAME];
