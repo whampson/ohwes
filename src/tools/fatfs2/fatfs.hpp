@@ -37,6 +37,8 @@ extern int g_nQuietness;
 extern int g_nVerbosity;
 extern uint32_t g_nSectorOffset;
 
+extern int _g_nAllocCount;
+
 extern const char *g_ProgramName;
 
 extern "C" int optidx;
@@ -259,6 +261,7 @@ do {                                                                            
     SafeRIF(_ptr, "out of memory!\n");                                          \
     LogVeryVerbose("alloc'd %zu bytes at address %p\n",                         \
         (size_t) size, (void *) _ptr);                                          \
+    _g_nAllocCount++;                                                           \
     _ptr;                                                                       \
 })
 
@@ -267,6 +270,7 @@ do {                                                                            
     if (ptr) {                                                                  \
         free(ptr);                                                              \
         LogVeryVerbose("freed memory at address %p\n", (void *) ptr);           \
+        _g_nAllocCount--;                                                       \
         (ptr) = NULL;                                                           \
     }                                                                           \
 })

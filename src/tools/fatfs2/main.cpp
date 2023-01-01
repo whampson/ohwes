@@ -7,11 +7,16 @@ int g_nQuietness = 0;
 int g_nVerbosity = 0;
 uint32_t g_nSectorOffset = 0;
 
+int _g_nAllocCount = 0;
+
 const char *g_ProgramName = PROG_NAME;
 
 int optidx = 0;
 
 static CommandArgs s_CommandArgs = { };
+
+// TODO: allow an environment variable to be set containing disk image
+// for command-line brevity
 
 int PrintHelp()
 {
@@ -151,6 +156,10 @@ int main(int argc, char **argv)
     int status = cmd->Func(cmd, &s_CommandArgs);
     if (status != STATUS_SUCCESS) {
         LogVerbose("'%s' failed with exit code %d\n", cmd->Name, status);
+    }
+
+    if (_g_nAllocCount != 0) {
+        LogWarning("%d UNFREE'D ALLOCS!\n", _g_nAllocCount);
     }
 
     return status;
