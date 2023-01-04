@@ -1,6 +1,8 @@
 #include "Command.hpp"
 #include "FatDisk.hpp"
 
+// static bool CreateDirectory(const FatDisk *disk, DirEntry *pDir, DirEntry *pParent, const char *name)
+
 int Mkdir(const Command *cmd, const CommandArgs *args)
 {
     (void) cmd;
@@ -58,76 +60,65 @@ int Mkdir(const Command *cmd, const CommandArgs *args)
     bool success = true;
     FatDisk *disk = NULL;
 
+    DirEntry newFile;
     DirEntry parent;
-    DirEntry *pParent = &parent;
+    DirEntry *pNewDirTable = NULL;
     DirEntry *pParentDirTable = NULL;
     uint32_t parentDirSize;
-
-    DirEntry newDir;
-    DirEntry *pNewDir = &newDir;
-
-    char *parentName = NULL;
-    char *newDirName = NULL;
-
-    char dirPathCopy[MAX_PATH];
-    strncpy(dirPathCopy, dirPath, MAX_PATH);
+    uint32_t parentDirCount;
+    uint32_t newDirSize;
+    bool fileFound = false;
+    DirEntry *e;
 
     disk = FatDisk::Open(diskPath, g_nSectorOffset);
     SafeRIF(disk, "failed to open disk\n");
 
-    SafeRIF(disk->FindFile(pParent, NULL, "/"),
-        "failed to locate root directory\n");
+    SafeRIF(disk->CreateFile(&newFile, &parent, dirPath),
+        "failed to create directory file\n");
 
-    newDirName = strtok(dirPathCopy, "/\\");
+    parentDirSize = disk->GetFileAllocSize(&parent);
+    parentDirCount = parentDirSize / sizeof(DirEntry);
 
-    while (true) {
-        char *nextName = strtok(NULL, "/\\");
-        bool leaf = (nextName == NULL);
+    newDirSize = disk->GetClusterSize();
+    pNewDirTable = (DirEntry *) SafeAlloc(newDirSize);
+    pParentDirTable = (DirEntry *) SafeAlloc(parentDirSize);
 
-        parentDirSize = disk->GetFileAllocSize(pParent);
-        pParentDirTable = (DirEntry *) SafeAlloc(parentDirSize);
+    memset(pNewDirTable, 0, newDirSize);
 
-        SafeRIF(disk->ReadFile((char *) pParentDirTable, pParent),
-            "failed to read parent directory\n");
+    SafeRIF(disk->ReadFile((char *) pParentDirTable, &parent),
+        "failed to read parent directory\n");
 
-        DirEntry *pTmpDir = NULL;
-        bool dirExists = disk->FindFileInDir(&pTmpDir, pParentDirTable,
-            parentDirSize, newDirName);
-
-        if (dirExists) {
-            // Directory exists, and we are at the leaf node, FAIL.
-            SafeRIF(!leaf, "'%s' exists\n", newDirName);
-            // TODO: need a better way to log and fail, SafeRIT?
+    e = pParentDirTable;
+    for (uint32_t i = 0; i < parentDirCount; i++, e++) {
+        if (IsFree(e)) continue;
+        if (memcmp(&newFile, e, sizeof(DirEntry)) == 0) {
+            fileFound = true;
+            break;
         }
-        else {
-            // Directory does not exist and we have more to traverse, FAIL.
-            SafeRIF(leaf, "directory not found - %s\n", newDirName);
-            // TODO: -p
-        }
-
-        if (leaf) break;
-        SafeRIF(IsDirectory(pTmpDir), "not a directory - %s\n", newDirName);
-
-        *pParent = *pTmpDir;
-        parentName = newDirName;
-        newDirName = nextName;
-
-        SafeFree(pParentDirTable);
     }
 
-    SafeRIF(disk->CreateDirectory(pNewDir, pParent, newDirName),
-        "failed to create directory - %s\n", newDirName);
+    SafeRIF(fileFound, "could not locate file\n");
+    // TODO: read file back, set ATTR_DIRECTORY, add . and .. entries, write-out
 
-    // TODO: need to update parent dir entry timestamp.
-    // e.g. FOO/BAR exists, we create BAZ in BAR. The following should have
-    // identical 'modified' and 'accessed' timestamps:
-    //   FOO/BAR/
-    //   FOO/BAR/BAZ/
-    //   FOO/BAR/BAZ/.
-    //   FOO/BAR/BAZ/..
+    SetAttribute(e, ATTR_DIRECTORY);
+    e->FirstCluster = disk->FindNextFreeCluster();
+
+    pNewDirTable[0] = *e;
+    SetLabel(&pNewDirTable[0], ".");
+    pNewDirTable[1] = parent;
+    SetLabel(&pNewDirTable[1], "..");
+    // TODO: timestamps
+
+    SafeRIF(disk->WriteFile(e, (const char *) pNewDirTable),
+        "failed to write directory\n");
+
+    SafeRIF(disk->WriteFile(&parent, (const char *) pParentDirTable),
+        "failed to write directory\n");
 
 Cleanup:
     SafeFree(pParentDirTable);
+    SafeFree(pNewDirTable);
+
     delete disk;
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }

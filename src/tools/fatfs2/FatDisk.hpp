@@ -62,7 +62,7 @@ public:
         uint32_t sizeBytes, const char *name) const;
 
     bool CreateDirectory(DirEntry *pDir, DirEntry *pParent, const char *name);
-    // TODO: bool CreateFile(DirEntry *pFile, DirEntry *pParent, const char *name);
+    bool CreateFile(DirEntry *pFile, DirEntry *pParent, const char *path);
 
     ~FatDisk();
 

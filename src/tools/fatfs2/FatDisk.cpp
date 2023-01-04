@@ -1023,3 +1023,121 @@ Cleanup:
     SafeFree(pParentDirTable);
     return success;
 }
+
+bool FatDisk::CreateFile(DirEntry *pFile, DirEntry *pParent, const char *path)
+{
+    bool success = true;
+
+    DirEntry *pParentDir;
+    DirEntry *pParentDirTable = NULL;
+    uint32_t parentDirSize;
+
+    DirEntry *pOldParentDirTable = NULL;
+
+    DirEntry *pCurrentDir;
+    DirEntry *pCurrentDirTable = NULL;
+    uint32_t currentDirSize;
+
+    DirEntry *pNewFile;
+    DirEntry root = GetRootDirEntry();
+    pCurrentDir = &root;
+    pParentDir = NULL;
+
+    bool parentDirEntryValid = false;
+
+    char pathCopy[MAX_PATH];
+    strncpy(pathCopy, path, MAX_PATH);
+
+    const char *parentDirName = NULL;
+    const char *currentDirName = "/";
+    const char *newFileName = strtok(pathCopy, "/\\");
+
+    // TODO: disallow / . .. etc for path
+    // SafeRIF(newFileName != NULL, "cannot create file - %s\n", path);
+
+    while (true) {
+        const char *nextName = strtok(NULL, "/\\");
+        bool leaf = (nextName == NULL);
+
+        currentDirSize = GetFileAllocSize(pCurrentDir);
+        pCurrentDirTable = (DirEntry *) SafeAlloc(currentDirSize);
+
+        SafeRIF(ReadFile((char *) pCurrentDirTable, pCurrentDir),
+            "failed to read directory - %s\n", currentDirName);
+
+        DirEntry *pTmpFile =  NULL;
+        bool fileExists = FindFileInDir(&pTmpFile, pCurrentDirTable,
+            currentDirSize, newFileName);
+
+        if (fileExists) {
+            // If we are at the leaf node and file exists, FAIL.
+            SafeRIF(!leaf, "'%s' exists\n", path);
+        }
+        else {
+            // If we are not at the leaf node and file does not exist, FAIL.
+            SafeRIF(leaf, "file not found - %s\n", newFileName);
+            // TODO: add ability to make parent dirs
+        }
+
+        if (leaf) break;
+        SafeRIF(IsDirectory(pTmpFile), "not a directory - %s\n", newFileName);
+
+        SafeFree(pOldParentDirTable);
+        pOldParentDirTable = pParentDirTable;
+
+        pParentDir = pCurrentDir;
+        parentDirSize = currentDirSize;
+        pParentDirTable = pCurrentDirTable;
+        parentDirName = currentDirName;
+        currentDirName = newFileName;
+        newFileName = nextName;
+
+        pCurrentDir = pTmpFile;
+    }
+
+    if (IsRoot(pCurrentDir)) {
+        pParentDir = &pCurrentDirTable[0];  // TODO: search for label
+        parentDirEntryValid = IsLabel(pParentDir);
+    }
+    else {
+        parentDirEntryValid = true;
+    }
+
+    // find a spot for the new dir entry
+    // TODO: alloc another cluster if it's full (unless we're in the root)
+    // TODO: LFN
+
+    pNewFile = pCurrentDirTable;
+    for (size_t i = 0; i < currentDirSize / sizeof(DirEntry); i++, pNewFile++) {
+        if (IsFree(pNewFile)) break;
+    }
+
+    // Create the new dir entry
+    InitDirEntry(pNewFile);
+    SetAttribute(pNewFile, ATTR_ARCHIVE);
+    SafeRIF(SetShortName(pNewFile, newFileName),
+        "invalid short name - %s\n", newFileName);
+
+    // Update timestamps on parent entry
+    pCurrentDir->ModifiedDate = pNewFile->ModifiedDate;
+    pCurrentDir->ModifiedTime = pNewFile->ModifiedTime;
+    pCurrentDir->AccessedDate = pNewFile->AccessedDate;
+
+    pCurrentDirTable[0].ModifiedDate = pCurrentDir->ModifiedDate;
+    pCurrentDirTable[0].ModifiedTime = pCurrentDir->ModifiedTime;
+    pCurrentDirTable[0].AccessedDate = pCurrentDir->AccessedDate;
+
+    SafeRIF(WriteFile(pCurrentDir, (char *) pCurrentDirTable),
+        "failed to write directory - %s\n", currentDirName);
+    SafeRIF(WriteFile(pParentDir, (char *) pParentDirTable),
+        "failed to write directory - %s\n", parentDirName);
+
+    *pParent = *pCurrentDir;
+    *pFile = *pNewFile;
+
+Cleanup:
+    SafeFree(pOldParentDirTable);
+    SafeFree(pCurrentDirTable);
+    SafeFree(pParentDirTable);
+    return success;
+}
