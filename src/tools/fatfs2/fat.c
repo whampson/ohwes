@@ -244,7 +244,7 @@ void InitDirEntry(DirEntry *e)
 
     struct tm tm;
     time_t now = time(NULL);
-    localtime_r(&now, &tm);
+    localtime_s(&tm, &now);
 
     SetCreationTime(e, &tm);
     SetModifiedTime(e, &tm);
@@ -308,7 +308,7 @@ char * GetShortName(char dst[MAX_SHORTNAME], const DirEntry *src)
     // 0xE5 is a valid KANJI lead byte, but it's been replaced with
     // 0x05 to distinguish it from the 'deleted' marker. Let's fix that!
     if (name[0] == 0x05) {
-        name[0] = 0xE5;
+        name[0] = (char) 0xE5;
     }
 
     if (ext[0] != '\0') {

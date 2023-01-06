@@ -265,8 +265,8 @@ do {                                                                            
 #define SafeFree(ptr)                                                           \
 ({                                                                              \
     if (ptr) {                                                                  \
+        LogVeryVerbose("freeing memory at address %p\n", (void *) ptr);         \
         free(ptr);                                                              \
-        LogVeryVerbose("freed memory at address %p\n", (void *) ptr);           \
         (ptr) = NULL;                                                           \
     }                                                                           \
 })

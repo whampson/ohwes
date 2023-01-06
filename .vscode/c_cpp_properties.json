@@ -1,7 +1,7 @@
 {
     "configurations": [
         {
-            "name": "Niobium",
+            "name": "ohwes",
             "includePath": [
                 "${workspaceFolder}/src/include/*"
             ],
@@ -17,42 +17,22 @@
             ]
         },
         {
-            "name": "Niobium Tools (MinGW)",
-            "includePath": [
-            ],
-            "defines": [
-                "_DEBUG"
-            ],
+            "name": "ohwes (Tools) [MinGW]",
+            "includePath": [],
             "compilerPath": "C:/msys64/mingw32/bin/gcc.exe",
             "cStandard": "c11",
             "cppStandard": "c++11",
-            "intelliSenseMode": "gcc-x86",
-            "compilerArgs": [
-                "-Wall",
-                "-Werror",
-                "-Wextra",
-                "-Wpedantic",
-                "-fshort-enums"
-            ]
+            "intelliSenseMode": "windows-gcc-x86",
+            "compilerArgs": []
         },
         {
-            "name": "Niobium Tools (macOS)",
-            "includePath": [
-            ],
-            "defines": [
-                "_DEBUG"
-            ],
+            "name": "ohwes (Tools) [macOS]",
+            "includePath": [],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "c11",
             "cppStandard": "c++11",
             "intelliSenseMode": "gcc-x86",
-            "compilerArgs": [
-                "-Wall",
-                "-Werror",
-                "-Wextra",
-                "-Wpedantic",
-                "-fshort-enums"
-            ]
+            "compilerArgs": []
         }
     ],
     "version": 4

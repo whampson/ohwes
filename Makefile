@@ -128,18 +128,24 @@ DEP                     = $(OBJ:.o=.d)
 
 export C_FLAGS          = -std=c11
 export C_DEFINES        =
-export C_WARNINGS       = all extra pedantic error
+export C_WARNINGS       = all extra error
 export CXX_FLAGS        = -std=c++11
 export CXX_DEFINES      =
-export CXX_WARNINGS     = all extra pedantic error
+export CXX_WARNINGS     = all extra error
 export AS_FLAGS         =
 export AS_DEFINES       =
-export AS_WARNINGS      = all extra pedantic error
+export AS_WARNINGS      = all extra error
 export LD_FLAGS         =
 export LD_WARNINGS      =
 export OBJCOPY_FLAGS    = -Obinary
 
 MAKEFLAGS               = --no-print-directory
+
+ifndef WIN32
+  C_WARNINGS += pedantic
+  CXX_WARNINGS += pedantic
+  AS_WARNINGS ++ pedantic
+endif
 
 ifdef DEBUG
   C_DEFINES             += DEBUG

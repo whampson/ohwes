@@ -77,7 +77,7 @@ int Touch(const Command *cmd, const CommandArgs *args)
     SafeRIF(!IsRoot(&f), "cannot touch root directory because it does not have a timestamp\n");
 
     t = time(NULL);
-    localtime_r(&t, &tm);
+    localtime_s(&tm, &t);
 
     if (modTime) {
         SetModifiedTime(&f, &tm);
