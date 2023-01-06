@@ -249,6 +249,8 @@ int Create(const Command *cmd, const CommandArgs *args)
     }
 
     char labelBuf[MAX_LABEL];
+    char linebuf[80];
+    char *p = linebuf;
     ReadFatString(labelBuf, bpb.Label, LABEL_LENGTH);
 
     LogInfo("%s statistics:\n", GetFileName(path));
@@ -271,11 +273,12 @@ int Create(const Command *cmd, const CommandArgs *args)
     LogInfo("root directory contains %d %s, occupying %d %s\n",
         PluralForPrintf(rootDirCapacity, "slot"),
         PluralForPrintf(rootSectorCount, "sector"));
-    LogInfo("volume ID is %08X", bpb.VolumeId);
+    p += sprintf(p, "volume ID is %08X", bpb.VolumeId);
     if (labelBuf[0] != '\0')
-        LogInfo(", volume label is '%s'\n", labelBuf);
+        p +=sprintf(p, ", volume label is '%s'", labelBuf);
     else
-        LogInfo(", volume has no label\n");
+        p += sprintf(p, ", volume has no label");
+    LogInfo("%s\n", linebuf);
     LogInfo("%d bytes free\n",
         clusters * sectorsPerCluster * sectorSize);
 

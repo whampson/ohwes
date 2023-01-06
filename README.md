@@ -7,7 +7,12 @@
 - `MSYS> pacman -Syu`
 - `MINGW32> pacman -S mingw32/mingw-w64-i686-toolchain`
 - `MINGW32> cp /mingw32/bin/mingw32-make.exe /mingw32/bin/make.exe`
-- `MINGW32> make`
+- `MINGW32> pacman -S mingw32/mingw-w64-i686-qemu`
+
+Download and extract [i686-elf-tools for Windows](https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-windows.zip).
+Copy the contents of `bin/`, `i686-elf/`, `lib/`, and `libexec/` to `/mingw32/`.
+
+
 
 ### macOS/OSX
 Execute `$ brew install binutils` then `$ brew install coreutils`.

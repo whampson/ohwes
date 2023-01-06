@@ -144,7 +144,7 @@ MAKEFLAGS               = --no-print-directory
 ifndef WIN32
   C_WARNINGS += pedantic
   CXX_WARNINGS += pedantic
-  AS_WARNINGS ++ pedantic
+  AS_WARNINGS += pedantic
 endif
 
 ifdef DEBUG
@@ -179,7 +179,7 @@ endif
 # ------------------------------------------------------------------------------
 # Rules
 
-.PHONY: all remake clean nuke dirs debug-make $(DIRS)
+.PHONY: all remake clean nuke dirs debug-make $(DIRS) img
 .DEFAULT_GOAL: all
 
 ifdef NO_ELF
@@ -198,6 +198,9 @@ clean:
 nuke:
 	@$(RM) -r $(_OBJROOT)
 	@$(RM) -r $(_BINROOT)
+
+img:
+	@fatfs -p create --force $(_BINROOT)/ohwes.img
 
 dirs:
 	@$(MKDIR) $(BIN_PATH)

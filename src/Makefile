@@ -1,4 +1,4 @@
-#DIRS = tools boot
-DIRS = tools
+DIRS = tools boot
+# DIRS = tools
 
 include $(_MAKEROOT)
