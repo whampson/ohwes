@@ -154,6 +154,7 @@ ifdef DEBUG
 
   C_FLAGS               += -g
   CXX_FLAGS             += -g
+  AS_FLAGS              += -g
 endif
 
 ifdef ENTRY_POINT
@@ -200,7 +201,9 @@ nuke:
 	@$(RM) -r $(_BINROOT)
 
 img:
-	@fatfs -p create --force $(_BINROOT)/ohwes.img
+	fatfs -pq create --force $(_BINROOT)/ohwes.img
+	dd if=$(_BINROOT)/$(ARCH)/boot/boot.bin of=$(_BINROOT)/ohwes.img bs=512 count=1 conv=notrunc status=none
+	fatfs -p info $(_BINROOT)/ohwes.img
 
 dirs:
 	@$(MKDIR) $(BIN_PATH)

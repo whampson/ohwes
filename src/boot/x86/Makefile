@@ -1,7 +1,5 @@
-TARGET = $(BIN_PATH)/boot/init.sys
-ENTRY_POINT = _x86_init
-CODE_BASE = 0x0000
-
-# DIRS = fat
+TARGET = $(BIN_PATH)/boot/boot.bin
+ENTRY_POINT = Entry
+CODE_BASE = 0x7C00
 
 include $(_MAKEROOT)

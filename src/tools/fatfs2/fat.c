@@ -88,26 +88,28 @@ inline void InitBootSector(
     bootSect->BiosParams = *bpb;
 
     static const char JumpCode[] = {
-    /* entry:      jmp     boot_code    */  '\xEB', '\x3C',
+    /* Entry:      jmp     BootCode     */  '\xEB', '\x3C',
     /*             nop                  */  '\x90'
     };
     static const char BootCode[] = {
-    /* boot_code:  pushw   %cs          */  "\x0E"
-    /*             popw    %ds          */  "\x1F"
-    /*             leaw    message, %si */  "\x8D\x36\x1C\x00"
-    /* print_loop: movb    $0x0e, %ah   */  "\xB4\x0E"
+    /* BootCode:   cld                  */  "\xFC"
+    /*             xorw    %ax, %ax     */  "\x31\xC0"
+    /*             movw    %ax, %ds     */  "\x8E\xD8"
+    /*             leaw    Message, %si */  "\x8D\x36\x5D\x7C"
+    /* PrintLoop:  movb    $0x0e, %ah   */  "\xB4\x0E"
     /*             movw    $0x07, %bx   */  "\xBB\x07\x00"
     /*             lodsb                */  "\xAC"
     /*             andb    %al, %al     */  "\x20\xC0"
-    /*             jz      key_press    */  "\x74\x04"
+    /*             jz      KeyPress    */   "\x74\x04"
     /*             int     $0x10        */  "\xCD\x10"
-    /*             jmp     print_loop   */  "\xEB\xF2"
-    /* key_press:  xorb    %ah, %ah     */  "\x30\xE4"
+    /*             jmp     PrintLoop    */  "\xEB\xF2"
+    /* KeyPress:   xorb    %ah, %ah     */  "\x30\xE4"
     /*             int     $0x16        */  "\xCD\x16"
     /*             int     $0x19        */  "\xCD\x19"
-    /* halt:       jmp     halt         */  "\xEB\xFE"
-    /* message:    .ascii               */  "\r\nThis disk is not bootable!"
-    /*             .asciz               */  "\r\nInsert a bootable disk and press any key to try again..."
+    /* Halt:       jmp     Halt         */  "\xEB\xFE"
+    /* Message:    .ascii               */  "\r\nThis disk is not bootable!"
+    /*             .ascii               */  "\r\nPlease insert a bootable disk, "
+    /*             .asciz               */  "then press any key to try again...\r\n"
     };
 
     static_assert(sizeof(JumpCode) <= sizeof(bootSect->JumpCode), "JumpCode is too large!");

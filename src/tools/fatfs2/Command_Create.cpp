@@ -248,39 +248,14 @@ int Create(const Command *cmd, const CommandArgs *args)
         return STATUS_ERROR;
     }
 
-    char labelBuf[MAX_LABEL];
-    char linebuf[80];
-    char *p = linebuf;
-    ReadFatString(labelBuf, bpb.Label, LABEL_LENGTH);
+    FatDisk *disk = FatDisk::Open(path, g_nSectorOffset);
+    if (!disk) {
+        LogError("failed to open newly-created disk\n");
+        return STATUS_ERROR;
+    }
 
-    LogInfo("%s statistics:\n", GetFileName(path));
-    LogInfo("%d %s, %d %s, %d %s per track\n",
-        PluralForPrintf(sectorCount, "sector"),
-        PluralForPrintf(bpb.HeadCount, "head"),
-        PluralForPrintf(bpb.SectorsPerTrack, "sector"));
-    LogInfo("sector size is %d bytes, %d %s per cluster\n",
-        bpb.SectorSize,
-        PluralForPrintf(bpb.SectorsPerCluster, "sector"));
-    LogInfo("%d reserved %s\n",
-        PluralForPrintf(bpb.ReservedSectorCount, "sector"));
-    LogInfo("media type is 0x%02X, drive number is 0x%02X\n",
-        bpb.MediaType, bpb.DriveNumber);
-    LogInfo("%d %d-bit %s, %d %s per FAT, providing %d clusters\n",
-        bpb.TableCount, fatWidth,
-        Plural(bpb.TableCount, "FAT"),
-        PluralForPrintf(fatSize / bpb.SectorSize, "sector"),
-        clusters);
-    LogInfo("root directory contains %d %s, occupying %d %s\n",
-        PluralForPrintf(rootDirCapacity, "slot"),
-        PluralForPrintf(rootSectorCount, "sector"));
-    p += sprintf(p, "volume ID is %08X", bpb.VolumeId);
-    if (labelBuf[0] != '\0')
-        p +=sprintf(p, ", volume label is '%s'", labelBuf);
-    else
-        p += sprintf(p, ", volume has no label");
-    LogInfo("%s\n", linebuf);
-    LogInfo("%d bytes free\n",
-        clusters * sectorsPerCluster * sectorSize);
+    PrintDiskInfo(path, disk);
 
+    delete disk;
     return STATUS_SUCCESS;
 }

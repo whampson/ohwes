@@ -7,6 +7,15 @@
 # Boots OH-WES in QEMU.
 #===============================================================================
 
-qemu-system-i386.exe \
-    -boot a \
-    -fda $_BINROOT/ohwes.img
+QEMU_FLAGS=""
+QEMU_FLAGS+=" -boot a"
+QEMU_FLAGS+=" -fda $_BINROOT/ohwes.img"
+
+if [ "$1" = "debug" ]; then
+QEMU_FLAGS+=" -S -m 16 -s"
+fi
+
+QEMU_EXEC="qemu-system-i386w.exe $QEMU_FLAGS"
+
+echo $QEMU_EXEC
+$QEMU_EXEC
