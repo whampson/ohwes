@@ -244,13 +244,12 @@ void InitDirEntry(DirEntry *e)
 {
     memset(e, 0, sizeof(DirEntry));
 
-    struct tm tm;
     time_t now = time(NULL);
-    localtime_s(&tm, &now);
+    struct tm *tm = localtime(&now);
 
-    SetCreationTime(e, &tm);
-    SetModifiedTime(e, &tm);
-    SetAccessedTime(e, &tm);
+    SetCreationTime(e, tm);
+    SetModifiedTime(e, tm);
+    SetAccessedTime(e, tm);
 }
 
 time_t GetCreationTime(struct tm *dst, const DirEntry *src)

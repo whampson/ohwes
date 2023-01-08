@@ -73,7 +73,7 @@ int Touch(const Command *cmd, const CommandArgs *args)
     uint32_t tableSizeBytes;
 
     time_t t;
-    struct tm tm;
+    struct tm *tm;
 
     if (file == NULL) {
         file = "/";
@@ -96,13 +96,13 @@ int Touch(const Command *cmd, const CommandArgs *args)
     assert(memcmp(pFile, &f, sizeof(DirEntry)) == 0);
 
     t = time(NULL);
-    localtime_s(&tm, &t);
+    tm = localtime(&t);
 
     if (modTime) {
-        SetModifiedTime(pFile, &tm);
+        SetModifiedTime(pFile, tm);
     }
     if (accTime) {
-        SetAccessedTime(pFile, &tm);
+        SetAccessedTime(pFile, tm);
     }
 
     // !!! TODO: FIXME
