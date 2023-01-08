@@ -8,11 +8,12 @@
 #===============================================================================
 
 QEMU_FLAGS=""
+QEMU_FLAGS+=" -m 4M"
 QEMU_FLAGS+=" -boot a"
-QEMU_FLAGS+=" -fda $_BINROOT/ohwes.img"
+QEMU_FLAGS+=" -fda $BINROOT/ohwes.img"
 
 if [ "$1" = "debug" ]; then
-QEMU_FLAGS+=" -S -m 16 -s"
+QEMU_FLAGS+=" -S -s"
 fi
 
 QEMU_EXEC="qemu-system-i386w.exe $QEMU_FLAGS"

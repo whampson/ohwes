@@ -3,216 +3,232 @@
 # Created: July 4, 2022
 #  Author: Wes Hampson
 #
-# The master Makefile containing the build system infrastructure.
-# All Makefiles in this project must include this Makefile in order for the
-# build system to function properly. This can be done by adding the following
-# line in your Makefile:
-#     include $(_MAKEROOT)
-#
-# _MAKEROOT is an environment variable that contains the path to this file.
+# The master Makefile containing the build system infrastructure. All Makefiles
+# in this project must 'include' this Makefile in order for the build system to
+# function properly. This can be done by adding the following line in your
+# Makefile:
+#     include $(MAKEROOT)
+# MAKEROOT is an environment variable that contains the path to this file.
+# The location of this line in your Makefile will affect the build behavior.
+# Please define all prerequisite variables, such as SOURCES, DIRS, and TARGET,
+# before including MAKEROOT.
 #===============================================================================
 
-# !!! TODO: header file change detection appears to be broken (MinGW)
-
-ifndef _MAKEROOT
-  $(error "Please source src/scripts/env.sh before invoking this Makefile.")
+ifndef MAKEROOT
+  $(error "Build environment not set! Please source src/scripts/env.sh before invoking this Makefile.")
 endif
 
 # ------------------------------------------------------------------------------
 # Global config
 
-export DEBUG            = 1
-export ARCH             = x86
+export ARCH  = x86
+export DEBUG = 1
 
 # ------------------------------------------------------------------------------
 # Makefile build OS detection
 # https://stackoverflow.com/a/14777895
 
-ifeq ($(OS),Windows_NT)
+ifeq '$(findstring :,$(PATH))' ';'
   BUILD_OS := Windows
 else
-  BUILD_OS := $(shell sh -c 'uname 2>/dev/null || echo Unknown')
+  BUILD_OS := $(shell uname 2>/dev/null || echo Unknown)
+  BUILD_OS := $(patsubst CYGWIN%,Cygwin,$(BUILD_OS))
+  BUILD_OS := $(patsubst MSYS%,MSYS,$(BUILD_OS))
+  BUILD_OS := $(patsubst MINGW%,MSYS,$(BUILD_OS))
 endif
 
-ifeq ($(BUILD_OS),Windows)
-  WIN32 = 1
+ifeq ($(BUILD_OS),MSYS)
+  MSYS     = 1
+  DEFINES += MSYS
 else ifeq ($(BUILD_OS),Darwin)
-  OSX = 1
-else ifeq ($(BUILD_OS),Linux)
-  LINUX = 1
+  OSX      = 1
+  DEFINES += OSX
 else
-  $(error Unknown system type! Cannot build.)
+  $(warning Unsupported system type!)
 endif
-
 
 # ------------------------------------------------------------------------------
 # Directory tree tracking
 
-ifeq ($(_OSROOT),$(CURDIR))
-  __TREEROOT = 1
-  __OSROOT = 1
+ifeq ($(OSROOT),$(CURDIR))
+  TREEROOT = 1
+  IN_OSROOT = 1
 endif
-ifeq ($(_SRCROOT),$(CURDIR))
-  __TREEROOT = 1
-  __SRCROOT = 1
+ifeq ($(SRCROOT),$(CURDIR))
+  TREEROOT = 1
 endif
 
-ifndef __TREEROOT
-  export TREE           = $(subst $(_SRCROOT)/,,$(CURDIR))
+ifndef TREEROOT
+  export TREE = $(subst $(SRCROOT)/,,$(CURDIR))
+endif
+
+# ------------------------------------------------------------------------------
+# Directories
+
+ifndef BINDIR
+  export BINDIR     := $(BINROOT)/$(ARCH)
+endif
+ifndef OBJDIR
+  export OBJDIR     := $(OBJROOT)
+  ifndef TREEROOT
+    export OBJDIR   := $(OBJDIR)/$(TREE)
+  endif
 endif
 
 # ------------------------------------------------------------------------------
 # Shell Commands
 
-BINUTILS_PREFIX         := i686-elf-
-export AS               := $(BINUTILS_PREFIX)gcc
-export CC               := $(BINUTILS_PREFIX)gcc
-export CXX              := $(BINUTILS_PREFIX)g++
-export LD               := $(BINUTILS_PREFIX)ld
-export OBJCOPY          := $(BINUTILS_PREFIX)objcopy
-export MKDIR            := mkdir -p
-export RM               := rm -f
-export COPY             := cp -f
-
-# ------------------------------------------------------------------------------
-# Directories
-
-ifndef BIN_PATH
-  export BIN_PATH       := $(_BINROOT)/$(ARCH)
-endif
-ifndef OBJ_PATH
-  export OBJ_PATH       := $(_OBJROOT)/$(ARCH)
-  ifndef __TREEROOT
-    export OBJ_PATH     := $(OBJ_PATH)/$(TREE)
-  endif
-endif
+BINUTILS_PREFIX     := i686-elf-
+export AS           := $(BINUTILS_PREFIX)gcc
+export CC           := $(BINUTILS_PREFIX)gcc
+export CXX          := $(BINUTILS_PREFIX)g++
+export LD           := $(BINUTILS_PREFIX)ld
+export OBJCOPY      := $(BINUTILS_PREFIX)objcopy
+export MKDIR        := mkdir -p
+export RM           := rm -f
+export COPY         := cp -f
 
 # ------------------------------------------------------------------------------
 # Includes
 
-ifndef INC
-  export INC            := . \
-                          $(_SRCROOT)/include
+ifndef INCLUDES
+  export INCLUDES   := . $(SRCROOT)/include
 endif
-
-# ------------------------------------------------------------------------------
-# Binaries
-
-TARGET_ELF              = $(addsuffix .elf, $(basename $(TARGET)))
 
 # ------------------------------------------------------------------------------
 # Sources, objects, and dependencies
 
-__SRC_S                 = $(wildcard *.S)
-__SRC_C                 = $(wildcard *.c)
-__SRC_CPP               = $(wildcard *.cpp)
+SOURCES_S           = $(filter %.S,$(SOURCES))
+SOURCES_C           = $(filter %.c,$(SOURCES))
+SOURCES_CPP         = $(filter %.cpp,$(SOURCES))
 
-ifdef __SRC_S
-  SRC                   += $(__SRC_S)
-  OBJ                   += $(addprefix $(OBJ_PATH)/,$(__SRC_S:.S=.o))
+ifdef SOURCES_S
+  OBJECTS           += $(addprefix $(OBJDIR)/,$(SOURCES_S:.S=.o))
 endif
-ifdef __SRC_C
-  SRC                   += $(__SRC_C)
-  OBJ                   += $(addprefix $(OBJ_PATH)/,$(__SRC_C:.c=.o))
+ifdef SOURCES_C
+  OBJECTS           += $(addprefix $(OBJDIR)/,$(SOURCES_C:.c=.o))
 endif
-ifdef __SRC_CPP
-  SRC                   += $(__SRC_CPP)
-  OBJ                   += $(addprefix $(OBJ_PATH)/,$(__SRC_CPP:.cpp=.o))
+ifdef SOURCES_CPP
+  OBJECTS           += $(addprefix $(OBJDIR)/,$(SOURCES_CPP:.cpp=.o))
 endif
 
-DEP                     = $(OBJ:.o=.d)
+DEPENDS             = $(OBJECTS:.o=.d)
+
+# ------------------------------------------------------------------------------
+# Binaries
+
+ifdef TARGET
+  TARGET              := $(BINDIR)/$(TARGET)
+  TARGET_ELF          = $(addsuffix .elf, $(basename $(TARGET)))
+endif
 
 # ------------------------------------------------------------------------------
 # Defines, flags, and warnings
-# -W, -D, -I automatically appended to warnings, defines, includes
+# -W, -D, -I automatically appended to warnings, defines, includes respectively.
 
-export C_FLAGS          = -std=c11
-export C_DEFINES        =
-export C_WARNINGS       = all extra error
-export CXX_FLAGS        = -std=c++11
-export CXX_DEFINES      =
-export CXX_WARNINGS     = all extra error
-export AS_FLAGS         =
-export AS_DEFINES       =
-export AS_WARNINGS      = all extra error
-export LD_FLAGS         =
-export LD_WARNINGS      =
-export OBJCOPY_FLAGS    = -Obinary
+MAKEFLAGS           += --no-print-directory
 
-MAKEFLAGS               = --no-print-directory
+export CFLAGS       += -std=c11
+export CXXFLAGS     += -std=c++11
+export LDFLAGS      +=
 
-ifndef WIN32
-  C_WARNINGS += pedantic
-  CXX_WARNINGS += pedantic
-  AS_WARNINGS += pedantic
+export CC_WARNINGS  += all extra error
+export CXX_WARNINGS += all extra error
+export AS_WARNINGS  += all extra error
+
+ifndef MSYS
+  CC_WARNINGS       += pedantic
+  CXX_WARNINGS      += pedantic
+  AS_WARNINGS       += pedantic
 endif
 
 ifdef DEBUG
-  C_DEFINES             += DEBUG
-  CXX_DEFINES           += DEBUG
-  AS_DEFINES            += DEBUG
-
-  C_FLAGS               += -g
-  CXX_FLAGS             += -g
-  AS_FLAGS              += -g
+  DEFINES           += DEBUG
+  CFLAGS            += -g
+  CXXFLAGS          += -g
+  ASFLAGS           += -g
+  LDFLAGS           += -g
 endif
 
-ifdef ENTRY_POINT
-  LD_FLAGS              += -e $(ENTRY_POINT)
+ifdef ENTRYPOINT
+  LDFLAGS           += -e $(ENTRYPOINT)
 endif
-ifdef CODE_BASE
-  LD_FLAGS              += -Ttext $(CODE_BASE)
+ifdef BASE
+  LDFLAGS           += -Ttext $(BASE)
 endif
 
-CC_ARGS                 = $(addprefix -D,$(C_DEFINES)) $(addprefix -I,$(INC)) $(addprefix -W,$(C_WARNINGS)) $(C_FLAGS)
-CXX_ARGS                = $(addprefix -D,$(CXX_DEFINES)) $(addprefix -I,$(INC)) $(addprefix -W,$(CXX_WARNINGS)) $(CXX_FLAGS)
-AS_ARGS                 = $(addprefix -D,$(AS_DEFINES)) $(addprefix -I,$(INC)) $(addprefix -W,$(AS_WARNINGS)) $(AS_FLAGS)
-LD_ARGS                 = $(LD_FLAGS)
-OBJCOPY_ARGS            = $(OBJCOPY_FLAGS)
+CC_ARGS             = $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INCLUDES)) $(addprefix -W,$(CC_WARNINGS)) $(CFLAGS)
+CXX_ARGS            = $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INCLUDES)) $(addprefix -W,$(CXX_WARNINGS)) $(CXXFLAGS)
+AS_ARGS             = $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INCLUDES)) $(addprefix -W,$(AS_WARNINGS)) $(ASFLAGS)
+LD_ARGS             = $(LDFLAGS)
+OBJCOPY_ARGS        = -Obinary
 
 # ------------------------------------------------------------------------------
 # Settings for this (root) Makefile
 
-ifdef __OSROOT
-  DIRS                  = src
+ifdef IN_OSROOT
+  DIRS         = src
+else
+  ifndef SOURCES
+    ifndef DIRS
+      $(error Need to define either SOURCES or DIRS!)
+    endif
+  endif
+  ifndef DIRS
+    ifndef SOURCES
+      $(error Need to define either SOURCES or DIRS!)
+    endif
+  endif
 endif
 
 # ------------------------------------------------------------------------------
 # Rules
 
-.PHONY: all remake clean nuke dirs debug-make $(DIRS) img
+.PHONY: all clean nuke remake dirs $(DIRS) img tools debug-make
 .DEFAULT_GOAL: all
 
 ifdef NO_ELF
   .INTERMEDIATE: $(TARGET_ELF)
 endif
 
-all: dirs $(DIRS) $(TARGET)
+# Do it all!!
+all:: dirs $(DIRS) $(TARGET)
 
-remake: clean all
-
-clean:
+# Delete objects and target binaries for current build tree.
+clean::
 	@$(RM) $(TARGET)
 	@$(RM) $(TARGET_ELF)
-	@$(RM) -r $(OBJ_PATH)
+	@$(RM) -r $(OBJDIR)
 
-nuke:
-	@$(RM) -r $(_OBJROOT)
-	@$(RM) -r $(_BINROOT)
+# Delete ALL objects and target binaries.
+nuke::
+	@$(RM) -r $(OBJROOT)
+	@$(RM) -r $(BINROOT)
 
-img:
-	fatfs -pq create --force $(_BINROOT)/ohwes.img
-	dd if=$(_BINROOT)/$(ARCH)/boot/boot.bin of=$(_BINROOT)/ohwes.img bs=512 count=1 conv=notrunc status=none
-	fatfs -p info $(_BINROOT)/ohwes.img
 
-dirs:
-	@$(MKDIR) $(BIN_PATH)
-	@$(MKDIR) $(OBJ_PATH)
+# Clean and rebuild the current tree.
+remake:: clean all
 
-$(DIRS):
+# Make binary and object directories.
+dirs::
+	@$(MKDIR) $(BINDIR)
+	@$(MKDIR) $(OBJDIR)
+
+# Invoke the Makefiles in each directory on the DIRS list.
+$(DIRS)::
 	@$(MAKE) -C $@
 
-$(TARGET): %: $(TARGET_ELF) $(OBJ)
+# Make the OS disk image.
+img:: tools
+	fatfs -pq create --force $(BINROOT)/ohwes.img
+	dd if=$(BINROOT)/$(ARCH)/boot/boot.bin of=$(BINROOT)/ohwes.img bs=512 count=1 conv=notrunc status=none
+	fatfs -p info $(BINROOT)/ohwes.img
+
+# Build tools.
+tools::
+	@$(MAKE) -C $(TOOLSSRC)
+
+$(TARGET): %: $(TARGET_ELF) $(OBJECTS)
 ifndef NO_OBJCOPY
 	@echo 'OBJCOPY $(OBJCOPY_ARGS) $< $@'
 	@$(OBJCOPY)    $(OBJCOPY_ARGS) $< $@
@@ -221,20 +237,20 @@ else
 	@$(COPY)       $< $@
 endif
 
-$(TARGET_ELF): $(OBJ)
+$(TARGET_ELF): $(OBJECTS)
 	@$(MKDIR)      $(dir $(TARGET))
 	@echo 'LD      $(LD_ARGS) -o $@ $^'
 	@$(LD)         $(LD_ARGS) -o $@ $^
 
-$(OBJ_PATH)/%.o: %.c
+$(OBJDIR)/%.o: %.c
 	@echo 'CC      $(CC_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $(TREE)/$<'
 	@$(CC)         $(CC_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $<
 
-$(OBJ_PATH)/%.o: %.cpp
+$(OBJDIR)/%.o: %.cpp
 	@echo 'CXX     $(CXX_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $(TREE)/$<'
 	@$(CXX)        $(CXX_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $<
 
-$(OBJ_PATH)/%.o: %.S
+$(OBJDIR)/%.o: %.S
 	@echo 'AS      $(AS_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $(TREE)/$<'
 	@$(AS)         $(AS_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $<
 
@@ -242,65 +258,53 @@ debug-make:
 	@echo '----------------------------------------'
 	@echo ">>> Build Variables <<<"
 	@echo '----------------------------------------'
-	@echo 'DIRS = $(DIRS)'
-	@echo 'TARGET = $(TARGET)'
-	@echo 'TREE = $(TREE)'
+	@echo '      CURDIR = $(CURDIR)'
+	@echo '      OSROOT = $(OSROOT)'
+	@echo '    MAKEROOT = $(MAKEROOT)'
+	@echo '     SRCROOT = $(SRCROOT)'
+	@echo '     BINROOT = $(BINROOT)'
+	@echo '     OBJROOT = $(OBJROOT)'
+	@echo '     SCRIPTS = $(SCRIPTS)'
+	@echo '    TOOLSSRC = $(TOOLSSRC)'
+	@echo '    TOOLSBIN = $(TOOLSBIN)'
 	@echo '----------------------------------------'
-	@echo '_OSROOT = $(_OSROOT)'
-	@echo '_SRCROOT = $(_SRCROOT)'
-	@echo '_BINROOT = $(_BINROOT)'
-	@echo '_OBJROOT = $(_OBJROOT)'
-	@echo '_SCRIPTS = $(_SCRIPTS)'
-	@echo '_TOOLSRC = $(_TOOLSRC)'
-	@echo '_TOOLBIN = $(_TOOLBIN)'
+	@echo '    BUILD_OS = $(BUILD_OS)'
+	@echo '        MSYS = $(MSYS)'
+	@echo '         OSX = $(OSX)'
 	@echo '----------------------------------------'
-	@echo '_MAKEROOT = $(_MAKEROOT)'
-	@echo '_TOOLMAKEROOT = $(_TOOLMAKEROOT)'
+	@echo '        ARCH = $(ARCH)'
+	@echo '       DEBUG = $(DEBUG)'
 	@echo '----------------------------------------'
-	@echo 'BUILD_OS = $(BUILD_OS)'
-	@echo 'WIN32 = $(WIN32)'
-	@echo 'OSX = $(OSX)'
-	@echo 'LINUX = $(LINUX)'
-	@echo 'ARCH = $(ARCH)'
-	@echo 'DEBUG = $(DEBUG)'
+	@echo '        TREE = $(TREE)'
+	@echo '      TARGET = $(TARGET)'
+	@echo '  TARGET_ELF = $(TARGET_ELF)'
+	@echo '      BINDIR = $(BINDIR)'
+	@echo '      OBJDIR = $(OBJDIR)'
+	@echo '        DIRS = $(DIRS)'
+	@echo '     DEFINES = $(DEFINES)'
+	@echo '    INCLUDES = $(INCLUDES)'
+	@echo '     SOURCES = $(SOURCES)'
+	@echo '     OBJECTS = $(OBJECTS)'
 	@echo '----------------------------------------'
-	@echo 'BIN_PATH = $(BIN_PATH)'
-	@echo 'OBJ_PATH = $(OBJ_PATH)'
-	@echo 'TARGET_ELF = $(TARGET_ELF)'
+	@echo '          CC = $(CC)'
+	@echo '     CC_ARGS = $(CC_ARGS)'
 	@echo '----------------------------------------'
-	@echo 'AS_FLAGS = $(AS_FLAGS)'
-	@echo 'AS_DEFINES = $(AS_DEFINES)'
-	@echo 'AS_WARNINGS = $(AS_WARNINGS)'
-	@echo 'C_FLAGS = $(C_FLAGS)'
-	@echo 'C_DEFINES = $(C_DEFINES)'
-	@echo 'C_WARNINGS = $(C_WARNINGS)'
-	@echo 'CXX_FLAGS = $(CXX_FLAGS)'
-	@echo 'CXX_DEFINES = $(CXX_DEFINES)'
-	@echo 'CXX_WARNINGS = $(CXX_WARNINGS)'
-	@echo 'LD_FLAGS = $(LD_FLAGS)'
-	@echo 'LD_WARNINGS = $(LD_WARNINGS)'
-	@echo 'OBJCOPY_FLAGS = $(OBJCOPY_FLAGS)'
-	@echo 'MAKEFLAGS = $(MAKEFLAGS)'
+	@echo '         CXX = $(CXX)'
+	@echo '    CXX_ARGS = $(CXX_ARGS)'
 	@echo '----------------------------------------'
-	@echo 'AS = $(AS)'
-	@echo 'CC = $(CC)'
-	@echo 'CXX = $(CXX)'
-	@echo 'LD = $(LD)'
-	@echo 'OBJCOPY = $(OBJCOPY)'
-	@echo 'MAKE = $(MAKE)'
-	@echo 'MKDIR = $(MKDIR)'
-	@echo 'RM = $(RM)'
-	@echo 'COPY = $(COPY)'
+	@echo '          AS = $(AS)'
+	@echo '     AS_ARGS = $(AS_ARGS)'
 	@echo '----------------------------------------'
-	@echo 'AS_ARGS = $(AS_ARGS)'
-	@echo 'CC_ARGS = $(CC_ARGS)'
-	@echo 'CXX_ARGS = $(CXX_ARGS)'
-	@echo 'LD_ARGS = $(LD_ARGS)'
+	@echo '          LD = $(LD)'
+	@echo '     LD_ARGS = $(LD_ARGS)'
 	@echo '----------------------------------------'
-	@echo 'INC = $(INC)'
-	@echo 'SRC = $(SRC)'
-	@echo 'OBJ = $(OBJ)'
-	@echo 'DEP = $(DEP)'
+	@echo '        COPY = $(COPY)'
+	@echo '        MAKE = $(MAKE)'
+	@echo '   MAKEFLAGS = $(MAKEFLAGS)'
+	@echo '       MKDIR = $(MKDIR)'
+	@echo '     OBJCOPY = $(OBJCOPY)'
+	@echo '          RM = $(RM)'
+	@echo '----------------------------------------'
 
 # Include dependency rules
--include $(DEP)
+-include $(DEPENDS)
