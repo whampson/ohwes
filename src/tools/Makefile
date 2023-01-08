@@ -1,5 +1,5 @@
 ifeq ($(_TOOLSRC),$(CURDIR))
-  DIRS = fatfs2
+  DIRS = fatfs
 endif
 
 BIN_PATH = $(_TOOLBIN)
