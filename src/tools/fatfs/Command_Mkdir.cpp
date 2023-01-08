@@ -10,6 +10,7 @@ int Mkdir(const Command *cmd, const CommandArgs *args)
     const char *dirPath = NULL;
 
     bool makeParent = 0;
+    (void) makeParent;
 
     static struct option LongOptions[] = {
         GLOBAL_LONGOPTS,

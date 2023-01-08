@@ -2,10 +2,13 @@ TARGET = fatfs
 NO_OBJCOPY = 1
 
 SOURCES = \
+  Command_Add.cpp \
   Command_Attr.cpp \
   Command_Create.cpp \
+  Command_Extract.cpp \
   Command_Info.cpp \
   Command_List.cpp \
+  Command_Mkdir.cpp \
   Command_Test.cpp \
   Command_Touch.cpp \
   Command_Type.cpp \

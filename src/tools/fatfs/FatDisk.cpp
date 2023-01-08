@@ -297,17 +297,10 @@ FatDisk::FatDisk(const char *path, FILE *file, size_t base, BootSector *boot, ch
 
 FatDisk::~FatDisk()
 {
-    // TODO: write FAT and clear dirty bit
-
-    bool success = true;
     if (m_bDirty) {
-        // Write the FAT
-        SafeRIF(WriteFAT(), "failed to write FAT\n");
+        WriteFAT();
     }
 
-    LogInfo("dtor()\n");
-
-Cleanup:
     SafeFree(m_fat);
     SafeClose(m_file);
 }
@@ -1030,7 +1023,6 @@ bool FatDisk::CreateFile(DirEntry *pFile, DirEntry *pParent, const char *path)
 
     DirEntry *pParentDir;
     DirEntry *pParentDirTable = NULL;
-    uint32_t parentDirSize;
 
     DirEntry *pOldParentDirTable = NULL;
 
@@ -1043,7 +1035,7 @@ bool FatDisk::CreateFile(DirEntry *pFile, DirEntry *pParent, const char *path)
     pCurrentDir = &root;
     pParentDir = NULL;
 
-    bool parentDirEntryValid = false;
+    // bool parentDirEntryValid = false;
 
     char pathCopy[MAX_PATH];
     strncpy(pathCopy, path, MAX_PATH);
@@ -1086,7 +1078,7 @@ bool FatDisk::CreateFile(DirEntry *pFile, DirEntry *pParent, const char *path)
         pOldParentDirTable = pParentDirTable;
 
         pParentDir = pCurrentDir;
-        parentDirSize = currentDirSize;
+        // parentDirSize = currentDirSize;
         pParentDirTable = pCurrentDirTable;
         parentDirName = currentDirName;
         currentDirName = newFileName;
@@ -1097,10 +1089,10 @@ bool FatDisk::CreateFile(DirEntry *pFile, DirEntry *pParent, const char *path)
 
     if (IsRoot(pCurrentDir)) {
         pParentDir = &pCurrentDirTable[0];  // TODO: search for label
-        parentDirEntryValid = IsLabel(pParentDir);
+        // parentDirEntryValid = IsLabel(pParentDir);
     }
     else {
-        parentDirEntryValid = true;
+        // parentDirEntryValid = true;
     }
 
     // find a spot for the new dir entry
