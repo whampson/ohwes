@@ -1,10 +1,7 @@
-ifeq ($(_TOOLSRC),$(CURDIR))
-  DIRS = fatfs2
+ifeq ($(TOOLSSRC),$(CURDIR))
+  DIRS = fatfs
 endif
 
-BIN_PATH = $(_TOOLBIN)
-OBJ_PATH = $(_OBJROOT)/$(TREE)
-INC = .
+BINDIR = $(TOOLSBIN)
 
-include $(_MAKEROOT)
-
+include $(MAKEROOT)

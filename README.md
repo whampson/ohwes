@@ -1,17 +1,30 @@
-# NbOS - Niobium Operating System
-A toy operating system that'll probably never get finished.
+# ohwes
+***ohwes** - Will you ever finish that damn operating system?*
+
+## Build Environment
+### Windows (MinGW)
+- `PS> winget install msys2.msys2`
+- `MSYS> pacman -Syu`
+- `MINGW32> pacman -S mingw32/mingw-w64-i686-toolchain`
+- `MINGW32> cp /mingw32/bin/mingw32-make.exe /mingw32/bin/make.exe`
+- `MINGW32> pacman -S mingw32/mingw-w64-i686-qemu`
+
+Download and extract [i686-elf-tools for Windows](https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-windows.zip).
+Copy the contents of `bin/`, `i686-elf/`, `lib/`, and `libexec/` to `/mingw32/`.
+
+
+
+### macOS/OSX
+Execute `$ brew install binutils` then `$ brew install coreutils`.
+
+
+**TODO: acquiring the i686-elf-tools**
 
 ## Building
-### OSX
-`brew install binutils`
-`brew install coreutils`
+**ohwes** uses GNU Make for building all source and external tools. The following
+assumes you are using bash as your shell.
 
-
-**TODO: installing msys2 (Windows) and acquiring the i686-elf-tools**
-
-**NbOS** uses GNU Make for building all source and external tools.
-
-To set up the build environment and build **NbOS**, run the following from the
+To set up the build environment and build **ohwes**, run the following from the
 repository root:
 ```
 $ source src/scripts/env.sh

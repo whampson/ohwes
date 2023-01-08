@@ -37,18 +37,9 @@ extern int g_nQuietness;
 extern int g_nVerbosity;
 extern uint32_t g_nSectorOffset;
 
-extern int _g_nAllocCount;
-
 extern const char *g_ProgramName;
 
 extern "C" int optidx;
-
-int PrintHelp();
-int PrintGlobalHelp();
-int PrintVersion();
-
-void FormatDate(char dst[MAX_DATE], const struct tm *src);
-void FormatTime(char dst[MAX_TIME], const struct tm *src);
 
 #define LONGOPT_OFFSET_TOKEN    0x0FF5E7
 #define GLOBAL_LONGOPTS                                                         \
@@ -94,6 +85,13 @@ do {                                                                            
         return STATUS_SUCCESS;                                                  \
     }                                                                           \
 } while (0)     // some people might call this evil...
+
+int PrintHelp();
+int PrintGlobalHelp();
+int PrintVersion();
+
+void FormatDate(char dst[MAX_DATE], const struct tm *src);
+void FormatTime(char dst[MAX_TIME], const struct tm *src);
 
 // -----------------------------------------------------------------------------
 // String Utilities
@@ -261,16 +259,14 @@ do {                                                                            
     SafeRIF(_ptr, "out of memory!\n");                                          \
     LogVeryVerbose("alloc'd %zu bytes at address %p\n",                         \
         (size_t) size, (void *) _ptr);                                          \
-    _g_nAllocCount++;                                                           \
     _ptr;                                                                       \
 })
 
 #define SafeFree(ptr)                                                           \
 ({                                                                              \
     if (ptr) {                                                                  \
+        LogVeryVerbose("freeing memory at address %p\n", (void *) ptr);         \
         free(ptr);                                                              \
-        LogVeryVerbose("freed memory at address %p\n", (void *) ptr);           \
-        _g_nAllocCount--;                                                       \
         (ptr) = NULL;                                                           \
     }                                                                           \
 })
@@ -280,7 +276,7 @@ inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
     FILE *fp = fopen(path, mode);
     if (!fp) {
         LogError("unable to open file '%s'\n", path);
-        if (pOutLen) *pOutLen = 0;
+        *pOutLen = 0;
         return NULL;
     }
 

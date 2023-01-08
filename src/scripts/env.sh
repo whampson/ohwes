@@ -10,38 +10,36 @@
 # To use, run `source env.sh` in your shell.
 #===============================================================================
 
-# !!! This file must live in <root>/src/scripts/ or _OSROOT will be defined incorrectly !!!
+# !!! This file must live in /src/scripts/ !!!
+# !!! Otherwise, OSROOT will be defined incorrectly !!!
 
-export _OSROOT=$(dirname $(dirname $(dirname $(realpath ${BASH_SOURCE[0]}))))
-export _BINROOT=$_OSROOT/bin
-export _OBJROOT=$_OSROOT/obj
-export _SRCROOT=$_OSROOT/src
-export _SCRIPTS=$_SRCROOT/scripts
-export _TOOLSRC=$_SRCROOT/tools
-export _TOOLBIN=$_BINROOT/tools
+export OSROOT=$(dirname $(dirname $(dirname $(realpath ${BASH_SOURCE[0]}))))
 
-export _MAKEROOT=$_OSROOT/Makefile
-export _TOOLMAKEROOT=$_TOOLSRC/Makefile
+export MAKEROOT=$OSROOT/Makefile
+export BINROOT=$OSROOT/bin
+export OBJROOT=$OSROOT/obj
+export SRCROOT=$OSROOT/src
+export SCRIPTS=$SRCROOT/scripts
+export TOOLSBIN=$BINROOT/tools
+export TOOLSSRC=$SRCROOT/tools
 
 echo "Setting build variables..."
-echo "   _OSROOT = $_OSROOT"
-echo "  _BINROOT = $_BINROOT"
-echo "  _OBJROOT = $_OBJROOT"
-echo "  _SRCROOT = $_SRCROOT"
-echo "  _SCRIPTS = $_SCRIPTS"
-echo "  _TOOLSRC = $_TOOLSRC"
-echo "  _MAKEROOT = $_MAKEROOT"
-echo "  _TOOLMAKEROOT = $_TOOLMAKEROOT"
+echo "  OSROOT = $OSROOT"
+echo "MAKEROOT = $MAKEROOT"
+echo " BINROOT = $BINROOT"
+echo " OBJROOT = $OBJROOT"
+echo " SRCROOT = $SRCROOT"
+echo " SCRIPTS = $SCRIPTS"
+echo "TOOLSBIN = $TOOLSBIN"
+echo "TOOLSSRC = $TOOLSSRC"
 
-qemu_path="/c/Program Files/qemu"    # TODO: this should go somewhere repository-local
-binutils_path=$_OSROOT/lib/i686-elf-tools/bin
+binutils_path=$OSROOT/lib/i686-elf-tools/bin
 
-export PATH=$PATH:$qemu_path:$binutils_path:$_TOOLBIN:$_SCRIPTS
+export PATH=$PATH:$binutils_path:$TOOLSBIN:$SCRIPTS
 
 echo "Updating PATH..."
-echo "     PATH += $qemu_path"
 echo "     PATH += $binutils_path"
-echo "     PATH += $_TOOLBIN"
-echo "     PATH += $_SCRIPTS"
+echo "     PATH += $TOOLSBIN"
+echo "     PATH += $SCRIPTS"
 
 echo "All set!"

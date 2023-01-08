@@ -96,7 +96,7 @@ int Touch(const Command *cmd, const CommandArgs *args)
     assert(memcmp(pFile, &f, sizeof(DirEntry)) == 0);
 
     t = time(NULL);
-    localtime_r(&t, &tm);
+    localtime_s(&tm, &t);
 
     if (modTime) {
         SetModifiedTime(pFile, &tm);

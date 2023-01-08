@@ -1,7 +1,7 @@
 #include "Command.hpp"
 #include "FatDisk.hpp"
 
-static void PrintDiskInfo(const char *path, const FatDisk *disk)
+void PrintDiskInfo(const char *path, const FatDisk *disk)
 {
     const BiosParamBlock *bpb = disk->GetBPB();
     uint32_t sectorCount = (bpb->SectorCount) ? bpb->SectorCount : bpb->SectorCountLarge;
@@ -18,6 +18,9 @@ static void PrintDiskInfo(const char *path, const FatDisk *disk)
     assert(clusterCount == disk->GetClusterCount());
 
     bool fat12 = clusterCount <= MAX_CLUSTERS_12;
+
+    char linebuf[80];
+    char *p = linebuf;
 
     LogInfo("%s statistics:\n", GetFileName(path));
     LogInfo("%d %s, %d %s, %d %s per track\n",
@@ -42,11 +45,12 @@ static void PrintDiskInfo(const char *path, const FatDisk *disk)
     if (bpb->Signature == BPBSIG_DOS41) {
         char labelBuf[MAX_LABEL];
         ReadFatString(labelBuf, bpb->Label, LABEL_LENGTH);
-        LogInfo("volume ID is %08X", bpb->VolumeId);
+        p += sprintf(p, "volume ID is %08X", bpb->VolumeId);
         if (labelBuf[0] != '\0')
-            LogInfo(", volume label is '%s'\n", labelBuf);
+            p +=sprintf(p, ", volume label is '%s'", labelBuf);
         else
-            LogInfo(", volume has no label\n");
+            p += sprintf(p, ", volume has no label");
+        LogInfo("%s\n", linebuf);
     }
     LogInfo("%d bytes free\n", bytesFree);
     LogInfo("%d bytes total\n", bytesTotal);

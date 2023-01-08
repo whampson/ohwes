@@ -2,6 +2,7 @@
 #define COMMAND_HPP
 
 #include "fatfs.hpp"
+#include "FatDisk.hpp"
 
 #define CheckParam(x,...)                                                       \
 do {                                                                            \
@@ -27,6 +28,8 @@ int GetCommandCount(void);
 
 const Command * FindCommand(const char *name);
 int PrintCommandHelp(const Command *cmd);
+
+void PrintDiskInfo(const char *path, const FatDisk *disk);
 
 int Add(const Command *cmd, const CommandArgs *args);
 int Attr(const Command *cmd, const CommandArgs *args);

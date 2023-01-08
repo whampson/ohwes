@@ -1,19 +1,38 @@
-TARGET = $(BIN_PATH)/fatfs
+TARGET = fatfs
 NO_OBJCOPY = 1
 
-include $(_TOOLMAKEROOT)
+SOURCES = \
+  Command_Attr.cpp \
+  Command_Create.cpp \
+  Command_Info.cpp \
+  Command_List.cpp \
+  Command_Test.cpp \
+  Command_Touch.cpp \
+  Command_Type.cpp \
+  Command.cpp \
+  FatDisk.cpp \
+  fat.c \
+  main.cpp
 
-CC = gcc
-LD = gcc
+include ../Makefile
 
-# macOS only
-# C_FLAGS += -fsanitize=address
-# LD_FLAGS += -fsanitize=address
+CC  = gcc
+CXX = g++
+LD  = g++
 
-C_WARNINGS += \
-	no-unused-function \
-	no-unused-parameter \
-	no-unused-variable \
-	no-unused-but-set-variable \
-	no-gnu-statement-expression \
-	no-pedantic
+ifeq ($(MSYS),1)
+  CC_WARNINGS += \
+    no-address-of-packed-member
+  CXX_WARNINGS += \
+    no-format-zero-length
+endif
+
+ifeq ($(OSX),1)
+  CFLAGS   += -fsanitize=address
+  CXXFLAGS += -fsanitize=address
+  LDFLAGS  += -fsanitize=address
+  CXX_WARNINGS += \
+    no-unused-function \
+    no-gnu-statement-expression \
+    no-gnu-anonymous-struct
+endif
