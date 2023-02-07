@@ -1,3 +1,13 @@
+
+# TODO: move to Reset.mk or something and include this
+TARGET =
+ENTRYPOINT =
+BASE =
+CFLAGS =
+CXXFLAGS =
+LDFLAGS =
+NO_ELF =
+
 TARGET = fatfs
 NO_OBJCOPY = 1
 

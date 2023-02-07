@@ -24,6 +24,14 @@ endif
 export ARCH  = x86
 export DEBUG = 1
 
+export DISKIMG_NAME = ohwes.img
+export BOOTSCT_NAME = bootldr
+export BOOTLDR_NAME = boot.sys
+
+export DISKIMG = $(BINROOT)/$(ARCH)/$(DISKIMG_NAME)
+export BOOTSCT = $(BINROOT)/$(ARCH)/boot/$(BOOTSCT_NAME)
+export BOOTLDR = $(BINROOT)/$(ARCH)/boot/$(BOOTLDR_NAME)
+
 # ------------------------------------------------------------------------------
 # Makefile build OS detection
 # https://stackoverflow.com/a/14777895
@@ -184,7 +192,7 @@ endif
 # ------------------------------------------------------------------------------
 # Rules
 
-.PHONY: all clean nuke remake dirs $(DIRS) img tools debug-make
+.PHONY: all clean nuke remake dirs $(DIRS) img tools debug-make run
 .DEFAULT_GOAL: all
 
 ifdef NO_ELF
@@ -199,12 +207,15 @@ clean::
 	@$(RM) $(TARGET)
 	@$(RM) $(TARGET_ELF)
 	@$(RM) -r $(OBJDIR)
+# TODO: recursive clean
 
 # Delete ALL objects and target binaries.
 nuke::
 	@$(RM) -r $(OBJROOT)
 	@$(RM) -r $(BINROOT)
 
+run:: all img
+	run.sh
 
 # Clean and rebuild the current tree.
 remake:: clean all
@@ -220,9 +231,11 @@ $(DIRS)::
 
 # Make the OS disk image.
 img:: tools
-	fatfs -pq create --force $(BINROOT)/ohwes.img
-	dd if=$(BINROOT)/$(ARCH)/boot/boot.bin of=$(BINROOT)/ohwes.img bs=512 count=1 conv=notrunc status=none
-	fatfs -p info $(BINROOT)/ohwes.img
+	fatfs -pq create --force $(DISKIMG)
+	dd if=$(BOOTSCT) of=$(DISKIMG) bs=512 count=1 conv=notrunc status=none
+	fatfs -p info $(DISKIMG)
+	fatfs -p add $(DISKIMG) $(BOOTLDR)
+	fatfs -p attr -s $(DISKIMG) $(BOOTLDR_NAME)
 
 # Build tools.
 tools::
@@ -274,6 +287,8 @@ debug-make:
 	@echo '----------------------------------------'
 	@echo '        ARCH = $(ARCH)'
 	@echo '       DEBUG = $(DEBUG)'
+	@echo '     DISKIMG = $(DISKIMG)'
+	@echo '     BOOTLDR = $(BOOTLDR)'
 	@echo '----------------------------------------'
 	@echo '        TREE = $(TREE)'
 	@echo '      TARGET = $(TARGET)'
@@ -305,6 +320,7 @@ debug-make:
 	@echo '     OBJCOPY = $(OBJCOPY)'
 	@echo '          RM = $(RM)'
 	@echo '----------------------------------------'
+
 
 # Include dependency rules
 -include $(DEPENDS)

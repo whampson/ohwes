@@ -7,12 +7,17 @@
 # Boots OH-WES in QEMU.
 #===============================================================================
 
+if [ "$1" = "" ]; then
+echo "error: missing diskimg argument"
+exit 1
+fi
+
 QEMU_FLAGS=""
 QEMU_FLAGS+=" -m 4M"
 QEMU_FLAGS+=" -boot a"
-QEMU_FLAGS+=" -fda $BINROOT/ohwes.img"
+QEMU_FLAGS+=" -fda $1"
 
-if [ "$1" = "debug" ]; then
+if [ "$2" = "debug" ]; then
 QEMU_FLAGS+=" -S -s"
 fi
 
