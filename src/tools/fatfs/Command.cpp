@@ -75,12 +75,12 @@ static const Command s_pCommands[] = {
         "Run the test suite",
         NULL
     },
-    { Touch,
-        "touch", PROG_NAME " touch DISK [OPTIONS] FILE",
-        "Change file access and/or modification times",
-        "  -a                Change file access time only\n"
-        "  -m                Change file modification time only\n"
-    },
+    // { Touch,
+    //     "touch", PROG_NAME " touch DISK [OPTIONS] FILE",
+    //     "Change file access and/or modification times",
+    //     "  -a                Change file access time only\n"
+    //     "  -m                Change file modification time only\n"
+    // },
     { Type,
         "type", PROG_NAME " type DISK FILE",
         "Print the contents of a file",

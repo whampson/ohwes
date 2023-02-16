@@ -1,19 +1,16 @@
 #include "Command.hpp"
 #include "FatDisk.hpp"
 
-int Add(const Command *cmd, const CommandArgs *args)
+static const char *s_diskPath = NULL;
+static const char *s_srcFilePath = NULL;
+static const char *s_dstFilePath = NULL;
+static int s_bForce = 0;
+
+static bool ParseArgs(const CommandArgs *args)
 {
-    (void) cmd;
-    const char *diskPath = NULL;
-    const char *srcFilePath = NULL;
-    const char *dstFilePath = NULL;
-    const char *dstFileName = NULL;
-
-    int force = 0;
-
     static struct option LongOptions[] = {
         GLOBAL_LONGOPTS,
-        { "force", no_argument, &force, 1 },
+        { "force", no_argument, &s_bForce, 1 },
         { 0, 0, 0, 0 }
     };
 
@@ -37,28 +34,38 @@ int Add(const Command *cmd, const CommandArgs *args)
         optarg = args->Argv[optind++];
         switch (pos++) {
             case 0:
-                diskPath = optarg;
+                s_diskPath = optarg;
                 break;
             case 1:
-                srcFilePath = optarg;
+                s_srcFilePath = optarg;
                 break;
             case 2:
-                dstFilePath = optarg;
+                s_dstFilePath = optarg;
                 break;
             default:
                 LogError_BadArg(optarg);
-                return STATUS_INVALIDARG;
+                return false;
                 break;
         }
     }
 
-    CheckParam(diskPath != NULL, "missing disk image file name\n");
-    CheckParam(srcFilePath != NULL, "missing source file name\n");
+    CheckParam(s_diskPath != NULL, "missing disk image file name\n");
+    CheckParam(s_srcFilePath != NULL, "missing source file name\n");
 
-    if (dstFilePath == NULL) {
-        dstFilePath = GetFileName(srcFilePath);     // will add to root
+    if (s_dstFilePath == NULL) {
+        s_dstFilePath = GetFileName(s_srcFilePath);     // will add to root
     }
-    dstFileName = GetFileName(dstFilePath);
+
+    return true;
+}
+
+int Add(const Command *cmd, const CommandArgs *args)
+{
+    (void) cmd;
+
+    if (!ParseArgs(args)) {
+        return STATUS_INVALIDARG;
+    }
 
     bool success = true;
 
@@ -70,61 +77,87 @@ int Add(const Command *cmd, const CommandArgs *args)
 
     DirEntry f;
     DirEntry p;
-    DirEntry *pFile = &f;
+    DirEntry *pFileDesc = &f;
     DirEntry *pParent = &p;
-    DirEntry *pDirTable = NULL;
+    DirEntry *pParentDir = NULL;
     char *pFileBuf = NULL;
     bool exists;
 
-    disk = FatDisk::Open(diskPath, g_nSectorOffset);
+    disk = FatDisk::Open(s_diskPath, g_nSectorOffset);
     SafeRIF(disk, "failed to open disk\n");
 
-    fp = SafeOpen(srcFilePath, "rb", &fileSize);
+    fp = SafeOpen(s_srcFilePath, "rb", &fileSize);
     SafeRIF(fileSize <= UINT32_MAX, "file is too large!\n");
 
     // TODO: check if srcFilePath is a directory, etc.
-    SafeRIF(FileExists(srcFilePath), "file not found - %s\n", srcFilePath);
+    SafeRIF(FileExists(s_srcFilePath), "file not found - %s\n", s_srcFilePath);
 
-    exists = disk->FindFile(pFile, pParent, dstFilePath);
-    SafeRIF(!(exists && !force), "'%s' exists\n", dstFilePath);
+    exists = disk->FindFile(pFileDesc, pParent, s_dstFilePath);
+    if (exists && !s_bForce) {
+        SafeRIF(0, "'%s' exists\n", s_dstFilePath);
+    }
     // TODO: verify that this is guaranteed to get the parent even when the file
     // doesn't exist
     // TODO: what if the parent doesn't exist?
 
     // TODO: what if we need to add a new cluster to the dir?
     // TODO: what if we have the root?
+
+    // TODO: CreateFile(path, overwrite, data)
+
+
     dirSize = disk->GetFileAllocSize(pParent);
-    pDirTable = (DirEntry *) SafeAlloc(dirSize);
-    SafeRIF(disk->ReadFile((char *) pDirTable, pParent),
-        "failed to read directory\n");
+    pParentDir = (DirEntry *) SafeAlloc(dirSize);
+    SafeRIF(disk->ReadFile((char *) pParentDir, pParent),
+        "failed to read parent directory\n");
 
-    // TODO: dont modify state within an assert lol
-    assert(disk->FindFileInDir(&pFile, pDirTable, dirSize, dstFileName));
-    assert(memcmp(pFile, &f, sizeof(DirEntry)) == 0);
-
-    pFileBuf = (char *) SafeAlloc(fileSize);
-    SafeRead(fp, pFileBuf, fileSize);
-    // TODO: read/write file in chunks? Might be better for very large files
-
-    if (!exists) {
-        InitDirEntry(pFile);
-        // TODO: LFN and ~n if dst name is too large
-        SafeRIF(SetShortName(pFile, dstFileName), "invalid short name\n");
-        // TODO: add to dir table
+    if (exists)
+    {
+        SafeRIF(disk->FindFileInDir(&pFileDesc, pParentDir, dirSize, GetFileName(s_dstFilePath)),
+            "failed to locate file in directory\n");
+        assert(memcmp(pFileDesc, &f, sizeof(DirEntry)) == 0);
+    }
+    else
+    {
+        // search for next available slot in dir table
+        // TODO: add sector to chain if full (or error if root)
+        pFileDesc = pParentDir;
+        while (!IsFree(pFileDesc)) {
+            pFileDesc++;
+            int slotsLeft = (pParent->FileSize / sizeof(DirEntry)) - CeilDiv((pFileDesc - pParentDir), sizeof(DirEntry));
+            LogInfo("slots left: %d\n", slotsLeft);
+            SafeRIF(slotsLeft != 0, "directory is full!\n");
+        }
+        InitDirEntry(pFileDesc);
+        pFileDesc->FirstCluster = disk->FindNextFreeCluster();
+        // TODO: derive valid short name and set long name
     }
 
+    // TODO: fn
+    {
+        time_t t = time(NULL);
+        struct tm *tm = localtime(&t);
 
-    // !!! TODO: FIXME
+        pFileBuf = (char *) SafeAlloc(fileSize);
+        SafeRead(fp, pFileBuf, fileSize);
+        // TODO: read/write file in chunks? Might be better for very large files
 
-    // SafeRIF(disk->WriteFile(pFile, pFileBuf, (uint32_t) fileSize),
-    //     "failed to write file\n");
-    // SafeRIF(disk->WriteFile(pParent, (const char *) pDirTable, dirSize),
-    //     "failed to write directory\n");
+        SetCreationTime(pFileDesc, tm);
+        SetModifiedTime(pFileDesc, tm);
+        SetAccessedTime(pFileDesc, tm);
+        SafeRIF(SetShortName(pFileDesc, GetFileName(s_dstFilePath)), "invalid short name\n");
+        pFileDesc->FileSize = fileSize;
+
+        SafeRIF(disk->WriteFile(pFileDesc, pFileBuf),
+            "failed to write file\n");
+        SafeRIF(disk->WriteFile(pParent, (const char *) pParentDir),
+            "failed to write directory\n");
+    }
 
 Cleanup:
     SafeFree(pFileBuf);
+    SafeFree(pParentDir);
     SafeClose(fp);
-    SafeFree(pDirTable);
     delete disk;
     return (success) ? STATUS_SUCCESS : STATUS_ERROR;
 }

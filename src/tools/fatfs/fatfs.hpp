@@ -159,6 +159,13 @@ do {                                                                            
     }                                                                           \
 } while (0)
 
+#define LogVerboseN(n, ...)                                                     \
+do {                                                                            \
+    if (g_nQuietness < 1 && g_nVerbosity >= (n)) {                              \
+        _Log(stdout, "", __VA_ARGS__);                                          \
+    }                                                                           \
+} while (0)
+
 #define LogInfo(...)                                                            \
 do {                                                                            \
     if (g_nQuietness < 1) {                                                     \

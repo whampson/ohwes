@@ -289,6 +289,7 @@ int Test(const Command *cmd, const CommandArgs *args)
         CheckResult(TestFatString());
         CheckResult(TestShortName());
         CheckResult(TestLongName());
+        // TODO: write/read file then diff with original
         goto Done;
     }
 

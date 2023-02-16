@@ -206,10 +206,8 @@ int Attr(const Command *cmd, const CommandArgs *args)
             ClearAttribute(pFile, ATTR_LABEL);
     }
 
-    // !! TODO: FIXME
-
-    // SafeRIF(disk->WriteFile(pParent, (const char *) dirTable, tableSizeBytes),
-    //     "failed to write directory table\n");
+    SafeRIF(disk->WriteFile(pParent, (const char *) dirTable),
+        "failed to write directory table\n");
 
 Cleanup:
     SafeFree(dirTable);

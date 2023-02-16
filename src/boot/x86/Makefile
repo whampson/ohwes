@@ -1,4 +1,3 @@
-NO_ELF = 1
 TARGET = boot/boot.bin
 ENTRYPOINT = Entry
 BASE = 0x7C00
@@ -9,13 +8,19 @@ SOURCES = \
 
 include $(MAKEROOT)
 
-all:: $(BOOTLDR) $(BOOTSCT)
+all::$(BOOTSCT)
+
+clean::
+	$(RM) -f $(BOOTLDR)
+	$(RM) -f $(BOOTSCT)
+
+$(BOOTSCT): $(BOOTLDR)
+	head -c 512 $(TARGET) > $(BOOTSCT)
 
 $(BOOTLDR):
 	tail -c +512 $(TARGET) > $(BOOTLDR)
 
-$(BOOTSCT):
-	head -c 512 $(TARGET) > $(BOOTSCT)
+
 
 # TODO: update BINDIR and OBJDIR to match bin and obj for current target
 # but keep TARGET relative to $(BINROOT)/$(ARCH)/

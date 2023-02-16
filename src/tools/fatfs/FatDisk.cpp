@@ -110,6 +110,7 @@ bool FatDisk::CreateNew(const char *path, const BiosParamBlock *bpb, uint32_t se
             DirEntry volLabel;
             InitDirEntry(&volLabel);
             volLabel.Attributes = ATTR_LABEL;
+            SetLabel(&volLabel, bpb->Label);
             memcpy(sectorBuf, &volLabel, sizeof(DirEntry));
             bytesWritten += SafeWrite(fp, sectorBuf, sectorSize);
             memset(sectorBuf, 0, sectorSize);
@@ -554,6 +555,10 @@ bool FatDisk::ReadSector(char *pBuf, uint32_t index) const
     if (seekAddr + SectorSize > DiskSize) {
         LogError("attempt to read out-of-bounds sector (index = %u)\n", index);
         return false;
+    }
+
+    if (g_nVerbosity >= 3) {
+        LogVerboseN(3, "reading sector %d...\n", index);
     }
 
     bool success = true;

@@ -25,7 +25,7 @@ export ARCH  = x86
 export DEBUG = 1
 
 export DISKIMG_NAME = ohwes.img
-export BOOTSCT_NAME = bootldr
+export BOOTSCT_NAME = bsect.bin
 export BOOTLDR_NAME = boot.sys
 
 export DISKIMG = $(BINROOT)/$(ARCH)/$(DISKIMG_NAME)
@@ -192,30 +192,34 @@ endif
 # ------------------------------------------------------------------------------
 # Rules
 
-.PHONY: all clean nuke remake dirs $(DIRS) img tools debug-make run
-.DEFAULT_GOAL: all
-
 ifdef NO_ELF
   .INTERMEDIATE: $(TARGET_ELF)
 endif
+
+export GLOBAL_GOALS = all clean nuke remake dirs $(DIRS)
+EXCLUSIVE_GOALS = img tools debug-make run floppy
+
+.PHONY: $(GLOBAL_GOALS) $(EXCLUSIVE_GOALS)
+.DEFAULT_GOAL: all
 
 # Do it all!!
 all:: dirs $(DIRS) $(TARGET)
 
 # Delete objects and target binaries for current build tree.
-clean::
-	@$(RM) $(TARGET)
-	@$(RM) $(TARGET_ELF)
-	@$(RM) -r $(OBJDIR)
+clean:: $(DIRS)
+ifdef TARGET
+	$(RM) $(TARGET)
+endif
+ifdef TARGET_ELF
+	$(RM) $(TARGET_ELF)
+endif
+	$(RM) -r $(OBJDIR)
 # TODO: recursive clean
 
 # Delete ALL objects and target binaries.
 nuke::
 	@$(RM) -r $(OBJROOT)
 	@$(RM) -r $(BINROOT)
-
-run:: all img
-	run.sh
 
 # Clean and rebuild the current tree.
 remake:: clean all
@@ -227,45 +231,27 @@ dirs::
 
 # Invoke the Makefiles in each directory on the DIRS list.
 $(DIRS)::
-	@$(MAKE) -C $@
+	@$(MAKE) -C $@ $(filter-out $(EXCLUSIVE_GOALS), $(MAKECMDGOALS))
+
+run:: all img
+	run.sh $(DISKIMG)
 
 # Make the OS disk image.
-img:: tools
-	fatfs -pq create --force $(DISKIMG)
+img:: all tools
+	fatfs -pq create --force -l OH-WES $(DISKIMG)
 	dd if=$(BOOTSCT) of=$(DISKIMG) bs=512 count=1 conv=notrunc status=none
 	fatfs -p info $(DISKIMG)
 	fatfs -p add $(DISKIMG) $(BOOTLDR)
 	fatfs -p attr -s $(DISKIMG) $(BOOTLDR_NAME)
 
+floppy:: all tools
+	$(COPY) $(BOOTLDR) /a/
+	dd if=$(BOOTSCT) of=/dev/fd0 bs=512 count=1 conv=notrunc status=none
+
 # Build tools.
 tools::
 	@$(MAKE) -C $(TOOLSSRC)
 
-$(TARGET): %: $(TARGET_ELF) $(OBJECTS)
-ifndef NO_OBJCOPY
-	@echo 'OBJCOPY $(OBJCOPY_ARGS) $< $@'
-	@$(OBJCOPY)    $(OBJCOPY_ARGS) $< $@
-else
-	@echo 'COPY    $< $@'
-	@$(COPY)       $< $@
-endif
-
-$(TARGET_ELF): $(OBJECTS)
-	@$(MKDIR)      $(dir $(TARGET))
-	@echo 'LD      $(LD_ARGS) -o $@ $^'
-	@$(LD)         $(LD_ARGS) -o $@ $^
-
-$(OBJDIR)/%.o: %.c
-	@echo 'CC      $(CC_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $(TREE)/$<'
-	@$(CC)         $(CC_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $<
-
-$(OBJDIR)/%.o: %.cpp
-	@echo 'CXX     $(CXX_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $(TREE)/$<'
-	@$(CXX)        $(CXX_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $<
-
-$(OBJDIR)/%.o: %.S
-	@echo 'AS      $(AS_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $(TREE)/$<'
-	@$(AS)         $(AS_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $<
 
 debug-make:
 	@echo '----------------------------------------'
@@ -316,11 +302,39 @@ debug-make:
 	@echo '        COPY = $(COPY)'
 	@echo '        MAKE = $(MAKE)'
 	@echo '   MAKEFLAGS = $(MAKEFLAGS)'
+	@echo 'MAKECMDGOALS = $(MAKECMDGOALS)'
 	@echo '       MKDIR = $(MKDIR)'
 	@echo '     OBJCOPY = $(OBJCOPY)'
 	@echo '          RM = $(RM)'
 	@echo '----------------------------------------'
 
+
+
+$(TARGET): %: $(TARGET_ELF) $(OBJECTS)
+ifndef NO_OBJCOPY
+	@echo 'OBJCOPY $(OBJCOPY_ARGS) $< $@'
+	@$(OBJCOPY)    $(OBJCOPY_ARGS) $< $@
+else
+	@echo 'COPY    $< $@'
+	@$(COPY)       $< $@
+endif
+
+$(TARGET_ELF): $(OBJECTS)
+	@$(MKDIR)      $(dir $(TARGET))
+	@echo 'LD      $(LD_ARGS) -o $@ $^'
+	@$(LD)         $(LD_ARGS) -o $@ $^
+
+$(OBJDIR)/%.o: %.c
+	@echo 'CC      $(CC_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $(TREE)/$<'
+	@$(CC)         $(CC_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $<
+
+$(OBJDIR)/%.o: %.cpp
+	@echo 'CXX     $(CXX_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $(TREE)/$<'
+	@$(CXX)        $(CXX_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $<
+
+$(OBJDIR)/%.o: %.S
+	@echo 'AS      $(AS_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $(TREE)/$<'
+	@$(AS)         $(AS_ARGS) -c -MD -MF $(@:.o=.d) -o $@ $<
 
 # Include dependency rules
 -include $(DEPENDS)

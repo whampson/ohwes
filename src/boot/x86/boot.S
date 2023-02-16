@@ -30,19 +30,19 @@ DriveNumber:            .byte       0
 _Reserved:              .byte       0
 Signature:              .byte       0x29
 VolumeId:               .int        0xCA55E77E
-Label:                  .ascii      "OH-WES 0.1 "
+Label:                  .ascii      "OH-WES     "
 FsType:                 .ascii      "FAT12   "
 
 //
 // Initial bootloader code.
 // Gotta be tight; file must assemble to exactly 512 bytes!
+// TODO: assert label address
 Boot:
         cli
         cld
         xorw            %ax, %ax
         movw            %ax, %ds
-        leaw            Hello, %si
-        call            Print
+        movw            %ax, %es
 
 #TODO: load a file from disk
 
@@ -56,12 +56,54 @@ Boot:
 # Switched to Protected Mode and call 32-bit kernel (kmain).
 
 
+        // read first root dir sector
+        // TOOD: chs to lba
+        movw            %sp, %bx        // dstBuf
+        movb            $1, %dh         // head
+        movb            $0, %ch         // cylinder
+        movb            $2, %cl         // sector
+        movb            $1, %al         // count
+        call            ReadSector
+
+        // TODO: handle error
+
+        movw            %sp, %bx
+        movw            26(%bx), %cx    // firstCluster
+        // movl            28(%bx), %eax   // fileSize
+
+
+        movw            %sp, %bx        // dstBuf
+        movb            $1, %dh         // head
+        movb            $0, %ch         // cylinder
+        movb            $2, %cl         // sector
+        movb            $1, %al         // count
+
+        call            KeyPress
+        jmp             Reset
+
+
+
         jmp             Halt
 
 
 //
 // ~~~ Subroutines
 //
+
+.global ReadSector
+ReadSector:
+        movb            (DriveNumber), %dl
+        movb            $0x02, %ah      // command: read sectors from drive
+        int             $0x13
+        jc              DiskError
+        leaw            s_Dot, %si
+        call            Print
+        ret
+.globl DiskError
+DiskError:
+        leaw            s_DiskError, %si
+        call            Print
+        jmp             Halt
 
 // -----------------------------------------------------------------------------
 // Print
@@ -71,12 +113,12 @@ Boot:
 //
 // Inputs:
 //      ds:si - address of string to print
-// Affects:
+// Clobbers:
 //      ax, bx
 //
 .globl Print
 Print:
-        xorw            %ax, %ax
+        // xorw            %ax, %ax
         movb            $0x0E, %ah
         movw            $0x07, %bx
         lodsb
@@ -94,7 +136,7 @@ _Print_Done:
 //
 // Returns:
 //      al - key pressed
-// Affects:
+// Clobbers:
 //      ax
 //
 .globl KeyPress
@@ -106,11 +148,17 @@ KeyPress:
 // -----------------------------------------------------------------------------
 // Reset
 // -----------------------------------------------------------------------------
-// Ask the BIOS to reboot/reset the system.
+// Performs a warm reboot.
 //
 .globl Reset
 Reset:
-        int             $0x19
+        leaw            S_Reset, %si
+        call            Print
+        xorl            %eax, %eax
+        movw            %ax, %es
+        movw            $0x0472, %ax            # Reset State Flag
+        movw            $0x1234, %es:(%eax)     # 0x1234 = Skip Memory Test
+        ljmp            $0xF000, $0xFFF0        # Reset Vector
 
 // -----------------------------------------------------------------------------
 // Halt
@@ -122,9 +170,12 @@ Halt:
         hlt
         jmp             Halt
 
-
-Hello:
-        .asciz          "\r\nOHWES is loading..."
+s_Dot:
+        .asciz          "."
+S_Reset:
+        .asciz          "Resetting..."
+s_DiskError:
+        .asciz          "\r\nDisk read error."
 
 // TODO: ensure file does not grow beyond 512B
 
