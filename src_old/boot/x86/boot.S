@@ -1,4 +1,4 @@
-.code16
+.code16         // Oh yeah, it's real.
 
 //
 // Global entry point.
@@ -46,14 +46,14 @@ Boot:
 
 #TODO: load a file from disk
 
-// Idea: When the image is built, OS.SYS will be placed at a known sector
-// location on disk. We load the DirEntry from a known location (root dir slot)
-// and read N sectors based on size into memory at a known address.
-//
-// Might need to load a STAGE2 file (BOOT.SYS) containing additional 16-bit code
-// required for system initialization.
-//
-// Switched to Protected Mode and call 32-bit kernel (kmain).
+# Idea: When the image is built, OS.SYS will be placed at a known sector
+# location on disk. We load the DirEntry from a known location (root dir slot)
+# and read N sectors based on size into memory at a known address.
+#
+# Might need to load a STAGE2 file (BOOT.SYS) containing additional 16-bit code
+# required for system initialization.
+#
+# Switched to Protected Mode and call 32-bit kernel (kmain).
 
 
         // read first root dir sector
