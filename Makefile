@@ -6,6 +6,7 @@ export ROOT     := $(CURDIR)
 export BIN_ROOT := bin
 export OBJ_ROOT := obj
 export SRC_ROOT := src
+export SCRIPTS  := scripts
 
 export INCLUDES := inc
 export DEFINES  :=
@@ -47,7 +48,7 @@ uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 define make-exe
   _TARGETS += $(addprefix $(BIN_ROOT)/,$1)
   _SOURCES += $(addprefix $(MODDIR)/,$2)
-  $(addprefix $(BIN_ROOT)/,$1): $(call get-c-obj, $(addprefix $(MODDIR)/,$2)) $(call get-S-obj, $(addprefix $(MODDIR)/,$2))
+  $(addprefix $(BIN_ROOT)/,$1):: $(call get-c-obj, $(addprefix $(MODDIR)/,$2)) $(call get-S-obj, $(addprefix $(MODDIR)/,$2))
 	$(LD) $(LDFLAGS) -o $$@ $$^
 endef
 
@@ -60,7 +61,7 @@ endef
 
 # =================================================================================================
 
-.PHONY: all dirs clean nuke debug-make
+.PHONY: all run img floppy clean nuke dirs debug-make
 .SECONDARY: $(_OBJECTS)
 
 all:
@@ -78,6 +79,16 @@ clean:
 
 nuke:
 	$(RM) -r $(BIN_ROOT)/ $(OBJ_ROOT)/
+
+img: $(_TARGETS)
+	dd if=/dev/zero of=$(BIN_ROOT)/ohwes.img bs=512 count=2880
+	dd if=$(BIN_ROOT)/boot.bin of=$(BIN_ROOT)/ohwes.img bs=512 conv=notrunc
+
+run: img
+	$(SCRIPTS)/run.sh $(BIN_ROOT)/ohwes.img
+
+floppy: img
+	dd if=$(BIN_ROOT)/boot.bin of=/dev/fd0 bs=512 conv=notrunc
 
 debug-make:
 	@echo 'MODULES       = $(MODULES)'
