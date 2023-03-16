@@ -53,7 +53,7 @@ Boot:
         movb            $0, %dh         // head
         movb            $0, %ch         // cylinder
         movb            $2, %cl         // sector
-        movb            $1, %al         // count
+        movb            $16, %al         // count
         call            ReadSectors
 
         jmp             Stage2
@@ -131,7 +131,7 @@ ReadKey:
 Reset:
 
 RESET_STATE_ADDR        = 0x0472
-RESET_STATE_NOMEMTEST   = 0x1234
+RESET_STATE_NOMEMTEST   = 0x1234  # like Ctrl+Alt+Del, use 0x0 for "cold" boot
 RESET_VECTOR_SEG        = 0xF000
 RESET_VECTOR_ADDR       = 0xFFF0
 
