@@ -20,6 +20,12 @@ export MKDIR    := mkdir -p
 export MV       := mv -f
 export RM       := rm -f
 
+export ASFLAGS  := -g -Wa,-mtune=i386
+export CFLAGS   := -g
+
+export WARNINGS := all error \
+	no-trigraphs
+
 # Current module directory.
 # DO NOT call from this Makefile!! Ok to use in define.
 export MODDIR    = $(patsubst %/$(_MODFILE),%,$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
@@ -37,10 +43,10 @@ _DEPENDS         = $(_OBJECTS:.o=.d)
 _DIRS            = $(call uniq, $(dir $(_OBJECTS) $(_TARGETS)))
 
 get-c-src        = $(filter %.c,$1)
-get-S-src        = $(filter %.S,$1)
+get-asm-src      = $(filter %.S,$1)
 
 get-c-obj        = $(subst $(SRC_ROOT)/,$(OBJ_ROOT)/,$(subst .c,.o,$(call get-c-src,$1)))
-get-S-obj        = $(subst $(SRC_ROOT)/,$(OBJ_ROOT)/,$(subst .S,.o,$(call get-S-src,$1)))
+get-asm-obj      = $(subst $(SRC_ROOT)/,$(OBJ_ROOT)/,$(subst .S,.o,$(call get-asm-src,$1)))
 
 # uniq - https://stackoverflow.com/a/16151140
 uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
@@ -48,7 +54,7 @@ uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 define make-exe
   _TARGETS += $(addprefix $(BIN_ROOT)/,$1)
   _SOURCES += $(addprefix $(MODDIR)/,$2)
-  $(addprefix $(BIN_ROOT)/,$1):: $(call get-c-obj, $(addprefix $(MODDIR)/,$2)) $(call get-S-obj, $(addprefix $(MODDIR)/,$2))
+  $(addprefix $(BIN_ROOT)/,$1):: $(call get-c-obj, $(addprefix $(MODDIR)/,$2)) $(call get-asm-obj, $(addprefix $(MODDIR)/,$2))
 	$(LD) $(LDFLAGS) -o $$@ $$^
 endef
 
@@ -59,20 +65,30 @@ define make-obj
 	$(CC) $(CFLAGS) $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INCLUDES)) $(addprefix -W,$(WARNINGS)) -c -MD -MF $$(@:.o=.d) -o $$@ $$<
 endef
 
+# $(call make-obj obj-path, source-path)
+define make-asm-obj
+  _OBJECTS += $1
+  $1: $2
+	$(AS) $(ASFLAGS) $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INCLUDES)) $(addprefix -W,$(WARNINGS)) -c -MD -MF $$(@:.o=.d) -o $$@ $$<
+endef
+
 # =================================================================================================
 
-.PHONY: all run img floppy clean nuke dirs debug-make
+.PHONY: all clean nuke dirs
+.PHONY: img floppy
+.PHONY: run-qemu run-bochs
+.PHONY: debug-make
+
 .SECONDARY: $(_OBJECTS)
 
 all:
 
 vpath %.h $(_INCLUDES)
-include $(addsuffix /$(_MODFILE), $(_MODULES))
+include $(addsuffix /$(_MODFILE), $(_MODULES)) # TODO: module-specific flags
+
+# -------------------------------------------------------------------------------------------------
 
 all: dirs $(_TARGETS)
-
-dirs:
-	$(MKDIR) $(_DIRS)
 
 clean:
 	$(RM) $(_TARGETS) $(_OBJECTS) $(_DEPENDS)
@@ -80,15 +96,27 @@ clean:
 nuke:
 	$(RM) -r $(BIN_ROOT)/ $(OBJ_ROOT)/
 
-img: $(_TARGETS)
+dirs:
+	$(MKDIR) $(_DIRS)
+
+# -------------------------------------------------------------------------------------------------
+
+img: dirs $(_TARGETS)
 	dd if=/dev/zero of=$(BIN_ROOT)/ohwes.img bs=512 count=2880
 	dd if=$(BIN_ROOT)/boot.bin of=$(BIN_ROOT)/ohwes.img bs=512 conv=notrunc
 
-run: img
-	$(SCRIPTS)/run.sh $(BIN_ROOT)/ohwes.img
-
 floppy: img
 	dd if=$(BIN_ROOT)/boot.bin of=/dev/fd0 bs=512 conv=notrunc
+
+# -------------------------------------------------------------------------------------------------
+
+run-qemu: img
+	$(SCRIPTS)/run.sh qemu $(BIN_ROOT)/ohwes.img
+
+run-bochs: img
+	$(SCRIPTS)/run.sh bochs $(BIN_ROOT)/ohwes.img
+
+# -------------------------------------------------------------------------------------------------
 
 debug-make:
 	@echo 'MODULES       = $(MODULES)'
@@ -112,8 +140,10 @@ debug-make:
 	@echo '_OBJECTS      = $(_OBJECTS)'
 	@echo '_DEPENDS      = $(_DEPENDS)'
 
+# -------------------------------------------------------------------------------------------------
+
 # generate object file rules
 $(foreach _src, $(call get-c-src, $(_SOURCES)), $(eval $(call make-obj, $(call get-c-obj, $(_src)), $(_src))))
-$(foreach _src, $(call get-S-src, $(_SOURCES)), $(eval $(call make-obj, $(call get-S-obj, $(_src)), $(_src))))
+$(foreach _src, $(call get-asm-src, $(_SOURCES)), $(eval $(call make-asm-obj, $(call get-asm-obj, $(_src)), $(_src))))
 
 -include $(_DEPENDS)

@@ -1,18 +1,18 @@
 .code16
 
-//
-// Global entry point.
-// Do NOT move or add to this.
-//
+#
+# Global entry point.
+# Do NOT move or add to this.
+#
 .globl Entry
 Entry:
         jmp             Boot
         nop
 
-//
-// BIOS Parameter Block for a FAT12-formatted 3.5" 1.44MB floppy disk.
-// Do NOT move this. Tweak with care.
-//
+#
+# BIOS Parameter Block for a FAT12-formatted 3.5" 1.44MB floppy disk.
+# Do NOT move this. Tweak with care.
+#
 OemName:                .ascii      "WHAMPSON"
 SectorSize:             .short      512
 SectorsPerCluster:      .byte       1
@@ -33,10 +33,10 @@ VolumeId:               .int        0xCA55E77E
 Label:                  .ascii      "OH-WES     "
 FsType:                 .ascii      "FAT12   "
 
-//
-// Initial bootloader code.
-// Gotta be tight; file must assemble to exactly 512 bytes!
-// TODO: assert label address
+#
+# Initial bootloader code.
+# Gotta be tight; file must assemble to exactly 512 bytes!
+# TODO: assert label address
 Boot:
         cli
         cld
@@ -46,27 +46,27 @@ Boot:
         leaw            s_Loading, %si
         call            Print
 
-        // Read stage 2 loader
-        // TODO: load from FAT
-        // TOOD: chs to lba
-        movw            $0x7E00, %bx    // dstBuf
-        movb            $0, %dh         // head
-        movb            $0, %ch         // cylinder
-        movb            $2, %cl         // sector
-        movb            $16, %al         // count
+        # Read stage 2 loader
+        # TODO: load from FAT
+        # TOOD: chs to lba
+        movw            $0x7E00, %bx    # dstBuf
+        movb            $0, %dh         # head
+        movb            $0, %ch         # cylinder
+        movb            $2, %cl         # sector
+        movb            $16, %al         # count
         call            ReadSectors
 
         jmp             Stage2
 
 
-//
-// ~~~ Subroutines
-//
+#
+# ~~~ Subroutines
+#
 
 .global ReadSectors
 ReadSectors:
         movb            DriveNumber, %dl
-        movb            $0x02, %ah      // command: read sectors from drive
+        movb            $0x02, %ah      # command: read sectors from drive
         int             $0x13
         jc              _DiskError
         ret
@@ -75,17 +75,17 @@ _DiskError:
         call            Print
         jmp             Halt
 
-// -----------------------------------------------------------------------------
-// Print
-// -----------------------------------------------------------------------------
-// Prints a zero-terminated string at the current curusor location and
-// advances the cursor.
-//
-// Inputs:
-//      ds:si - address of string to print
-// Clobbers:
-//      ax, bx
-//
+# -----------------------------------------------------------------------------
+# Print
+# -----------------------------------------------------------------------------
+# Prints a zero-terminated string at the current curusor location and
+# advances the cursor.
+#
+# Inputs:
+#      ds:si - address of string to print
+# Clobbers:
+#      ax, bx
+#
 .globl Print
 Print:
         xorw            %ax, %ax
@@ -106,27 +106,27 @@ PrintLn:
         call            Print
         ret
 
-// -----------------------------------------------------------------------------
-// ReadKey
-// -----------------------------------------------------------------------------
-// Waits for keyboard input.
-//
-// Returns:
-//      al - key pressed
-// Clobbers:
-//      ax
-//
+# -----------------------------------------------------------------------------
+# ReadKey
+# -----------------------------------------------------------------------------
+# Waits for keyboard input.
+#
+# Returns:
+#      al - key pressed
+# Clobbers:
+#      ax
+#
 .globl ReadKey
 ReadKey:
         xorb            %ah, %ah
         int             $0x16
         ret
 
-// -----------------------------------------------------------------------------
-// Reset
-// -----------------------------------------------------------------------------
-// Performs a warm reboot.
-//
+# -----------------------------------------------------------------------------
+# Reset
+# -----------------------------------------------------------------------------
+# Performs a warm reboot.
+#
 .globl Reset
 Reset:
 
@@ -141,21 +141,21 @@ RESET_VECTOR_ADDR       = 0xFFF0
         movw            $RESET_STATE_NOMEMTEST, %es:(%eax)
         ljmp            $RESET_VECTOR_SEG, $RESET_VECTOR_ADDR
 
-// -----------------------------------------------------------------------------
-// ReadKeyReset
-// -----------------------------------------------------------------------------
-// Waits for keyboard input, then resets the computer.
-//
+# -----------------------------------------------------------------------------
+# ReadKeyReset
+# -----------------------------------------------------------------------------
+# Waits for keyboard input, then resets the computer.
+#
 .globl ReadKeyReset
 ReadKeyReset:
         call            ReadKey
         jmp             Reset
 
-// -----------------------------------------------------------------------------
-// Halt
-// -----------------------------------------------------------------------------
-// Idle the CPU.
-//
+# -----------------------------------------------------------------------------
+# Halt
+# -----------------------------------------------------------------------------
+# Idle the CPU.
+#
 .globl Halt
 Halt:
         hlt
@@ -164,11 +164,11 @@ Halt:
 s_Newline:
         .asciz          "\r\n"
 s_Loading:
-        .asciz          "\r\nLoading..."
+        .asciz          "\r\nOHWES is loading..."
 s_DiskError:
         .asciz          "\r\nDiskette read error!"
 
-// TODO: ensure file does not grow beyond 512B
+# TODO: ensure file does not grow beyond 512B
 
 _Pad:                   .space      0x1FE - (. - Entry)
 Sig:                    .short      0xAA55
