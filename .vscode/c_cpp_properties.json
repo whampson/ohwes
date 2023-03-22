@@ -1,38 +1,39 @@
 {
     "configurations": [
         {
-            "name": "ohwes",
+            "name": "OH-WES (MINGW32)",
             "includePath": [
                 "${workspaceFolder}/src/include/*"
             ],
             "defines": [],
-            "compilerPath": "${workspaceFolder}/lib/i686-elf-tools/bin/i686-elf-gcc",
+            "compilerPath": "/mingw32/bin/i686-elf-gcc",
             "cStandard": "c11",
             "cppStandard": "c++11",
             "intelliSenseMode": "gcc-x86",
             "compilerArgs": [
                 "-ffreestanding",
                 "-nostdinc",
+                "-nostdinc++",
                 "-nostdlib"
             ]
-        },
-        {
-            "name": "ohwes (Tools) [MinGW]",
-            "includePath": [],
-            "compilerPath": "C:/msys64/mingw32/bin/gcc.exe",
-            "cStandard": "c11",
-            "cppStandard": "c++11",
-            "intelliSenseMode": "windows-gcc-x86",
-            "compilerArgs": []
-        },
-        {
-            "name": "ohwes (Tools) [macOS]",
-            "includePath": [],
-            "compilerPath": "/usr/bin/gcc",
-            "cStandard": "c11",
-            "cppStandard": "c++11",
-            "intelliSenseMode": "gcc-x86",
-            "compilerArgs": []
+        // },
+        // {
+        //     "name": "OH-WES (Tools) [MinGW]",
+        //     "includePath": [],
+        //     "compilerPath": "C:/msys64/mingw32/bin/gcc.exe",
+        //     "cStandard": "c11",
+        //     "cppStandard": "c++11",
+        //     "intelliSenseMode": "windows-gcc-x86",
+        //     "compilerArgs": []
+        // },
+        // {
+        //     "name": "OH-WES (Tools) [macOS]",
+        //     "includePath": [],
+        //     "compilerPath": "/usr/bin/gcc",
+        //     "cStandard": "c11",
+        //     "cppStandard": "c++11",
+        //     "intelliSenseMode": "gcc-x86",
+        //     "compilerArgs": []
         }
     ],
     "version": 4

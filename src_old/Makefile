@@ -1,3 +1,0 @@
-DIRS = boot
-
-include $(MAKEROOT)

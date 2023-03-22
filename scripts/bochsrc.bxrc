@@ -29,12 +29,12 @@ pci: enabled=1, chipset=i440fx, slot1=none, slot2=none, slot3=none, slot4=none, 
 vga: extension=vbe, update_freq=5, realtime=1, ddc=builtin
 cpu: count=1, ips=4000000, model=bx_generic, reset_on_triple_fault=1, cpuid_limit_winnt=0, ignore_bad_msrs=1, mwait_is_nop=0
 cpuid: level=6, stepping=3, model=3, family=6, vendor_string="GenuineIntel", brand_string="              Intel(R) Pentium(R) 4 CPU        "
-cpuid: mmx=true, apic=xapic, simd=sse2, sse4a=false, misaligned_sse=false, sep=true
+cpuid: mmx=true, apic=xapic, simd=sse3, sse4a=false, misaligned_sse=false, sep=true
 cpuid: movbe=false, adx=false, aes=false, sha=false, xsave=false, xsaveopt=false, x86_64=true
 cpuid: 1g_pages=false, pcid=false, fsgsbase=false, smep=false, smap=false, mwait=true
 cpuid: vmx=1
 print_timestamps: enabled=0
-port_e9_hack: enabled=0
+port_e9_hack: enabled=1
 private_colormap: enabled=0
 clock: sync=none, time0=local, rtc_sync=0
 # no cmosimage
@@ -45,7 +45,7 @@ info: action=report
 error: action=report
 panic: action=ask
 keyboard: type=mf, serial_delay=250, paste_delay=100000, user_shortcut=none
-mouse: type=ps2, enabled=false, toggle=ctrl+mbutton
+mouse: type=none, enabled=false, toggle=ctrl+mbutton
 sound: waveoutdrv=win, waveout=none, waveindrv=win, wavein=none, midioutdrv=win, midiout=none
 speaker: enabled=true, mode=sound, volume=15
 parport1: enabled=true, file=none

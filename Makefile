@@ -21,7 +21,7 @@ export MV       := mv -f
 export RM       := rm -f
 
 export ASFLAGS  := -g -Wa,-mtune=i386
-export CFLAGS   := -g -nostdinc -ffreestanding
+export CFLAGS   := -g -nostdinc -nostdlib -ffreestanding
 
 export WARNINGS := all error \
 	no-trigraphs
@@ -114,7 +114,7 @@ run-qemu: img
 	$(SCRIPTS)/run.sh qemu $(BIN_ROOT)/ohwes.img
 
 run-bochs: img
-	$(SCRIPTS)/run.sh bochs $(BIN_ROOT)/ohwes.img
+	$(SCRIPTS)/run.sh bochs $(SCRIPTS)/bochsrc.bxrc
 
 # -------------------------------------------------------------------------------------------------
 

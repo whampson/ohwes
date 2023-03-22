@@ -11,7 +11,8 @@
     "cSpell.diagnosticLevel": "Hint",
     "cSpell.languageSettings": [
         {
-            "languageId": "cpp,c",
+            // C and C++ files
+            "languageId": "*",
             // Turn off compound words, because it is only checking strings.
             "allowCompoundWords": false,
             // Only check comments and strings
