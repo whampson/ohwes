@@ -21,7 +21,7 @@ export MV       := mv -f
 export RM       := rm -f
 
 export ASFLAGS  := -g -Wa,-mtune=i386
-export CFLAGS   := -g
+export CFLAGS   := -g -nostdinc -ffreestanding
 
 export WARNINGS := all error \
 	no-trigraphs
@@ -54,7 +54,7 @@ uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 define make-exe
   _TARGETS += $(addprefix $(BIN_ROOT)/,$1)
   _SOURCES += $(addprefix $(MODDIR)/,$2)
-  $(addprefix $(BIN_ROOT)/,$1):: $(call get-c-obj, $(addprefix $(MODDIR)/,$2)) $(call get-asm-obj, $(addprefix $(MODDIR)/,$2))
+  $(addprefix $(BIN_ROOT)/,$1):: $(call get-asm-obj, $(addprefix $(MODDIR)/,$2)) $(call get-c-obj, $(addprefix $(MODDIR)/,$2))
 	$(LD) $(LDFLAGS) -o $$@ $$^
 endef
 

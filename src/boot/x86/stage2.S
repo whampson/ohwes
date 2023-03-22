@@ -1,4 +1,5 @@
 .code16
+.text
 
 # TODO: glean as much information about the system as possible from the
 # BIOS system calls before switching to protected mode
@@ -10,8 +11,11 @@ Stage2:
     leaw        s_HelloFromStage2, %si
     call        PrintLn
 
-    movb        $1, %al     # blue
-    call        VgaSetColor
+    // movb        $0x12, %al
+    // call        VgaSetMode
+
+    // movb        $1, %al     # blue
+    // call        VgaSetColor
 
     # get VGA info
     leaw        s_VideoMode, %si
@@ -128,8 +132,27 @@ _ram:
     call        PrintLn
     # TODO: int 15h ah=88h, int 15h ax=e801h, int 15h ax=e820h
 
-    call        ReadKey
-    jmp         Reset
+    call        SetupGdt
+
+    cli
+    movl        %cr0, %eax
+    orl         $0x01, %eax       # enable Protected Mode
+    movl        %eax, %cr0
+    jmpl        $0x08, $Entry32
+
+.code32
+
+Entry32:
+    movw        $0x10, %ax
+    movw        %ax, %ds
+    movw        %ax, %es
+    movw        %ax, %ss
+    call        kmain
+
+Idle32:
+    jmp         Idle32
+
+.code16
 
 # -----------------------------------------------------------------------------
 # TestA20
@@ -160,6 +183,32 @@ _A20_OFF:
     stc
 _A20_DONE:
     ret
+
+# -----------------------------------------------------------------------------
+# SetupGdt
+# -----------------------------------------------------------------------------
+SetupGdt:
+    movw        gdt_size, %dx
+    decw        %dx
+    movw        %dx, gdt_regptr
+    movl        $gdt_base, gdt_regptr+2
+    lgdtl       gdt_regptr
+    ret
+
+// TODO: expand-out fields for clarity
+.align 16
+gdt_base:
+    .quad       0x0000000000000000      # (not used, required by CPU)
+    .quad       0x00CF9A000000FFFF      # cs = 0x08
+    .quad       0x00CF92000000FFFF      # ds = 0x10
+gdt_end:
+
+.align 8
+gdt_regptr:
+    .quad       0
+
+gdt_size:
+    .long       gdt_end - gdt_base
 
 # -----------------------------------------------------------------------------
 # Num2Hex
@@ -231,6 +280,23 @@ VgaGetInfo:
     ret
 
 # -----------------------------------------------------------------------------
+# VgaSetMode
+# -----------------------------------------------------------------------------
+# Sets the current background/border color.
+#
+# Inputs:
+#      al - mode ID
+# Clobbers:
+#      bx, possibly many others due to interrupt
+#
+.globl VgaSetMode
+VgaSetMode:
+    movb        $0x00, %ah
+    int         $0x10
+    call        VgaGetInfo
+    ret
+
+# -----------------------------------------------------------------------------
 # VgaSetColor
 # -----------------------------------------------------------------------------
 # Sets the current background/border color.
@@ -249,18 +315,25 @@ VgaSetColor:
     int         $0x10
     ret
 
+.data
+
+.globl g_VgaMode
 g_VgaMode:
-    .byte       0
+    .long       0
 
+.globl g_VgaNumCols
 g_VgaNumCols:
-    .byte       0
+    .long       0
 
+.globl g_VgaPage
 g_VgaPage:
-    .byte       0
+    .long       0
 
+.globl g_VgaColor
 g_VgaColor:
-    .byte       0
+    .long       0
 
+.globl g_EquipmentFlags
 g_EquipmentFlags:
 #       [0] - diskette drive installed
 #       [1] - math coprocessor (x87) installed
@@ -273,11 +346,11 @@ g_EquipmentFlags:
 #      [12] - game port installed
 #      [13] - (unused) (previously serial printer attached, or internal modem installed)
 #   [15:14] - num parallel ports installed
-    .word       0
+    .long       0
 
+.globl g_RamKB
 g_RamKB:
-    .word       0
-
+    .long       0
 
 s_HelloFromStage2:
     .asciz      "\r\nHello from stage 2!"
@@ -299,9 +372,3 @@ s_A20_TryingPort92h:
     .asciz      "BIOS: A20: trying port 92h... "
 s_A20_TryingKeyboard:
     .asciz      "BIOS: A20: trying keyboard... "
-s_Success:
-    .asciz      "success"
-s_Failed:
-    .asciz      "failed"
-s_NotSupported:
-    .asciz      "not supported"

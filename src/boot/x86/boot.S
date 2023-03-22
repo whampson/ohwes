@@ -1,4 +1,5 @@
 .code16
+.text
 
 #
 # Global entry point.
@@ -130,16 +131,11 @@ ReadKey:
 .globl Reset
 Reset:
 
-RESET_STATE_ADDR        = 0x0472
-RESET_STATE_NOMEMTEST   = 0x1234  # like Ctrl+Alt+Del, use 0x0 for "cold" boot
-RESET_VECTOR_SEG        = 0xF000
-RESET_VECTOR_ADDR       = 0xFFF0
+RESETFLAG               = 0x0472
+RESETFLAG_NOMEMTEST     = 0x1234
 
-        xorl            %eax, %eax
-        movw            %ax, %es
-        movw            $RESET_STATE_ADDR, %ax
-        movw            $RESET_STATE_NOMEMTEST, %es:(%eax)
-        ljmp            $RESET_VECTOR_SEG, $RESET_VECTOR_ADDR
+        movw            $RESETFLAG_NOMEMTEST, RESETFLAG   # Affects Ctrl+Alt+Del behavior too
+        ljmp            $0xF000, $0xFFF0
 
 # -----------------------------------------------------------------------------
 # ReadKeyReset
@@ -164,7 +160,7 @@ Halt:
 s_Newline:
         .asciz          "\r\n"
 s_Loading:
-        .asciz          "\r\nOHWES is loading..."
+        .asciz          "\r\nOH-WES is loading..."
 s_DiskError:
         .asciz          "\r\nDiskette read error!"
 

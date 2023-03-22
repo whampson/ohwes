@@ -1,0 +1,20 @@
+extern int g_VgaMode;
+
+void kmain()
+{
+    volatile short *vgaBuf = (short *) 0xB8000;
+
+    vgaBuf[0x00] = 0x2000 | 'V';
+    vgaBuf[0x01] = 0x2000 | 'G';
+    vgaBuf[0x02] = 0x2000 | 'A';
+    vgaBuf[0x03] = 0x2000 | ' ';
+    vgaBuf[0x04] = 0x2000 | 'M';
+    vgaBuf[0x05] = 0x2000 | 'o';
+    vgaBuf[0x06] = 0x2000 | 'd';
+    vgaBuf[0x07] = 0x2000 | 'e';
+    vgaBuf[0x08] = 0x2000 | ':';
+    vgaBuf[0x09] = 0x2000 | ' ';
+    vgaBuf[0x0A] = 0x2000 | ('0' + ((g_VgaMode & 0xF0) >> 4));
+    vgaBuf[0x0B] = 0x2000 | ('0' +  (g_VgaMode & 0x0F));
+    vgaBuf[0x0C] = 0x2000 | 'h';
+}

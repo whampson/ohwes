@@ -1,5 +1,5 @@
 TARGET  = boot.elf
-SOURCES = boot.S stage2.S
+SOURCES = boot.S stage2.S init.c
 
  # ORIGIN ENTRYPOINT
 LDFLAGS = -Ttext 0x7C00 -e Entry
