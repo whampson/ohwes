@@ -12,7 +12,7 @@
     "cSpell.languageSettings": [
         {
             // C and C++ files
-            "languageId": "*",
+            "languageId": "c,cpp,gas",
             // Turn off compound words, because it is only checking strings.
             "allowCompoundWords": false,
             // Only check comments and strings
@@ -39,5 +39,6 @@
         "string_view": "c",
         "initializer_list": "c",
         "__config": "cpp"
-    }
+    },
+    "cSpell.enabled": true
 }

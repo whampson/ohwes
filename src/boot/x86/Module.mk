@@ -1,8 +1,11 @@
 TARGET  = boot.elf
-SOURCES = boot.S stage2.S init.c
+SOURCES = \
+	boot_stage1.S \
+	boot_stage2.S \
+	init.c \
 
  # ORIGIN ENTRYPOINT
-LDFLAGS = -Ttext 0x7C00 -e Entry
+LDFLAGS = -Ttext 0x7C00 -e Entry16
 
 $(eval $(call make-exe, $(TARGET), $(SOURCES)))
 

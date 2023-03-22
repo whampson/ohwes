@@ -20,7 +20,7 @@ export MKDIR    := mkdir -p
 export MV       := mv -f
 export RM       := rm -f
 
-export ASFLAGS  := -g -Wa,-mtune=i386
+export ASFLAGS  := -D__ASSEMBLER__ -g -Wa,-mtune=i386
 export CFLAGS   := -g -nostdinc -nostdlib -ffreestanding
 
 export WARNINGS := all error \
