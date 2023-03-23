@@ -20,6 +20,9 @@
 
 #include "boot.h"
 
+RESETMODE               = 0x0472                # Soft reset mode address
+RESETMODE_NOMEMTEST     = 0x1234                # Skip memory test on soft reset
+
 .text
 .code16
 
@@ -36,34 +39,34 @@ Entry16:
 # BIOS Parameter Block for a FAT12-formatted 3.5" 1.44MB floppy disk.
 # Do NOT move this. Tweak with care.
 #
-OemName:                .ascii              "whampson"
-SectorSize:             .short              512
-SectorsPerCluster:      .byte               1
-ReservedSectorCount:    .short              1
-TableCount:             .byte               2
-RootDirCapacity:        .short              224
-SectorCount:            .short              2880
-MediaType:              .byte               0xF0
-SectorsPerTable:        .short              9
-SectorsPerTrack:        .short              18
-HeadCount:              .short              2
-HiddenSectorCount:      .int                0
-SectorCountLarge:       .int                0
-DriveNumber:            .byte               0
-_Reserved:              .byte               0
-Signature:              .byte               0x29
-VolumeId:               .int                0xCA55E77E
-Label:                  .ascii              "OH-WES     "
-FsType:                 .ascii              "FAT12   "
+OemName:                .ascii                  "whampson"
+SectorSize:             .short                  512
+SectorsPerCluster:      .byte                   1
+ReservedSectorCount:    .short                  1
+TableCount:             .byte                   2
+RootDirCapacity:        .short                  224
+SectorCount:            .short                  2880
+MediaType:              .byte                   0xF0
+SectorsPerTable:        .short                  9
+SectorsPerTrack:        .short                  18
+HeadCount:              .short                  2
+HiddenSectorCount:      .int                    0
+SectorCountLarge:       .int                    0
+DriveNumber:            .byte                   0
+_Reserved:              .byte                   0
+Signature:              .byte                   0x29
+VolumeId:               .int                    0xCA55E77E
+Label:                  .ascii                  "OH-WES     "
+FsType:                 .ascii                  "FAT12   "
 
 #
 # Initial boot loader code.
 # Gotta be tight; file must assemble to exactly 512 bytes!
 #
 Boot:
-        cli                                 # interrupts off
-        cld                                 # ensure DF=0
-        xorw            %ax, %ax            # zero some segment regs
+        cli                                     # interrupts off
+        cld                                     # ensure DF=0
+        xorw            %ax, %ax                # zero some segment regs
         movw            %ax, %ds
         movw            %ax, %es
 
@@ -72,18 +75,18 @@ Boot:
 
         # hardcoded sector for now
 _Boot_LoadStage2:
-        movw            $STAGE2_BASE, %bx   # dest
-        movb            $0, %dh             # head
-        movb            $0, %ch             # cylinder
-        movb            $2, %cl             # sector (indexed at 1)
-        movb            $16, %al            # sector count
+        movw            $STAGE2_BASE, %bx       # dest
+        movb            $0, %dh                 # head
+        movb            $0, %ch                 # cylinder
+        movb            $2, %cl                 # sector (indexed at 1)
+        movb            $16, %al                # sector count
         movb            DriveNumber, %dl
         movb            $0x02, %ah
         int             $0x13
         jc              _Boot_DiskError
 
 _Boot_GoToStage2:
-        jmp             Stage2              # onward!
+        jmp             Stage2                  # onward!
 
 _Boot_DiskError:
         leaw            s_DiskError, %si
@@ -153,7 +156,5 @@ s_DiskError:
 s_Newline:
         .asciz          "\r\n"
 
-_Pad:   .space          0x1FE - (. - Entry16), 0xCC
-_Sig:   .short          0xAA55
-
-# TODO: ensure file does not grow beyond 512 bytes!
+        .space          0x1FE - (. - Entry16), 0xCC     # padding
+        .short          0xAA55                          # boot signature

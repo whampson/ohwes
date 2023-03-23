@@ -21,22 +21,54 @@
 #ifndef BOOT_H
 #define BOOT_H
 
-#define STAGE2_BASE         0x7E00
+#define IDT_BASE                0x0000
+#define GDT_BASE                0x0800
+#define MEMMAP_BASE             0x1000
+#define STAGE1_BASE             0x7C00
+#define STAGE2_BASE             0x7E00
 
-#define RESETMODE           0x0472  // Soft reset mode address
-#define RESETMODE_NOMEMTEST 0x1234  // Skip memory test on soft reset
+#define A20METHOD_KEYBOARD      1
+#define A20METHOD_PORT          2
+#define A20METHOD_BIOS          3
 
-// #define PORT_PS2KBD_CMD     0x64
-// #define PORT_PS2KBD_DATA    0x60
+#ifndef __ASSEMBLER__
 
-// #define PORT_SYSCNTL_A      0x92
-// #define SYSCNTLA_A20        0x02
+// #include <inttypes.h>
 
-#define DUMMY_CS            0x08
-#define DUMMY_DS            0x10
+extern char g_A20Method;
 
-#ifndef  __ASSEMBLER__
+extern short g_RamCapacityLo;         // contiguous RAM <1M in 1K blocks
+extern short g_RamCapacityHi;         // contiguous RAM >1M in 1K blocks, up to 15M or 64M
+extern short g_RamCapacityLo_e801;    // contiguous RAM >1M in 1K blocks, up to 16M
+extern short g_RamCapacityHi_e801;    // contiguous RAM >16M in 64K blocks
 
+extern char g_bHasMemoryMap;
+extern void *g_pAcpiMemoryMap;
+
+extern short g_EquipmentFlags;
+
+struct EquipmentFlags {
+    short DisketteDrive     : 1;
+    short Coprocessor       : 1;
+    short Ps2Mouse          : 1;
+    short                   : 1;
+    short VideoMode         : 2;    // 00 = unused, 01 = 40x25, 10 = 80x25, 11 = 80x25 mono
+    short NumOtherDiskette  : 2;    // num diskette drives attached less 1
+    short _Dma              : 1;
+    short NumSerialPorts    : 3;
+    short GamePort          : 1;
+    short _PrinterOrModem   : 1;
+    short NumParallelPorts  : 2;
+};
+_Static_assert(sizeof(struct EquipmentFlags) == 2, "sizeof(struct EquipmentFlags)");
+
+struct MemoryMapEntry {
+    unsigned long long int Base;
+    unsigned long long int Length;
+    unsigned int Type;
+    unsigned int ExtendedAttributes;
+};
+_Static_assert(sizeof(struct MemoryMapEntry) == 24, "sizeof(struct MemoryMapEntry)");
 // Put C-only stuff here!
 
 #endif  // __ASSEMBLER__

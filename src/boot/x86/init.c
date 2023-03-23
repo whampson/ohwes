@@ -1,6 +1,6 @@
-extern char g_A20Method;
+#include "boot.h"
 
-void Init()
+void SysInit()
 {
     volatile short *vgaBuf = (short *) 0xB8000;
 
