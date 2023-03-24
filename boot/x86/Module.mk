@@ -1,7 +1,7 @@
 TARGET  = boot.elf
 SOURCES = \
-	boot_stage1.S \
-	boot_stage2.S \
+	stage1.S \
+	stage2.S \
 	init.c \
 
  # ORIGIN ENTRYPOINT

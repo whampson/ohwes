@@ -8,6 +8,21 @@
         "editor.tabSize": 8
     },
 
+    "files.associations": {
+        "*.h": "c",
+        "numbers": "c",
+        "stdbool.h": "c",
+        "unistd.h": "c",
+        "getopt.h": "c",
+        "image.h": "c",
+        "typeinfo": "c",
+        "random": "c",
+        "array": "c",
+        "string_view": "c",
+        "initializer_list": "c",
+        "__config": "cpp"
+    },
+
     "cSpell.diagnosticLevel": "Hint",
     "cSpell.languageSettings": [
         {
@@ -26,19 +41,8 @@
             ]
         }
     ],
-    "files.associations": {
-        "*.h": "c",
-        "numbers": "c",
-        "stdbool.h": "c",
-        "unistd.h": "c",
-        "getopt.h": "c",
-        "image.h": "c",
-        "typeinfo": "c",
-        "random": "c",
-        "array": "c",
-        "string_view": "c",
-        "initializer_list": "c",
-        "__config": "cpp"
-    },
-    "cSpell.enabled": true
+    "cSpell.enabled": true,
+    "cSpell.words": [
+        "Hampson"
+    ]
 }

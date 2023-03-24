@@ -5,7 +5,6 @@ export MODULES  := \
 export ROOT     := $(CURDIR)
 export BIN_ROOT := bin
 export OBJ_ROOT := obj
-export SRC_ROOT := src
 export SCRIPTS  := scripts
 
 export INCLUDES := inc
@@ -27,7 +26,7 @@ export WARNINGS := all error \
 	no-trigraphs
 
 # Current module directory.
-# DO NOT call from this Makefile!! Ok to use in define.
+# Use only in recipies that will be evaulated by a module Makefile.
 export MODDIR    = $(patsubst %/$(_MODFILE),%,$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
 
 # =================================================================================================
@@ -37,16 +36,16 @@ _SOURCES        :=
 _OBJECTS        :=
 _TARGETS        :=
 
-_MODULES         = $(addprefix $(SRC_ROOT)/,$(MODULES))
-_INCLUDES        = $(addprefix $(SRC_ROOT)/,$(INCLUDES))
+_MODULES         = $(MODULES)
+_INCLUDES        = $(INCLUDES)
 _DEPENDS         = $(_OBJECTS:.o=.d)
 _DIRS            = $(call uniq, $(dir $(_OBJECTS) $(_TARGETS)))
 
 get-c-src        = $(filter %.c,$1)
 get-asm-src      = $(filter %.S,$1)
 
-get-c-obj        = $(subst $(SRC_ROOT)/,$(OBJ_ROOT)/,$(subst .c,.o,$(call get-c-src,$1)))
-get-asm-obj      = $(subst $(SRC_ROOT)/,$(OBJ_ROOT)/,$(subst .S,.o,$(call get-asm-src,$1)))
+get-c-obj        = $(addprefix $(OBJ_ROOT)/,$(subst .c,.o,$(call get-c-src,$1)))
+get-asm-obj      = $(addprefix $(OBJ_ROOT)/,$(subst .S,.o,$(call get-asm-src,$1)))
 
 # uniq - https://stackoverflow.com/a/16151140
 uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
@@ -94,7 +93,7 @@ clean:
 	$(RM) $(_TARGETS) $(_OBJECTS) $(_DEPENDS)
 
 nuke:
-	$(RM) -r $(BIN_ROOT)/ $(OBJ_ROOT)/
+	$(RM) -r $(BIN_ROOT) $(OBJ_ROOT)
 
 dirs:
 	$(MKDIR) $(_DIRS)
@@ -131,7 +130,6 @@ debug-make:
 	@echo 'ROOT          = $(ROOT)'
 	@echo 'BIN_ROOT      = $(BIN_ROOT)'
 	@echo 'OBJ_ROOT      = $(OBJ_ROOT)'
-	@echo 'SRC_ROOT      = $(SRC_ROOT)'
 	@echo 'MAKEFILE_LIST = $(MAKEFILE_LIST)'
 	@echo '_MODULES      = $(_MODULES)'
 	@echo '_TARGETS      = $(_TARGETS)'

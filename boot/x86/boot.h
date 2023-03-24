@@ -9,12 +9,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *        File: boot/x86/boot_stage2.S
+ *        File: boot/x86/boot.h
  *      Created: Mar 21, 2023
  *       Author: Wes Hampson
- *  Environment: 16-bit Real Mode (except for jump to Protected Mode)
- *
- * Stage 2 boot loader. Initializes devices and loads the kernel.
  * =============================================================================
  */
 
