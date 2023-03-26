@@ -9,7 +9,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 # -----------------------------------------------------------------------------
-#        File: boot/x86/stage1.S
+#         File: boot/stage1.S
 #      Created: Mar 21, 2023
 #       Author: Wes Hampson
 #  Environment: 16-bit Real Mode

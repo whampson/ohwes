@@ -1,6 +1,6 @@
 #include "boot.h"
 
-void SysInit()
+void Init()
 {
     volatile short *vgaBuf = (short *) 0xB8000;
 

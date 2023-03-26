@@ -9,7 +9,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *        File: boot/x86/boot.h
+ *         File: boot/boot.h
  *      Created: Mar 21, 2023
  *       Author: Wes Hampson
  * =============================================================================
@@ -44,7 +44,8 @@ extern void *g_pAcpiMemoryMap;
 
 extern short g_EquipmentFlags;
 
-struct EquipmentFlags {
+struct EquipmentFlags
+{
     short DisketteDrive     : 1;
     short Coprocessor       : 1;
     short Ps2Mouse          : 1;
@@ -59,14 +60,14 @@ struct EquipmentFlags {
 };
 _Static_assert(sizeof(struct EquipmentFlags) == 2, "sizeof(struct EquipmentFlags)");
 
-struct MemoryMapEntry {
+struct MemoryMapEntry
+{
     unsigned long long int Base;
     unsigned long long int Length;
     unsigned int Type;
     unsigned int ExtendedAttributes;
 };
 _Static_assert(sizeof(struct MemoryMapEntry) == 24, "sizeof(struct MemoryMapEntry)");
-// Put C-only stuff here!
 
 #endif  // __ASSEMBLER__
 
