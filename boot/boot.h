@@ -1,6 +1,10 @@
 /* =============================================================================
  * Copyright (C) 2023 Wes Hampson. All Rights Reserved.
  *
+ * This file is part of the OH-WES Operating System.
+ * OH-WES is free software; you may redistribute it and/or modify it under the
+ * terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -30,42 +34,42 @@
 
 #ifndef __ASSEMBLER__
 
-// #include <inttypes.h>
+#include <stdint.h>
 
-extern char g_A20Method;
+extern uint8_t g_A20Method;
 
-extern short g_RamCapacityLo;         // contiguous RAM <1M in 1K blocks
-extern short g_RamCapacityHi;         // contiguous RAM >1M in 1K blocks, up to 15M or 64M
-extern short g_RamCapacityLo_e801;    // contiguous RAM >1M in 1K blocks, up to 16M
-extern short g_RamCapacityHi_e801;    // contiguous RAM >16M in 64K blocks
+extern uint16_t g_RamCapacityLo;        // contiguous RAM <1M in 1K blocks
+extern uint16_t g_RamCapacityHi;        // contiguous RAM >1M in 1K blocks, up to 15M or 64M
+extern uint16_t g_RamCapacityLo_e801;   // contiguous RAM >1M in 1K blocks, up to 16M
+extern uint16_t g_RamCapacityHi_e801;   // contiguous RAM >16M in 64K blocks
 
 extern char g_bHasMemoryMap;
 extern void *g_pAcpiMemoryMap;
 
-extern short g_EquipmentFlags;
+extern uint16_t g_EquipmentFlags;
 
 struct EquipmentFlags
 {
-    short DisketteDrive     : 1;
-    short Coprocessor       : 1;
-    short Ps2Mouse          : 1;
-    short                   : 1;
-    short VideoMode         : 2;    // 00 = unused, 01 = 40x25, 10 = 80x25, 11 = 80x25 mono
-    short NumOtherDiskette  : 2;    // num diskette drives attached less 1
-    short _Dma              : 1;
-    short NumSerialPorts    : 3;
-    short GamePort          : 1;
-    short _PrinterOrModem   : 1;
-    short NumParallelPorts  : 2;
+    uint16_t DisketteDrive     : 1;
+    uint16_t Coprocessor       : 1;
+    uint16_t Ps2Mouse          : 1;
+    uint16_t                   : 1;
+    uint16_t VideoMode         : 2;     // 00 = unused, 01 = 40x25, 10 = 80x25, 11 = 80x25 mono
+    uint16_t NumOtherDiskette  : 2;     // num diskette drives attached less 1
+    uint16_t _Dma              : 1;
+    uint16_t NumSerialPorts    : 3;
+    uint16_t GamePort          : 1;
+    uint16_t _PrinterOrModem   : 1;
+    uint16_t NumParallelPorts  : 2;
 };
 _Static_assert(sizeof(struct EquipmentFlags) == 2, "sizeof(struct EquipmentFlags)");
 
 struct MemoryMapEntry
 {
-    unsigned long long int Base;
-    unsigned long long int Length;
-    unsigned int Type;
-    unsigned int ExtendedAttributes;
+    uint64_t Base;
+    uint64_t Length;
+    uint32_t Type;
+    uint32_t ExtendedAttributes;
 };
 _Static_assert(sizeof(struct MemoryMapEntry) == 24, "sizeof(struct MemoryMapEntry)");
 
