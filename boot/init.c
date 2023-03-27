@@ -1,22 +1,24 @@
 #include "boot.h"
 
+#include <stdint.h>
+#include <drivers/vga.h>
+
+char * const g_VgaBuf = (char * const) 0xB8000;
+
+void puts(const char *s)
+{
+    uint16_t pos = VgaGetCursorPos();
+
+    char c;
+    while ((c = *(s++)) != '\0')
+    {
+        g_VgaBuf[(pos++) << 1] = c;
+    }
+    VgaSetCursorPos(pos);
+}
+
 void Init()
 {
-    volatile short *vgaBuf = (short *) 0xB8000;
-
-    vgaBuf[0x50] = 0x0700 | 'A';
-    vgaBuf[0x51] = 0x0700 | '2';
-    vgaBuf[0x52] = 0x0700 | '0';
-    vgaBuf[0x53] = 0x0700 | ' ';
-    vgaBuf[0x54] = 0x0700 | 'M';
-    vgaBuf[0x55] = 0x0700 | 'e';
-    vgaBuf[0x56] = 0x0700 | 't';
-    vgaBuf[0x57] = 0x0700 | 'h';
-    vgaBuf[0x58] = 0x0700 | 'o';
-    vgaBuf[0x59] = 0x0700 | 'd';
-    vgaBuf[0x5A] = 0x0700 | ':';
-    vgaBuf[0x5B] = 0x0700 | ' ';
-    vgaBuf[0x5C] = 0x0700 | ('0' + ((g_A20Method & 0xF0) >> 4));
-    vgaBuf[0x5D] = 0x0700 | ('0' + ((g_A20Method & 0x0F)));
-    vgaBuf[0x5E] = 0x0700 | 'h';
+    VgaSetCursorPos(420);
+    puts("Bong rips for Jesus!");
 }

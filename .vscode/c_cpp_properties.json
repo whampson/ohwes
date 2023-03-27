@@ -6,7 +6,7 @@
                 "${workspaceFolder}/include/*"
             ],
             "defines": [],
-            "compilerPath": "/mingw32/bin/i686-elf-gcc",
+            "compilerPath": "C:/msys64/mingw32/bin/i686-elf-gcc",
             "cStandard": "c11",
             "intelliSenseMode": "gcc-x86",
             "compilerArgs": [
