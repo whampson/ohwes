@@ -19,13 +19,14 @@
 # =============================================================================
 
 # Modules to build
-export MODULES      := boot
+export MODULES      := boot kernel
 # TODO: search tree for modules?
 
 # Important directories
 export SCRIPTS      := scripts
 export BIN_ROOT     := bin
 export OBJ_ROOT     := obj
+export LIB_ROOT     := lib
 export MOD_ROOT      = $(patsubst %/$(_MODFILE),%,$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
 
 # Build tools
@@ -68,10 +69,10 @@ endef
 
 # $(call make-lib lib-name, source-list)
 define make-lib
-  _LIBRARIES += $(addprefix $(OBJ_ROOT)/$(MOD_ROOT)/,$1)
+  _LIBRARIES += $(addprefix $(LIB_ROOT)/$(MOD_ROOT)/,$1)
   _SOURCES += $(addprefix $(MOD_ROOT)/,$2)
-  $(addprefix $(OBJ_ROOT)/$(MOD_ROOT)/,$1):: $(call get-asm-obj, $(addprefix $(MOD_ROOT)/,$2)) $(call get-c-obj, $(addprefix $(MOD_ROOT)/,$2))
-       $(AR) rcs $$@ $$^
+  $(addprefix $(LIB_ROOT)/$(MOD_ROOT)/,$1):: $(call get-asm-obj, $(addprefix $(MOD_ROOT)/,$2)) $(call get-c-obj, $(addprefix $(MOD_ROOT)/,$2))
+	$(AR) rcs $$@ $$^
 endef
 
 # =================================================================================================
@@ -132,7 +133,7 @@ clean:
 	$(RM) $(_TARGETS) $(_LIBRARIES) $(_OBJECTS) $(_DEPENDS)
 
 nuke:
-	$(RM) -r $(BIN_ROOT) $(OBJ_ROOT)
+	$(RM) -r $(BIN_ROOT) $(OBJ_ROOT) $(LIB_ROOT)
 
 dirs:
 	$(MKDIR) $(_DIRS)

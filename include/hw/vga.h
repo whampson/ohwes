@@ -33,8 +33,8 @@
 */
 
 #include <stdint.h>
-#include <ohwes/io.h>
-#include <ohwes/interrupt.h>
+#include <hw/io.h>
+#include <hw/interrupt.h>
 
 // /**
 //  * Screen Dimensions
@@ -204,15 +204,15 @@
  * @param reg one of VGA_REG_CRTC_*
  * @return the register value
  */
-static inline uint8_t VgaCntlCrtcRead(uint8_t reg)
+static inline uint8_t vga_crtc_read(uint8_t reg)
 {
     uint32_t flags;
     uint8_t data;
 
-    CliSave(&flags);
-    IoWriteDelay(VGA_PORT_CRTC_ADDR, reg);
-    data = IoReadDelay(VGA_PORT_CRTC_DATA);
-    RestoreFlags(flags);
+    cli_save(&flags);
+    outb_delay(VGA_PORT_CRTC_ADDR, reg);
+    data = inb_delay(VGA_PORT_CRTC_DATA);
+    restore_flags(flags);
 
     return data;
 }
@@ -223,14 +223,14 @@ static inline uint8_t VgaCntlCrtcRead(uint8_t reg)
  * @param reg one of VGA_REG_CRTC_*
  * @param data the value to write
  */
-static inline void VgaCntlCrtcWrite(uint8_t reg, uint8_t data)
+static inline void vga_crtc_write(uint8_t reg, uint8_t data)
 {
     uint32_t flags;
 
-    CliSave(&flags);
-    IoWriteDelay(VGA_PORT_CRTC_ADDR, reg);
-    IoWriteDelay(VGA_PORT_CRTC_DATA, data);
-    RestoreFlags(flags);
+    cli_save(&flags);
+    outb_delay(VGA_PORT_CRTC_ADDR, reg);
+    outb_delay(VGA_PORT_CRTC_DATA, data);
+    restore_flags(flags);
 }
 
 // TODO: other register types

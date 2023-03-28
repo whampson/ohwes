@@ -34,40 +34,40 @@ RESETMODE_NOMEMTEST     = 0x1234                # Skip memory test on soft reset
 # Global entry point for boot loader.
 # Do NOT move or add to this.
 #
-.globl Entry16
-Entry16:
-        jmp             Boot
+.globl _start
+_start:
+        jmp             boot
         nop
 
 #
 # BIOS Parameter Block for a FAT12-formatted 3.5" 1.44MB floppy disk.
 # Do NOT move this. Tweak with care.
 #
-OemName:                .ascii                  "whampson"
-SectorSize:             .short                  512
-SectorsPerCluster:      .byte                   1
-ReservedSectorCount:    .short                  1
-TableCount:             .byte                   2
-RootDirCapacity:        .short                  224
-SectorCount:            .short                  2880
-MediaType:              .byte                   0xF0
-SectorsPerTable:        .short                  9
-SectorsPerTrack:        .short                  18
-HeadCount:              .short                  2
-HiddenSectorCount:      .int                    0
-SectorCountLarge:       .int                    0
-DriveNumber:            .byte                   0
-_Reserved:              .byte                   0
-Signature:              .byte                   0x29
-VolumeId:               .int                    0xCA55E77E
-Label:                  .ascii                  "OH-WES     "
-FsType:                 .ascii                  "FAT12   "
+oem_name:               .ascii                  "whampson"
+sector_size:            .short                  512
+sectors_per_cluster:    .byte                   1
+reserved_sectors:       .short                  1
+table_count:            .byte                   2
+root_dir_capacity:      .short                  224
+sector_count:           .short                  2880
+media_type:             .byte                   0xF0
+sectors_per_table:      .short                  9
+sectors_per_track:      .short                  18
+head_count:             .short                  2
+hidden_sectors:         .int                    0
+sector_count32:         .int                    0
+drive_number:           .byte                   0
+_reserved:              .byte                   0
+signature:              .byte                   0x29
+volume_id:              .int                    0xCA55E77E
+label:                  .ascii                  "OH-WES     "
+fs_type:                .ascii                  "FAT12   "
 
 #
 # Initial boot loader code.
 # Gotta be tight; file must assemble to exactly 512 bytes!
 #
-Boot:
+boot:
         cli                                     # interrupts off
         cld                                     # ensure DF=0
         xorw            %ax, %ax                # zero some segment regs
@@ -78,24 +78,22 @@ Boot:
         # TODO: locate BOOT.SYS within FAT file system
 
         # hardcoded sector for now
-_Boot_LoadStage2:
         movw            $STAGE2_BASE, %bx       # dest
         movb            $0, %dh                 # head
         movb            $0, %ch                 # cylinder
         movb            $2, %cl                 # sector (indexed at 1)
         movb            $16, %al                # sector count
-        movb            DriveNumber, %dl
+        movb            drive_number, %dl
         movb            $0x02, %ah
         int             $0x13
-        jc              _Boot_DiskError
+        jc              _boot_diskerror
 
-_Boot_GoToStage2:
-        jmp             Stage2                  # onward!
+        jmp             stage2                  # onward!
 
-_Boot_DiskError:
-        leaw            s_DiskError, %si
-        call            Bios_Print
-        call            Bios_ReadKey
+_boot_diskerror:
+        leaw            s_diskerr, %si
+        call            bios_print
+        call            bios_readkey
         movw            $RESETMODE_NOMEMTEST, RESETMODE
         ljmp            $0xFFFF, $0x0000
 
@@ -104,7 +102,7 @@ _Boot_DiskError:
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
-# Bios_Print
+# bios_print
 # -----------------------------------------------------------------------------
 # Prints a zero-terminated string at the current curusor location and
 # advances the cursor.
@@ -114,28 +112,28 @@ _Boot_DiskError:
 # Clobbers:
 #      (potentially everything due to BIOS call)
 #
-.globl Bios_Print
-Bios_Print:
+.globl bios_print
+bios_print:
         xorw            %ax, %ax
         movb            $0x0E, %ah
         movw            $0x07, %bx
         lodsb
         andb            %al, %al
-        jz              _Bios_Print_Done
+        jz              _bios_print_done
         int             $0x10
-        jmp             Bios_Print
-_Bios_Print_Done:
+        jmp             bios_print
+_bios_print_done:
         ret
 
-.globl Bios_PrintLn
-Bios_PrintLn:
-        call            Bios_Print
-        leaw            s_Newline, %si
-        call            Bios_Print
+.globl bios_println
+bios_println:
+        call            bios_print
+        leaw            s_newline, %si
+        call            bios_print
         ret
 
 # -----------------------------------------------------------------------------
-# Bios_ReadKey
+# bios_readkey
 # -----------------------------------------------------------------------------
 # Waits for keyboard input.
 #
@@ -144,8 +142,8 @@ Bios_PrintLn:
 # Clobbers:
 #      (potentially everything due to BIOS call)
 #
-.globl Bios_ReadKey
-Bios_ReadKey:
+.globl bios_readkey
+bios_readkey:
         xorb            %ah, %ah
         int             $0x16
         ret
@@ -154,11 +152,11 @@ Bios_ReadKey:
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
 
-s_DiskError:
+s_diskerr:
         .ascii          "\r\nDiskette read error!"
         .asciz          "\r\nPress any key to try again..."
-s_Newline:
+s_newline:
         .asciz          "\r\n"
 
-        .space          0x1FE - (. - Entry16), 0xCC     # padding
+        .space          0x1FE - (. - _start), 0xCC     # padding
         .short          0xAA55                          # boot signature

@@ -29,7 +29,7 @@
 /**
  * Clears the interrupt flag.
  */
-static inline void Cli()
+static inline void cli()
 {
     __asm__ volatile (
         "cli"
@@ -42,7 +42,7 @@ static inline void Cli()
 /**
  * Sets the interrupt flag.
  */
-static inline void Sli()
+static inline void sti()
 {
     __asm__ volatile (
         "sti"
@@ -55,7 +55,7 @@ static inline void Sli()
 /**
  * Backs up the EFLAGS register, then clears the interrupt flag.
  */
-static inline void CliSave(uint32_t *pFlags)
+static inline void cli_save(uint32_t *pFlags)
 {
     __asm__ volatile (
         "               \n\
@@ -73,7 +73,7 @@ static inline void CliSave(uint32_t *pFlags)
  * Restores the EFLAGS register.
  * If interrupts were previously enabled, this will also restore interrupts.
  */
-static inline void RestoreFlags(uint32_t flags)
+static inline void restore_flags(uint32_t flags)
 {
     __asm__ volatile (
         "               \n\

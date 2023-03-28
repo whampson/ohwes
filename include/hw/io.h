@@ -36,7 +36,7 @@
 /**
  * Reads a byte from an I/O port.
  */
-static inline uint8_t IoRead(uint16_t port)
+static inline uint8_t inb(uint16_t port)
 {
     uint8_t data;
     __asm__ volatile (
@@ -51,7 +51,7 @@ static inline uint8_t IoRead(uint16_t port)
 /**
  * Reads a byte from an I/O port with a short delay before reading.
  */
-static inline uint8_t IoReadDelay(uint16_t port)
+static inline uint8_t inb_delay(uint16_t port)
 {
     uint8_t data;
     __asm__ volatile (
@@ -71,7 +71,7 @@ static inline uint8_t IoReadDelay(uint16_t port)
 /**
  * Writes a byte to an I/O port.
  */
-static inline void IoWrite(uint16_t port, uint8_t data)
+static inline void outb(uint16_t port, uint8_t data)
 {
     __asm__ volatile (
         "outb   %b0, %w1"
@@ -83,7 +83,7 @@ static inline void IoWrite(uint16_t port, uint8_t data)
 /**
  * Writes a byte to an I/O port with a short delay after writing.
  */
-static inline void IoWriteDelay(uint16_t port, uint8_t data)
+static inline void outb_delay(uint16_t port, uint8_t data)
 {
     __asm__ volatile (
         "                   \n\

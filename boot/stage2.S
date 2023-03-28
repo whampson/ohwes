@@ -40,16 +40,16 @@ VGA_MODE                = 0x03  # 0x03 = text, CGA/EGA/VGA, 16 colors, B8000h
 # Temporary GDT so we can get into Protected Mode.
 ##
 .align 16
-TempGdt:
+temp_gdt:
         .quad           0x0                     # (not used)
         .quad           0x00CF9A000000FFFF      # cs = 0x08
         .quad           0x00CF92000000FFFF      # ds = 0x10
-TempGdtEnd:
+temp_gdt_end:
 
         .word           0                       # (align)
-TempGdtReg:
-        .word           TempGdtEnd-TempGdt-1    # GDT limit
-        .long           TempGdt                 # GDT base, aligned
+temp_gdt_reg:
+        .word           temp_gdt_end-temp_gdt-1 # GDT limit
+        .long           temp_gdt                # GDT base, aligned
 
 # -----------------------------------------------------------------------------
 # ---------------------------------- Stage2 -----------------------------------
@@ -58,25 +58,24 @@ TempGdtReg:
 ##
 # Stage 2 entry point.
 ##
-.globl Stage2
-Stage2:
-        call            InitVideo
-        leaw            s_Hello, %si
-        call            Bios_PrintLn
-        call            GetHwInfo
-        call            DetectMemory
-        call            EnableA20
+.globl stage2
+stage2:
+        call            init_video
+        leaw            s_hello, %si
+        call            bios_println
+        call            get_hwinfo
+        call            detect_memory
+        call            enable_a20
 
-_GoToProtectedMode:
         cli
-        lgdtl           TempGdtReg
+        lgdtl           temp_gdt_reg
         movl            %cr0, %eax
         orl             $0x01, %eax     # Protected Mode enable bit
         movl            %eax, %cr0
-        jmpl            $TEMP_CS, $_ProtectedModeEntry
+        jmpl            $TEMP_CS, $start32
 
 .code32
-_ProtectedModeEntry:
+start32:
         movw            $TEMP_DS, %ax
         movw            %ax, %ds
         movw            %ax, %es
@@ -84,9 +83,10 @@ _ProtectedModeEntry:
         xorw            %ax, %ax
         movw            %ax, %fs
         movw            %ax, %gs
-        call            Init            # initialize devices and load kernel
-_IdleLoop:
-        jmp             _IdleLoop
+        call            init            # initialize devices and load kernel
+
+idle_loop:
+        jmp             idle_loop
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
@@ -96,37 +96,37 @@ _IdleLoop:
 
 ##
 # -----------------------------------------------------------------------------
-# InitVideo
+# init_video
 # -----------------------------------------------------------------------------
 # Sets the VGA mode using a BIOS routine.
 ##
-InitVideo:
+init_video:
         xorw            %ax, %ax
         movb            $VGA_MODE, %al
         int             $0x10
         ret
 ##
 # -----------------------------------------------------------------------------
-# GetHwInfo
+# get_hwinfo
 # -----------------------------------------------------------------------------
 # Gets installed hardware flags using a BIOS routine.
 ##
-GetHwInfo:
+get_hwinfo:
         int             $0x11
-        movw            %ax, g_EquipmentFlags
+        movw            %ax, g_hwflags
         ret
 
 ##
 # -----------------------------------------------------------------------------
-# DetectMemory
+# detect_memory
 # -----------------------------------------------------------------------------
 # Gets memory capacity and physical memory map (if available) using BIOS
 # routines. If all methods fail, the system will display an error and halt.
 ##
-DetectMemory:
-        call            DetectMemory_e820
-        call            DetectMemory_e801
-        call            DetectMemory_Legacy
+detect_memory:
+        call            detect_memory_e820
+        call            detect_memory_e801
+        call            detect_memory_legacy
         ret
 
 ####
@@ -157,28 +157,28 @@ DetectMemory:
 #  bit 2: slow access
 #  bit 3: hardware error logging area
 ####
-DetectMemory_e820:
+detect_memory_e820:
         clc
         movw            $MEMMAP_BASE, %di               # dest buffer
         xorl            %ebx, %ebx                      # continuation value (0 to begin)
-_DetectMemory_e820_Loop:
+_detect_memory_e820_loop:
         movl            $0x18, %ecx                     # table entry size
         movl            $0x534D4150, %edx               # 'SMAP'
         movl            $0xE820, %eax                   # ACPI Query System Address Map function
         int             $0x15
-        jc              _DetectMemory_e820_Done         # error or end of table
+        jc              _detect_memory_e820_done         # error or end of table
         cmpb            $0x80, %ah
-        je              _DetectMemory_e820_Done         # invalid command
+        je              _detect_memory_e820_done         # invalid command
         cmpb            $0x86, %ah
-        je              _DetectMemory_e820_Done         # unsupported function
+        je              _detect_memory_e820_done         # unsupported function
         testl           %ebx, %ebx
-        jz              _DetectMemory_e820_Done         # end of table
+        jz              _detect_memory_e820_done         # end of table
         addw            $0x18, %di                      # move table ptr
         cmpb            $0x14, %cl                      # if extended attr not present...
-        je              _DetectMemory_e820_Loop
+        je              _detect_memory_e820_loop
         movw            $0, -4(%edi)                    # ...ensure it is stored as zero
-        jmp             _DetectMemory_e820_Loop
-_DetectMemory_e820_Done:
+        jmp             _detect_memory_e820_loop
+_detect_memory_e820_done:
         ret     # TODO: set method bit
 
 ####
@@ -188,7 +188,7 @@ _DetectMemory_e820_Done:
 # This function will work on all systems made after 1994. If detection fails,
 # the function will return without error.
 ####
-DetectMemory_e801:
+detect_memory_e801:
         # data can be returned in ax/bx or cx/dx; initialize all to zero
         xorw            %ax, %ax
         xorw            %bx, %bx
@@ -196,74 +196,72 @@ DetectMemory_e801:
         xorw            %dx, %dx
         movw            $0xE801, %ax
         int             $0x15
-        jcxz            DetectMemory_e801_Store         # cx = 0, use ax/bx
+        jcxz            detect_memory_e801_store        # cx = 0, use ax/bx
         movw            %cx, %ax
         movw            %dx, %bx
-DetectMemory_e801_Store:
-        movw            %ax, g_RamCapacityLo_e801       # contiguous RAM >1M in 1K blocks, up to 16M
-        movw            %bx, g_RamCapacityHi_e801       # contiguous RAM >16M in 64K blocks
+detect_memory_e801_store:
+        movw            %ax, g_ramsize_e801_lo          # contiguous RAM >1M in 1K blocks, up to 16M
+        movw            %bx, g_ramsize_e801_hi          # contiguous RAM >16M in 64K blocks
         ret     # TODO: set method bit
 
 ####
 # Gets the number of contiguous 1K blocks of memory up to 15M or 64M, depending
 # on the BIOS. If detection fails, the system will display an error and halt.
 ####
-DetectMemory_Legacy:
+detect_memory_legacy:
         clc
         movb            $0x88, %ah
         int             $0x15
-        jc              DetectMemory_LegacyLo
+        jc              detect_memory_LelacyLo
         cmpb            $0x80, %ah                      # (invalid command)
-        je              DetectMemory_LegacyLo
+        je              detect_memory_LelacyLo
         cmpb            $0x86, %ah                      # (unsupported func)
-        je              DetectMemory_LegacyLo
-        movw            %ax, g_RamCapacityHi            # contiguous RAM >1M in 1K blocks
-DetectMemory_LegacyLo:
+        je              detect_memory_LelacyLo
+        movw            %ax, g_ramsize_hi            # contiguous RAM >1M in 1K blocks
+detect_memory_LelacyLo:
         clc
         int             $0x12
-        jc              _DetectMemory_Legacy_Error
-        movw            %ax, g_RamCapacityLo            # contiguous RAM <1M in 1K blocks
-        jz              _DetectMemory_Legacy_Error
+        jc              _detect_memory_LegacylError
+        movw            %ax, g_ramsize_lo            # contiguous RAM <1M in 1K blocks
+        jz              _detect_memory_LegacylError
         ret     # TODO: set method bit
 
-_DetectMemory_Legacy_Error:
-        leaw            s_DetectMemoryError, %si
-        call            Bios_Print
-_DetectMemory_Legacy_ErrorLoop:
-        jmp             _DetectMemory_Legacy_ErrorLoop
+_detect_memory_LegacylError:
+        leaw            s_memerr, %si
+        call            bios_print
+        jmp             idle_loop
 
 ##
 # -----------------------------------------------------------------------------
-# EnableA20
+# enable_a20
 # -----------------------------------------------------------------------------
 # Attempts to enable the A20 gate. If unsuccessful, the system will halt;
 # otherwise there would be a very annoying non-contiguous memory hole.
 ###
-EnableA20:
-        call            TestA20
-        jnc             _EnableA20_Done
-        call            EnableA20_Bios
-        call            TestA20
-        jnc             _EnableA20_Done
-        call            EnableA20_Port92h
-        call            TestA20
-        jnc             _EnableA20_Done
-        call            EnableA20_Keyboard
-        call            TestA20
-        jc              _EnableA20_Error
-_EnableA20_Done:
+enable_a20:
+        call            test_a20
+        jnc             _enable_a20_done
+        call            enable_a20_Bios
+        call            test_a20
+        jnc             _enable_a20_done
+        call            enable_a20_port92h
+        call            test_a20
+        jnc             _enable_a20_done
+        call            enable_a20_keyboard
+        call            test_a20
+        jc              _enable_a20_error
+_enable_a20_done:
         ret
 
-_EnableA20_Error:
-        leaw            s_A20Error, %si
-        call            Bios_Print
-_EnableA20_ErrorLoop:
-        jmp             _EnableA20_ErrorLoop
+_enable_a20_error:
+        leaw            s_a20err, %si
+        call            bios_print
+        jmp             idle_loop
 
 ##
 # Test whether A20 gate is enabled.
 ##
-TestA20:
+test_a20:
         // wbinvd                                  # invalidate cache (i486+)
         xorw            %ax, %ax
         movw            %ax, %es                # ds = 0x0000
@@ -273,80 +271,80 @@ TestA20:
         movw            %es:0x7DFE, %dx         # [0x00FDFE] -> dx
         movw            %fs:0x7E0E, %ax         # [0x10FDFE] -> ax
         cmpw            %ax, %dx                # are they the same?
-        je              _TestA20_Off
+        je              _test_a20_Off
         clc
-        jmp             _TestA20_Done
-_TestA20_Off:
+        jmp             _test_a20_Done
+_test_a20_Off:
         stc                                     # CF=1 if A20 disabled
-_TestA20_Done:
+_test_a20_Done:
         ret
 
 ##
 # Enable A20 using BIOS INT=15h,AX=2401h.
 # Supported on newer systems.
 ##
-EnableA20_Bios:
+enable_a20_Bios:
         movw            $0x2401, %ax
         int             $0x15
-        movw            $A20METHOD_BIOS, g_A20Method
+        movw            $A20METHOD_BIOS, g_a20_method
         ret
 
 ##
 # Enable A20 by writing port 92h.
 # Not supported on all systems.
 ##
-EnableA20_Port92h:
+enable_a20_port92h:
         inb             $PORT_SYSCNTLA, %al
         orb             $0x02, %al          # A20 enable bit
         andb            $0xFE, %al          # clear (possible) reset flag
         outb            %al, $PORT_SYSCNTLA
-        movw            $A20METHOD_PORT, g_A20Method
+        movw            $A20METHOD_PORT, g_a20_method
         ret
 
 ##
 # Enable A20 via the PS/2 keyboard controller.
 # This is the most common method and usually does the trick.
 ##
-EnableA20_Keyboard:
-        call            WaitForKbd_Out
+enable_a20_keyboard:
+        call            kbd_out_wait
         movb            $0xAD, %al              # cmd: disable keyboard
         outb            %al, $PORT_PS2KBD_CMD
 
-        call            WaitForKbd_Out
+        call            kbd_out_wait
         movb            $0xD0, %al              # cmd: read controller output port
         outb            %al, $PORT_PS2KBD_CMD
 
-        call            WaitForKbd_In
+        call            kbd_in_wait
         inb             $PORT_PS2KBD_DATA, %al  # data: controller output port
         pushw           %ax                     # save output port
 
-        call            WaitForKbd_Out
+        call            kbd_out_wait
         movb            $0xD1, %al              # cmd: write controller output port
         outb            %al, $PORT_PS2KBD_CMD
 
-        call            WaitForKbd_Out
+        call            kbd_out_wait
         popw            %ax
         orb             $0x02, %al              # A20 enable bit
         outb            %al, $PORT_PS2KBD_DATA  # write output reg
 
-        call            WaitForKbd_Out
+        call            kbd_out_wait
         movb            $0xAE, %al              # cmd: enable keyboard
         outb            %al, $PORT_PS2KBD_CMD
 
-        call            WaitForKbd_Out          # (delay)
-        movw            $A20METHOD_KEYBOARD, g_A20Method
+        call            kbd_out_wait          # (delay)
+        movw            $A20METHOD_KEYBOARD, g_a20_method
         ret
 
-WaitForKbd_Out:
+kbd_out_wait:
         inb             $PORT_PS2KBD_CMD, %al   # (buffer from controller perspective)
         testb           $0x02, %al              # is input buffer full?
-        jnz             WaitForKbd_Out          # continue checking 'til empty (consumed)
+        jnz             kbd_out_wait          # continue checking 'til empty (consumed)
         ret
 
-WaitForKbd_In:
+kbd_in_wait:
         inb             $PORT_PS2KBD_CMD, %al   # (buffer from controller perspective)
         testb           $0x01, %al              # is output buffer full?
-        jz              WaitForKbd_In           # continue checking 'til data arrives
+        jz              kbd_in_wait           # continue checking 'til data arrives
         ret
 
 # -----------------------------------------------------------------------------
@@ -355,41 +353,41 @@ WaitForKbd_In:
 
 .align 4
 
-.globl g_A20Method
-g_A20Method:
+.globl g_a20_method
+g_a20_method:
         .long           0
 
-.globl g_bHasMemoryMap
-g_bHasMemoryMap:
+.globl g_has_memory_map
+g_has_memory_map:
         .long           0
 
-.globl g_pAcpiMemoryMap
-g_pAcpiMemoryMap:
+.globl g_acpi_memory_map
+g_acpi_memory_map:
         .long           MEMMAP_BASE
 
-.globl g_RamCapacityLo
-g_RamCapacityLo:
+.globl g_ramsize_lo
+g_ramsize_lo:
         .long           0
 
-.globl g_RamCapacityHi
-g_RamCapacityHi:
+.globl g_ramsize_hi
+g_ramsize_hi:
         .long           0
 
-.globl g_RamCapacityLo_e801
-g_RamCapacityLo_e801:
+.globl g_ramsize_e801_lo
+g_ramsize_e801_lo:
         .long           0
 
-.globl g_RamCapacityHi_e801
-g_RamCapacityHi_e801:
+.globl g_ramsize_e801_hi
+g_ramsize_e801_hi:
         .long           0
 
-.globl g_EquipmentFlags
-g_EquipmentFlags:
+.globl g_hwflags
+g_hwflags:
         .long           0
 
-s_Hello:
+s_hello:
         .asciz          "OH-WES is loading..."
-s_DetectMemoryError:
+s_memerr:
         .asciz          "Error: unable to detect system memory!"
-s_A20Error:
+s_a20err:
         .asciz          "Error: failed to enable A20 gate!"

@@ -22,25 +22,13 @@
  * =============================================================================
  */
 
-#ifndef _VGA_H
-#define _VGA_H
+#ifndef _CONSOLE_H
+#define _CONSOLE_H
 
 #include <stdint.h>
-#include <drivers/vga_cntl.h>
+#include <hw/vga.h>
 
-static inline uint16_t VgaGetCursorPos()
-{
-    uint8_t cursorLocHi, cursorLocLo;
-    cursorLocHi = VgaCntlCrtcRead(VGA_REG_CRTC_CL_HI);
-    cursorLocLo = VgaCntlCrtcRead(VGA_REG_CRTC_CL_LO);
+uint16_t con_get_cursor();
+void con_set_cursor(uint16_t pos);
 
-    return (cursorLocHi << 8) | cursorLocLo;
-}
-
-static inline void VgaSetCursorPos(uint16_t pos)
-{
-    VgaCntlCrtcWrite(VGA_REG_CRTC_CL_HI, pos >> 8);
-    VgaCntlCrtcWrite(VGA_REG_CRTC_CL_LO, pos & 0xFF);
-}
-
-#endif /* _VGA_H */
+#endif /* _CONSOLE_H */

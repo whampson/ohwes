@@ -36,42 +36,42 @@
 
 #include <stdint.h>
 
-extern uint8_t g_A20Method;
+extern uint8_t g_a20_method;
 
-extern uint16_t g_RamCapacityLo;        // contiguous RAM <1M in 1K blocks
-extern uint16_t g_RamCapacityHi;        // contiguous RAM >1M in 1K blocks, up to 15M or 64M
-extern uint16_t g_RamCapacityLo_e801;   // contiguous RAM >1M in 1K blocks, up to 16M
-extern uint16_t g_RamCapacityHi_e801;   // contiguous RAM >16M in 64K blocks
+extern uint16_t g_ramsize_lo;        // contiguous RAM <1M in 1K blocks
+extern uint16_t g_ramsize_hi;        // contiguous RAM >1M in 1K blocks, up to 15M or 64M
+extern uint16_t g_ramsize_e801_lo;   // contiguous RAM >1M in 1K blocks, up to 16M
+extern uint16_t g_ramsize_e801_hi;   // contiguous RAM >16M in 64K blocks
 
-extern char g_bHasMemoryMap;
-extern void *g_pAcpiMemoryMap;
+extern char g_has_memory_map;
+extern struct acpi_memory_map_entry *g_acpi_memory_map;
 
-extern uint16_t g_EquipmentFlags;
+extern uint16_t g_hwflags;
 
-struct EquipmentFlags
+struct equipment_flags
 {
-    uint16_t DisketteDrive     : 1;
-    uint16_t Coprocessor       : 1;
-    uint16_t Ps2Mouse          : 1;
+    uint16_t has_diskette_drive: 1;
+    uint16_t has_coprocessor   : 1;
+    uint16_t has_ps2_mouse     : 1;
     uint16_t                   : 1;
-    uint16_t VideoMode         : 2;     // 00 = unused, 01 = 40x25, 10 = 80x25, 11 = 80x25 mono
-    uint16_t NumOtherDiskette  : 2;     // num diskette drives attached less 1
-    uint16_t _Dma              : 1;
-    uint16_t NumSerialPorts    : 3;
-    uint16_t GamePort          : 1;
-    uint16_t _PrinterOrModem   : 1;
-    uint16_t NumParallelPorts  : 2;
+    uint16_t video_mode        : 2;     // 00 = unused, 01 = 40x25, 10 = 80x25, 11 = 80x25 mono
+    uint16_t num_other_diskette: 2;     // num diskette drives attached less 1
+    uint16_t _dma              : 1;
+    uint16_t num_serial_ports  : 3;
+    uint16_t has_game_port     : 1;
+    uint16_t _printer_or_modem : 1;
+    uint16_t num_parallel_ports: 2;
 };
-_Static_assert(sizeof(struct EquipmentFlags) == 2, "sizeof(struct EquipmentFlags)");
+_Static_assert(sizeof(struct equipment_flags) == 2, "sizeof(struct equipment_flags)");
 
-struct MemoryMapEntry
+struct acpi_memory_map_entry
 {
-    uint64_t Base;
-    uint64_t Length;
-    uint32_t Type;
-    uint32_t ExtendedAttributes;
+    uint64_t base;
+    uint64_t length;
+    uint32_t type;
+    uint32_t attributes;
 };
-_Static_assert(sizeof(struct MemoryMapEntry) == 24, "sizeof(struct MemoryMapEntry)");
+_Static_assert(sizeof(struct acpi_memory_map_entry) == 24, "sizeof(struct acpi_memory_map_entry)");
 
 #endif  // __ASSEMBLER__
 
