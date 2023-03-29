@@ -13,12 +13,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/drivers/vga_cntl.h
- *      Created: December 13, 2020
+ *         File: include/os/console.h
+ *      Created: March 26, 2023
  *       Author: Wes Hampson
- *
- * VGA controller interface. A lot of register and port information can be found
- * here: http://www.osdever.net/FreeVGA/home.htm
  * =============================================================================
  */
 

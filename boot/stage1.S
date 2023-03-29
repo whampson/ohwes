@@ -24,6 +24,10 @@
 
 #include "boot.h"
 
+#
+# TODO: read BOOT.SYS (stage2) and OHWES.SYS (kernel) into memory from FAT
+#
+
 RESETMODE               = 0x0472                # Soft reset mode address
 RESETMODE_NOMEMTEST     = 0x1234                # Skip memory test on soft reset
 

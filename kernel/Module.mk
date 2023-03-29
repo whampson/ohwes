@@ -18,9 +18,8 @@
 #       Author: Wes Hampson
 # =============================================================================
 
-TARGET  = libkernel.a
+TARGET  = kernel.lib
 SOURCES = \
 	console.c
 
-# $(eval $(call make-exe, libkernel.a, console.c))
 $(eval $(call make-lib, $(TARGET), $(SOURCES)))

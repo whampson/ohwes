@@ -42,7 +42,7 @@ export RM           := rm -f
 
 # Compiler, assembler, linker flags
 DEFAULT_GCC_FLAGS   := -nostdinc -nostdlib -ffreestanding
-export ASFLAGS      := $(DEFAULT_GCC_FLAGS) -D__ASSEMBLER__ -Wa,-mtune=i386
+export ASFLAGS      := $(DEFAULT_GCC_FLAGS) -D__ASSEMBLER__
 export CFLAGS       := $(DEFAULT_GCC_FLAGS)
 export LDFLAGS      := $(DEFAULT_GCC_FLAGS)
 # TODO: module-specific compiler flags
@@ -56,7 +56,7 @@ export INCLUDES     := include
 # Default warnings
 export WARNINGS     := all error
 
-# Debug build
+# Enable debug build
 export DEBUG        := 1
 
 # $(call make-exe exe-name, source-list[, link-libs])
@@ -93,6 +93,13 @@ get-asm-src      = $(filter %.S,$1)
 
 get-c-obj        = $(addprefix $(OBJ_ROOT)/,$(subst .c,.o,$(call get-c-src,$1)))
 get-asm-obj      = $(addprefix $(OBJ_ROOT)/,$(subst .S,.o,$(call get-asm-src,$1)))
+
+ifdef DEBUG
+  DEFINES += DEBUG
+  CFLAGS += -g
+  LDFLAGS += -g
+  ASLAGS += -g
+endif
 
 # uniq - https://stackoverflow.com/a/16151140
 uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
@@ -135,7 +142,9 @@ clean:
 nuke:
 	$(RM) -r $(BIN_ROOT) $(OBJ_ROOT) $(LIB_ROOT)
 
-dirs:
+dirs: $(_DIRS)
+
+$(_DIRS):
 	$(MKDIR) $(_DIRS)
 
 # -------------------------------------------------------------------------------------------------

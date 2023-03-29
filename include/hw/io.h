@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/ohwes/io.h
+ *         File: include/hw/io.h
  *      Created: December 13, 2020
  *       Author: Wes Hampson
  * =============================================================================

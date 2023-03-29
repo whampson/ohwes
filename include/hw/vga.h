@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/drivers/vga_cntl.h
+ *         File: include/hw/vga.h
  *      Created: December 13, 2020
  *       Author: Wes Hampson
  *

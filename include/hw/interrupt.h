@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/ohwes/interrupt.h
+ *         File: include/hw/interrupt.h
  *      Created: December 14, 2020
  *       Author: Wes Hampson
  * =============================================================================
