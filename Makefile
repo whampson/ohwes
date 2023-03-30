@@ -29,6 +29,9 @@ export OBJ_ROOT     := obj
 export LIB_ROOT     := lib
 export MOD_ROOT      = $(patsubst %/$(_MODFILE),%,$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
 
+export IMG          := $(BIN_ROOT)/ohwes.img
+export BOOTBIN      := $(BIN_ROOT)/boot.bin
+
 # Build tools
 BINUTILS_PREFIX     := i686-elf-
 export AR           := $(BINUTILS_PREFIX)ar
@@ -87,6 +90,7 @@ _MODULES         = $(MODULES)
 _INCLUDES        = $(INCLUDES)
 _DEPENDS         = $(_OBJECTS:.o=.d)
 _DIRS            = $(call uniq, $(dir $(_OBJECTS) $(_TARGETS) $(_LIBRARIES)))
+_IMG             = $(IMG)
 
 get-c-src        = $(filter %.c,$1)
 get-asm-src      = $(filter %.S,$1)
@@ -120,12 +124,13 @@ endef
 
 # =================================================================================================
 
-.PHONY: all clean nuke dirs
-.PHONY: img floppy
+.PHONY: all floppy img
+.PHONY: dirs clean nuke
 .PHONY: run-qemu run-bochs
 .PHONY: debug-make
 
 .SECONDARY: $(_OBJECTS)
+.INTERMEDIATE: $(_DEPENDS)
 
 all:
 
@@ -134,27 +139,27 @@ include $(addsuffix /$(_MODFILE), $(_MODULES))
 
 # -------------------------------------------------------------------------------------------------
 
-all: dirs $(_TARGETS) $(_LIBRARIES)
-
-clean:
-	$(RM) $(_TARGETS) $(_LIBRARIES) $(_OBJECTS) $(_DEPENDS)
-
-nuke:
-	$(RM) -r $(BIN_ROOT) $(OBJ_ROOT) $(LIB_ROOT)
+all: dirs img $(_TARGETS) $(_LIBRARIES)
 
 dirs: $(_DIRS)
 
 $(_DIRS):
 	$(MKDIR) $(_DIRS)
 
-# -------------------------------------------------------------------------------------------------
+img: dirs $(_IMG) $(_TARGETS) $(_LIBRARIES)
 
-img: dirs $(_TARGETS) $(_LIBRARIES)
-	dd if=/dev/zero of=$(BIN_ROOT)/ohwes.img bs=512 count=2880
-	dd if=$(BIN_ROOT)/boot.bin of=$(BIN_ROOT)/ohwes.img bs=512 conv=notrunc
+$(_IMG): $(BOOTBIN)
+	dd if=/dev/zero of=$(_IMG) bs=512 count=2880
+	dd if=$(BOOTBIN) of=$(_IMG) bs=512 conv=notrunc
 
 floppy: img
-	dd if=$(BIN_ROOT)/boot.bin of=/dev/fd0 bs=512 conv=notrunc
+	dd if=$(BOOTBIN) of=/dev/fd0 bs=512 conv=notrunc
+
+clean:
+	$(RM) $(_IMG) $(_TARGETS) $(_LIBRARIES) $(_OBJECTS) $(_DEPENDS)
+
+nuke:
+	$(RM) -r $(BIN_ROOT) $(OBJ_ROOT) $(LIB_ROOT)
 
 # -------------------------------------------------------------------------------------------------
 

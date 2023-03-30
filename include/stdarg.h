@@ -13,23 +13,30 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/os/console.h
- *      Created: March 26, 2023
+ *         File: include/stdarg.h
+ *      Created: December 13, 2020
  *       Author: Wes Hampson
+ *       Module: C Standard Library (C99)
  * =============================================================================
  */
 
-#ifndef _CONSOLE_H
-#define _CONSOLE_H
+/* Status: DONE */
 
-#include <stdint.h>
-#include <hw/vga.h>
+#ifndef __STDARG_H
+#define __STDARG_H
 
-uint16_t console_get_cursor();
-void console_set_cursor(uint16_t pos);
+typedef void *va_list;
 
-void console_clear(void);
+#define va_start(list,param) \
+    (void) ((list) = ((char *) &(param) + sizeof(param)))
 
-void console_write(char c);
+#define va_arg(list,type) \
+    ((type *) ((list) = ((char *) (list) + sizeof(type))))[-1]
 
-#endif /* _CONSOLE_H */
+#define va_end(list) \
+    (list = (void *) 0)
+
+#define va_copy(dest,src) \
+    (dest = src)
+
+#endif /* __STDARG_H */

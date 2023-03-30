@@ -22,8 +22,8 @@
  * =============================================================================
  */
 
-#ifndef _STDINT_H
-#define _STDINT_H
+#ifndef __STDINT_H
+#define __STDINT_H
 
 /* Status: COMPLETE */
 
@@ -157,4 +157,4 @@ _Static_assert(sizeof(uint_least16_t)   >= 2, "sizeof(uint_least16_t)");
 _Static_assert(sizeof(uint_least32_t)   >= 4, "sizeof(uint_least32_t)");
 _Static_assert(sizeof(uint_least64_t)   >= 8, "sizeof(uint_least64_t)");
 
-#endif /* _STDINT_H */
+#endif /* __STDINT_H */

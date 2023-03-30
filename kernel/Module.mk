@@ -18,8 +18,10 @@
 #       Author: Wes Hampson
 # =============================================================================
 
-TARGET  = kernel.lib
+TARGET  = libkernel.a
 SOURCES = \
-	console.c
+	console.c \
+	printf.c \
+	puts.c \
 
 $(eval $(call make-lib, $(TARGET), $(SOURCES)))

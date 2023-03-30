@@ -13,23 +13,23 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/os/console.h
- *      Created: March 26, 2023
+ *         File: include/stdbool.h
+ *      Created: December 13, 2020
  *       Author: Wes Hampson
+ *       Module: C Standard Library (C99)
  * =============================================================================
  */
 
-#ifndef _CONSOLE_H
-#define _CONSOLE_H
+/* Status: DONE */
 
-#include <stdint.h>
-#include <hw/vga.h>
+#ifndef __STDBOOL_H
+#define __STDBOOL_H
 
-uint16_t console_get_cursor();
-void console_set_cursor(uint16_t pos);
+#define bool _Bool
 
-void console_clear(void);
+#define false 0
+#define true 1
 
-void console_write(char c);
+#define __bool_true_false_are_defined 1
 
-#endif /* _CONSOLE_H */
+#endif

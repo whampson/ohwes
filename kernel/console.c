@@ -21,7 +21,9 @@
 
 #include <os/console.h>
 
-uint16_t con_get_cursor()
+char * const g_VgaBuf = (char * const) 0xB8000;
+
+uint16_t console_get_cursor()
 {
     uint8_t cursorLocHi, cursorLocLo;
     cursorLocHi = vga_crtc_read(VGA_REG_CRTC_CL_HI);
@@ -30,8 +32,29 @@ uint16_t con_get_cursor()
     return (cursorLocHi << 8) | cursorLocLo;
 }
 
-void con_set_cursor(uint16_t pos)
+void console_set_cursor(uint16_t pos)
 {
     vga_crtc_write(VGA_REG_CRTC_CL_HI, pos >> 8);
     vga_crtc_write(VGA_REG_CRTC_CL_LO, pos & 0xFF);
+}
+
+void console_write(char c)
+{
+    uint16_t pos = console_get_cursor();
+
+    switch (c)
+    {
+        case '\r':
+            pos -= (pos % 80);
+            break;
+        case '\n':
+            pos += (80 - (pos % 80));   // TODO: CRLF vs LF
+            break;
+
+        default:
+            g_VgaBuf[(pos++) << 1] = c;
+            break;
+    }
+
+    console_set_cursor(pos);
 }

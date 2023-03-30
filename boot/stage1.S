@@ -86,7 +86,7 @@ boot:
         movb            $0, %dh                 # head
         movb            $0, %ch                 # cylinder
         movb            $2, %cl                 # sector (indexed at 1)
-        movb            $16, %al                # sector count
+        movb            $64, %al                # sector count
         movb            drive_number, %dl
         movb            $0x02, %ah
         int             $0x13

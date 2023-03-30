@@ -13,23 +13,38 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/os/console.h
- *      Created: March 26, 2023
+ *         File: include/stddef.h
+ *      Created: December 13, 2020
  *       Author: Wes Hampson
+ *       Module: C Standard Library (C99)
  * =============================================================================
  */
 
-#ifndef _CONSOLE_H
-#define _CONSOLE_H
+/* Status: DONE */
+
+#ifndef __STDDEF_H
+#define __STDDEF_H
 
 #include <stdint.h>
-#include <hw/vga.h>
 
-uint16_t console_get_cursor();
-void console_set_cursor(uint16_t pos);
+#ifndef __SIZE_T_DEFINED
+#define __SIZE_T_DEFINED
+typedef uint32_t size_t;
+#endif
 
-void console_clear(void);
+#ifndef __PTRDIFF_T_DEFINED
+#define __PTRDIFF_T_DEFINED
+typedef int32_t ptrdiff_t;
+#endif
 
-void console_write(char c);
+#ifndef __NULL_DEFINED
+#define __NULL_DEFINED
+#define NULL ((void *) 0)
+#endif
 
-#endif /* _CONSOLE_H */
+#define offsetof(type,member)   \
+    ((size_t)((char *)&((type *)(0))->member-(char *)0))
+
+typedef uint64_t max_align_t;
+
+#endif /* __STDDEF_H */

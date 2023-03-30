@@ -25,7 +25,7 @@ SOURCES = \
 	init.c \
 
 LINKLIBS = \
-	$(LIB_ROOT)/kernel/kernel.lib
+	$(LIB_ROOT)/kernel/libkernel.a \
 
  # ORIGIN
 LDFLAGS += -Ttext 0x7C00

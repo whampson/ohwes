@@ -1,40 +1,32 @@
+/* =============================================================================
+ * Copyright (C) 2020-2023 Wes Hampson. All Rights Reserved.
+ *
+ * This file is part of the OH-WES Operating System.
+ * OH-WES is free software; you may redistribute it and/or modify it under the
+ * terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ * -----------------------------------------------------------------------------
+ *         File: boot/init.c
+ *      Created: March 26, 2023
+ *       Author: Wes Hampson
+ * =============================================================================
+ */
+
 #include "boot.h"
 
 #include <stdint.h>
+#include <stdio.h>
 #include <os/console.h>
-
-char * const g_VgaBuf = (char * const) 0xB8000;
-
-void puts(const char *s)
-{
-    uint16_t pos = con_get_cursor();
-
-    char c;
-    while ((c = *(s++)) != '\0')
-    {
-        switch (c)
-        {
-            case '\r':
-                pos -= (pos % 80);
-                break;
-            case '\n':
-                pos += (80 - (pos % 80));
-                break;
-
-            default:
-                g_VgaBuf[(pos++) << 1] = c;
-                break;
-        }
-    }
-    con_set_cursor(pos);
-}
 
 void init()
 {
-    struct equipment_flags *ef = (struct equipment_flags *) &g_hwflags;
-    puts("\nhas diskette drive: "); puts(((ef->has_diskette_drive) ? "yes" : "no"));
-    puts("\nhas coprocessor: "); puts(((ef->has_coprocessor) ? "yes" : "no"));
-    puts("\nhas mouse: "); puts(((ef->has_ps2_mouse) ? "yes" : "no"));
-    puts("\nhas game port: "); puts(((ef->has_game_port) ? "yes" : "no"));
-    puts("\n");
+    printf("Hello, world!\n");  // TODO: printf does not work on pcjs DeskPro 386
+    // puts("Hello, world!");
 }

@@ -13,23 +13,23 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/os/console.h
- *      Created: March 26, 2023
+ *         File: include/types.h
+ *      Created: December 17, 2020
  *       Author: Wes Hampson
+ *       Module: C Standard Library (C99)
  * =============================================================================
  */
 
-#ifndef _CONSOLE_H
-#define _CONSOLE_H
+#ifndef __TYPES_H
+#define __TYPES_H
 
 #include <stdint.h>
-#include <hw/vga.h>
 
-uint16_t console_get_cursor();
-void console_set_cursor(uint16_t pos);
+#ifndef __SIZE_T_DEFINED
+#define __SIZE_T_DEFINED
+typedef uint32_t size_t;
+#endif
 
-void console_clear(void);
+typedef int32_t ssize_t;        // POSIX
 
-void console_write(char c);
-
-#endif /* _CONSOLE_H */
+#endif /* __TYPES_H */
