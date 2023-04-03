@@ -80,87 +80,6 @@ boot:
 
         # TODO: locate BOOT.SYS and OHWES.SYS within FAT file system
 
-test_lba2chs:
-        # 2 = 0,0,3
-        movw            $2, %ax
-        call            lba2chs
-        cmpw            $0, %cx
-        jne             _test_lba2chs_fail
-        cmpb            $0, %dh
-        jne             _test_lba2chs_fail
-        cmpb            $3, %dl
-        jne             _test_lba2chs_fail
-
-        # 62 = 0,0,63
-        movw            $62, %ax
-        call            lba2chs
-        cmpw            $0, %cx
-        jne             _test_lba2chs_fail
-        cmpb            $0, %dh
-        jne             _test_lba2chs_fail
-        cmpb            $63, %dl
-        jne             _test_lba2chs_fail
-
-        // # 63 = 0,1,1
-        // movw            $63, %ax
-        // call            lba2chs
-        // cmpw            $0, %cx
-        // jne             _test_lba2chs_fail
-        // cmpb            $1, %dh
-        // jne             _test_lba2chs_fail
-        // cmpb            $1, %dl
-        // jne             _test_lba2chs_fail
-
-        // # 945 = 0,15,1
-        // movw            $945, %ax
-        // call            lba2chs
-        // cmpw            $0, %cx
-        // jne             _test_lba2chs_fail
-        // cmpb            $15, %dh
-        // jne             _test_lba2chs_fail
-        // cmpb            $1, %dl
-        // jne             _test_lba2chs_fail
-
-        // # 1007 = 0,15,63
-        // movw            $1007, %ax
-        // call            lba2chs
-        // cmpw            $0, %cx
-        // jne             _test_lba2chs_fail
-        // cmpb            $15, %dh
-        // jne             _test_lba2chs_fail
-        // cmpb            $63, %dl
-        // jne             _test_lba2chs_fail
-
-        // # 1008 = 1,0,1
-        // movw            $1008, %ax
-        // call            lba2chs
-        // cmpw            $1, %cx
-        // jne             _test_lba2chs_fail
-        // cmpb            $0, %dh
-        // jne             _test_lba2chs_fail
-        // cmpb            $1, %dl
-        // jne             _test_lba2chs_fail
-
-        // # 32256 = 32,0,1
-        // movw            $32256, %ax
-        // call            lba2chs
-        // cmpw            $32, %cx
-        // jne             _test_lba2chs_fail
-        // cmpb            $0, %dh
-        // jne             _test_lba2chs_fail
-        // cmpb            $1, %dl
-        // jne             _test_lba2chs_fail
-
-_test_lba2chs_pass:
-        leaw            s_lba2chs_pass, %si
-        call            bios_print
-        jmp             readkey_reset
-
-_test_lba2chs_fail:
-        leaw            s_lba2chs_fail, %si
-        call            bios_print
-        jmp             readkey_reset
-
 //         # hardcoded sector for now
 //         movw            $STAGE2_BASE, %bx       # dest
 //         movb            $1, %ax                 # sector
@@ -189,27 +108,40 @@ reset:
 # ------------------------------- Subroutines ---------------------------------
 # -----------------------------------------------------------------------------
 
-
 # -----------------------------------------------------------------------------
 # lba2chs
 # -----------------------------------------------------------------------------
 # Converts a Logical Block Address into a Cylinder-Head-Sector address.
 #
+# Inputs:
+#       ax - logical block address
 # Returns:
-#      cx - cylinder
-#      dh - head
-#      dl - sector
+#       cx - cylinder
+#       dh - head
+#       dl - sector
 # Clobbers:
-#      ax, bx, cx, dx
+#       ax, bx, cx, dx
 #
 lba2chs:
+        # For a disk with 2 heads, 80 tracks, and 18 sectors per track:
+        #   0  = 0,0,1
+        #   1  = 0,0,2
+        #   17 = 0,0,18
+        #   18 = 0,1,1
+        #   35 = 0,1,18
+        #   36 = 1,0,1
+        #   71 = 1,1,18
+        #   72 = 2,0,1
+        # 2879 = 79,1,18
+        # 2880 = 80,0,1
+
         # C = LBA / (HPC * SPT)
         movw            %ax, %cx                # save lba for later
         movw            sectors_per_track, %bx  # bx = spt
         imulw           head_count, %bx         # bx = hpc * spt
         xorw            %dx, %dx                # clear dx
         idivw           %bx                     # ax = dx:ax / bx
-        pushw           %ax                     # store cylinder for later
+        pushw           %ax                     # save cylinder for later
 
         # H = (LBA / SPT) mod HPC
         # S = (LBA mod SPT) + 1
@@ -217,7 +149,7 @@ lba2chs:
         movw            %cx, %ax                # ax = lba
         idivw           sectors_per_track       # ax = dx:ax / spt, dx = dx:ax mod spt
         incw            %dx                     # +1
-        movb            %dl, %cl                # store head
+        movb            %dl, %cl                # save head for later
         xorw            %dx, %dx                # clear dx
         idivw           head_count              # dx = dx:ax mod hpc (ax = lba / spt)
         movb            %dl, %dh                # dh = head
@@ -232,9 +164,9 @@ lba2chs:
 # advances the cursor.
 #
 # Inputs:
-#      ds:si - address of string to print
+#       ds:si - address of string to print
 # Clobbers:
-#      (potentially everything due to BIOS call)
+#       (potentially everything due to BIOS call)
 #
 .globl bios_print
 bios_print:
@@ -262,9 +194,9 @@ bios_println:
 # Waits for keyboard input.
 #
 # Returns:
-#      al - key pressed
+#       al - key pressed
 # Clobbers:
-#      (potentially everything due to BIOS call)
+#       (potentially everything due to BIOS call)
 #
 .globl bios_readkey
 bios_readkey:
@@ -275,11 +207,6 @@ bios_readkey:
 # -----------------------------------------------------------------------------
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
-
-s_lba2chs_fail:
-        .asciz          "\r\nLBA2CHS test failed!"
-s_lba2chs_pass:
-        .asciz          "\r\nLBA2CHS test passed!"
 
 s_diskerr:
         .ascii          "\r\nDiskette read error!"
