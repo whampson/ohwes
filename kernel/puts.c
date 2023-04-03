@@ -1,4 +1,11 @@
+#include <stdio.h>
 #include <os/console.h>
+
+int putchar(int ch)
+{
+    console_write((char) ch);
+    return 1;
+}
 
 int puts(const char *str)
 {
@@ -6,8 +13,7 @@ int puts(const char *str)
     int n = 0;
     while ((c = *(str++)) != '\0')
     {
-        console_write(c);
-        n++;
+        n += putchar(c);
     }
 
     return n;

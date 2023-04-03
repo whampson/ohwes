@@ -4,14 +4,19 @@
 # Created: Jan 5, 2023
 #  Author: Wes Hampson
 #
-# Boots OH-WES in QEMU.
+# Boots OH-WES in QEMU or Bochs.
 #===============================================================================
 
 # Usage: run.sh bochs bochs_config
-#        run.sh qemu disk_image
+#        run.sh qemu disk_image [debug]
 
-QEMU_PATH=/mingw32/bin/qemu-system-i386
-BOCHS_PATH=/c/Program\ Files/Bochs-2.7/bochs.exe
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    QEMU_PATH=qemu
+    BOCHS_PATH=bochs
+elif [[ "$OSTYPE" == "msys" ]]; then
+    QEMU_PATH=/mingw32/bin/qemu-system-i386
+    BOCHS_PATH=/c/Program\ Files/Bochs-2.7/bochs.exe
+fi
 
 if [ "$#" -lt 2 ]; then
     echo "Usage: run.sh bochs bochs_config"
