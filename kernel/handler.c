@@ -13,32 +13,30 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/stdlib.h
- *      Created: December 18, 2020
+ *         File: kernel/handler.c
+ *      Created: April 4, 2023
  *       Author: Wes Hampson
- *       Module: C Standard Library (C99)
  * =============================================================================
  */
 
-/* Status: INCOMPLETE */
+#include <stdio.h>
+#include <hw/interrupt.h>
+#include <os/compiler.h>
 
-#ifndef __STDLIB_H
-#define __STDLIB_H
+__fastcall void handle_exception(struct iframe *frame)
+{
+    printf("!!! exception: 0x%02x\n", frame->vec_num);
+    __asm__ volatile (".1: jmp .1");
+}
 
-#include <stdint.h>
+__fastcall void handle_irq(struct iframe *frame)
+{
+    printf("!!! irq: %d\n", ~frame->vec_num);
+    __asm__ volatile (".2: jmp .2");
+}
 
-#ifndef __SIZE_T_DEFINED
-#define __SIZE_T_DEFINED
-typedef uint32_t size_t;
-#endif
-
-#ifndef __NULL_DEFINED
-#define __NULL_DEFINED
-#define NULL ((void *) 0)
-#endif
-
-char * itoa(int value, char *str, int base);    /* Non-standard */
-char * itoa64(int64_t value, char *str, int base);    /* Non-standard */
-
-
-#endif /* __STDLIB_H */
+__fastcall void handle_syscall(struct iframe *frame)
+{
+    printf("!!! system call: %d\n", frame->eax);
+    __asm__ volatile (".3: jmp .3");
+}

@@ -14,7 +14,7 @@
  * SOFTWARE.
  * -----------------------------------------------------------------------------
  *         File: boot/boot.h
- *      Created: Mar 21, 2023
+ *      Created: March 21, 2023
  *       Author: Wes Hampson
  * =============================================================================
  */
@@ -22,19 +22,28 @@
 #ifndef BOOT_H
 #define BOOT_H
 
-#define IDT_BASE                0x0000
-#define GDT_BASE                0x0800
-#define MEMMAP_BASE             0x1000
-#define STAGE1_BASE             0x7C00
-#define STAGE2_BASE             0x7E00
-
 #define A20METHOD_KEYBOARD      1
 #define A20METHOD_PORT          2
 #define A20METHOD_BIOS          3
 
-#ifndef __ASSEMBLER__
+#define IDT_BASE                0x0000
+#define IDT_SIZE                (256*8)
 
+#define GDT_BASE                (IDT_BASE+IDT_SIZE)
+#define GDT_SIZE                (8*8)
+
+#define LDT_BASE                (GDT_BASE+GDT_SIZE)
+#define LDT_SIZE                (2*8)
+
+#define TSS_BASE                (LDT_BASE+LDT_SIZE)
+#define TSS_SIZE                (108)
+
+#define MEMMAP_BASE             0x1000
+
+#ifndef __ASSEMBLER__
 #include <stdint.h>
+
+_Static_assert(TSS_BASE + TSS_SIZE < MEMMAP_BASE, "TSS overlaps memory map!");
 
 extern uint8_t g_a20_method;
 
@@ -68,7 +77,7 @@ struct acpi_memory_map_entry
 {
     uint64_t base;
     uint64_t length;
-    uint32_t type;
+    uint32_t type;          // 1 = free, 2 = reserved, 3 = acpi, 4 = acpi non-volatile, 5 = bad
     uint32_t attributes;
 };
 _Static_assert(sizeof(struct acpi_memory_map_entry) == 24, "sizeof(struct acpi_memory_map_entry)");

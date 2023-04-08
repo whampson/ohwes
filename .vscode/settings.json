@@ -27,7 +27,7 @@
     "cSpell.languageSettings": [
         {
             // C and C++ files
-            "languageId": "c,cpp,gas",
+            "languageId": "c,cpp,gas,asm",
             // Turn off compound words, because it is only checking strings.
             "allowCompoundWords": false,
             // Only check comments and strings
@@ -45,5 +45,6 @@
     "cSpell.words": [
         "Hampson",
         "ohwes"
-    ]
+    ],
+    "makefile.makePath": "c:/msys64/mingw32/bin/make"
 }

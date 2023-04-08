@@ -1,38 +1,21 @@
 {
     "configurations": [
         {
-            "name": "OH-WES",
+            "name": "OH-WES [Win32]",
             "includePath": [
                 "${workspaceFolder}/include/*"
             ],
             "defines": [],
-            "compilerPath": "i686-elf-gcc",
-            "cStandard": "c11",
+            "compilerPath": "c:/msys64/mingw32/bin/i686-elf-gcc",
+            "cStandard": "c99",
             "intelliSenseMode": "gcc-x86",
             "compilerArgs": [
                 "-ffreestanding",
                 "-nostdinc",
-                "-nostdinc++",
-                "-nostdlib"
-            ]
-        // },
-        // {
-        //     "name": "OH-WES (Tools) [MinGW]",
-        //     "includePath": [],
-        //     "compilerPath": "C:/msys64/mingw32/bin/gcc.exe",
-        //     "cStandard": "c11",
-        //     "cppStandard": "c++11",
-        //     "intelliSenseMode": "windows-gcc-x86",
-        //     "compilerArgs": []
-        // },
-        // {
-        //     "name": "OH-WES (Tools) [macOS]",
-        //     "includePath": [],
-        //     "compilerPath": "/usr/bin/gcc",
-        //     "cStandard": "c11",
-        //     "cppStandard": "c++11",
-        //     "intelliSenseMode": "gcc-x86",
-        //     "compilerArgs": []
+                "-nostdlib",
+                "-g"
+            ],
+            "configurationProvider": "ms-vscode.makefile-tools"
         }
     ],
     "version": 4

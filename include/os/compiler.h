@@ -13,32 +13,50 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/stdlib.h
- *      Created: December 18, 2020
+ *         File: include/os/compiler.h
+ *      Created: December 30, 2020
  *       Author: Wes Hampson
- *       Module: C Standard Library (C99)
+ *
+ * Compiler-specific flags and defines.
  * =============================================================================
  */
 
-/* Status: INCOMPLETE */
+#ifndef __COMPILER_H
+#define __COMPILER_H
 
-#ifndef __STDLIB_H
-#define __STDLIB_H
+#ifdef __GNUC__
 
-#include <stdint.h>
+/**
+ * 'fastcall' calling convention.
+ * Passes the first two arguments through ECX and EDX respectively.
+ */
+#define __fastcall      __attribute__((fastcall))
 
-#ifndef __SIZE_T_DEFINED
-#define __SIZE_T_DEFINED
-typedef uint32_t size_t;
-#endif
+/**
+ * 'syscall' calling convention.
+ * Ensures parameters are always retrieved from the stack.
+ */
+#define __syscall       __attribute__((regparm(0)))
 
-#ifndef __NULL_DEFINED
-#define __NULL_DEFINED
-#define NULL ((void *) 0)
-#endif
+/**
+ * Case statement fall-through hint.
+ */
+#define __fallthrough   __attribute__((fallthrough))
 
-char * itoa(int value, char *str, int base);    /* Non-standard */
-char * itoa64(int64_t value, char *str, int base);    /* Non-standard */
+/**
+ * 64-bit divivison functions.
+*/
 
+int64_t __moddi3(int64_t, int64_t);
+int64_t __divdi3(int64_t, int64_t);
+int64_t __divmoddi4(int64_t, int64_t, int64_t *);
 
-#endif /* __STDLIB_H */
+uint64_t __umoddi3(uint64_t, uint64_t);
+uint64_t __udivdi3(uint64_t, uint64_t);
+uint64_t __udivmoddi4(uint64_t, uint64_t, uint64_t *);
+
+#else
+#error "Please compile using GCC."
+#endif  /* __GNUC__ */
+
+#endif /* __COMPILER_H */

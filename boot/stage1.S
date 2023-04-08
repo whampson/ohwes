@@ -14,7 +14,7 @@
 # SOFTWARE.
 # -----------------------------------------------------------------------------
 #         File: boot/stage1.S
-#      Created: Mar 21, 2023
+#      Created: March 21, 2023
 #       Author: Wes Hampson
 #  Environment: 16-bit Real Mode
 #
@@ -72,31 +72,25 @@ fs_type:                .ascii                  "FAT12   "
 # Gotta be tight; file must assemble to exactly 512 bytes!
 #
 boot:
-        cli                                     # interrupts off
-        cld                                     # ensure DF=0
-        xorw            %ax, %ax                # zero some segment regs
+        cld
+        xorw            %ax, %ax
         movw            %ax, %ds
+        movw            %ax, %ss
+        movw            $0x07E0, %ax
         movw            %ax, %es
+        movw            $0x7C00, %bp
+        movw            %bp, %sp
+
+        leaw            s_hello, %si
+        call            bios_println
+        xorw            %bx, %bx                # base = 07E0:0000h = 0x7E00
+        movw            $1, %ax                 # start sector (logical block address)
+        movw            $32, %cx                # sector count          (TODO: can't read more than 64 for some reason?)
+        call            read_sectors
 
         # TODO: locate BOOT.SYS and OHWES.SYS within FAT file system
 
-//         # hardcoded sector for now
-//         movw            $STAGE2_BASE, %bx       # dest
-//         movb            $1, %ax                 # sector
-//         movw            $64, %cx                # sector count
-
-// read_sectors:
-//         movb            drive_number, %dl
-//         movb            $0x02, %ah
-//         int             $0x13
-//         jc              _boot_diskerror
-
-//         jmp             stage2                  # onward!
-
-// _boot_diskerror:
-//         leaw            s_diskerr, %si
-//         call            bios_print
-//         jmp             readkey_reset
+        jmp             stage2                  # onwards!
 
 readkey_reset:
         call            bios_readkey
@@ -107,6 +101,71 @@ reset:
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
 # -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# read_sectors
+# -----------------------------------------------------------------------------
+# Reads one or more sectors from the primary disk drive into a buffer.
+# In this case, the primary disk drive is (likely) floppy drive 0.
+#
+# Inputs:
+#       es:bx - buffer address
+#       ax - logical block address (starting sector)
+#       cx - sector count (max 128 if es=0000h)
+#
+# Clobbers:
+#       (everything, probably)
+#
+read_sectors:
+        test            %cx, %cx
+        jle             _read_sectors_error
+
+        pushw           %bp
+        movw            %sp, %bp
+        pushw           %bx                     # bp-2: buffer
+        pushw           %ax                     # bp-4: lba
+        pushw           %cx                     # bp-6: count
+
+_read_sectors_loop:
+        movw            -4(%bp), %ax
+        call            lba2chs                 # returns: cx=cyl, dh=head, dl=sect
+
+        # need to combine cylinder and sector into cx like below:
+        #   cx =       ---ch--- ---cl---
+        #   cylinder : 76543210 98
+        #   sector   :            543210
+        xchgb           %cl, %ch
+        rorb            $2, %cl
+        orb             %dl, %cl
+
+        movw            -2(%bp), %bx            # es:bx=buffer
+        movb            drive_number, %dl       # dl=drive
+        movb            $1, %al                 # al=count
+        movb            $0x02, %ah              # ah=fn:read_sectors
+        int             $0x13                   # ch=cyl, dh=head, cl=sect
+        jc              _read_sectors_error             # TODO: retry on error?
+
+        leaw            s_progress, %si
+        call            bios_print
+
+        movw            sector_size, %ax
+        addw            %ax, -2(%bp)            # buf += sector_size
+        incw            -4(%bp)                 # lba++
+        decw            -6(%bp)                 # count--
+
+        jz              _read_sectors_done
+        jmp             _read_sectors_loop
+
+_read_sectors_done:
+        leaw            s_newline, %si
+        call            bios_print
+        leave
+        ret
+
+_read_sectors_error:
+        leaw            s_diskerr, %si
+        call            bios_print
+        jmp             readkey_reset
 
 # -----------------------------------------------------------------------------
 # lba2chs
@@ -208,13 +267,16 @@ bios_readkey:
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
 
+s_hello:
+        .asciz          "boot: loading boot.sys"
+
 s_diskerr:
         .ascii          "\r\nDiskette read error!"
         .asciz          "\r\nPress any key to try again..."
 s_newline:
         .asciz          "\r\n"
-s_dot:
+s_progress:
         .asciz          "."
 
-        .space          0x1FE - (. - _start), 0xCC     # padding
+        .space          0x1FE - (. - _start), 0xCC      # padding
         .short          0xAA55                          # boot signature

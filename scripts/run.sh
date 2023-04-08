@@ -15,7 +15,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     BOCHS_PATH=bochs
 elif [[ "$OSTYPE" == "msys" ]]; then
     QEMU_PATH=/mingw32/bin/qemu-system-i386
-    BOCHS_PATH=/c/Program\ Files/Bochs-2.7/bochs.exe
+    BOCHS_PATH=bochs
 fi
 
 if [ "$#" -lt 2 ]; then
@@ -30,12 +30,24 @@ if [ "$1" = "qemu" ]; then
     QEMU_FLAGS+=" -boot a"          # boot drive A:
     QEMU_FLAGS+=" -fda $2"          # disk image
 
+    DEBUG=0
     if [ "$3" = "debug" ]; then
+        DEBUG=1
         QEMU_FLAGS+=" -S -s"
     fi
 
     echo "$QEMU_PATH" "$QEMU_FLAGS"
-    "$QEMU_PATH" $QEMU_FLAGS
+
+    if [ $DEBUG = 1 ]; then
+        "$QEMU_PATH" $QEMU_FLAGS &
+        gdb \
+            -ex 'target remote localhost:1234' \
+            -ex 'add-symbol-file bin/boot.elf' \
+            -ex 'b start32'
+    else
+        "$QEMU_PATH" $QEMU_FLAGS
+    fi
+
 elif [ "$1" = "bochs" ]; then
     BOCHS_FLAGS=""
     BOCHS_FLAGS+=" -f $2"           # config file

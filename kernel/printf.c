@@ -142,8 +142,9 @@ int snprintf(char *str, size_t n, const char *fmt, ...)
 int vprintf(const char *fmt, va_list args)
 {
     struct printf_params p = { 0 };
+    va_copy(p.args, args);
     p.fmt = fmt;
-    p.args = args;
+    // p.args = args;
     p.fd = STDOUT_FILENO;
     p.use_buf = false;
 
@@ -255,7 +256,8 @@ static int printf_impl(struct printf_params *p)
                 continue;
             case 'l':   /* long */
                 if (!p->parsing) goto sendchar;
-                p->length = L_L;
+                if (p->length == L_L) p->length = L_LL;
+                else p->length = L_L;
                 continue;
             case 'z':   /* size_t */
                 if (!p->parsing) goto sendchar;
@@ -348,7 +350,7 @@ static int printf_impl(struct printf_params *p)
 static int fmt_int(struct printf_params *p)
 {
     intmax_t value;
-    char buf[33];
+    char buf[65];
     int i;
     int len;
     int nchars;
@@ -406,11 +408,16 @@ static int fmt_int(struct printf_params *p)
         case L_T:
             value = (intmax_t) va_arg(p->args, ptrdiff_t);
             break;
+        default:
+            // assert(false);
+            value = 0;
+            break;
     }
 
     /* get number as string according to radix */
     nchars = 0;
-    itoa(value, buf, p->int_radix);
+    itoa64(value, buf, p->int_radix);
+    // itoa(value, buf, p->int_radix);
 
     /* don't print anything if value and precision are both 0 */
     if (value == 0 && p->precision == 0) {
@@ -447,13 +454,14 @@ static int fmt_int(struct printf_params *p)
     }
 
     /* determine left-pad character */
+    lpadchar = ' ';
     if (!has_flag(p->flags, F_LJUST)) {
         if (has_flag(p->flags, F_ZEROPAD) && p->precision <= 0) {
             lpadchar = '0';
         }
-        else {
-            lpadchar = ' ';
-        }
+        // else {
+        //     lpadchar = ' ';
+        // }
     }
 
     /* print left-pad (width, spaces) */
@@ -597,4 +605,58 @@ static void terminate(struct printf_params *p)
     if (p->use_buf) {
         p->buf[p->pos] = '\0';
     }
+}
+
+char * itoa(int value, char *str, int base)   /* Non-standard */
+{
+    return itoa64(value, str, base);
+}
+
+char * itoa64(int64_t value, char *str, int base)   /* Non-standard */
+{
+    static char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+    char tmp[65];
+    char *ptr;
+    int i, len;
+    uint64_t v;
+
+    if (base < 2 || base > 36) {
+        str[0] = '\0';
+        return str;
+    }
+    if (value == 0) {
+        str[0] = '0';
+        str[1] = '\0';
+        return str;
+    }
+
+    int sign = (base == 10 && value < 0);
+    if (sign) {
+        v = -value;
+    }
+    else {
+        v = (uint64_t) value;
+    }
+
+    ptr = tmp;
+    while (v) {
+        i = v % base;
+        v /= base;
+        *ptr = digits[i];
+        ptr++;
+    }
+    if (sign) {
+        *(ptr++) = '-';
+    }
+    *ptr = '\0';
+
+    i = 0;
+    len = ptr - tmp;
+    while (i < len) {
+        str[i] = tmp[len - i - 1];
+        i++;
+    }
+    str[i] = '\0';
+
+    return str;
 }

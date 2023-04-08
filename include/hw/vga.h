@@ -209,7 +209,7 @@ static inline uint8_t vga_crtc_read(uint8_t reg)
     uint32_t flags;
     uint8_t data;
 
-    cli_save(&flags);
+    cli_save(flags);
     outb_delay(VGA_PORT_CRTC_ADDR, reg);
     data = inb_delay(VGA_PORT_CRTC_DATA);
     restore_flags(flags);
@@ -227,7 +227,7 @@ static inline void vga_crtc_write(uint8_t reg, uint8_t data)
 {
     uint32_t flags;
 
-    cli_save(&flags);
+    cli_save(flags);
     outb_delay(VGA_PORT_CRTC_ADDR, reg);
     outb_delay(VGA_PORT_CRTC_DATA, data);
     restore_flags(flags);

@@ -20,8 +20,13 @@
 
 TARGET  = libkernel.a
 SOURCES = \
+	interrupt.S \
+	handler.c \
+	irq.c \
 	console.c \
 	printf.c \
 	puts.c \
+	string.c \
+	gcc.c \
 
 $(eval $(call make-lib, $(TARGET), $(SOURCES)))

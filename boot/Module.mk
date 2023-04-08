@@ -39,8 +39,8 @@ $(eval $(call make-exe, $(TARGET), $(SOURCES), $(LINKLIBS)))
 
 _TARGETS += \
 	$(BIN_ROOT)/boot.bin \
+	$(BIN_ROOT)/bootsect.bin \
 	$(BIN_ROOT)/boot.sys \
-	$(BIN_ROOT)/bootsect.bin
 
 # strip
 $(BIN_ROOT)/boot.bin: $(BIN_ROOT)/boot.elf

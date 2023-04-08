@@ -14,7 +14,7 @@
 # SOFTWARE.
 # -----------------------------------------------------------------------------
 #         File: boot/stage2.S
-#      Created: Mar 21, 2023
+#      Created: March 21, 2023
 #       Author: Wes Hampson
 #  Environment: 16-bit Real Mode (except for jump to Protected Mode)
 #
@@ -78,8 +78,8 @@ stage2:
 start32:
         movw            $TEMP_DS, %ax
         movw            %ax, %ds
-        movw            %ax, %es
         movw            %ax, %ss
+        movw            %ax, %es
         xorw            %ax, %ax
         movw            %ax, %fs
         movw            %ax, %gs
@@ -103,7 +103,7 @@ idle_loop:
 init_video:
         xorw            %ax, %ax
         movb            $VGA_MODE, %al
-        int             $0x10
+        int             $0x10   # sets video mode and clears the screen
         ret
 ##
 # -----------------------------------------------------------------------------
@@ -159,6 +159,8 @@ detect_memory:
 ####
 detect_memory_e820:
         clc
+        xorl            %eax, %eax
+        movw            %ax, %es
         movw            $MEMMAP_BASE, %di               # dest buffer
         xorl            %ebx, %ebx                      # continuation value (0 to begin)
 _detect_memory_e820_loop:
@@ -172,12 +174,15 @@ _detect_memory_e820_loop:
         cmpb            $0x86, %ah
         je              _detect_memory_e820_done         # unsupported function
         testl           %ebx, %ebx
-        jz              _detect_memory_e820_done         # end of table
+        jz              _detect_memory_e820_success         # end of table
         addw            $0x18, %di                      # move table ptr
         cmpb            $0x14, %cl                      # if extended attr not present...
         je              _detect_memory_e820_loop
         movw            $0, -4(%edi)                    # ...ensure it is stored as zero
         jmp             _detect_memory_e820_loop
+
+_detect_memory_e820_success:
+        movl            $1, g_has_memory_map
 _detect_memory_e820_done:
         ret     # TODO: set method bit
 
@@ -386,7 +391,7 @@ g_hwflags:
         .long           0
 
 s_hello:
-        .asciz          "OH-WES is loading..."
+        .asciz          "boot: entering stage 2..."
 s_memerr:
         .asciz          "Error: unable to detect system memory!"
 s_a20err:

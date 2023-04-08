@@ -44,11 +44,9 @@ export MV           := mv -f
 export RM           := rm -f
 
 # Compiler, assembler, linker flags
-DEFAULT_GCC_FLAGS   := -nostdinc -nostdlib -ffreestanding
-export ASFLAGS      := $(DEFAULT_GCC_FLAGS) -D__ASSEMBLER__
-export CFLAGS       := $(DEFAULT_GCC_FLAGS)
-export LDFLAGS      := $(DEFAULT_GCC_FLAGS)
-# TODO: module-specific compiler flags
+export ASFLAGS      := -D__ASSEMBLER__
+export CFLAGS       := -nostdinc -ffreestanding -std=c99
+export LDFLAGS      := -nostdlib
 
 # Default defines
 export DEFINES      :=
@@ -67,7 +65,7 @@ define make-exe
   _TARGETS += $(addprefix $(BIN_ROOT)/,$1)
   _SOURCES += $(addprefix $(MOD_ROOT)/,$2)
   $(addprefix $(BIN_ROOT)/,$1):: $(call get-asm-obj, $(addprefix $(MOD_ROOT)/,$2)) $(call get-c-obj, $(addprefix $(MOD_ROOT)/,$2)) $3
-	$(LD) $(LDFLAGS) -o $$@ $$^ $3
+	$(LD) -o $$@ $(LDFLAGS) $$^
 endef
 
 # $(call make-lib lib-name, source-list)
@@ -75,7 +73,7 @@ define make-lib
   _LIBRARIES += $(addprefix $(LIB_ROOT)/$(MOD_ROOT)/,$1)
   _SOURCES += $(addprefix $(MOD_ROOT)/,$2)
   $(addprefix $(LIB_ROOT)/$(MOD_ROOT)/,$1):: $(call get-asm-obj, $(addprefix $(MOD_ROOT)/,$2)) $(call get-c-obj, $(addprefix $(MOD_ROOT)/,$2))
-	$(AR) rcs $$@ $$^
+	$(AR) rcsv $$@ $$^
 endef
 
 # =================================================================================================
@@ -100,9 +98,9 @@ get-asm-obj      = $(addprefix $(OBJ_ROOT)/,$(subst .S,.o,$(call get-asm-src,$1)
 
 ifdef DEBUG
   DEFINES += DEBUG
-  CFLAGS += -g
-  LDFLAGS += -g
-  ASLAGS += -g
+  CFLAGS += -g -Og
+  LDFLAGS += -g -Og
+  ASLAGS += -g -Og
 endif
 
 # uniq - https://stackoverflow.com/a/16151140
@@ -112,14 +110,14 @@ uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 define make-obj
   _OBJECTS += $1
   $1: $2
-	$(CC) $(CFLAGS) $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INCLUDES)) $(addprefix -W,$(WARNINGS)) -c -MD -MF $$(@:.o=.d) -o $$@ $$<
+	$(CC) -c $(CFLAGS) $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INCLUDES)) $(addprefix -W,$(WARNINGS)) -MD -MF $$(@:.o=.d) -o $$@ $$<
 endef
 
 # $(call make-obj obj-path, source-path)
 define make-asm-obj
   _OBJECTS += $1
   $1: $2
-	$(AS) $(ASFLAGS) $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INCLUDES)) $(addprefix -W,$(WARNINGS)) -c -MD -MF $$(@:.o=.d) -o $$@ $$<
+	$(AS) -c $(ASFLAGS) $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INCLUDES)) $(addprefix -W,$(WARNINGS)) -MD -MF $$(@:.o=.d) -o $$@ $$<
 endef
 
 # =================================================================================================

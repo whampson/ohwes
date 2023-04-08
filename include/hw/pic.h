@@ -13,32 +13,42 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/stdlib.h
- *      Created: December 18, 2020
+ *         File: include/hw/pic.h
+ *      Created: December 22, 2020
  *       Author: Wes Hampson
- *       Module: C Standard Library (C99)
+ *
+ * Intel 8259A Programmable Interrupt Controller driver.
  * =============================================================================
  */
 
-/* Status: INCOMPLETE */
-
-#ifndef __STDLIB_H
-#define __STDLIB_H
+#ifndef __PIC_H
+#define __PIC_H
 
 #include <stdint.h>
+#include <hw/io.h>
 
-#ifndef __SIZE_T_DEFINED
-#define __SIZE_T_DEFINED
-typedef uint32_t size_t;
-#endif
+/* I/O Ports */
+#define I8259_PORT_PIC0_CMD     0x20        /* Master PIC Command Port */
+#define I8259_PORT_PIC0_DATA    0x21        /* Master PIC Data Port */
+#define I8259_PORT_PIC1_CMD     0xA0        /* Slave PIC Command Port */
+#define I8259_PORT_PIC1_DATA    0xA1        /* Slave PIC Data Port */
 
-#ifndef __NULL_DEFINED
-#define __NULL_DEFINED
-#define NULL ((void *) 0)
-#endif
+static inline uint8_t i8259_data_read(int pic_num)
+{
+    uint16_t port = (pic_num % 2) ? I8259_PORT_PIC1_DATA : I8259_PORT_PIC0_DATA;
+    return inb_delay(port);
+}
 
-char * itoa(int value, char *str, int base);    /* Non-standard */
-char * itoa64(int64_t value, char *str, int base);    /* Non-standard */
+static inline void i8259_data_write(int pic_num, uint8_t data)
+{
+    uint16_t port = (pic_num % 2) ? I8259_PORT_PIC1_DATA : I8259_PORT_PIC0_DATA;
+    outb_delay(port, data);
+}
 
+static inline void i8259_cmd_write(int pic_num, uint8_t data)
+{
+    uint16_t port = (pic_num % 2) ? I8259_PORT_PIC1_CMD : I8259_PORT_PIC0_CMD;
+    outb_delay(port, data);
+}
 
-#endif /* __STDLIB_H */
+#endif /* __PIC_H */
