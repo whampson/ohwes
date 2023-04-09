@@ -22,10 +22,6 @@
 #ifndef BOOT_H
 #define BOOT_H
 
-#define A20METHOD_KEYBOARD      1
-#define A20METHOD_PORT          2
-#define A20METHOD_BIOS          3
-
 #define IDT_BASE                0x0000
 #define IDT_SIZE                (256*8)
 
@@ -40,47 +36,71 @@
 
 #define MEMMAP_BASE             0x1000
 
+#define A20METHOD_NONE          0       /* A20 already enabled (emulators only) */
+#define A20METHOD_KEYBOARD      1       /* A20 enabled via PS/2 keyboard controller */
+#define A20METHOD_PORT92h       2       /* A20 enabled via IO port 92h */
+#define A20METHOD_BIOS          3       /* A20 enabled via BIOS INT=15h,AX=2401h */
+
 #ifndef __ASSEMBLER__
+#include <stdbool.h>
 #include <stdint.h>
 
 _Static_assert(TSS_BASE + TSS_SIZE < MEMMAP_BASE, "TSS overlaps memory map!");
 
-extern uint8_t g_a20_method;
+typedef struct HwFlags {
+    uint16_t HasDisketteDrive       : 1;
+    uint16_t HasCoprocessor         : 1;
+    uint16_t HasPs2Mouse            : 1;
+    uint16_t                        : 1;
+    uint16_t VideoMode              : 2;
+    uint16_t NumOtherDisketteDrives : 2;
+    uint16_t _Dma                   : 1;
+    uint16_t NumSerialPorts         : 3;
+    uint16_t HasGamePort            : 1;
+    uint16_t _HasPrinterOrModem     : 1;
+    uint16_t NumParallelPorts       : 2;
+} HwFlags;
+_Static_assert(sizeof(HwFlags) == 2, "sizeof(HwFlags)");
 
-extern uint16_t g_ramsize_lo;        // contiguous RAM <1M in 1K blocks
-extern uint16_t g_ramsize_hi;        // contiguous RAM >1M in 1K blocks, up to 15M or 64M
-extern uint16_t g_ramsize_e801_lo;   // contiguous RAM >1M in 1K blocks, up to 16M
-extern uint16_t g_ramsize_e801_hi;   // contiguous RAM >16M in 64K blocks
-
-extern char g_has_memory_map;
-extern struct acpi_memory_map_entry *g_acpi_memory_map;
-
-extern uint16_t g_hwflags;
-
-struct equipment_flags
-{
-    uint16_t has_diskette_drive: 1;
-    uint16_t has_coprocessor   : 1;
-    uint16_t has_ps2_mouse     : 1;
-    uint16_t                   : 1;
-    uint16_t video_mode        : 2;     // 00 = unused, 01 = 40x25, 10 = 80x25, 11 = 80x25 mono
-    uint16_t num_other_diskette: 2;     // num diskette drives attached less 1
-    uint16_t _dma              : 1;
-    uint16_t num_serial_ports  : 3;
-    uint16_t has_game_port     : 1;
-    uint16_t _printer_or_modem : 1;
-    uint16_t num_parallel_ports: 2;
+enum HwFlagsVideoMode {
+    HWFLAGS_VIDEOMODE_INVALID       = 0,
+    HWFLAGS_VIDEOMODE_40x25         = 1,
+    HWFLAGS_VIDEOMODE_80x25         = 2,
+    HWFLAGS_VIDEOMODE_80x25_MONO    = 3,
 };
-_Static_assert(sizeof(struct equipment_flags) == 2, "sizeof(struct equipment_flags)");
 
-struct acpi_memory_map_entry
-{
-    uint64_t base;
-    uint64_t length;
-    uint32_t type;          // 1 = free, 2 = reserved, 3 = acpi, 4 = acpi non-volatile, 5 = bad
-    uint32_t attributes;
+typedef struct AcpiMemoryMapEntry {
+    uint64_t Base;
+    uint64_t Length;
+    uint32_t Type;
+    uint32_t Attributes;
+} AcpiMemoryMapEntry;
+_Static_assert(sizeof(AcpiMemoryMapEntry) == 24, "sizeof(AcpiMemoryMapEntry)");
+
+typedef AcpiMemoryMapEntry AcpiMemoryMap;
+
+enum AcpiMemoryMapType {
+    ACPI_MMAP_TYPE_INVALID  = 0,    /* (invalid table entry, ignore) */
+    ACPI_MMAP_TYPE_USABLE   = 1,    /* Available, free for use */
+    ACPI_MMAP_TYPE_RESERVED = 2,    /* Reserved, do not use */
+    ACPI_MMAP_TYPE_ACPI     = 3,    /* ACPI tables, can be reclaimed */
+    ACPI_MMAP_TYPE_ACPI_NVS = 4,    /* ACPI non-volatile storage, do not use */
+    ACPI_MMAP_TYPE_BAD      = 5,    /* Bad memory, do not use */
+    /* Other values are reserved or OEM-specific, do not use */
 };
-_Static_assert(sizeof(struct acpi_memory_map_entry) == 24, "sizeof(struct acpi_memory_map_entry)");
+
+extern uint16_t g_HwFlags;
+
+extern uint8_t g_A20Method;
+extern bool g_HasAcpiMemoryMap;
+
+extern uint16_t g_RamLo_Legacy;         /* Contiguous 1K pages up to 640K (BIOS INT=12h) */
+extern uint16_t g_RamHi_Legacy;         /* Contiguous 1K pages 1M to 16M (BIOS INT=15h,AX=E801h) */
+
+extern uint16_t g_RamLo_E801h;          /* Contiguous 1K pages 1M to 16M or 64M (BIOS INT=15h,AX=E801h) */
+extern uint16_t g_RamHi_E801h;          /* Contiguous 64K pages 16M to 4G (BIOS INT=15h,AX=E801h) */
+
+extern const AcpiMemoryMapEntry *g_AcpiMemoryMap;
 
 #endif  // __ASSEMBLER__
 

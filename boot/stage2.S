@@ -113,7 +113,7 @@ init_video:
 ##
 get_hwinfo:
         int             $0x11
-        movw            %ax, g_hwflags
+        movw            %ax, g_HwFlags
         ret
 
 ##
@@ -168,13 +168,13 @@ _detect_memory_e820_loop:
         movl            $0x534D4150, %edx               # 'SMAP'
         movl            $0xE820, %eax                   # ACPI Query System Address Map function
         int             $0x15
-        jc              _detect_memory_e820_done         # error or end of table
+        jc              _detect_memory_e820_done        # error or end of table
         cmpb            $0x80, %ah
-        je              _detect_memory_e820_done         # invalid command
+        je              _detect_memory_e820_done        # invalid command
         cmpb            $0x86, %ah
-        je              _detect_memory_e820_done         # unsupported function
+        je              _detect_memory_e820_done        # unsupported function
         testl           %ebx, %ebx
-        jz              _detect_memory_e820_success         # end of table
+        jz              _detect_memory_e820_success     # end of table
         addw            $0x18, %di                      # move table ptr
         cmpb            $0x14, %cl                      # if extended attr not present...
         je              _detect_memory_e820_loop
@@ -182,16 +182,15 @@ _detect_memory_e820_loop:
         jmp             _detect_memory_e820_loop
 
 _detect_memory_e820_success:
-        movl            $1, g_has_memory_map
+        movl            $1, g_HasAcpiMemoryMap
 _detect_memory_e820_done:
-        ret     # TODO: set method bit
+        ret
 
 ####
 # Gets the number of contiguous 1K blocks of memory between 1M and 16M, and
 # the number of contiguous 64K blocks of memory between 16M and 4G.
 #
-# This function will work on all systems made after 1994. If detection fails,
-# the function will return without error.
+# This function should work on BIOSes made after 1994.
 ####
 detect_memory_e801:
         # data can be returned in ax/bx or cx/dx; initialize all to zero
@@ -201,37 +200,42 @@ detect_memory_e801:
         xorw            %dx, %dx
         movw            $0xE801, %ax
         int             $0x15
-        jcxz            detect_memory_e801_store        # cx = 0, use ax/bx
+        jc              _detect_memory_e801_done        # unsupported function
+        jcxz            _detect_memory_e801_store       # cx = 0, use ax/bx
         movw            %cx, %ax
         movw            %dx, %bx
-detect_memory_e801_store:
-        movw            %ax, g_ramsize_e801_lo          # contiguous RAM >1M in 1K blocks, up to 16M
-        movw            %bx, g_ramsize_e801_hi          # contiguous RAM >16M in 64K blocks
-        ret     # TODO: set method bit
+_detect_memory_e801_store:
+        movw            %ax, g_RamLo_E801h              # contiguous RAM >1M in 1K blocks, up to 16M
+        movw            %bx, g_RamHi_E801h              # contiguous RAM >16M in 64K blocks
+_detect_memory_e801_done:
+        ret
 
 ####
-# Gets the number of contiguous 1K blocks of memory up to 15M or 64M, depending
-# on the BIOS. If detection fails, the system will display an error and halt.
+# Gets the number of contiguous 1K blocks from 0 to 640K, and from 1M up to 15M
+# or 64M, depending on the BIOS. If detection fails, the system will display
+# an error and halt. This detection method should be supported on every 386
+# BIOS, so if this fails, either something is seriouly wrong or the system
+# probably does not have enough memory to run this OS!
 ####
 detect_memory_legacy:
         clc
         movb            $0x88, %ah
         int             $0x15
-        jc              detect_memory_LelacyLo
+        jc              detect_memory_legacy_lo
         cmpb            $0x80, %ah                      # (invalid command)
-        je              detect_memory_LelacyLo
+        je              detect_memory_legacy_lo
         cmpb            $0x86, %ah                      # (unsupported func)
-        je              detect_memory_LelacyLo
-        movw            %ax, g_ramsize_hi            # contiguous RAM >1M in 1K blocks
-detect_memory_LelacyLo:
+        je              detect_memory_legacy_lo
+        movw            %ax, g_RamHi_Legacy             # contiguous RAM >1M in 1K blocks
+detect_memory_legacy_lo:
         clc
         int             $0x12
-        jc              _detect_memory_LegacylError
-        movw            %ax, g_ramsize_lo            # contiguous RAM <1M in 1K blocks
-        jz              _detect_memory_LegacylError
-        ret     # TODO: set method bit
+        jc              _detect_memory_legacy_error
+        movw            %ax, g_RamLo_Legacy             # contiguous RAM <1M in 1K blocks
+        jz              _detect_memory_legacy_error
+        ret
 
-_detect_memory_LegacylError:
+_detect_memory_legacy_error:
         leaw            s_memerr, %si
         call            bios_print
         jmp             idle_loop
@@ -246,7 +250,7 @@ _detect_memory_LegacylError:
 enable_a20:
         call            test_a20
         jnc             _enable_a20_done
-        call            enable_a20_Bios
+        call            enable_a20_bios
         call            test_a20
         jnc             _enable_a20_done
         call            enable_a20_port92h
@@ -288,10 +292,10 @@ _test_a20_Done:
 # Enable A20 using BIOS INT=15h,AX=2401h.
 # Supported on newer systems.
 ##
-enable_a20_Bios:
+enable_a20_bios:
         movw            $0x2401, %ax
         int             $0x15
-        movw            $A20METHOD_BIOS, g_a20_method
+        movw            $A20METHOD_BIOS, g_A20Method
         ret
 
 ##
@@ -303,7 +307,7 @@ enable_a20_port92h:
         orb             $0x02, %al          # A20 enable bit
         andb            $0xFE, %al          # clear (possible) reset flag
         outb            %al, $PORT_SYSCNTLA
-        movw            $A20METHOD_PORT, g_a20_method
+        movw            $A20METHOD_PORT92h, g_A20Method
         ret
 
 ##
@@ -336,20 +340,20 @@ enable_a20_keyboard:
         movb            $0xAE, %al              # cmd: enable keyboard
         outb            %al, $PORT_PS2KBD_CMD
 
-        call            kbd_out_wait          # (delay)
-        movw            $A20METHOD_KEYBOARD, g_a20_method
+        call            kbd_out_wait            # (delay)
+        movw            $A20METHOD_KEYBOARD, g_A20Method
         ret
 
 kbd_out_wait:
         inb             $PORT_PS2KBD_CMD, %al   # (buffer from controller perspective)
         testb           $0x02, %al              # is input buffer full?
-        jnz             kbd_out_wait          # continue checking 'til empty (consumed)
+        jnz             kbd_out_wait            # continue checking 'til empty (consumed)
         ret
 
 kbd_in_wait:
         inb             $PORT_PS2KBD_CMD, %al   # (buffer from controller perspective)
         testb           $0x01, %al              # is output buffer full?
-        jz              kbd_in_wait           # continue checking 'til data arrives
+        jz              kbd_in_wait             # continue checking 'til data arrives
         ret
 
 # -----------------------------------------------------------------------------
@@ -358,36 +362,36 @@ kbd_in_wait:
 
 .align 4
 
-.globl g_a20_method
-g_a20_method:
+.globl g_HwFlags
+g_HwFlags:
         .long           0
 
-.globl g_has_memory_map
-g_has_memory_map:
+.globl g_A20Method
+g_A20Method:
+        .long           A20METHOD_NONE
+
+.globl g_HasAcpiMemoryMap
+g_HasAcpiMemoryMap:
         .long           0
 
-.globl g_acpi_memory_map
-g_acpi_memory_map:
+.globl g_AcpiMemoryMap
+g_AcpiMemoryMap:
         .long           MEMMAP_BASE
 
-.globl g_ramsize_lo
-g_ramsize_lo:
+.globl g_RamLo_Legacy
+g_RamLo_Legacy:
         .long           0
 
-.globl g_ramsize_hi
-g_ramsize_hi:
+.globl g_RamHi_Legacy
+g_RamHi_Legacy:
         .long           0
 
-.globl g_ramsize_e801_lo
-g_ramsize_e801_lo:
+.globl g_RamLo_E801h
+g_RamLo_E801h:
         .long           0
 
-.globl g_ramsize_e801_hi
-g_ramsize_e801_hi:
-        .long           0
-
-.globl g_hwflags
-g_hwflags:
+.globl g_RamHi_E801h
+g_RamHi_E801h:
         .long           0
 
 s_hello:

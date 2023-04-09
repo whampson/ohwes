@@ -44,55 +44,78 @@
 __attribute__ ((aligned)) struct desc_reg g_gdtdesc = { 0 };
 __attribute__ ((aligned)) struct desc_reg g_idtdesc = { 0 };
 
-void gdt_init();
-void idt_init();
-void ldt_init();
-void tss_init();
+void InitGdt();
+void InitIdt();
+void InitLdt();
+void InitTss();
 void irq_init();
 
 void init()
 {
     cli();
 
-    printf("a20 method = %d\n", g_a20_method);
-    printf("has memory map = %d\n", g_has_memory_map);
-    printf("RAM LO: %d kilobytes\n", g_ramsize_lo);
-    printf("RAM HI: %d kilobytes\n", g_ramsize_hi);
-    printf("bios-e801 LO: %d kilobytes\n", g_ramsize_e801_lo);
-    printf("bios-e801 HI: %d kilobytes\n", g_ramsize_e801_hi * 64);
+    const HwFlags *hwFlags = (HwFlags *) &g_HwFlags;
+    printf("hwflags: diskette drive? %s\n", hwFlags->HasDisketteDrive ? "yes" : "no");
+    printf("hwflags: coprocessor? %s\n", hwFlags->HasCoprocessor ? "yes" : "no");
+    printf("hwflags: PS/2 mouse? %s\n", hwFlags->HasPs2Mouse ? "yes" : "no");
+    printf("hwflags: game port? %s\n", hwFlags->HasGamePort ? "yes" : "no");
+    printf("hwflags: num serial ports = %d\n", hwFlags->NumSerialPorts);
+    printf("hwflags: num parallel ports = %d\n", hwFlags->NumParallelPorts);
+    printf("hwflags: num secondary diskette drives = %d\n", hwFlags->NumOtherDisketteDrives);
+    printf("hwflags: video mode = ");
+    switch (hwFlags->VideoMode) {
+        case HWFLAGS_VIDEOMODE_40x25:       printf("40x25\n"); break;
+        case HWFLAGS_VIDEOMODE_80x25:       printf("80x25\n"); break;
+        case HWFLAGS_VIDEOMODE_80x25_MONO:  printf("80x25 (monochrome)\n"); break;
+        default:                            printf("(invalid)\n"); break;
+    }
 
-    idt_init();
-    gdt_init();
-    ldt_init();
-    tss_init();
-    irq_init();
+    printf("A20: ");
+    switch (g_A20Method) {
+        case A20METHOD_NONE:        printf("enabled\n"); break;
+        case A20METHOD_KEYBOARD:    printf("enabled via PS/2 keyboard controller\n"); break;
+        case A20METHOD_PORT92h:     printf("enabled via I/O port 92h\n"); break;
+        case A20METHOD_BIOS:        printf("enabled via BIOS INT=15h,AX=2401h\n"); break;
+        default:                    printf("(invalid)"); break;
+    }
 
-    if (g_has_memory_map) {
-        struct acpi_memory_map_entry *mem_map = g_acpi_memory_map;
+    printf("RAM: g_RamLo_Legacy = %d\n", g_RamLo_Legacy);
+    printf("RAM: g_RamHi_Legacy = %d\n", g_RamHi_Legacy);
+    printf("RAM: g_RamLo_E801h = %d\n", g_RamLo_E801h);
+    printf("RAM: g_RamHi_E801h = %d\n", g_RamHi_E801h << 6);    // 64K pages to 1K pages
+
+    if (g_HasAcpiMemoryMap) {
+        const AcpiMemoryMapEntry *memMap = g_AcpiMemoryMap;
         do {
-            if (mem_map->length > 0) {
-                printf("bios-e820: %08x-%08x ",
-                    (uint32_t) mem_map->base,
-                    (uint32_t) mem_map->base + mem_map->length - 1);
+            if (memMap->Length > 0) {
+                printf("RAM: BIOS-E820h: %08x-%08x ",
+                    (uint32_t) memMap->Base,
+                    (uint32_t) memMap->Base + memMap->Length - 1);
 
-                switch (mem_map->type) {
-                    case 1: printf("usable\n"); break;
-                    case 2: printf("reserved\n"); break;
-                    case 3: printf("ACPI\n"); break;
-                    case 4: printf("ACPI NV\n"); break;
-                    case 5: printf("bad\n"); break;
-                    default: printf("%d\n"); break;
+                switch (memMap->Type) {
+                    case ACPI_MMAP_TYPE_USABLE:     printf("usable\n"); break;
+                    case ACPI_MMAP_TYPE_RESERVED:   printf("reserved\n"); break;
+                    case ACPI_MMAP_TYPE_ACPI:       printf("ACPI\n"); break;
+                    case ACPI_MMAP_TYPE_ACPI_NVS:   printf("ACPI NV\n"); break;
+                    case ACPI_MMAP_TYPE_BAD:        printf("bad\n"); break;
+                    default:                        printf("reserved (%d)\n", memMap->Type); break;
                 }
             }
-        } while ((mem_map++)->type);
+        } while ((memMap++)->Type != ACPI_MMAP_TYPE_INVALID);
     }
+
+    InitIdt();
+    InitGdt();
+    InitLdt();
+    InitTss();
+    irq_init();
 
     sti();
     irq_unmask(IRQ_KEYBOARD);
 }
 
 
-void gdt_init(void)
+void InitGdt(void)
 {
     struct x86_desc *gdt;
     struct x86_desc *kcs, *kds, *ucs, *uds, *ldt, *tss;
@@ -115,14 +138,14 @@ void gdt_init(void)
     set_tss_desc(tss, KERNEL_PL, 1, TSS_BASE,   TSS_SIZE-1,0);
     /* TODO: stack segment? */
 
-#define QW2DW(q)    (uint32_t) ((q) >> 32), (uint32_t) (q)
+// #define QW2DW(q)    (uint32_t) ((q) >> 32), (uint32_t) (q)
 
-    printf("gdt: (%02x|%d)=%08x'%08x %s\n", LDT_SEG & 0xFFF8, LDT_SEG & 3, QW2DW(ldt->_value), "LDT_SEG");
-    printf("gdt: (%02x|%d)=%08x'%08x %s\n", KCS_SEG & 0xFFF8, KCS_SEG & 3, QW2DW(kcs->_value), "KCS_SEG");
-    printf("gdt: (%02x|%d)=%08x'%08x %s\n", KDS_SEG & 0xFFF8, KDS_SEG & 3, QW2DW(kds->_value), "KDS_SEG");
-    printf("gdt: (%02x|%d)=%08x'%08x %s\n", UCS_SEG & 0xFFF8, UCS_SEG & 3, QW2DW(ucs->_value), "UCS_SEG");
-    printf("gdt: (%02x|%d)=%08x'%08x %s\n", UDS_SEG & 0xFFF8, UDS_SEG & 3, QW2DW(uds->_value), "UDS_SEG");
-    printf("gdt: (%02x|%d)=%08x'%08x %s\n", TSS_SEG & 0xFFF8, TSS_SEG & 3, QW2DW(tss->_value), "TSS_SEG");
+//     printf("gdt: (%02x|%d)=%08x'%08x %s\n", LDT_SEG & 0xFFF8, LDT_SEG & 3, QW2DW(ldt->_value), "LDT_SEG");
+//     printf("gdt: (%02x|%d)=%08x'%08x %s\n", KCS_SEG & 0xFFF8, KCS_SEG & 3, QW2DW(kcs->_value), "KCS_SEG");
+//     printf("gdt: (%02x|%d)=%08x'%08x %s\n", KDS_SEG & 0xFFF8, KDS_SEG & 3, QW2DW(kds->_value), "KDS_SEG");
+//     printf("gdt: (%02x|%d)=%08x'%08x %s\n", UCS_SEG & 0xFFF8, UCS_SEG & 3, QW2DW(ucs->_value), "UCS_SEG");
+//     printf("gdt: (%02x|%d)=%08x'%08x %s\n", UDS_SEG & 0xFFF8, UDS_SEG & 3, QW2DW(uds->_value), "UDS_SEG");
+//     printf("gdt: (%02x|%d)=%08x'%08x %s\n", TSS_SEG & 0xFFF8, TSS_SEG & 3, QW2DW(tss->_value), "TSS_SEG");
 
     g_gdtdesc.base = GDT_BASE;
     g_gdtdesc.limit = GDT_SIZE - 1;
@@ -156,7 +179,7 @@ static const idt_thunk irq_thunks[NUM_IRQ] =
     _thunk_irq_0ch, _thunk_irq_0dh, _thunk_irq_0eh, _thunk_irq_0fh
 };
 
-void idt_init(void)
+void InitIdt(void)
 {
     struct x86_desc *idt;
     struct x86_desc *desc;
@@ -187,7 +210,7 @@ void idt_init(void)
     lidt(g_idtdesc);
 }
 
-void ldt_init(void)
+void InitLdt(void)
 {
     struct segdesc *ldt = (struct segdesc *) LDT_BASE;
     memset(ldt, 0, LDT_SIZE);
@@ -195,7 +218,7 @@ void ldt_init(void)
     lldt(LDT_SEG);
 }
 
-void tss_init(void)
+void InitTss(void)
 {
     struct tss *tss = (struct tss *) TSS_BASE;
     memset(tss, 0, TSS_SIZE);
