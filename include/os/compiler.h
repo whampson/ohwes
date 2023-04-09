@@ -44,8 +44,8 @@
 #define __fallthrough   __attribute__((fallthrough))
 
 /**
- * 64-bit divivison functions.
-*/
+ * 64-bit division functions.
+ */
 
 int64_t __moddi3(int64_t, int64_t);
 int64_t __divdi3(int64_t, int64_t);

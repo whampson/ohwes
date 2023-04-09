@@ -14,12 +14,12 @@
 # SOFTWARE.
 # -----------------------------------------------------------------------------
 #         File: Makefile
-#      Created: Mar 12, 2023
+#      Created: March 12, 2023
 #       Author: Wes Hampson
 # =============================================================================
 
 # Modules to build
-export MODULES      := boot kernel
+export MODULES      := boot kernel sdk/libc
 # TODO: search tree for modules?
 
 # Important directories

@@ -14,7 +14,7 @@
 # SOFTWARE.
 # -----------------------------------------------------------------------------
 #         File: kernel/Module.mk
-#      Created: Mar 27, 2023
+#      Created: March 27, 2023
 #       Author: Wes Hampson
 # =============================================================================
 
@@ -24,9 +24,5 @@ SOURCES = \
 	handler.c \
 	irq.c \
 	console.c \
-	printf.c \
-	puts.c \
-	string.c \
-	gcc.c \
 
 $(eval $(call make-lib, $(TARGET), $(SOURCES)))

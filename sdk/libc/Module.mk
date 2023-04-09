@@ -13,44 +13,16 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 # -----------------------------------------------------------------------------
-#         File: boot/Module.mk
-#      Created: March 12, 2023
+#         File: sdk/libc/Module.mk
+#      Created: April 8, 2023
 #       Author: Wes Hampson
 # =============================================================================
 
-TARGET  = boot.elf
+TARGET  = libc.a
 SOURCES = \
-	stage1.S \
-	stage2.S \
-	init.c \
+	gcc.c \
+	printf.c \
+	puts.c \
+	string.c \
 
-LINKLIBS = \
-	$(LIB_ROOT)/sdk/libc/libc.a \
-	$(LIB_ROOT)/kernel/libkernel.a \
-
- # ORIGIN
-LDFLAGS += -Ttext 0x7C00
-
-$(eval $(call make-exe, $(TARGET), $(SOURCES), $(LINKLIBS)))
-
-# split boot.elf into boot.bin, bootsect.bin and boot.sys
-#   boot.bin = stripped boot.elf
-#   bootsect.bin = bytes 0-511 of boot.bin (boot sector)
-#   boot.sys = bytes 512-end of boot.bin
-
-_TARGETS += \
-	$(BIN_ROOT)/boot.bin \
-	$(BIN_ROOT)/bootsect.bin \
-	$(BIN_ROOT)/boot.sys \
-
-# strip
-$(BIN_ROOT)/boot.bin: $(BIN_ROOT)/boot.elf
-	objcopy -Obinary $< $@
-
-# extract boot sector
-$(BIN_ROOT)/bootsect.bin: $(BIN_ROOT)/boot.bin
-	head -c 512 $< > $@
-
-# rest of boot loader
-$(BIN_ROOT)/boot.sys: $(BIN_ROOT)/boot.bin
-	tail -c +512 $< > $@
+$(eval $(call make-lib, $(TARGET), $(SOURCES)))
