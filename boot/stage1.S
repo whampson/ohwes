@@ -31,7 +31,7 @@
 RESETMODE               = 0x0472                # Soft reset mode address
 RESETMODE_NOMEMTEST     = 0x1234                # Skip memory test on soft reset
 
-.text
+.section .stage1
 .code16
 
 #
@@ -76,22 +76,25 @@ boot:
         xorw            %ax, %ax
         movw            %ax, %ds
         movw            %ax, %ss
-        movw            $0x07E0, %ax
-        movw            %ax, %es
-        movw            $0x7C00, %bp
+        movw            $STACK_BASE, %bp
         movw            %bp, %sp
 
         leaw            s_hello, %si
         call            bios_println
+
+        movw            $STAGE2_SEGMENT, %ax
+        movw            %ax, %es
         xorw            %bx, %bx                # base = 07E0:0000h = 0x7E00
-        movw            $1, %ax                 # start sector (logical block address)
-        movw            $32, %cx                # sector count          (TODO: can't read more than 64 for some reason?)
+        movw            $STAGE2_SECTOR, %ax                 # start sector (logical block address)
+        movw            /*$STAGE2_COUNT*/$32, %cx                # sector count          (TODO: can't read more than 64 for some reason?)
         call            read_sectors
 
         # TODO: locate BOOT.SYS and OHWES.SYS within FAT file system
 
         jmp             stage2                  # onwards!
 
+.globl readkey_reset
+.globl reset
 readkey_reset:
         call            bios_readkey
 reset:
@@ -102,6 +105,7 @@ reset:
 # ------------------------------- Subroutines ---------------------------------
 # -----------------------------------------------------------------------------
 
+.globl read_sectors
 # -----------------------------------------------------------------------------
 # read_sectors
 # -----------------------------------------------------------------------------
@@ -278,5 +282,5 @@ s_newline:
 s_progress:
         .asciz          "."
 
-        .space          0x1FE - (. - _start), 0xCC      # padding
-        .short          0xAA55                          # boot signature
+        // .space          0x1FE - (. - _start), 0xCC      # padding
+        // .short          0xAA55                          # boot signature

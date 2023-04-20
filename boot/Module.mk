@@ -18,20 +18,20 @@
 #       Author: Wes Hampson
 # =============================================================================
 
-TARGET  = boot.elf
+TARGET = boot.elf
+TARGETLIB = libboot.a
 SOURCES = \
 	stage1.S \
 	stage2.S \
-	init.c \
 
 LINKLIBS = \
 	$(LIB_ROOT)/sdk/libc/libc.a \
-	$(LIB_ROOT)/kernel/libkernel.a \
 
  # ORIGIN
-LDFLAGS += -Ttext 0x7C00
+LDFLAGS += -T $(MODDIR)/boot.ld #-Ttext 0x7C00
 
 $(eval $(call make-exe, $(TARGET), $(SOURCES), $(LINKLIBS)))
+$(eval $(call make-lib, $(TARGETLIB), $(SOURCES)))
 
 # split boot.elf into boot.bin, bootsect.bin and boot.sys
 #   boot.bin = stripped boot.elf
@@ -53,4 +53,4 @@ $(BIN_ROOT)/bootsect.bin: $(BIN_ROOT)/boot.bin
 
 # rest of boot loader
 $(BIN_ROOT)/boot.sys: $(BIN_ROOT)/boot.bin
-	tail -c +512 $< > $@
+	tail -c +513 $< > $@

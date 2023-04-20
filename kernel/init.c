@@ -19,7 +19,7 @@
  * =============================================================================
  */
 
-#include "boot.h"
+#include "init.h"
 
 #include <stdarg.h>
 #include <stdint.h>

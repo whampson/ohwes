@@ -27,7 +27,8 @@ export SCRIPTS      := scripts
 export BIN_ROOT     := bin
 export OBJ_ROOT     := obj
 export LIB_ROOT     := lib
-export MOD_ROOT      = $(patsubst %/$(_MODFILE),%,$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
+
+export MODDIR       = $(patsubst %/$(_MODFILE),%,$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
 
 export IMG          := $(BIN_ROOT)/ohwes.img
 export BOOTBIN      := $(BIN_ROOT)/boot.bin
@@ -63,16 +64,16 @@ export DEBUG        := 1
 # $(call make-exe exe-name, source-list[, link-libs])
 define make-exe
   _TARGETS += $(addprefix $(BIN_ROOT)/,$1)
-  _SOURCES += $(addprefix $(MOD_ROOT)/,$2)
-  $(addprefix $(BIN_ROOT)/,$1):: $(call get-asm-obj, $(addprefix $(MOD_ROOT)/,$2)) $(call get-c-obj, $(addprefix $(MOD_ROOT)/,$2)) $3
+  _SOURCES += $(addprefix $(MODDIR)/,$2)
+  $(addprefix $(BIN_ROOT)/,$1):: $(call get-asm-obj, $(addprefix $(MODDIR)/,$2)) $(call get-c-obj, $(addprefix $(MODDIR)/,$2)) $3
 	$(LD) -o $$@ $(LDFLAGS) $$^
 endef
 
 # $(call make-lib lib-name, source-list)
 define make-lib
-  _LIBRARIES += $(addprefix $(LIB_ROOT)/$(MOD_ROOT)/,$1)
-  _SOURCES += $(addprefix $(MOD_ROOT)/,$2)
-  $(addprefix $(LIB_ROOT)/$(MOD_ROOT)/,$1):: $(call get-asm-obj, $(addprefix $(MOD_ROOT)/,$2)) $(call get-c-obj, $(addprefix $(MOD_ROOT)/,$2))
+  _LIBRARIES += $(addprefix $(LIB_ROOT)/$(MODDIR)/,$1)
+  _SOURCES += $(addprefix $(MODDIR)/,$2)
+  $(addprefix $(LIB_ROOT)/$(MODDIR)/,$1):: $(call get-asm-obj, $(addprefix $(MODDIR)/,$2)) $(call get-c-obj, $(addprefix $(MODDIR)/,$2)) $3
 	$(AR) rcsv $$@ $$^
 endef
 
@@ -203,8 +204,9 @@ debug-make:
 # -------------------------------------------------------------------------------------------------
 
 # Generate object file rules from source list
-$(foreach _src, $(call get-c-src, $(_SOURCES)), $(eval $(call make-obj, $(call get-c-obj, $(_src)), $(_src))))
-$(foreach _src, $(call get-asm-src, $(_SOURCES)), $(eval $(call make-asm-obj, $(call get-asm-obj, $(_src)), $(_src))))
+_UNIQ_SOURCES = $(call uniq, $(_SOURCES))
+$(foreach _src, $(call get-c-src, $(_UNIQ_SOURCES)), $(eval $(call make-obj, $(call get-c-obj, $(_src)), $(_src))))
+$(foreach _src, $(call get-asm-src, $(_UNIQ_SOURCES)), $(eval $(call make-asm-obj, $(call get-asm-obj, $(_src)), $(_src))))
 
 # Include .d files
 -include $(_DEPENDS)

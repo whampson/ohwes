@@ -18,11 +18,16 @@
 #       Author: Wes Hampson
 # =============================================================================
 
-TARGET  = libkernel.a
+TARGET  = ohwes.elf
 SOURCES = \
+	entry.S \
 	interrupt.S \
+	init.c \
 	handler.c \
 	irq.c \
 	console.c \
 
-$(eval $(call make-lib, $(TARGET), $(SOURCES)))
+LINKLIBS = \
+	$(LIB_ROOT)/sdk/libc/libc.a \
+
+$(eval $(call make-exe, $(TARGET), $(SOURCES), $(LINKLIBS)))

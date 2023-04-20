@@ -33,7 +33,7 @@ TEMP_DS                 = 0x10
 
 VGA_MODE                = 0x03  # 0x03 = text, CGA/EGA/VGA, 16 colors, B8000h
 
-.text
+.section .stage2
 .code16
 
 ##
@@ -46,7 +46,7 @@ temp_gdt:
         .quad           0x00CF92000000FFFF      # ds = 0x10
 temp_gdt_end:
 
-        .word           0                       # (align)
+        .word           0xAFFE                       # (align)
 temp_gdt_reg:
         .word           temp_gdt_end-temp_gdt-1 # GDT limit
         .long           temp_gdt                # GDT base, aligned
@@ -67,6 +67,13 @@ stage2:
         call            detect_memory
         call            enable_a20
 
+        // movw            $KERNEL_SEGMENT, %ax
+        // movw            %ax, %es
+        // xorw            %bx, %bx
+        // movw            $KERNEL_SECTOR, %ax
+        // movw            $KERNEL_COUNT, %cx
+        // call            read_sectors
+
         cli
         lgdtl           temp_gdt_reg
         movl            %cr0, %eax
@@ -83,7 +90,7 @@ start32:
         xorw            %ax, %ax
         movw            %ax, %fs
         movw            %ax, %gs
-        call            init            # initialize devices and load kernel
+        jmpl            $TEMP_CS, $kentry
 
 idle_loop:
         jmp             idle_loop
@@ -238,7 +245,7 @@ detect_memory_legacy_lo:
 _detect_memory_legacy_error:
         leaw            s_memerr, %si
         call            bios_print
-        jmp             idle_loop
+        jmp             readkey_reset
 
 ##
 # -----------------------------------------------------------------------------
@@ -265,7 +272,7 @@ _enable_a20_done:
 _enable_a20_error:
         leaw            s_a20err, %si
         call            bios_print
-        jmp             idle_loop
+        jmp             readkey_reset
 
 ##
 # Test whether A20 gate is enabled.
