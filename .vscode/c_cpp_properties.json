@@ -16,6 +16,23 @@
                 "-g"
             ],
             "configurationProvider": "ms-vscode.makefile-tools"
+        },
+        {
+            "name": "OH-WES [macOS]",
+            "includePath": [
+                "${workspaceFolder}/include/*"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/local/bin/i686-elf-gcc",
+            "cStandard": "c99",
+            "intelliSenseMode": "gcc-x86",
+            "compilerArgs": [
+                "-ffreestanding",
+                "-nostdinc",
+                "-nostdlib",
+                "-g"
+            ],
+            "configurationProvider": "ms-vscode.makefile-tools"
         }
     ],
     "version": 4

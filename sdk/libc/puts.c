@@ -3,7 +3,7 @@
 
 int putchar(int ch)
 {
-    console_write((char) ch);
+    console_write((char) ch);       // TODO: use write() syscall
     return 1;
 }
 
