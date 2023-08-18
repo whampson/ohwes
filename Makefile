@@ -26,7 +26,7 @@ export MODULES      := boot kernel sdk/libc
 export SCRIPTS      := scripts
 export BIN_ROOT     := bin
 export OBJ_ROOT     := obj
-export LIB_ROOT     := lib
+export LIB_ROOT     := obj
 export MOD_ROOT      = $(patsubst %/$(_MODFILE),%,$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
 
 export IMG          := $(BIN_ROOT)/ohwes.img
