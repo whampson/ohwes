@@ -1,5 +1,5 @@
 /* =============================================================================
- * Copyright (C) 2020-2023 Wes Hampson. All Rights Reserved.
+ * Copyright (C) 2023 Wes Hampson. All Rights Reserved.
  *
  * This file is part of the OH-WES Operating System.
  * OH-WES is free software; you may redistribute it and/or modify it under the
@@ -13,31 +13,16 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/handler.c
- *      Created: April 4, 2023
+ *         File: boot/debug.h
+ *      Created: August 20, 2023
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#include <stdio.h>
-#include <hw/interrupt.h>
-#include <os/compiler.h>
+#ifndef BOOT_DEBUG_H
+#define BOOT_DEBUG_H
 
-__fastcall void handle_exception(struct iframe *frame)
-{
-    printf("!!! exception: 0x%02x\n", frame->vecNum);
-    __asm__ volatile (".1: jmp .1");
-}
+void PrintHardwareInfo();
+void PrintMemoryInfo();
 
-__fastcall void handle_irq(struct iframe *frame)
-{
-    printf("!!! irq: %d\n", ~frame->vecNum);
-    __asm__ volatile (".2: jmp .2");
-    IrqEnd(~frame->vecNum);
-}
-
-__fastcall void handle_syscall(struct iframe *frame)
-{
-    printf("!!! system call: %d\n", frame->eax);
-    __asm__ volatile (".3: jmp .3");
-}
+#endif // BOOT_DEBUG_H

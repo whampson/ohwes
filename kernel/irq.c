@@ -42,9 +42,9 @@
 
 #define valid_irq(n)    ((n) >= 0 && (n) < NUM_IRQ)
 
-static irq_handler handler_map[NUM_IRQ] = { 0 };  /* TODO: linked list */
+static IrqHandler handler_map[NUM_IRQ] = { 0 };  /* TODO: linked list */
 
-void irq_init(void)
+void IrqInit(void)
 {
     /* configure master PIC */
     i8259_cmd_write(PIC_MASTER, PIC_ICW1);
@@ -63,7 +63,7 @@ void irq_init(void)
     i8259_data_write(PIC_SLAVE, 0xFF);
 }
 
-void irq_mask(int irq_num)
+void IrqMask(int irq_num)
 {
     int pic_num = (irq_num >= 8);
     int mask = (1 << (irq_num & 7));
@@ -72,7 +72,7 @@ void irq_mask(int irq_num)
     i8259_data_write(pic_num, oldmask | mask);
 }
 
-void irq_unmask(int irq_num)
+void IrqUnmask(int irq_num)
 {
     int pic_num = (irq_num >= 8);
     int mask = (1 << (irq_num & 7));
@@ -81,7 +81,7 @@ void irq_unmask(int irq_num)
     i8259_data_write(pic_num, oldmask & ~mask);
 }
 
-void irq_eoi(int irq_num)
+void IrqEnd(int irq_num)
 {
     if (irq_num >= 8) {
         i8259_cmd_write(PIC_SLAVE, PIC_EOI | (irq_num & 7));
@@ -92,7 +92,7 @@ void irq_eoi(int irq_num)
     }
 }
 
-bool irq_register_handler(int irq_num, irq_handler func)
+bool IrqRegisterHandler(int irq_num, IrqHandler func)
 {
     if (!valid_irq(irq_num)) {
         return false;
@@ -105,7 +105,7 @@ bool irq_register_handler(int irq_num, irq_handler func)
     return true;
 }
 
-void irq_unregister_handler(int irq_num)
+void IrqUnregisterHandler(int irq_num)
 {
     if (!valid_irq(irq_num)) {
         return;

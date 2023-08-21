@@ -229,17 +229,15 @@ _Static_assert(sizeof(SegSel) == 2);
  * together are referred to as the "pseudo-descriptor".
  *
  * The alignment on this structure is tricky; the limit field should be aligned
- * to an odd-word address (address MOD 4 equals 2).
+ * to an odd-word address (address MOD 4 equals 2). You may need to stick an
+ * '__align(2)' before instantiating this.
  */
 typedef struct DescReg_
 {
-    uint64_t limit  : 16;   /* Descriptor Table Limit */
-    uint64_t base   : 32;   /* Descriptor Table Base */
-    uint64_t        : 16;   /* (align) */
-} DescReg __attribute((aligned(4)));
-_Static_assert(sizeof(DescReg) == 8);
-
-// #define GetDescRegPtr(r)     (((char *) (r)) + 2)
+    uint16_t limit;     /* Descriptor Table Limit */
+    uint32_t base;      /* Descriptor Table Base */
+} __attribute__((packed)) DescReg;
+_Static_assert(sizeof(DescReg) == 6);
 
 /*
  * Task State Segment
@@ -384,11 +382,11 @@ static inline void MakeTssDesc(SegDesc *pDesc, int dpl, int base, int limit)
  * @param tssSegSel TSS Segment Selector
  * @param dpl task gate privilege level
  */
-static inline void MakeTaskDesc(SegDesc *pDesc, SegSel tssSegSel, int dpl)
+static inline void MakeTaskDesc(SegDesc *pDesc, int tssSegSel, int dpl)
 {
     pDesc->_value = 0;
     pDesc->task.type = DESC_SYS_TASK;
-    pDesc->task.tssSegSel = tssSegSel._value;
+    pDesc->task.tssSegSel = tssSegSel;
     pDesc->task.dpl = dpl;
     pDesc->task.p = 1;  // 1 = present in memory
 }
@@ -405,11 +403,11 @@ static inline void MakeTaskDesc(SegDesc *pDesc, SegSel tssSegSel, int dpl)
  * @param paramCount number of stack parameters
  * @param pHandler a pointer to the call handler function
  */
-static inline void MakeCallDesc(SegDesc *pDesc, SegSel segSel, int dpl, int paramCount, void *pHandler)
+static inline void MakeCallDesc(SegDesc *pDesc, int segSel, int dpl, int paramCount, void *pHandler)
 {
     pDesc->_value = 0;
     pDesc->call.type = DESC_SYS_CALL32;
-    pDesc->call.segSel = segSel._value;
+    pDesc->call.segSel = segSel;
     pDesc->call.dpl = dpl;
     pDesc->call.paramCount = paramCount;
     pDesc->call.offsetLo = ((uint32_t) pHandler) & 0xFFFF;
@@ -428,11 +426,11 @@ static inline void MakeCallDesc(SegDesc *pDesc, SegSel segSel, int dpl, int para
  * @param dpl interrupt Gate descriptor privilege level
  * @param pHandler a pointer to the interrupt handler function
  */
-static inline void MakeIntrDesc(SegDesc *pDesc, SegSel segSel, int dpl, void *pHandler)
+static inline void MakeIntrDesc(SegDesc *pDesc, int segSel, int dpl, void *pHandler)
 {
     pDesc->_value = 0;
     pDesc->intr.type = DESC_SYS_INTR32;
-    pDesc->intr.segSel = segSel._value;
+    pDesc->intr.segSel = segSel;
     pDesc->intr.dpl = dpl;
     pDesc->intr.offsetLo = ((uint32_t) pHandler) & 0xFFFF;
     pDesc->intr.offsetHi = ((uint32_t) pHandler) >> 16;
@@ -450,11 +448,11 @@ static inline void MakeIntrDesc(SegDesc *pDesc, SegSel segSel, int dpl, void *pH
  * @param pl trap handler privilege level
  * @param handler a pointer to the trap handler function
  */
-static inline void MakeTrapDesc(SegDesc *pDesc, SegSel segSel, int dpl, void *pHandler)
+static inline void MakeTrapDesc(SegDesc *pDesc, int segSel, int dpl, void *pHandler)
 {
     pDesc->_value = 0;
     pDesc->trap.type = DESC_SYS_TRAP32;
-    pDesc->trap.segSel = segSel._value;
+    pDesc->trap.segSel = segSel;
     pDesc->trap.dpl = dpl;
     pDesc->trap.offsetLo = ((uint32_t) pHandler) & 0xFFFF;
     pDesc->trap.offsetHi = ((uint32_t) pHandler) >> 16;
@@ -476,16 +474,6 @@ __asm__ volatile (              \
     : "m"(pDesc)                \
     :                           \
 )
-
-#define sgdt(pDesc)             \
-__asm__ volatile (              \
-    "sgdt %0"                   \
-    : "=m"(pDesc)                \
-    :                           \
-    :                           \
-)
-
-
 
 /**
  * Loads the Interrupt Descriptor Table Register (IDTR).

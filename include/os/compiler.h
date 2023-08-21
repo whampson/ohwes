@@ -43,6 +43,10 @@
  */
 #define __fallthrough   __attribute__((fallthrough))
 
+#define __pack          __attribute__((packed))
+
+#define __align(n)      __attribute__((aligned(n)))
+
 /**
  * 64-bit division functions.
  */

@@ -154,60 +154,60 @@ thunk_name:                                                                     
 #     abort - severe error, interrupted program cannot be resumed
 
 # 0-31                          processor exceptions
-THUNK_EXCEPTION                 (_thunk_exception_00h, EXCEPTION_DE)    # fault
-THUNK_EXCEPTION                 (_thunk_exception_01h, EXCEPTION_DB)    # fault/trap
-THUNK_EXCEPTION                 (_thunk_exception_02h, EXCEPTION_NMI)   # interrupt
-THUNK_EXCEPTION                 (_thunk_exception_03h, EXCEPTION_BP)    # trap
-THUNK_EXCEPTION                 (_thunk_exception_04h, EXCEPTION_OF)    # trap
-THUNK_EXCEPTION                 (_thunk_exception_05h, EXCEPTION_BR)    # fault
-THUNK_EXCEPTION                 (_thunk_exception_06h, EXCEPTION_UD)    # fault
-THUNK_EXCEPTION                 (_thunk_exception_07h, EXCEPTION_NM)    # fault
-THUNK_EXCEPTION_WITH_ERRORCODE  (_thunk_exception_08h, EXCEPTION_DF)    # abort, error code is 0
-THUNK_EXCEPTION                 (_thunk_exception_09h, 9)               # fault (not used, was Coprocessor Segment Overrun)
-THUNK_EXCEPTION_WITH_ERRORCODE  (_thunk_exception_0ah, EXCEPTION_TS)    # fault
-THUNK_EXCEPTION_WITH_ERRORCODE  (_thunk_exception_0bh, EXCEPTION_NP)    # fault
-THUNK_EXCEPTION_WITH_ERRORCODE  (_thunk_exception_0ch, EXCEPTION_SS)    # fault
-THUNK_EXCEPTION_WITH_ERRORCODE  (_thunk_exception_0dh, EXCEPTION_GP)    # fault
-THUNK_EXCEPTION_WITH_ERRORCODE  (_thunk_exception_0eh, EXCEPTION_PF)    # fault
-THUNK_EXCEPTION                 (_thunk_exception_0fh, 15)              # (Intel reserved)
-THUNK_EXCEPTION                 (_thunk_exception_10h, EXCEPTION_MF)    # fault
-THUNK_EXCEPTION_WITH_ERRORCODE  (_thunk_exception_11h, EXCEPTION_AC)    # fault, error code is 0
-THUNK_EXCEPTION                 (_thunk_exception_12h, EXCEPTION_MC)    # abort
-THUNK_EXCEPTION                 (_thunk_exception_13h, EXCEPTION_XM)    # fault
-THUNK_EXCEPTION                 (_thunk_exception_14h, EXCEPTION_VE)    # fault
-THUNK_EXCEPTION_WITH_ERRORCODE  (_thunk_exception_15h, EXCEPTION_CP)    # fault
-THUNK_EXCEPTION                 (_thunk_exception_16h, 22)              # (Intel reserved)
-THUNK_EXCEPTION                 (_thunk_exception_17h, 23)              # (Intel reserved)
-THUNK_EXCEPTION                 (_thunk_exception_18h, 24)              # (Intel reserved)
-THUNK_EXCEPTION                 (_thunk_exception_19h, 25)              # (Intel reserved)
-THUNK_EXCEPTION                 (_thunk_exception_1ah, 26)              # (Intel reserved)
-THUNK_EXCEPTION                 (_thunk_exception_1bh, 27)              # (Intel reserved)
-THUNK_EXCEPTION                 (_thunk_exception_1ch, 28)              # (Intel reserved)
-THUNK_EXCEPTION                 (_thunk_exception_1dh, 29)              # (Intel reserved)
-THUNK_EXCEPTION                 (_thunk_exception_1eh, 30)              # (Intel reserved)
-THUNK_EXCEPTION                 (_thunk_exception_1fh, 31)              # (Intel reserved)
+THUNK_EXCEPTION                 (Exception00h, EXCEPTION_DE)    # fault
+THUNK_EXCEPTION                 (Exception01h, EXCEPTION_DB)    # fault/trap
+THUNK_EXCEPTION                 (Exception02h, EXCEPTION_NMI)   # interrupt
+THUNK_EXCEPTION                 (Exception03h, EXCEPTION_BP)    # trap
+THUNK_EXCEPTION                 (Exception04h, EXCEPTION_OF)    # trap
+THUNK_EXCEPTION                 (Exception05h, EXCEPTION_BR)    # fault
+THUNK_EXCEPTION                 (Exception06h, EXCEPTION_UD)    # fault
+THUNK_EXCEPTION                 (Exception07h, EXCEPTION_NM)    # fault
+THUNK_EXCEPTION_WITH_ERRORCODE  (Exception08h, EXCEPTION_DF)    # abort, error code is 0
+THUNK_EXCEPTION                 (Exception09h, 9)               # fault (not used, was Coprocessor Segment Overrun)
+THUNK_EXCEPTION_WITH_ERRORCODE  (Exception0Ah, EXCEPTION_TS)    # fault
+THUNK_EXCEPTION_WITH_ERRORCODE  (Exception0Bh, EXCEPTION_NP)    # fault
+THUNK_EXCEPTION_WITH_ERRORCODE  (Exception0Ch, EXCEPTION_SS)    # fault
+THUNK_EXCEPTION_WITH_ERRORCODE  (Exception0Dh, EXCEPTION_GP)    # fault
+THUNK_EXCEPTION_WITH_ERRORCODE  (Exception0Eh, EXCEPTION_PF)    # fault
+THUNK_EXCEPTION                 (Exception0Fh, 15)              # (Intel reserved)
+THUNK_EXCEPTION                 (Exception10h, EXCEPTION_MF)    # fault
+THUNK_EXCEPTION_WITH_ERRORCODE  (Exception11h, EXCEPTION_AC)    # fault, error code is 0
+THUNK_EXCEPTION                 (Exception12h, EXCEPTION_MC)    # abort
+THUNK_EXCEPTION                 (Exception13h, EXCEPTION_XM)    # fault
+THUNK_EXCEPTION                 (Exception14h, EXCEPTION_VE)    # fault
+THUNK_EXCEPTION_WITH_ERRORCODE  (Exception15h, EXCEPTION_CP)    # fault
+THUNK_EXCEPTION                 (Exception16h, 22)              # (Intel reserved)
+THUNK_EXCEPTION                 (Exception17h, 23)              # (Intel reserved)
+THUNK_EXCEPTION                 (Exception18h, 24)              # (Intel reserved)
+THUNK_EXCEPTION                 (Exception19h, 25)              # (Intel reserved)
+THUNK_EXCEPTION                 (Exception1Ah, 26)              # (Intel reserved)
+THUNK_EXCEPTION                 (Exception1Bh, 27)              # (Intel reserved)
+THUNK_EXCEPTION                 (Exception1Ch, 28)              # (Intel reserved)
+THUNK_EXCEPTION                 (Exception1Dh, 29)              # (Intel reserved)
+THUNK_EXCEPTION                 (Exception1Eh, 30)              # (Intel reserved)
+THUNK_EXCEPTION                 (Exception1Fh, 31)              # (Intel reserved)
 
 # 32-47                         device IRQs
-THUNK_IRQ                       (_thunk_irq_00h,  0)                    # trap
-THUNK_IRQ                       (_thunk_irq_01h, IRQ_KEYBOARD)          # trap
-THUNK_IRQ                       (_thunk_irq_02h, 2)                     # trap
-THUNK_IRQ                       (_thunk_irq_03h, 3)                     # trap
-THUNK_IRQ                       (_thunk_irq_04h, 4)                     # trap
-THUNK_IRQ                       (_thunk_irq_05h, 5)                     # trap
-THUNK_IRQ                       (_thunk_irq_06h, 6)                     # trap
-THUNK_IRQ                       (_thunk_irq_07h, 7)                     # trap
-THUNK_IRQ                       (_thunk_irq_08h, 8)                     # trap
-THUNK_IRQ                       (_thunk_irq_09h, 9)                     # trap
-THUNK_IRQ                       (_thunk_irq_0ah, 10)                    # trap
-THUNK_IRQ                       (_thunk_irq_0bh, 11)                    # trap
-THUNK_IRQ                       (_thunk_irq_0ch, 12)                    # trap
-THUNK_IRQ                       (_thunk_irq_0dh, 13)                    # trap
-THUNK_IRQ                       (_thunk_irq_0eh, 14)                    # trap
-THUNK_IRQ                       (_thunk_irq_0fh, 15)                    # trap
+THUNK_IRQ                       (Irq00h,  0)                    # trap
+THUNK_IRQ                       (Irq01h, IRQ_KEYBOARD)          # trap
+THUNK_IRQ                       (Irq02h, 2)                     # trap
+THUNK_IRQ                       (Irq03h, 3)                     # trap
+THUNK_IRQ                       (Irq04h, 4)                     # trap
+THUNK_IRQ                       (Irq05h, 5)                     # trap
+THUNK_IRQ                       (Irq06h, 6)                     # trap
+THUNK_IRQ                       (Irq07h, 7)                     # trap
+THUNK_IRQ                       (Irq08h, 8)                     # trap
+THUNK_IRQ                       (Irq09h, 9)                     # trap
+THUNK_IRQ                       (Irq0Ah, 10)                    # trap
+THUNK_IRQ                       (Irq0Bh, 11)                    # trap
+THUNK_IRQ                       (Irq0Ch, 12)                    # trap
+THUNK_IRQ                       (Irq0Dh, 13)                    # trap
+THUNK_IRQ                       (Irq0Eh, 14)                    # trap
+THUNK_IRQ                       (Irq0Fh, 15)                    # trap
 
 # 48-79                         reserved
 
 # 80                            system call
-THUNK_SYSCALL                   (_thunk_syscall)                        # trap
+THUNK_SYSCALL                   (Syscall)                       # trap
 
 # 81-255                        reserved

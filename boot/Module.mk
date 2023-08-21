@@ -22,6 +22,7 @@ TARGET  = boot.elf
 SOURCES = \
 	stage1.S \
 	stage2.S \
+	debug.c \
 	init.c \
 
 LINKLIBS = \

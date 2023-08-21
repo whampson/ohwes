@@ -155,13 +155,13 @@ struct iframe
      * INT_IRQ: One's Compliment of device IRQ number.
      * INT_SYSCALL: 0x80 when executing system call.
      */
-    uint32_t vec_num;
+    uint32_t vecNum;
 
     /**
      * Exception error code.
      * Zero for non-exception interrupts.
      */
-    int32_t err_code;
+    int32_t errCode;
 
     /**
      * Hardware context.
@@ -175,87 +175,85 @@ struct iframe
     uint32_t ss;    /*   an interrupt causes a privilege level change. */
 };
 
-_Static_assert(offsetof(struct iframe, ebx) == 0x00, "offsetof(struct iframe, ebx)");
-_Static_assert(offsetof(struct iframe, ecx) == 0x04, "offsetof(struct iframe, ecx)");
-_Static_assert(offsetof(struct iframe, edx) == 0x08, "offsetof(struct iframe, edx)");
-_Static_assert(offsetof(struct iframe, esi) == 0x0C, "offsetof(struct iframe, esi)");
-_Static_assert(offsetof(struct iframe, edi) == 0x10, "offsetof(struct iframe, edi)");
-_Static_assert(offsetof(struct iframe, ebp) == 0x14, "offsetof(struct iframe, ebp)");
-_Static_assert(offsetof(struct iframe, eax) == 0x18, "offsetof(struct iframe, eax)");
-_Static_assert(offsetof(struct iframe, vec_num) == 0x1C, "offsetof(struct iframe, vec_num)");
-_Static_assert(offsetof(struct iframe, err_code) == 0x20, "offsetof(struct iframe, err_code)");
-_Static_assert(offsetof(struct iframe, eip) == 0x24, "offsetof(struct iframe, eip)");
-_Static_assert(offsetof(struct iframe, cs) == 0x28, "offsetof(struct iframe, cs)");
-_Static_assert(offsetof(struct iframe, eflags) == 0x2C, "offsetof(struct iframe, eflags)");
-_Static_assert(offsetof(struct iframe, esp) == 0x30, "offsetof(struct iframe, esp)");
-_Static_assert(offsetof(struct iframe, ss) == 0x34, "offsetof(struct iframe, ss)");
+_Static_assert(offsetof(struct iframe, ebx) == 0x00);
+_Static_assert(offsetof(struct iframe, ecx) == 0x04);
+_Static_assert(offsetof(struct iframe, edx) == 0x08);
+_Static_assert(offsetof(struct iframe, esi) == 0x0C);
+_Static_assert(offsetof(struct iframe, edi) == 0x10);
+_Static_assert(offsetof(struct iframe, ebp) == 0x14);
+_Static_assert(offsetof(struct iframe, eax) == 0x18);
+_Static_assert(offsetof(struct iframe, vecNum) == 0x1C);
+_Static_assert(offsetof(struct iframe, errCode) == 0x20);
+_Static_assert(offsetof(struct iframe, eip) == 0x24);
+_Static_assert(offsetof(struct iframe, cs) == 0x28);
+_Static_assert(offsetof(struct iframe, eflags) == 0x2C);
+_Static_assert(offsetof(struct iframe, esp) == 0x30);
+_Static_assert(offsetof(struct iframe, ss) == 0x34);
 
+typedef void (*IrqHandler)(void);
 
-typedef void (*irq_handler)(void);
+void IrqMask(int irqNum);
+void IrqUnmask(int irqNum);
+void IrqEnd(int irqNum);
 
-void irq_mask(int irq_num);
-void irq_unmask(int irq_num);
-void irq_eoi(int irq_num);
+bool IrqRegisterHandler(int irqNum, IrqHandler func);
+void IrqUnregisterHandler(int irqNum);
 
-bool irq_register_handler(int irq_num, irq_handler func);
-void irq_unregister_handler(int irq_num);
+typedef void (*IdtThunk)(void);
 
+extern void Exception00h(void);
+extern void Exception01h(void);
+extern void Exception02h(void);
+extern void Exception03h(void);
+extern void Exception04h(void);
+extern void Exception05h(void);
+extern void Exception06h(void);
+extern void Exception07h(void);
+extern void Exception08h(void);
+extern void Exception09h(void);
+extern void Exception0Ah(void);
+extern void Exception0Bh(void);
+extern void Exception0Ch(void);
+extern void Exception0Dh(void);
+extern void Exception0Eh(void);
+extern void Exception0Fh(void);
+extern void Exception10h(void);
+extern void Exception11h(void);
+extern void Exception12h(void);
+extern void Exception13h(void);
+extern void Exception14h(void);
+extern void Exception15h(void);
+extern void Exception16h(void);
+extern void Exception17h(void);
+extern void Exception18h(void);
+extern void Exception19h(void);
+extern void Exception1Ah(void);
+extern void Exception1Bh(void);
+extern void Exception1Ch(void);
+extern void Exception1Dh(void);
+extern void Exception1Eh(void);
+extern void Exception1Fh(void);
 
-typedef void (*idt_thunk)(void);
+extern void Irq00h(void);
+extern void Irq01h(void);
+extern void Irq02h(void);
+extern void Irq03h(void);
+extern void Irq04h(void);
+extern void Irq05h(void);
+extern void Irq06h(void);
+extern void Irq07h(void);
+extern void Irq08h(void);
+extern void Irq09h(void);
+extern void Irq0Ah(void);
+extern void Irq0Bh(void);
+extern void Irq0Ch(void);
+extern void Irq0Dh(void);
+extern void Irq0Eh(void);
+extern void Irq0Fh(void);
 
-extern void _thunk_exception_00h(void);
-extern void _thunk_exception_01h(void);
-extern void _thunk_exception_02h(void);
-extern void _thunk_exception_03h(void);
-extern void _thunk_exception_04h(void);
-extern void _thunk_exception_05h(void);
-extern void _thunk_exception_06h(void);
-extern void _thunk_exception_07h(void);
-extern void _thunk_exception_08h(void);
-extern void _thunk_exception_09h(void);
-extern void _thunk_exception_0ah(void);
-extern void _thunk_exception_0bh(void);
-extern void _thunk_exception_0ch(void);
-extern void _thunk_exception_0dh(void);
-extern void _thunk_exception_0eh(void);
-extern void _thunk_exception_0fh(void);
-extern void _thunk_exception_10h(void);
-extern void _thunk_exception_11h(void);
-extern void _thunk_exception_12h(void);
-extern void _thunk_exception_13h(void);
-extern void _thunk_exception_14h(void);
-extern void _thunk_exception_15h(void);
-extern void _thunk_exception_16h(void);
-extern void _thunk_exception_17h(void);
-extern void _thunk_exception_18h(void);
-extern void _thunk_exception_19h(void);
-extern void _thunk_exception_1ah(void);
-extern void _thunk_exception_1bh(void);
-extern void _thunk_exception_1ch(void);
-extern void _thunk_exception_1dh(void);
-extern void _thunk_exception_1eh(void);
-extern void _thunk_exception_1fh(void);
+extern void Syscall(void);
 
-extern void _thunk_irq_00h(void);
-extern void _thunk_irq_01h(void);
-extern void _thunk_irq_02h(void);
-extern void _thunk_irq_03h(void);
-extern void _thunk_irq_04h(void);
-extern void _thunk_irq_05h(void);
-extern void _thunk_irq_06h(void);
-extern void _thunk_irq_07h(void);
-extern void _thunk_irq_08h(void);
-extern void _thunk_irq_09h(void);
-extern void _thunk_irq_0ah(void);
-extern void _thunk_irq_0bh(void);
-extern void _thunk_irq_0ch(void);
-extern void _thunk_irq_0dh(void);
-extern void _thunk_irq_0eh(void);
-extern void _thunk_irq_0fh(void);
-
-extern void _thunk_syscall(void);
-
-extern void _thunk_generic_interrupt(void);
+extern void Interrupt(void);
 
 #endif /* __ASSEMBLER__ */
 

@@ -83,7 +83,7 @@ start32:
         xorw            %ax, %ax
         movw            %ax, %fs
         movw            %ax, %gs
-        call            init            # initialize devices and load kernel
+        call            Init32            # initialize devices and load kernel
 
 idle_loop:
         jmp             idle_loop

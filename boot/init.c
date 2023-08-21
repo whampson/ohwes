@@ -22,11 +22,35 @@
  */
 
 #include "boot.h"
+#include "debug.h"
 
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <os/console.h>
+#include <os/compiler.h>
+
+extern void IrqInit(void);
+
+static const IdtThunk ExceptionThunks[NUM_EXCEPTION] =
+{
+    Exception00h, Exception01h, Exception02h, Exception03h,
+    Exception04h, Exception05h, Exception06h, Exception07h,
+    Exception08h, Exception09h, Exception0Ah, Exception0Bh,
+    Exception0Ch, Exception0Dh, Exception0Eh, Exception0Fh,
+    Exception10h, Exception11h, Exception12h, Exception13h,
+    Exception14h, Exception15h, Exception16h, Exception17h,
+    Exception18h, Exception19h, Exception1Ah, Exception19h,
+    Exception1Ch, Exception1Ch, Exception1Eh, Exception1Fh
+};
+
+static const IdtThunk IrqThunks[NUM_IRQ] =
+{
+    Irq00h, Irq01h, Irq02h, Irq03h,
+    Irq04h, Irq05h, Irq06h, Irq07h,
+    Irq08h, Irq09h, Irq0Ah, Irq0Bh,
+    Irq0Ch, Irq0Dh, Irq0Eh, Irq0Fh
+};
 
 /* Segment Selectors */
 #define SEGSEL_NULL         (0x0)
@@ -44,200 +68,73 @@ SegDesc * const g_idt = (SegDesc *) IDT_BASE;
 SegDesc * const g_ldt = (SegDesc *) LDT_BASE;
 struct Tss * const g_tss = (struct Tss *) TSS_BASE;
 
-DescReg g_gdtDesc = { GDT_SIZE-1, GDT_BASE };
-DescReg g_idtDesc = { IDT_SIZE-1, IDT_BASE };
-
-void InitGdt();
-void InitIdt();
-void InitLdt();
-void InitTss();
-void irq_init();
-
-void PrintHardwareInfo()
-{
-    const HwFlags *hwFlags = (HwFlags *) &g_HwFlags;
-    printf("boot: diskette drive? %s\n", hwFlags->HasDisketteDrive ? "yes" : "no");
-    printf("boot: coprocessor? %s\n", hwFlags->HasCoprocessor ? "yes" : "no");
-    printf("boot: PS/2 mouse? %s\n", hwFlags->HasPs2Mouse ? "yes" : "no");
-    printf("boot: game port? %s\n", hwFlags->HasGamePort ? "yes" : "no");
-    printf("boot: num serial ports = %d\n", hwFlags->NumSerialPorts);
-    printf("boot: num parallel ports = %d\n", hwFlags->NumParallelPorts);
-    printf("boot: num secondary diskette drives = %d\n", hwFlags->NumOtherDisketteDrives);
-    printf("boot: video mode = ");
-    switch (hwFlags->VideoMode) {
-        case HWFLAGS_VIDEOMODE_40x25:       printf("40x25\n"); break;
-        case HWFLAGS_VIDEOMODE_80x25:       printf("80x25\n"); break;
-        case HWFLAGS_VIDEOMODE_80x25_MONO:  printf("80x25 (monochrome)\n"); break;
-        default:                            printf("(invalid)\n"); break;
-    }
-}
-
-void PrintMemoryInfo()
-{
-    printf("boot: A20 ");
-    switch (g_A20Method) {
-        case A20METHOD_NONE:        printf("enabled\n"); break;
-        case A20METHOD_KEYBOARD:    printf("enabled via PS/2 keyboard controller\n"); break;
-        case A20METHOD_PORT92h:     printf("enabled via I/O port 92h\n"); break;
-        case A20METHOD_BIOS:        printf("enabled via BIOS INT=15h,AX=2401h\n"); break;
-        default:                    printf("(invalid)"); break;
-    }
-    printf("boot: g_RamLo_Legacy = %d\n", g_RamLo_Legacy);
-    printf("boot: g_RamHi_Legacy = %d\n", g_RamHi_Legacy);
-    printf("boot: g_RamLo_E801h = %d\n", g_RamLo_E801h);
-    printf("boot: g_RamHi_E801h = %d\n", g_RamHi_E801h << 6);    // 64K pages to 1K pages
-
-    if (g_HasAcpiMemoryMap) {
-        const AcpiMemoryMapEntry *memMap = g_AcpiMemoryMap;
-        do {
-            if (memMap->Length > 0) {
-                printf("boot: BIOS-E820h: %08x-%08x ",
-                    (uint32_t) memMap->Base,
-                    (uint32_t) memMap->Base + memMap->Length - 1);
-
-                switch (memMap->Type) {
-                    case ACPI_MMAP_TYPE_USABLE:     printf("usable\n"); break;
-                    case ACPI_MMAP_TYPE_RESERVED:   printf("reserved\n"); break;
-                    case ACPI_MMAP_TYPE_ACPI:       printf("ACPI\n"); break;
-                    case ACPI_MMAP_TYPE_ACPI_NVS:   printf("ACPI NV\n"); break;
-                    case ACPI_MMAP_TYPE_BAD:        printf("bad\n"); break;
-                    default:                        printf("reserved (%d)\n", memMap->Type); break;
-                }
-            }
-        } while ((memMap++)->Type != ACPI_MMAP_TYPE_INVALID);
-    }
-}
-
-void init()
-{
-    cli();
-
-    PrintHardwareInfo();
-    PrintMemoryInfo();
-
-    InitIdt();
-    InitGdt();
-    // InitLdt();
-    // InitTss();
-    // irq_init();
-
-    // sti();
-    // irq_unmask(IRQ_KEYBOARD);
-}
+__align(2) DescReg g_gdtDesc = { GDT_SIZE-1, GDT_BASE };
+__align(2) DescReg g_idtDesc = { IDT_SIZE-1, IDT_BASE };
 
 void InitGdt(void)
 {
     SegDesc *gdt = (SegDesc *) GDT_BASE;
     memset(gdt, 0, GDT_SIZE);
 
-    MakeSegDesc(     // kernel code segment
-        GetDescPtr(gdt, SEGSEL_KERNEL_CODE),
+    MakeSegDesc(
+        GetDescPtr(gdt, SEGSEL_KERNEL_CODE),        // kernel code segment
         DPL_KERNEL,
         0x0, LIMIT_MAX,
         DESC_MEM_CODE_XR);
-    MakeSegDesc(     // kernel data segment
-        GetDescPtr(gdt, SEGSEL_KERNEL_DATA),
+    MakeSegDesc(
+        GetDescPtr(gdt, SEGSEL_KERNEL_DATA),        // kernel data segment
         DPL_KERNEL,
         0x0, LIMIT_MAX,
         DESC_MEM_DATA_RW);
-    MakeSegDesc(    // user data segment
-        GetDescPtr(gdt, SEGSEL_USER_CODE),
+    MakeSegDesc(
+        GetDescPtr(gdt, SEGSEL_USER_CODE),          // user code segment
         DPL_USER,
         0x0, LIMIT_MAX,
         DESC_MEM_CODE_XR);
-    MakeSegDesc(    // user data segment
-        GetDescPtr(gdt, SEGSEL_USER_DATA),
+    MakeSegDesc(
+        GetDescPtr(gdt, SEGSEL_USER_DATA),          // user data segment
         DPL_USER,
         0x0, LIMIT_MAX,
         DESC_MEM_DATA_RW);
-    MakeLdtDesc(    // LDT segment
-        GetDescPtr(gdt, SEGSEL_LDT),
+    MakeLdtDesc(
+        GetDescPtr(gdt, SEGSEL_LDT),                // LDT segment
         DPL_KERNEL,
         LDT_BASE, LDT_SIZE - 1);
-    MakeTssDesc(    // TSS segment
-        GetDescPtr(gdt, SEGSEL_TSS),
+    MakeTssDesc(
+        GetDescPtr(gdt, SEGSEL_TSS),                // TSS segment
         DPL_KERNEL,
         TSS_BASE, TSS_SIZE - 1);
-
     // TODO: stack segment?
 
-// #define QW2DW(q) (uint32_t) ((q) >> 32), (uint32_t) (q)       // Qword to Dword
-
-//     printf("boot: gdt: (%02x|%d)=%08x'%08x %s\n", SEGSEL_NULL & 0xFFF8, SEGSEL_NULL & 3, QW2DW(GetDescPtr(gdt, SEGSEL_NULL)->_value), "SEGSEL_NULL");
-//     printf("boot: gdt: (%02x|%d)=%08x'%08x %s\n", SEGSEL_LDT & 0xFFF8, SEGSEL_LDT & 3, QW2DW(GetDescPtr(gdt, SEGSEL_LDT)->_value), "SEGSEL_LDT");
-//     printf("boot: gdt: (%02x|%d)=%08x'%08x %s\n", SEGSEL_KERNEL_CODE & 0xFFF8, SEGSEL_KERNEL_CODE & 3, QW2DW(GetDescPtr(gdt, SEGSEL_KERNEL_CODE)->_value), "SEGSEL_KERNEL_CODE");
-//     printf("boot: gdt: (%02x|%d)=%08x'%08x %s\n", SEGSEL_KERNEL_DATA & 0xFFF8, SEGSEL_KERNEL_DATA & 3, QW2DW(GetDescPtr(gdt, SEGSEL_KERNEL_DATA)->_value), "SEGSEL_KERNEL_DATA");
-//     printf("boot: gdt: (%02x|%d)=%08x'%08x %s\n", SEGSEL_USER_CODE & 0xFFF8, SEGSEL_USER_CODE & 3, QW2DW(GetDescPtr(gdt, SEGSEL_USER_CODE)->_value), "SEGSEL_USER_CODE");
-//     printf("boot: gdt: (%02x|%d)=%08x'%08x %s\n", SEGSEL_USER_DATA & 0xFFF8, SEGSEL_USER_DATA & 3, QW2DW(GetDescPtr(gdt, SEGSEL_USER_DATA)->_value), "SEGSEL_USER_DATA");
-//     printf("boot: gdt: (%02x|%d)=%08x'%08x %s\n", SEGSEL_TSS & 0xFFF8, SEGSEL_TSS & 3, QW2DW(GetDescPtr(gdt, SEGSEL_TSS)->_value), "SEGSEL_TSS");
-
-// #undef QW2DW
-
-    // memset(&g_gdtDesc, 0, sizeof(DescReg));
-    // g_gdtDesc.base = GDT_BASE;
-    // g_gdtDesc.limit = GDT_SIZE - 1;
-
-    volatile void *pDescReg = (void *) (((char *) &g_gdtDesc));
-    printf("0x%08x\n", pDescReg);
-
-    // lgdt(pDescReg);
-    // LoadCs(SEGSEL_KERNEL_CODE);
-    // LoadDs(SEGSEL_KERNEL_DATA);
-    // LoadEs(SEGSEL_KERNEL_DATA);
-    // LoadFs(0);
-    // LoadGs(0);
-    // LoadSs(SEGSEL_KERNEL_DATA);
+    lgdt(g_gdtDesc);
+    LoadCs(SEGSEL_KERNEL_CODE);
+    LoadDs(SEGSEL_KERNEL_DATA);
+    LoadEs(SEGSEL_KERNEL_DATA);
+    LoadFs(0);
+    LoadGs(0);
+    LoadSs(SEGSEL_KERNEL_DATA);
 }
-
-// static const idt_thunk exception_thunks[NUM_EXCEPTION] =
-// {
-//     _thunk_exception_00h, _thunk_exception_01h, _thunk_exception_02h, _thunk_exception_03h,
-//     _thunk_exception_04h, _thunk_exception_05h, _thunk_exception_06h, _thunk_exception_07h,
-//     _thunk_exception_08h, _thunk_exception_09h, _thunk_exception_0ah, _thunk_exception_0bh,
-//     _thunk_exception_0ch, _thunk_exception_0dh, _thunk_exception_0eh, _thunk_exception_0fh,
-//     _thunk_exception_10h, _thunk_exception_11h, _thunk_exception_12h, _thunk_exception_13h,
-//     _thunk_exception_14h, _thunk_exception_15h, _thunk_exception_16h, _thunk_exception_17h,
-//     _thunk_exception_18h, _thunk_exception_19h, _thunk_exception_1ah, _thunk_exception_19h,
-//     _thunk_exception_1ch, _thunk_exception_1ch, _thunk_exception_1eh, _thunk_exception_1fh
-// };
-
-// static const idt_thunk irq_thunks[NUM_IRQ] =
-// {
-//     _thunk_irq_00h, _thunk_irq_01h, _thunk_irq_02h, _thunk_irq_03h,
-//     _thunk_irq_04h, _thunk_irq_05h, _thunk_irq_06h, _thunk_irq_07h,
-//     _thunk_irq_08h, _thunk_irq_09h, _thunk_irq_0ah, _thunk_irq_0bh,
-//     _thunk_irq_0ch, _thunk_irq_0dh, _thunk_irq_0eh, _thunk_irq_0fh
-// };
 
 void InitIdt(void)
 {
-    // struct x86_desc *idt;
-    // struct x86_desc *desc;
-    // int count;
+    int count = IDT_SIZE / sizeof(SegDesc);
+    for (int idx = 0, e = 0, i = 0; idx < count; idx++) {
+        e = idx - INT_EXCEPTION;
+        i = idx - INT_IRQ;
+        SegDesc *desc = g_idt + idx;
 
-    // idt = (struct x86_desc *) IDT_BASE;
-    // memset(idt, 0, IDT_SIZE);
+        if (idx >= INT_EXCEPTION && e < NUM_EXCEPTION) {
+            MakeTrapDesc(desc, SEGSEL_KERNEL_CODE, DPL_KERNEL, ExceptionThunks[e]);
+        }
+        else if (idx >= INT_IRQ && i < NUM_IRQ) {
+            MakeIntrDesc(desc, SEGSEL_KERNEL_CODE, DPL_KERNEL, IrqThunks[i]);
+        }
+        else if (idx == INT_SYSCALL) {
+            MakeTrapDesc(desc, SEGSEL_KERNEL_CODE, DPL_USER, Syscall);
+        }
+    }
 
-    // count = IDT_SIZE / sizeof(struct x86_desc);
-    // for (int idx = 0, e_num = 0, i_num = 0; idx < count; idx++) {
-    //     e_num = idx - INT_EXCEPTION;
-    //     i_num = idx - INT_IRQ;
-    //     desc = idt + idx;
-
-    //     if (idx >= INT_EXCEPTION && e_num < NUM_EXCEPTION) {
-    //         set_trap_desc(desc, SEGSEL_KERNEL_CODE, DPL_KERNEL, exception_thunks[e_num]);
-    //     }
-    //     else if (idx >= INT_IRQ && i_num < NUM_IRQ) {
-    //         set_intr_desc(desc, SEGSEL_KERNEL_CODE, DPL_KERNEL, irq_thunks[i_num]);
-    //     }
-    //     else if (idx == INT_SYSCALL) {
-    //         set_trap_desc(desc, SEGSEL_KERNEL_CODE, DPL_USER, _thunk_syscall);
-    //     }
-    // }
-
-    // g_idtdesc.base = IDT_BASE;
-    // g_idtdesc.limit = IDT_SIZE - 1;
-    // lidt(g_idtdesc);
+    lidt(g_idtDesc);
 }
 
 void InitLdt(void)
@@ -256,4 +153,21 @@ void InitTss(void)
     g_tss->ss0 = SEGSEL_KERNEL_DATA;
 
     ltr(SEGSEL_TSS);
+}
+
+void Init32()
+{
+    cli();
+
+    PrintHardwareInfo();
+    PrintMemoryInfo();
+
+    InitIdt();
+    InitGdt();
+    InitLdt();
+    InitTss();
+    IrqInit();
+
+    sti();
+    IrqUnmask(IRQ_KEYBOARD);
 }
