@@ -22,17 +22,37 @@
 #ifndef BOOT_H
 #define BOOT_H
 
-#define IDT_BASE                0x0000
-#define IDT_SIZE                (256*8)
+#include <hw/x86.h>
 
-#define GDT_BASE                (IDT_BASE+IDT_SIZE)
-#define GDT_SIZE                (8*8)
+#define PAGE_SIZE               4096
 
-#define LDT_BASE                (GDT_BASE+GDT_SIZE)
-#define LDT_SIZE                (2*8)
+/**
+ * System Descriptor Memory Mapping
+ * The IDT, GDT, LDT, and TSS live within the first page of kernel-mode virtual
+ * memory. The ordering of these structures is completely arbitrary;
+ */
 
-#define TSS_BASE                (LDT_BASE+LDT_SIZE)
-#define TSS_SIZE                (108)
+#define NUM_IDT_ENTRIES         256
+#define NUM_GDT_ENTRIES         8
+#define NUM_LDT_ENTRIES         2
+
+#define IDT_BASE                (0x0000)
+#define IDT_SIZE                (NUM_IDT_ENTRIES*DESC_SIZE)
+
+#define GDT_BASE                (0x0800)
+#define GDT_SIZE                (NUM_GDT_ENTRIES*DESC_SIZE)
+
+#define LDT_BASE                (0x0840)
+#define LDT_SIZE                (NUM_LDT_ENTRIES*DESC_SIZE)
+
+#define TSS_BASE                (0x0900)
+
+#ifndef __ASSEMBLER__
+_Static_assert(IDT_BASE+IDT_SIZE <= GDT_BASE);
+_Static_assert(GDT_BASE+GDT_SIZE <= LDT_BASE);
+_Static_assert(LDT_BASE+LDT_SIZE <= TSS_BASE);
+_Static_assert(IDT_SIZE+GDT_SIZE+LDT_SIZE+TSS_SIZE <= PAGE_SIZE);
+#endif
 
 #define MEMMAP_BASE             0x1000
 
@@ -44,8 +64,6 @@
 #ifndef __ASSEMBLER__
 #include <stdbool.h>
 #include <stdint.h>
-
-_Static_assert(TSS_BASE + TSS_SIZE < MEMMAP_BASE, "TSS overlaps memory map!");
 
 typedef struct HwFlags {
     uint16_t HasDisketteDrive       : 1;
