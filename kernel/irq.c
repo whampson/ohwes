@@ -20,7 +20,6 @@
  */
 
 #include <stddef.h>
-#include <os/compiler.h>
 #include <hw/interrupt.h>
 #include <hw/pic.h>
 

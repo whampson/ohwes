@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/os/compiler.h
+ *         File: include/c/compiler.h
  *      Created: December 30, 2020
  *       Author: Wes Hampson
  *
@@ -25,6 +25,8 @@
 #define __COMPILER_H
 
 #ifdef __GNUC__
+
+#include <stdint.h>
 
 /**
  * 'fastcall' calling convention.
@@ -43,8 +45,15 @@
  */
 #define __fallthrough   __attribute__((fallthrough))
 
+/**
+ * Pack a data structure; do not align or add padding between fields.
+ */
 #define __pack          __attribute__((packed))
 
+/**
+ * Align fields in a data structure to the nearest n bytes, where n is a power
+ * of 2.
+ */
 #define __align(n)      __attribute__((aligned(n)))
 
 /**

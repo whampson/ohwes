@@ -97,8 +97,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <os/compiler.h>
-
 /*
  * Descriptor Privilege Levels
  */

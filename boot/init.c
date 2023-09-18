@@ -28,7 +28,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <os/console.h>
-#include <os/compiler.h>
 
 extern void IrqInit(void);
 

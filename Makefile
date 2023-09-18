@@ -54,6 +54,9 @@ export DEFINES      :=
 # Default include directories
 export INCLUDES     := include
 
+# Default include files
+export INCLUDE_FILES:= compiler.h
+
 # Default warnings
 export WARNINGS     := all error
 
@@ -110,14 +113,23 @@ uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 define make-obj
   _OBJECTS += $1
   $1: $2
-	$(CC) -c $(CFLAGS) $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INCLUDES)) $(addprefix -W,$(WARNINGS)) -MD -MF $$(@:.o=.d) -o $$@ $$<
+	$(CC) -c $(CFLAGS) \
+	$(addprefix -W,$(WARNINGS)) \
+	$(addprefix -D,$(DEFINES)) \
+	$(addprefix -I,$(INCLUDES)) \
+	$(addprefix -include , $(INCLUDE_FILES)) \
+	-MD -MF $$(@:.o=.d) -o $$@ $$<
 endef
 
 # $(call make-obj obj-path, source-path)
 define make-asm-obj
   _OBJECTS += $1
   $1: $2
-	$(AS) -c $(ASFLAGS) $(addprefix -D,$(DEFINES)) $(addprefix -I,$(INCLUDES)) $(addprefix -W,$(WARNINGS)) -MD -MF $$(@:.o=.d) -o $$@ $$<
+	$(AS) -c $(ASFLAGS) \
+	$(addprefix -W,$(WARNINGS)) \
+	$(addprefix -D,$(DEFINES)) \
+	$(addprefix -I,$(INCLUDES)) \
+	-MD -MF $$(@:.o=.d) -o $$@ $$<
 endef
 
 # =================================================================================================

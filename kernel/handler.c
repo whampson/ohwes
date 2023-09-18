@@ -21,7 +21,6 @@
 
 #include <stdio.h>
 #include <hw/interrupt.h>
-#include <os/compiler.h>
 
 __fastcall void handle_exception(struct iframe *frame)
 {

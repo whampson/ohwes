@@ -1,11 +1,11 @@
+/*============================================================================*
+ * 64-bit division for 32-bit GCC.
+ *============================================================================*/
+
+#ifdef __GNUC__
+
 #include <stddef.h>
 #include <stdint.h>
-#include <os/compiler.h>
-
-/**
- * 64-bit division for 32-bit GCC.
- */
-
 
 int64_t __divdi3(int64_t num, int64_t den)
 {
@@ -21,7 +21,7 @@ int64_t __moddi3(int64_t num, int64_t den)
 
 /**
  * https://dox.ipxe.org/____divmoddi4_8c.html
-*/
+ */
 int64_t __divmoddi4(int64_t num, int64_t den, int64_t *rem_p)
 {
     int minus = 0;
@@ -61,7 +61,7 @@ uint64_t __umoddi3(uint64_t num, uint64_t den)
 
 /**
  * https://dox.ipxe.org/____udivmoddi4_8c.html
-*/
+ */
 uint64_t __udivmoddi4(uint64_t num, uint64_t den, uint64_t *rem_p)
 {
    uint64_t quot = 0, qbit = 1;
@@ -94,3 +94,5 @@ uint64_t __udivmoddi4(uint64_t num, uint64_t den, uint64_t *rem_p)
 
     return quot;
 }
+
+#endif  /* __GNUC__ */
