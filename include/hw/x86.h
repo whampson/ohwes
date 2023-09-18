@@ -97,6 +97,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <os/compiler.h>
+
 /*
  * Descriptor Privilege Levels
  */
@@ -201,7 +203,7 @@ typedef struct SegDesc_
         uint64_t _value;                /* Aggregate value */
     };
 } SegDesc;
-_Static_assert(sizeof(SegDesc) == DESC_SIZE);
+_Static_assert(sizeof(SegDesc) == DESC_SIZE, "sizeof(SegDesc) == DESC_SIZE");
 
 /*
  * Segment Selector
@@ -220,7 +222,7 @@ typedef struct SegSel_
         uint16_t _value;                /* Aggregate Value */
     };
 } SegSel;
-_Static_assert(sizeof(SegSel) == 2);
+_Static_assert(sizeof(SegSel) == 2, "sizeof(SegSel) == 2");
 
 /*
  * Descriptor Register
@@ -237,7 +239,7 @@ typedef struct DescReg_
     uint16_t limit;     /* Descriptor Table Limit */
     uint32_t base;      /* Descriptor Table Base */
 } __attribute__((packed)) DescReg;
-_Static_assert(sizeof(DescReg) == 6);
+_Static_assert(sizeof(DescReg) == 6, "sizeof(DescReg) == 6");
 
 /*
  * Task State Segment
@@ -287,7 +289,7 @@ struct Tss
     uint16_t ioMapBase;
     uint32_t ssp;
 };
-_Static_assert(sizeof(struct Tss) == TSS_SIZE);
+_Static_assert(sizeof(struct Tss) == TSS_SIZE, "sizeof(struct Tss) == TSS_SIZE");
 
 /**
  * Gets a pointer to a Segment Descriptor from a descriptor table.

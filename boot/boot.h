@@ -48,10 +48,10 @@
 #define TSS_BASE                (0x0900)
 
 #ifndef __ASSEMBLER__
-_Static_assert(IDT_BASE+IDT_SIZE <= GDT_BASE);
-_Static_assert(GDT_BASE+GDT_SIZE <= LDT_BASE);
-_Static_assert(LDT_BASE+LDT_SIZE <= TSS_BASE);
-_Static_assert(IDT_SIZE+GDT_SIZE+LDT_SIZE+TSS_SIZE <= PAGE_SIZE);
+_Static_assert(IDT_BASE+IDT_SIZE <= GDT_BASE, "IDT_BASE+IDT_SIZE <= GDT_BASE");
+_Static_assert(GDT_BASE+GDT_SIZE <= LDT_BASE, "GDT_BASE+GDT_SIZE <= LDT_BASE");
+_Static_assert(LDT_BASE+LDT_SIZE <= TSS_BASE, "LDT_BASE+LDT_SIZE <= TSS_BASE");
+_Static_assert(IDT_SIZE+GDT_SIZE+LDT_SIZE+TSS_SIZE <= PAGE_SIZE, "IDT_SIZE+GDT_SIZE+LDT_SIZE+TSS_SIZE <= PAGE_SIZE");
 #endif
 
 #define MEMMAP_BASE             0x1000
@@ -78,7 +78,7 @@ typedef struct HwFlags {
     uint16_t _HasPrinterOrModem     : 1;
     uint16_t NumParallelPorts       : 2;
 } HwFlags;
-_Static_assert(sizeof(HwFlags) == 2, "sizeof(HwFlags)");
+_Static_assert(sizeof(HwFlags) == 2, "sizeof(HwFlags) == 2");
 
 enum HwFlagsVideoMode {
     HWFLAGS_VIDEOMODE_INVALID       = 0,
@@ -93,7 +93,7 @@ typedef struct AcpiMemoryMapEntry {
     uint32_t Type;
     uint32_t Attributes;
 } AcpiMemoryMapEntry;
-_Static_assert(sizeof(AcpiMemoryMapEntry) == 24, "sizeof(AcpiMemoryMapEntry)");
+_Static_assert(sizeof(AcpiMemoryMapEntry) == 24, "sizeof(AcpiMemoryMapEntry) == 24");
 
 typedef AcpiMemoryMapEntry AcpiMemoryMap;
 

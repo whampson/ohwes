@@ -175,20 +175,20 @@ struct iframe
     uint32_t ss;    /*   an interrupt causes a privilege level change. */
 };
 
-_Static_assert(offsetof(struct iframe, ebx) == 0x00);
-_Static_assert(offsetof(struct iframe, ecx) == 0x04);
-_Static_assert(offsetof(struct iframe, edx) == 0x08);
-_Static_assert(offsetof(struct iframe, esi) == 0x0C);
-_Static_assert(offsetof(struct iframe, edi) == 0x10);
-_Static_assert(offsetof(struct iframe, ebp) == 0x14);
-_Static_assert(offsetof(struct iframe, eax) == 0x18);
-_Static_assert(offsetof(struct iframe, vecNum) == 0x1C);
-_Static_assert(offsetof(struct iframe, errCode) == 0x20);
-_Static_assert(offsetof(struct iframe, eip) == 0x24);
-_Static_assert(offsetof(struct iframe, cs) == 0x28);
-_Static_assert(offsetof(struct iframe, eflags) == 0x2C);
-_Static_assert(offsetof(struct iframe, esp) == 0x30);
-_Static_assert(offsetof(struct iframe, ss) == 0x34);
+_Static_assert(offsetof(struct iframe, ebx) == 0x00, "offsetof(struct iframe, ebx) == 0x00");
+_Static_assert(offsetof(struct iframe, ecx) == 0x04, "offsetof(struct iframe, ecx) == 0x04");
+_Static_assert(offsetof(struct iframe, edx) == 0x08, "offsetof(struct iframe, edx) == 0x08");
+_Static_assert(offsetof(struct iframe, esi) == 0x0C, "offsetof(struct iframe, esi) == 0x0C");
+_Static_assert(offsetof(struct iframe, edi) == 0x10, "offsetof(struct iframe, edi) == 0x10");
+_Static_assert(offsetof(struct iframe, ebp) == 0x14, "offsetof(struct iframe, ebp) == 0x14");
+_Static_assert(offsetof(struct iframe, eax) == 0x18, "offsetof(struct iframe, eax) == 0x18");
+_Static_assert(offsetof(struct iframe, vecNum) == 0x1C, "offsetof(struct iframe, vecNum) == 0x1C");
+_Static_assert(offsetof(struct iframe, errCode) == 0x20, "offsetof(struct iframe, errCode) == 0x20");
+_Static_assert(offsetof(struct iframe, eip) == 0x24, "offsetof(struct iframe, eip) == 0x24");
+_Static_assert(offsetof(struct iframe, cs) == 0x28, "offsetof(struct iframe, cs) == 0x28");
+_Static_assert(offsetof(struct iframe, eflags) == 0x2C, "offsetof(struct iframe, eflags) == 0x2C");
+_Static_assert(offsetof(struct iframe, esp) == 0x30, "offsetof(struct iframe, esp) == 0x30");
+_Static_assert(offsetof(struct iframe, ss) == 0x34, "offsetof(struct iframe, ss) == 0x34");
 
 typedef void (*IrqHandler)(void);
 

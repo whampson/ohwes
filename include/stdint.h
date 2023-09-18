@@ -132,29 +132,29 @@ typedef uint32_t                        uintptr_t;
 #define UINT64_C(c)                     (c ## ULL)
 #define UINTMAX_C(c)                    UINT64_C(c)
 
-_Static_assert(sizeof(int8_t)           == 1, "sizeof(int8_t)");
-_Static_assert(sizeof(int16_t)          == 2, "sizeof(int16_t)");
-_Static_assert(sizeof(int32_t)          == 4, "sizeof(int32_t)");
-_Static_assert(sizeof(int64_t)          == 8, "sizeof(int64_t)");
-_Static_assert(sizeof(int_fast8_t)      >= 1, "sizeof(int_fast8_t)");
-_Static_assert(sizeof(int_fast16_t)     >= 2, "sizeof(int_fast16_t)");
-_Static_assert(sizeof(int_fast32_t)     >= 4, "sizeof(int_fast32_t)");
-_Static_assert(sizeof(int_fast64_t)     >= 8, "sizeof(int_fast64_t)");
-_Static_assert(sizeof(int_least8_t)     >= 1, "sizeof(int_least8_t)");
-_Static_assert(sizeof(int_least16_t)    >= 2, "sizeof(int_least16_t)");
-_Static_assert(sizeof(int_least32_t)    >= 4, "sizeof(int_least32_t)");
-_Static_assert(sizeof(int_least64_t)    >= 8, "sizeof(int_least64_t)");
-_Static_assert(sizeof(uint8_t)          == 1, "sizeof(uint8_t)");
-_Static_assert(sizeof(uint16_t)         == 2, "sizeof(uint16_t)");
-_Static_assert(sizeof(uint32_t)         == 4, "sizeof(uint32_t)");
-_Static_assert(sizeof(uint64_t)         == 8, "sizeof(uint64_t)");
-_Static_assert(sizeof(uint_fast8_t)     >= 1, "sizeof(uint_fast8_t)");
-_Static_assert(sizeof(uint_fast16_t)    >= 2, "sizeof(uint_fast16_t)");
-_Static_assert(sizeof(uint_fast32_t)    >= 4, "sizeof(uint_fast32_t)");
-_Static_assert(sizeof(uint_fast64_t)    >= 8, "sizeof(uint_fast64_t)");
-_Static_assert(sizeof(uint_least8_t)    >= 1, "sizeof(uint_least8_t)");
-_Static_assert(sizeof(uint_least16_t)   >= 2, "sizeof(uint_least16_t)");
-_Static_assert(sizeof(uint_least32_t)   >= 4, "sizeof(uint_least32_t)");
-_Static_assert(sizeof(uint_least64_t)   >= 8, "sizeof(uint_least64_t)");
+_Static_assert(sizeof(int8_t)           == 1, "sizeof(int8_t)           == 1");
+_Static_assert(sizeof(int16_t)          == 2, "sizeof(int16_t)          == 2");
+_Static_assert(sizeof(int32_t)          == 4, "sizeof(int32_t)          == 4");
+_Static_assert(sizeof(int64_t)          == 8, "sizeof(int64_t)          == 8");
+_Static_assert(sizeof(int_fast8_t)      >= 1, "sizeof(int_fast8_t)      >= 1");
+_Static_assert(sizeof(int_fast16_t)     >= 2, "sizeof(int_fast16_t)     >= 2");
+_Static_assert(sizeof(int_fast32_t)     >= 4, "sizeof(int_fast32_t)     >= 4");
+_Static_assert(sizeof(int_fast64_t)     >= 8, "sizeof(int_fast64_t)     >= 8");
+_Static_assert(sizeof(int_least8_t)     >= 1, "sizeof(int_least8_t)     >= 1");
+_Static_assert(sizeof(int_least16_t)    >= 2, "sizeof(int_least16_t)    >= 2");
+_Static_assert(sizeof(int_least32_t)    >= 4, "sizeof(int_least32_t)    >= 4");
+_Static_assert(sizeof(int_least64_t)    >= 8, "sizeof(int_least64_t)    >= 8");
+_Static_assert(sizeof(uint8_t)          == 1, "sizeof(uint8_t)          == 1");
+_Static_assert(sizeof(uint16_t)         == 2, "sizeof(uint16_t)         == 2");
+_Static_assert(sizeof(uint32_t)         == 4, "sizeof(uint32_t)         == 4");
+_Static_assert(sizeof(uint64_t)         == 8, "sizeof(uint64_t)         == 8");
+_Static_assert(sizeof(uint_fast8_t)     >= 1, "sizeof(uint_fast8_t)     >= 1");
+_Static_assert(sizeof(uint_fast16_t)    >= 2, "sizeof(uint_fast16_t)    >= 2");
+_Static_assert(sizeof(uint_fast32_t)    >= 4, "sizeof(uint_fast32_t)    >= 4");
+_Static_assert(sizeof(uint_fast64_t)    >= 8, "sizeof(uint_fast64_t)    >= 8");
+_Static_assert(sizeof(uint_least8_t)    >= 1, "sizeof(uint_least8_t)    >= 1");
+_Static_assert(sizeof(uint_least16_t)   >= 2, "sizeof(uint_least16_t)   >= 2");
+_Static_assert(sizeof(uint_least32_t)   >= 4, "sizeof(uint_least32_t)   >= 4");
+_Static_assert(sizeof(uint_least64_t)   >= 8, "sizeof(uint_least64_t)   >= 8");
 
 #endif /* __STDINT_H */
