@@ -20,7 +20,10 @@
  * =============================================================================
  */
 
-/* Status: DONE */
+/**
+ * Status: DONE
+ * https://en.cppreference.com/w/c/variadic
+ */
 
 #ifndef __STDARG_H
 #define __STDARG_H

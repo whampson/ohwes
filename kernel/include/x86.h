@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/hw/x86.h
+ *         File: kernel/include/x86.h
  *      Created: December 12, 2020
  *       Author: Wes Hampson
  *

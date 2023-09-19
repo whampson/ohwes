@@ -19,7 +19,8 @@
  * =============================================================================
  */
 
-#include <os/console.h>
+#include <console.h>
+#include <vga.h>
 
 char * const g_VgaBuf = (char * const) 0xB8000;
 

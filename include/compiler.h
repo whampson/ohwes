@@ -13,18 +13,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/c/compiler.h
+ *         File: compiler.h
  *      Created: December 30, 2020
  *       Author: Wes Hampson
  *
- * Compiler-specific flags and defines.
+ * Compiler-specific stuff.
  * =============================================================================
  */
 
 #ifndef __COMPILER_H
 #define __COMPILER_H
 
-#ifdef __GNUC__
+#ifdef __GNUC__     // GCC
 
 #include <stdint.h>
 

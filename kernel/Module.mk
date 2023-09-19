@@ -18,6 +18,7 @@
 #       Author: Wes Hampson
 # =============================================================================
 
+INCLUDES+= kernel/include
 TARGET  = libkernel.a
 SOURCES = \
 	interrupt.S \

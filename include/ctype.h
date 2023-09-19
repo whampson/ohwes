@@ -20,7 +20,10 @@
  * =============================================================================
  */
 
-/* Status: DONE */
+/**
+ * Status: DONE
+ * https://en.cppreference.com/w/c/string/byte
+ */
 
 // TODO: TESTS!!!
 

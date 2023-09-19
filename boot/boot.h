@@ -22,7 +22,7 @@
 #ifndef BOOT_H
 #define BOOT_H
 
-#include <hw/x86.h>
+#include <x86.h>
 
 #define PAGE_SIZE               4096
 

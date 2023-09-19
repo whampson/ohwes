@@ -20,23 +20,20 @@
  */
 
 #include <stdio.h>
-#include <hw/interrupt.h>
-
-__fastcall void handle_exception(struct iframe *frame)
-{
-    printf("!!! exception: 0x%02x\n", frame->vecNum);
-    __asm__ volatile (".1: jmp .1");
-}
-
-__fastcall void handle_irq(struct iframe *frame)
-{
-    printf("!!! irq: %d\n", ~frame->vecNum);
-    __asm__ volatile (".2: jmp .2");
-    IrqEnd(~frame->vecNum);
-}
+#include <os.h>
+#include <interrupt.h>
 
 __fastcall void handle_syscall(struct iframe *frame)
 {
-    printf("!!! system call: %d\n", frame->eax);
-    __asm__ volatile (".3: jmp .3");
+    panic("unexpected system call %d\n", frame->eax);
 }
+
+__fastcall void handle_exception(struct iframe *frame)
+{
+    panic("exception 0x%02x\n", frame->vecNum);
+}
+
+// __fastcall void handle_irq(struct iframe *frame)
+// {
+//     printf("got irq %d\n", ~frame->vecNum);
+// }

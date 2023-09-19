@@ -20,7 +20,10 @@
  * =============================================================================
  */
 
-/* Status: DONE */
+/**
+ * Status: DONE
+ * https://en.cppreference.com/w/c/types
+ */
 
 #ifndef __STDDEF_H
 #define __STDDEF_H

@@ -85,8 +85,9 @@ start32:
         movw            %ax, %gs
         call            Init32            # initialize devices and load kernel
 
-idle_loop:
-        jmp             idle_loop
+.globl Halt
+Halt:
+        jmp             Halt
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
@@ -238,7 +239,7 @@ detect_memory_legacy_lo:
 _detect_memory_legacy_error:
         leaw            s_memerr, %si
         call            bios_print
-        jmp             idle_loop
+        jmp             Halt
 
 ##
 # -----------------------------------------------------------------------------
@@ -265,7 +266,7 @@ _enable_a20_done:
 _enable_a20_error:
         leaw            s_a20err, %si
         call            bios_print
-        jmp             idle_loop
+        jmp             Halt
 
 ##
 # Test whether A20 gate is enabled.

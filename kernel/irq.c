@@ -20,8 +20,9 @@
  */
 
 #include <stddef.h>
-#include <hw/interrupt.h>
-#include <hw/pic.h>
+#include <os.h>
+#include <interrupt.h>
+#include <pic.h>
 
 #define PIC_MASTER  0
 #define PIC_SLAVE   1
@@ -43,7 +44,7 @@
 
 static IrqHandler handler_map[NUM_IRQ] = { 0 };  /* TODO: linked list */
 
-void IrqInit(void)
+static void InitPic()
 {
     /* configure master PIC */
     i8259_cmd_write(PIC_MASTER, PIC_ICW1);
@@ -62,72 +63,84 @@ void IrqInit(void)
     i8259_data_write(PIC_SLAVE, 0xFF);
 }
 
-void IrqMask(int irq_num)
+void RecvKeyPress()
 {
-    int pic_num = (irq_num >= 8);
-    int mask = (1 << (irq_num & 7));
+    uint8_t scancode = inb(0x60);
+    printf("scancode %d\n", scancode);
+}
+
+void IrqInit(void)
+{
+    InitPic();
+    IrqRegisterHandler(IRQ_KEYBOARD, RecvKeyPress);
+}
+
+void IrqMask(int irq)
+{
+    int pic_num = (irq >= 8);
+    int mask = (1 << (irq & 7));
 
     uint8_t oldmask = i8259_data_read(pic_num);
     i8259_data_write(pic_num, oldmask | mask);
 }
 
-void IrqUnmask(int irq_num)
+void IrqUnmask(int irq)
 {
-    int pic_num = (irq_num >= 8);
-    int mask = (1 << (irq_num & 7));
+    int pic_num = (irq >= 8);
+    int mask = (1 << (irq & 7));
 
     uint8_t oldmask = i8259_data_read(pic_num);
     i8259_data_write(pic_num, oldmask & ~mask);
 }
 
-void IrqEnd(int irq_num)
+void IrqEnd(int irq)
 {
-    if (irq_num >= 8) {
-        i8259_cmd_write(PIC_SLAVE, PIC_EOI | (irq_num & 7));
+    if (irq >= 8) {
+        i8259_cmd_write(PIC_SLAVE, PIC_EOI | (irq & 7));
         i8259_cmd_write(PIC_MASTER, PIC_EOI | IRQ_SLAVE_PIC);
     }
     else {
-        i8259_cmd_write(PIC_MASTER, PIC_EOI | irq_num);
+        i8259_cmd_write(PIC_MASTER, PIC_EOI | irq);
     }
 }
 
-bool IrqRegisterHandler(int irq_num, IrqHandler func)
+bool IrqRegisterHandler(int irq, IrqHandler func)
 {
-    if (!valid_irq(irq_num)) {
+    if (!valid_irq(irq)) {
         return false;
     }
-    if (handler_map[irq_num] != NULL) {
+    if (handler_map[irq] != NULL) {
         return false;
     }
 
-    handler_map[irq_num] = func;
+    handler_map[irq] = func;
     return true;
 }
 
-void IrqUnregisterHandler(int irq_num)
+void IrqUnregisterHandler(int irq)
 {
-    if (!valid_irq(irq_num)) {
+    if (!valid_irq(irq)) {
         return;
     }
 
-    handler_map[irq_num] = NULL;
+    handler_map[irq] = NULL;
 }
 
-// __fastcall void handle_irq(struct iframe *regs)
-// {
-//     int irq_num = ~regs->vec_num;
+__fastcall void handle_irq(struct iframe *regs)
+{
+    int irq = ~regs->vecNum;
 
-//     if (!valid_irq(irq_num)) {
-//         panic("unknown device IRQ number: %d", irq_num);
-//     }
+    if (!valid_irq(irq)) {
+        panic("unknown device IRQ number: %d", irq);
+    }
 
-//     irq_handler handler = handler_map[irq_num];
-//     if (handler != NULL) {
-//         handler();
-//     }
-//     else {
-//         kprintf("unhandled IRQ: %d\n", irq_num);
-//     }
+    IrqHandler handler = handler_map[irq];
+    if (handler != NULL) {
+        handler();
+    }
+    else {
+        panic("unhandled IRQ %d", irq);
+    }
 
-//     irq_eoi(irq_num);   /* TODO: pass EOI responsibility onto handler? */
-// }
+    IrqEnd(irq);    /* TODO: pass EOI responsibility onto handler? */
+}

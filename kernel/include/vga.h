@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/hw/vga.h
+ *         File: kernel/include/vga.h
  *      Created: December 13, 2020
  *       Author: Wes Hampson
  *
@@ -33,8 +33,7 @@
 */
 
 #include <stdint.h>
-#include <hw/io.h>
-#include <hw/interrupt.h>
+#include <io.h>
 
 // /**
 //  * Screen Dimensions

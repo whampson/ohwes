@@ -21,7 +21,10 @@
  */
 
 
-/* Status: INCOMPLETE */
+/**
+ * Status: INCOMPLETE
+ * https://en.cppreference.com/w/c/io
+ */
 
 #ifndef __STDIO_H
 #define __STDIO_H

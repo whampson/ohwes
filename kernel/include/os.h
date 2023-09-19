@@ -13,23 +13,25 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/os/console.h
- *      Created: March 26, 2023
+ *         File: kernel/include/os.h
+ *      Created: September 18, 2023
  *       Author: Wes Hampson
+ *       Module: System Includes
  * =============================================================================
  */
 
-#ifndef _CONSOLE_H
-#define _CONSOLE_H
+#ifndef __OS_H
+#define __OS_H
 
-#include <stdint.h>
-#include <hw/vga.h>
+#include <stdio.h>
+#include <compiler.h>
 
-uint16_t console_get_cursor();
-void console_set_cursor(uint16_t pos);
+extern void Halt(); // see boot/stage2.S    TODO: move this to a stub /in/ the kernel
 
-void console_clear(void);
+#define panic(...)                                                              \
+do {                                                                            \
+    printf("panic: " __VA_ARGS__);                                              \
+    Halt();                                                                     \
+} while (0)
 
-void console_write(char c);
-
-#endif /* _CONSOLE_H */
+#endif // __OS_H

@@ -25,7 +25,10 @@
 #ifndef __STDINT_H
 #define __STDINT_H
 
-/* Status: COMPLETE */
+/**
+ * Status: DONE
+ * https://en.cppreference.com/w/c/types/integer
+ */
 
 typedef signed char                     int8_t;
 typedef signed short int                int16_t;

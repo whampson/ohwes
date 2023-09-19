@@ -22,7 +22,7 @@
 # routine depending on the type of interrupt raised.
 # =============================================================================
 
-#include <hw/interrupt.h>
+#include <interrupt.h>
 
 IFRAME_EBX              = 0x00
 IFRAME_ECX              = 0x04

@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/hw/interrupt.h
+ *         File: kernel/include/interrupt.h
  *      Created: December 14, 2020
  *       Author: Wes Hampson
  * =============================================================================
@@ -72,63 +72,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-
-/**
- * The following functions are defined as macros to ensure assembly instructions
- * are injected in-line.
- */
-
-/**
- * Clears the interrupt flag.
- */
-#define cli()               \
-__asm__ volatile (          \
-    "cli"                   \
-    :                       \
-    :                       \
-    : "cc"                  \
-)
-
-/**
- * Sets the interrupt flag.
- */
-#define sti()               \
-__asm__ volatile (          \
-    "sti"                   \
-    :                       \
-    :                       \
-    : "cc"                  \
-)
-
-/**
- * Backs up the EFLAGS register, then clears the interrupt flag.
- */
-#define cli_save(flags)     \
-__asm__ volatile (          \
-    "                       \n\
-    pushfl                  \n\
-    popl %0                 \n\
-    cli                     \n\
-    "                       \
-    : "=r"(flags)           \
-    :                       \
-    : "memory", "cc"        \
-)
-
-/**
- * Restores the EFLAGS register.
- * If interrupts were previously enabled, this will also restore interrupts.
- */
-#define restore_flags(flags)\
-__asm__ volatile (          \
-    "                       \n\
-    push %0                 \n\
-    popfl                   \n\
-    "                       \
-    :                       \
-    : "r"(flags)            \
-    : "memory", "cc"        \
-)
 
 /**
  * The stack frame upon entry to an interrupt handler.

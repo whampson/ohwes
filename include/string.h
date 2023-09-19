@@ -20,10 +20,13 @@
  * =============================================================================
  */
 
-/* Status: INCOMPLETE */
+/**
+ * Status: INCOMPLETE
+ * https://en.cppreference.com/w/c/string/byte
+ */
 
-#ifndef _STRING_H
-#define _STRING_H
+#ifndef __STRING_H
+#define __STRING_H
 
 #include <stdint.h>
 
@@ -67,4 +70,4 @@ size_t strlen(const char *str);
 
 // char * strerror(int errnum);
 
-#endif /* _STRING_H */
+#endif /* __STRING_H */

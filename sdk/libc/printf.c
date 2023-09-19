@@ -27,7 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <os/console.h>
+#include <console.h>    // TODO: use std fwrite() or similar
 
 #define has_flag(x,f) (((x)&(f))==(f))
 

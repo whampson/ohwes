@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/hw/io.h
+ *         File: kernel/include/io.h
  *      Created: December 13, 2020
  *       Author: Wes Hampson
  * =============================================================================
@@ -23,6 +23,59 @@
 #define _IO_H
 
 #include <stdint.h>
+
+/**
+ * Clears the interrupt flag.
+ */
+#define cli()               \
+__asm__ volatile (          \
+    "cli"                   \
+    :                       \
+    :                       \
+    : "cc"                  \
+)
+
+/**
+ * Sets the interrupt flag.
+ */
+#define sti()               \
+__asm__ volatile (          \
+    "sti"                   \
+    :                       \
+    :                       \
+    : "cc"                  \
+)
+
+/**
+ * Backs up the EFLAGS register, then clears the interrupt flag.
+ */
+#define cli_save(flags)     \
+__asm__ volatile (          \
+    "                       \n\
+    pushfl                  \n\
+    popl %0                 \n\
+    cli                     \n\
+    "                       \
+    : "=r"(flags)           \
+    :                       \
+    : "memory", "cc"        \
+)
+
+/**
+ * Restores the EFLAGS register.
+ * If interrupts were previously enabled, this will also restore interrupts.
+ */
+#define restore_flags(flags)\
+__asm__ volatile (          \
+    "                       \n\
+    push %0                 \n\
+    popfl                   \n\
+    "                       \
+    :                       \
+    : "r"(flags)            \
+    : "memory", "cc"        \
+)
+
 
 /**
  * Write to this port to add a small delay to any I/O transaction.

@@ -13,23 +13,42 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/types.h
- *      Created: December 17, 2020
+ *         File: kernel/include/pic.h
+ *      Created: December 22, 2020
  *       Author: Wes Hampson
- *       Module: C Standard Library (C99)
+ *
+ * Intel 8259A Programmable Interrupt Controller driver.
  * =============================================================================
  */
 
-#ifndef __TYPES_H
-#define __TYPES_H
+#ifndef __PIC_H
+#define __PIC_H
 
 #include <stdint.h>
+#include <io.h>
 
-#ifndef __SIZE_T_DEFINED
-#define __SIZE_T_DEFINED
-typedef uint32_t size_t;
-#endif
+/* I/O Ports */
+#define I8259_PORT_PIC0_CMD     0x20        /* Master PIC Command Port */
+#define I8259_PORT_PIC0_DATA    0x21        /* Master PIC Data Port */
+#define I8259_PORT_PIC1_CMD     0xA0        /* Slave PIC Command Port */
+#define I8259_PORT_PIC1_DATA    0xA1        /* Slave PIC Data Port */
 
-typedef int32_t ssize_t;        // POSIX
+static inline uint8_t i8259_data_read(int pic_num)
+{
+    uint16_t port = (pic_num % 2) ? I8259_PORT_PIC1_DATA : I8259_PORT_PIC0_DATA;
+    return inb_delay(port);
+}
 
-#endif /* __TYPES_H */
+static inline void i8259_data_write(int pic_num, uint8_t data)
+{
+    uint16_t port = (pic_num % 2) ? I8259_PORT_PIC1_DATA : I8259_PORT_PIC0_DATA;
+    outb_delay(port, data);
+}
+
+static inline void i8259_cmd_write(int pic_num, uint8_t data)
+{
+    uint16_t port = (pic_num % 2) ? I8259_PORT_PIC1_CMD : I8259_PORT_PIC0_CMD;
+    outb_delay(port, data);
+}
+
+#endif /* __PIC_H */
