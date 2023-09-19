@@ -24,14 +24,16 @@
 
 #include "boot.h"
 
-PORT_PS2KBD_CMD         = 0x64  # in = status, out = command
+PORT_PS2KBD_CMD         = 0x64  # read = status, write = command
 PORT_PS2KBD_DATA        = 0x60
-PORT_SYSCNTLA           = 0x92
+PORT_SYSCNTLA           = 0x92  # For "Fast" A20
 
-TEMP_CS                 = 0x08
-TEMP_DS                 = 0x10
+EARLY_CS                = 0x08  # Initial Code Segment Selector
+EARLY_DS                = 0x10  # Initial Data Segment Selector
 
 VGA_MODE                = 0x03  # 0x03 = text, CGA/EGA/VGA, 16 colors, B8000h
+
+CR0_PE                  = 1     # CR0 Protection Enable bit
 
 .text
 .code16
@@ -39,17 +41,17 @@ VGA_MODE                = 0x03  # 0x03 = text, CGA/EGA/VGA, 16 colors, B8000h
 ##
 # Temporary GDT so we can get into Protected Mode.
 ##
-.align 16
-temp_gdt:
-        .quad           0x0                     # (not used)
-        .quad           0x00CF9A000000FFFF      # cs = 0x08
-        .quad           0x00CF92000000FFFF      # ds = 0x10
-temp_gdt_end:
+.align 8
+early_gdt:
+        .quad           0x0                             # (not used)
+        .quad           0x00CF9A000000FFFF              # cs = 0x08
+        .quad           0x00CF92000000FFFF              # ds = 0x10
+early_gdt_end:
 
-        .word           0                       # (align)
-temp_gdt_reg:
-        .word           temp_gdt_end-temp_gdt-1 # GDT limit
-        .long           temp_gdt                # GDT base, aligned
+        .word           0                               # (align)
+early_gdt_reg:
+        .word           early_gdt_end-early_gdt-1       # GDT limit
+        .long           early_gdt                       # GDT base, aligned
 
 # -----------------------------------------------------------------------------
 # ---------------------------------- Stage2 -----------------------------------
@@ -66,24 +68,26 @@ stage2:
         call            get_hwinfo
         call            detect_memory
         call            enable_a20
+        call            load_kernel
 
+        # Enter Protected Mode
         cli
-        lgdtl           temp_gdt_reg
+        lgdtl           early_gdt_reg
         movl            %cr0, %eax
-        orl             $0x01, %eax     # Protected Mode enable bit
+        orl             $CR0_PE, %eax
         movl            %eax, %cr0
-        jmpl            $TEMP_CS, $start32
+        jmpl            $EARLY_CS, $boot32
 
 .code32
-start32:
-        movw            $TEMP_DS, %ax
+boot32:
+        movw            $EARLY_DS, %ax
         movw            %ax, %ds
         movw            %ax, %ss
         movw            %ax, %es
         xorw            %ax, %ax
         movw            %ax, %fs
         movw            %ax, %gs
-        call            Init32            # initialize devices and load kernel
+        call            OsInit
 
 .globl Halt
 Halt:
@@ -355,6 +359,15 @@ kbd_in_wait:
         inb             $PORT_PS2KBD_CMD, %al   # (buffer from controller perspective)
         testb           $0x01, %al              # is output buffer full?
         jz              kbd_in_wait             # continue checking 'til data arrives
+        ret
+
+##
+# -----------------------------------------------------------------------------
+# load_kernel
+# -----------------------------------------------------------------------------
+# Loads the kernel image from disk.
+##
+load_kernel:
         ret
 
 # -----------------------------------------------------------------------------

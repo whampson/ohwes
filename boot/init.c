@@ -158,7 +158,7 @@ void InitTss(void)
     ltr(SEGSEL_TSS);
 }
 
-void Init32()
+void OsInit()
 {
     cli();
 

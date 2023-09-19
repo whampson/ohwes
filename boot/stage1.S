@@ -36,11 +36,11 @@ RESETMODE_NOMEMTEST     = 0x1234                # Skip memory test on soft reset
 
 #
 # Global entry point for boot loader.
-# Do NOT move or add to this.
+# DO NOT MOVE, RENAME, OR MODIFY THIS FUNCTION IN ANY WAY.
 #
 .globl _start
 _start:
-        jmp             boot
+        jmp             stage1
         nop
 
 #
@@ -71,7 +71,7 @@ fs_type:                .ascii                  "FAT12   "
 # Initial boot loader code.
 # Gotta be tight; file must assemble to exactly 512 bytes!
 #
-boot:
+stage1:
         cld
         xorw            %ax, %ax
         movw            %ax, %ds

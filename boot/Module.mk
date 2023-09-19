@@ -19,26 +19,34 @@
 # =============================================================================
 
 TARGET  = boot.elf
+
+# NOTE: stage1.S must come before stage2.S,
+#       or else entrypoint will end up in the wrong spot!
 SOURCES = \
 	stage1.S \
 	stage2.S \
 	debug.c \
 	init.c \
 
+# TODO: don't include kernel
 LINKLIBS = \
 	$(LIB_ROOT)/sdk/libc/libc.a \
 	$(LIB_ROOT)/kernel/libkernel.a \
 
- # ORIGIN
+ # Code Origin
 LDFLAGS += -Ttext 0x7C00
 
+# Build BOOT.
 $(eval $(call make-exe, $(TARGET), $(SOURCES), $(LINKLIBS)))
 
+###
 # split boot.elf into boot.bin, bootsect.bin and boot.sys
-#   boot.bin = stripped boot.elf
-#   bootsect.bin = bytes 0-511 of boot.bin (boot sector)
-#   boot.sys = bytes 512-end of boot.bin
+#     boot.bin = stripped boot.elf
+# bootsect.bin = bytes 0-511 of boot.bin (boot sector)
+#     boot.sys = bytes 512-end of boot.bin
+###
 
+# Make sure the new files are recognized by the build system
 _TARGETS += \
 	$(BIN_ROOT)/boot.bin \
 	$(BIN_ROOT)/bootsect.bin \
@@ -52,6 +60,6 @@ $(BIN_ROOT)/boot.bin: $(BIN_ROOT)/boot.elf
 $(BIN_ROOT)/bootsect.bin: $(BIN_ROOT)/boot.bin
 	head -c 512 $< > $@
 
-# rest of boot loader
+# extract rest of boot loader (stage 2)
 $(BIN_ROOT)/boot.sys: $(BIN_ROOT)/boot.bin
-	tail -c +512 $< > $@
+	tail -c +513 $< > $@
