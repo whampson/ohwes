@@ -27,8 +27,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <console.h>    // TODO: use std fwrite() or similar
-
 #define has_flag(x,f) (((x)&(f))==(f))
 
 struct printf_params
@@ -594,9 +592,9 @@ static int write_char(struct printf_params *p, char c)
         return sizeof(char);
     }
 
-    // return write(p->fd, &c, sizeof(char));
+    // TODO: return write(p->fd, &c, sizeof(char));
 
-    console_write(c);
+    putchar(c);
     return 1;
 }
 
@@ -605,58 +603,4 @@ static void terminate(struct printf_params *p)
     if (p->use_buf) {
         p->buf[p->pos] = '\0';
     }
-}
-
-char * itoa(int value, char *str, int base)   /* Non-standard */
-{
-    return itoa64(value, str, base);
-}
-
-char * itoa64(int64_t value, char *str, int base)   /* Non-standard */
-{
-    static char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-    char tmp[65];
-    char *ptr;
-    int i, len;
-    uint64_t v;
-
-    if (base < 2 || base > 36) {
-        str[0] = '\0';
-        return str;
-    }
-    if (value == 0) {
-        str[0] = '0';
-        str[1] = '\0';
-        return str;
-    }
-
-    int sign = (base == 10 && value < 0);
-    if (sign) {
-        v = -value;
-    }
-    else {
-        v = (uint64_t) value;
-    }
-
-    ptr = tmp;
-    while (v) {
-        i = v % base;
-        v /= base;
-        *ptr = digits[i];
-        ptr++;
-    }
-    if (sign) {
-        *(ptr++) = '-';
-    }
-    *ptr = '\0';
-
-    i = 0;
-    len = ptr - tmp;
-    while (i < len) {
-        str[i] = tmp[len - i - 1];
-        i++;
-    }
-    str[i] = '\0';
-
-    return str;
 }
