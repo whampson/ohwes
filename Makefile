@@ -18,6 +18,9 @@
 #       Author: Wes Hampson
 # =============================================================================
 
+# TODO: try to isloate variabls on a per-module basis
+# Example: INCLUDES will leak into other modules, re-init it with each pass
+
 # Modules to build
 export MODULES      := boot kernel sdk/libc
 # TODO: search tree for modules?
@@ -65,7 +68,7 @@ export DEBUG        := 1
 
 # $(call make-exe exe-name, source-list[, link-libs])
 define make-exe
-  _TARGETS += $(addprefix $(BIN_ROOT)/,$1)
+  _BINARIES += $(addprefix $(BIN_ROOT)/,$1)
   _SOURCES += $(addprefix $(MOD_ROOT)/,$2)
   $(addprefix $(BIN_ROOT)/,$1):: $(call get-asm-obj, $(addprefix $(MOD_ROOT)/,$2)) $(call get-c-obj, $(addprefix $(MOD_ROOT)/,$2)) $3
 	$(LD) -o $$@ $(LDFLAGS) $$^
@@ -81,20 +84,23 @@ endef
 
 # =================================================================================================
 
-_MODFILE        := Module.mk
+_MODFILE        := Module.mk		# Module file name
 _SOURCES        :=
 _OBJECTS        :=
-_TARGETS        :=
+_BINARIES       :=
 _LIBRARIES      :=
 
-_MODULES         = $(MODULES)
-_INCLUDES        = $(INCLUDES)
-_DEPENDS         = $(_OBJECTS:.o=.d)
-_DIRS            = $(call uniq, $(dir $(_OBJECTS) $(_TARGETS) $(_LIBRARIES)))
-_IMG             = $(IMG)
+_MODULES         = $(MODULES)		# modules to build
+_INCLUDES        = $(INCLUDES)		# includes were touched
+_DEPENDS         = $(_OBJECTS:.o=.d)	# build dependencies
 
-get-c-src        = $(filter %.c,$1)
-get-asm-src      = $(filter %.S,$1)
+# directories to create and destroy
+_DIRS            = $(call uniq, $(dir $(_OBJECTS) $(_BINARIES) $(_LIBRARIES)))
+
+_IMG             = $(IMG)		# Needed? not really.
+
+get-c-src        = $(filter %.c,$1)	# Locates .c files in a file list
+get-asm-src      = $(filter %.S,$1)	# Locates .S files in a file list
 
 get-c-obj        = $(addprefix $(OBJ_ROOT)/,$(subst .c,.o,$(call get-c-src,$1)))
 get-asm-obj      = $(addprefix $(OBJ_ROOT)/,$(subst .S,.o,$(call get-asm-src,$1)))
@@ -136,7 +142,8 @@ endef
 
 .PHONY: all floppy img
 .PHONY: dirs clean nuke
-.PHONY: run-qemu run-bochs
+.PHONY: run-qemu run-qemu-dbg
+.PHONY: run-bochs
 .PHONY: debug-make
 
 .SECONDARY: $(_OBJECTS)
@@ -149,24 +156,25 @@ include $(addsuffix /$(_MODFILE), $(_MODULES))
 
 # -------------------------------------------------------------------------------------------------
 
-all: dirs img $(_TARGETS) $(_LIBRARIES)
+all: dirs img $(_BINARIES) $(_LIBRARIES)
 
 dirs: $(_DIRS)
 
 $(_DIRS):
 	$(MKDIR) $(_DIRS)
 
-img: dirs $(_IMG) $(_TARGETS) $(_LIBRARIES)
+img: dirs $(_IMG) $(_BINARIES) $(_LIBRARIES)
 
 $(_IMG): $(BOOTBIN)
 	dd if=/dev/zero of=$(_IMG) bs=512 count=2880
 	dd if=$(BOOTBIN) of=$(_IMG) bs=512 conv=notrunc
+# TODO: add ohwes.sys
 
 floppy: img
 	dd if=$(BOOTBIN) of=/dev/fd0 bs=512 conv=notrunc
 
 clean:
-	$(RM) $(_IMG) $(_TARGETS) $(_LIBRARIES) $(_OBJECTS) $(_DEPENDS)
+	$(RM) $(_IMG) $(_BINARIES) $(_LIBRARIES) $(_OBJECTS) $(_DEPENDS)
 
 nuke:
 	$(RM) -r $(BIN_ROOT) $(OBJ_ROOT) $(LIB_ROOT)
@@ -176,7 +184,11 @@ nuke:
 run-qemu: img
 	$(SCRIPTS)/run.sh qemu $(BIN_ROOT)/ohwes.img
 
+run-qemu-dbg:
+	$(SCRIPTS)/run.sh qemu $(BIN_ROOT)/ohwes.img debug
+
 run-bochs: img
+# TODO: try to make the bochs script less platform and directory dependent...
 	$(SCRIPTS)/run.sh bochs $(SCRIPTS)/bochsrc.bxrc
 
 # -------------------------------------------------------------------------------------------------
@@ -204,7 +216,7 @@ debug-make:
 	@echo '--------------------------------------------------------------------------------'
 	@echo 'MAKEFILE_LIST = $(MAKEFILE_LIST)'
 	@echo '_MODULES      = $(_MODULES)'
-	@echo '_TARGETS      = $(_TARGETS)'
+	@echo '_BINARIES      = $(_BINARIES)'
 	@echo '_LIBRARIES    = $(_LIBRARIES)'
 	@echo '_SOURCES      = $(_SOURCES)'
 	@echo '_INCLUDES     = $(_INCLUDES)'

@@ -22,8 +22,6 @@
 # Designed for a 1.44MB floppy with 512-byte sectors and a FAT12 file system.
 # =============================================================================
 
-#include "boot.h"
-
 #
 # TODO: read BOOT.SYS (stage2) and OHWES.SYS (kernel) into memory from FAT
 #
@@ -266,6 +264,7 @@ bios_readkey:
 # -----------------------------------------------------------------------------
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
+.globl kernel_sectors
 
 s_hello:
         .asciz          "boot: loading boot.sys"
@@ -278,5 +277,5 @@ s_newline:
 s_progress:
         .asciz          "."
 
-        .space          0x1FE - (. - _start), 0xCC      # padding
+.space          0x1FE - (. - _start), 0xCC      # padding
         .short          0xAA55                          # boot signature

@@ -24,16 +24,18 @@
 
 #include "boot.h"
 
-PORT_PS2KBD_CMD         = 0x64  # read = status, write = command
+PORT_PS2KBD_CMD         = 0x64          # read = status, write = command
 PORT_PS2KBD_DATA        = 0x60
-PORT_SYSCNTLA           = 0x92  # For "Fast" A20
+PORT_SYSCNTLA           = 0x92          # For "Fast" A20
 
-EARLY_CS                = 0x08  # Initial Code Segment Selector
-EARLY_DS                = 0x10  # Initial Data Segment Selector
+EARLY_CS                = 0x08          # Initial Code Segment Selector
+EARLY_DS                = 0x10          # Initial Data Segment Selector
 
-VGA_MODE                = 0x03  # 0x03 = text, CGA/EGA/VGA, 16 colors, B8000h
+VGA_MODE                = 0x03          # 0x03 = text, CGA/EGA/VGA, 16 colors, B8000h
 
-CR0_PE                  = 1     # CR0 Protection Enable bit
+CR0_PE                  = 1             # CR0 Protection Enable bit
+
+KERNEL_ENTRY            = 0x100000      # 1M
 
 .text
 .code16
@@ -87,7 +89,10 @@ boot32:
         xorw            %ax, %ax
         movw            %ax, %fs
         movw            %ax, %gs
-        call            OsInit
+
+        # Jump to kernel
+        pushl           $KERNEL_ENTRY
+        ret
 
 .globl Halt
 Halt:
@@ -373,6 +378,9 @@ load_kernel:
 # -----------------------------------------------------------------------------
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
+
+// TODO: create a struct around these fields, then pass ptr to struct as
+// kernel argument
 
 .align 4
 

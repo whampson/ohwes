@@ -18,12 +18,35 @@
 #       Author: Wes Hampson
 # =============================================================================
 
-INCLUDES+= kernel/include
-TARGET  = libkernel.a
-SOURCES = \
-	interrupt.S \
-	handler.c \
-	irq.c \
-	console.c \
+TARGETNAME = ohwes
 
-$(eval $(call make-lib, $(TARGET), $(SOURCES)))
+# TODO: buildsys: appending this is leaky
+INCLUDES += kernel/include
+
+# NOTE: entry.S must be first!
+SOURCES = \
+	entry.S \
+	console.c \
+	debug.c \
+	handler.c \
+	init.c \
+	interrupt.S \
+	irq.c \
+
+LINKLIBS = \
+	$(LIB_ROOT)/sdk/libc/libc.a \
+
+ # Code Origin
+LDFLAGS += -Ttext 0x100000		# TODO: LEAKY!!!
+
+# $(eval $(call make-lib, lib$(TARGETNAME).a, $(SOURCES)))
+$(eval $(call make-exe, $(TARGETNAME).elf, $(SOURCES), $(LINKLIBS)))
+
+# Strip .elf to create .sys
+$(BIN_ROOT)/$(TARGETNAME).sys: $(BIN_ROOT)/$(TARGETNAME).elf
+	objcopy -Obinary $< $@
+
+# Make sure buildsys knows about .sys
+# TODO: this is kind of a hack
+_BINARIES += \
+	$(BIN_ROOT)/$(TARGETNAME).sys \

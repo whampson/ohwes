@@ -25,15 +25,11 @@ TARGET  = boot.elf
 SOURCES = \
 	stage1.S \
 	stage2.S \
-	debug.c \
-	init.c \
 
-# TODO: don't include kernel
 LINKLIBS = \
 	$(LIB_ROOT)/sdk/libc/libc.a \
-	$(LIB_ROOT)/kernel/libkernel.a \
 
- # Code Origin
+# Code Origin
 LDFLAGS += -Ttext 0x7C00
 
 # Build BOOT.
@@ -47,7 +43,8 @@ $(eval $(call make-exe, $(TARGET), $(SOURCES), $(LINKLIBS)))
 ###
 
 # Make sure the new files are recognized by the build system
-_TARGETS += \
+# TODO: this is kind of a hack
+_BINARIES += \
 	$(BIN_ROOT)/boot.bin \
 	$(BIN_ROOT)/bootsect.bin \
 	$(BIN_ROOT)/boot.sys \

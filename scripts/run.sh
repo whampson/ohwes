@@ -43,7 +43,7 @@ if [ "$1" = "qemu" ]; then
         gdb \
             -ex 'target remote localhost:1234' \
             -ex 'add-symbol-file bin/boot.elf' \
-            -ex 'b start32'
+            -ex 'b boot32'
     else
         "$QEMU_PATH" $QEMU_FLAGS
     fi

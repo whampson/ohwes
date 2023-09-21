@@ -13,15 +13,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: boot/init.c
+ *         File: kernel/init.c
  *      Created: March 26, 2023
  *       Author: Wes Hampson
- *
- * x86 Protected Mode boot code.
  * =============================================================================
  */
 
-#include "boot.h"
+#include "init.h"
 #include "debug.h"
 
 #include <stdarg.h>
@@ -32,6 +30,9 @@
 #include <io.h>
 #include <interrupt.h>
 #include <os.h>
+
+struct BootInfo g_BootInfo = { };
+struct BootInfo *g_pBootInfo = &g_BootInfo;
 
 extern void IrqInit(void);
 
@@ -158,7 +159,8 @@ void InitTss(void)
     ltr(SEGSEL_TSS);
 }
 
-void OsInit()
+__fastcall
+void OhWes(struct BootInfo *bootInfo)
 {
     cli();
 
