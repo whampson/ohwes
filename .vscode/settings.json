@@ -46,5 +46,5 @@
         "Hampson",
         "ohwes"
     ],
-    "makefile.makePath": "c:/msys64/mingw32/bin/make"
+    "makefile.makePath": "make"
 }
