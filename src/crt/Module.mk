@@ -13,16 +13,16 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 # -----------------------------------------------------------------------------
-#         File: sdk/libc/Module.mk
+#         File: crt/Module.mk
 #      Created: April 8, 2023
 #       Author: Wes Hampson
 # =============================================================================
 
-TARGET  = libc.a
-SOURCES = \
-	gcc.c \
-	printf.c \
-	puts.c \
-	string.c \
+TARGET  := crt/crt.lib
+SOURCES := \
+    gcc.c \
+    printf.c \
+    puts.c \
+    string.c \
 
-$(eval $(call make-lib, $(TARGET), $(SOURCES)))
+$(eval $(call make-lib,$(TARGET),$(SOURCES)))

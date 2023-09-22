@@ -18,124 +18,122 @@
 #       Author: Wes Hampson
 # =============================================================================
 
-# TODO: try to isloate variabls on a per-module basis
-# Example: INCLUDES will leak into other modules, re-init it with each pass
-
 # Modules to build
-export MODULES      := boot kernel sdk/libc
-# TODO: search tree for modules?
-
-# Important directories
-export SCRIPTS      := scripts
-export BIN_ROOT     := bin
-export OBJ_ROOT     := obj
-export LIB_ROOT     := obj
-export MOD_ROOT      = $(patsubst %/$(_MODFILE),%,$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
-
-export IMG          := $(BIN_ROOT)/ohwes.img
-export BOOTBIN      := $(BIN_ROOT)/boot.bin
-
-# Build tools
-BINUTILS_PREFIX     := i686-elf-
-export AR           := $(BINUTILS_PREFIX)ar
-export AS           := $(BINUTILS_PREFIX)gcc
-export CC           := $(BINUTILS_PREFIX)gcc
-export LD           := $(BINUTILS_PREFIX)gcc
-export OBJCOPY      := $(BINUTILS_PREFIX)objcopy
-export MKDIR        := mkdir -p
-export MV           := mv -f
-export RM           := rm -f
-
-# Compiler, assembler, linker flags
-export ASFLAGS      := -D__ASSEMBLER__
-export CFLAGS       := -nostdinc -ffreestanding -std=c99
-export LDFLAGS      := -nostdlib
-
-# Default defines
-export DEFINES      :=
-
-# Default include directories
-export INCLUDES     := include
-
-# Default include files
-export INCLUDE_FILES:= compiler.h
-
-# Default warnings
-export WARNINGS     := all error
+export MODULES := \
+    src/crt \
+    src/boot \
+    src/kernel \
 
 # Enable debug build
-export DEBUG        := 1
+export DEBUG      := 1
+export DEBUGFLAGS := -DDEBUG -g -Og
 
-# $(call make-exe exe-name, source-list[, link-libs])
-define make-exe
-  _BINARIES += $(addprefix $(BIN_ROOT)/,$1)
-  _SOURCES += $(addprefix $(MOD_ROOT)/,$2)
-  $(addprefix $(BIN_ROOT)/,$1):: $(call get-asm-obj, $(addprefix $(MOD_ROOT)/,$2)) $(call get-c-obj, $(addprefix $(MOD_ROOT)/,$2)) $3
-	$(LD) -o $$@ $(LDFLAGS) $$^
-endef
+# Important directories
+export BIN     := bin
+export OBJ     := obj
+export SRC     := src
+export SCRIPTS := scripts
+export MODULE   = $(patsubst %/$(_MODFILE),%,$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
 
-# $(call make-lib lib-name, source-list)
-define make-lib
-  _LIBRARIES += $(addprefix $(LIB_ROOT)/$(MOD_ROOT)/,$1)
-  _SOURCES += $(addprefix $(MOD_ROOT)/,$2)
-  $(addprefix $(LIB_ROOT)/$(MOD_ROOT)/,$1):: $(call get-asm-obj, $(addprefix $(MOD_ROOT)/,$2)) $(call get-c-obj, $(addprefix $(MOD_ROOT)/,$2))
-	$(AR) rcsv $$@ $$^
-endef
+export _IMG     := $(BIN)/ohwes.img
+export _BOOTBIN := $(BIN)/boot.bin
+
+# Build tools
+export PREFIX  := i686-elf-
+export AR      := $(PREFIX)ar
+export AS      := $(PREFIX)gcc
+export CC      := $(PREFIX)gcc
+export LD      := $(PREFIX)gcc
+export OBJCOPY := $(PREFIX)objcopy
+export MKDIR   := mkdir -p
+export MV      := mv -f
+export RM      := rm -f
+
+export INCLUDES      := src/include
+export INCLUDE_FILES := compiler.h
+
+# Compiler, assembler, linker flags
+export _ASFLAGS       := -Wall -Werror -D__ASSEMBLER__
+export _CFLAGS        := -Wall -Werror -nostdinc -ffreestanding -std=c99
+export _LDFLAGS       := -nostdlib
+
+ifeq ($(DEBUG),1)
+  _ASFLAGS += $(DEBUGFLAGS)
+  _CFLAGS  += $(DEBUGFLAGS)
+  _LDFLAGS += $(DEBUGFLAGS)
+endif
+
+_MODFILE := Module.mk
+_OBJS    :=
+_LIBS    :=
+_BINS    :=
+_INCS     = $(INCLUDES)
+_DEPS     = $(_OBJS:.o=.d)
+_DIRS     = $(call uniq,$(dir $(_OBJS) $(_LIBS) $(_BINS)))
 
 # =================================================================================================
 
-_MODFILE        := Module.mk		# Module file name
-_SOURCES        :=
-_OBJECTS        :=
-_BINARIES       :=
-_LIBRARIES      :=
-
-_MODULES         = $(MODULES)		# modules to build
-_INCLUDES        = $(INCLUDES)		# includes were touched
-_DEPENDS         = $(_OBJECTS:.o=.d)	# build dependencies
-
-# directories to create and destroy
-_DIRS            = $(call uniq, $(dir $(_OBJECTS) $(_BINARIES) $(_LIBRARIES)))
-
-_IMG             = $(IMG)		# Needed? not really.
-
-get-c-src        = $(filter %.c,$1)	# Locates .c files in a file list
-get-asm-src      = $(filter %.S,$1)	# Locates .S files in a file list
-
-get-c-obj        = $(addprefix $(OBJ_ROOT)/,$(subst .c,.o,$(call get-c-src,$1)))
-get-asm-obj      = $(addprefix $(OBJ_ROOT)/,$(subst .S,.o,$(call get-asm-src,$1)))
-
-ifdef DEBUG
-  DEFINES += DEBUG
-  CFLAGS += -g -Og
-  LDFLAGS += -g -Og
-  ASLAGS += -g -Og
-endif
-
-# uniq - https://stackoverflow.com/a/16151140
-uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
-
-# $(call make-obj obj-path, source-path)
-define make-obj
-  _OBJECTS += $1
-  $1: $2
-	$(CC) -c $(CFLAGS) \
-	$(addprefix -W,$(WARNINGS)) \
-	$(addprefix -D,$(DEFINES)) \
-	$(addprefix -I,$(INCLUDES)) \
-	$(addprefix -include , $(INCLUDE_FILES)) \
-	-MD -MF $$(@:.o=.d) -o $$@ $$<
+# $(call make-sys, sys-path, elf-path)
+define make-sys
+  _BINS += $(addprefix $(BIN)/,$1)
+  $(addprefix $(BIN)/,$1):: $(addprefix $(BIN)/,$2)
+	$(OBJCOPY) -Obinary $$< $$@
 endef
 
-# $(call make-obj obj-path, source-path)
-define make-asm-obj
-  _OBJECTS += $1
+# $(call make-exe, exe-path, src-list, [link-libs], [cflags], [asflags], [ldflags])
+define make-exe
+  _BINS += $(addprefix $(BIN)/,$1)
+  $(foreach _src,$(addprefix $(MODULE)/,$(filter %.S,$2)),$(eval $(call make-obj-asm,$(call get-objpath-asm,$(_src)),$(_src),$5)))
+  $(foreach _src,$(addprefix $(MODULE)/,$(filter %.c,$2)),$(eval $(call make-obj-c,$(call get-objpath-c,$(_src)),$(_src),$4)))
+  $(addprefix $(OBJ)/,$1):: $(call get-objpath-asm,$(addprefix $(MODULE)/,$(filter %.S,$2))) $(call get-objpath-c,$(addprefix $(MODULE)/,$(filter %.c,$2)))
+	$(AR) rcsv $$@ $$^
+  $(addprefix $(BIN)/,$1):: $(call get-objpath-asm,$(addprefix $(MODULE)/,$(filter %.S,$2))) $(call get-objpath-c,$(addprefix $(MODULE)/,$(filter %.c,$2))) $3
+	$(LD) -o $$@ $6 $(_LDFLAGS) $$^
+endef
+
+# $(call make-lib, lib-path, src-list, [cflags], [asflags])
+define make-lib
+  _LIBS += $(addprefix $(OBJ)/,$1)
+  $(foreach _src,$(addprefix $(MODULE)/,$(filter %.S,$2)),$(eval $(call make-obj-asm,$(call get-objpath-asm,$(_src)),$(_src),$4)))
+  $(foreach _src,$(addprefix $(MODULE)/,$(filter %.c,$2)),$(eval $(call make-obj-c,$(call get-objpath-c,$(_src)),$(_src),$3)))
+  $(addprefix $(OBJ)/,$1):: $(call get-objpath-asm,$(addprefix $(MODULE)/,$(filter %.S,$2))) $(call get-objpath-c,$(addprefix $(MODULE)/,$(filter %.c,$2)))
+	$(AR) rcsv $$@ $$^
+endef
+
+# $(call make-obj-asm, obj-path, src-list, [asflags])
+define make-obj-asm
+  _OBJS += $1
   $1: $2
-	$(AS) -c $(ASFLAGS) \
-	$(addprefix -W,$(WARNINGS)) \
-	$(addprefix -D,$(DEFINES)) \
+	$(AS) -o $$@ $(_ASFLAGS) $3 \
 	$(addprefix -I,$(INCLUDES)) \
-	-MD -MF $$(@:.o=.d) -o $$@ $$<
+	-c -MD -MF $$(@:.o=.d) $$<
+endef
+
+# $(call make-obj-c, obj-path, src-list, [cflags])
+define make-obj-c
+  _OBJS += $1
+  $1: $2
+	$(CC) -o $$@ $(_CFLAGS) $3 \
+	$(addprefix -I,$(INCLUDES)) \
+	$(addprefix -include , $(INCLUDE_FILES)) \
+	-c -MD -MF $$(@:.o=.d) $$<
+endef
+
+# $(call get-objpath-asm, src-path)
+define get-objpath-asm
+  $(subst $(SRC)/,$(OBJ)/,$(subst .S,.o,$(filter %.S,$1)))
+endef
+
+# $(call get-objpath-c, src-path)
+define get-objpath-c
+  $(subst $(SRC)/,$(OBJ)/,$(subst .c,.o,$(filter %.c,$1)))
+endef
+
+
+# $(call uniq, word-list)
+#     https://stackoverflow.com/a/16151140
+define uniq
+  $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 endef
 
 # =================================================================================================
@@ -146,46 +144,45 @@ endef
 .PHONY: run-bochs
 .PHONY: debug-make
 
-.SECONDARY: $(_OBJECTS)
-.INTERMEDIATE: $(_DEPENDS)
+.SECONDARY: $(_OBJS)
+.INTERMEDIATE: $(_DEPS)
 
 all:
 
-vpath %.h $(_INCLUDES)
-include $(addsuffix /$(_MODFILE), $(_MODULES))
+vpath %.h $(_INCS)
+include $(addsuffix /$(_MODFILE), $(MODULES))
 
 # -------------------------------------------------------------------------------------------------
 
-all: dirs img $(_BINARIES) $(_LIBRARIES)
-
+all: $(_DIRS) $(_BINS) $(_LIBS)
+img: $(_DIRS) $(_IMG) $(_BINS) $(_LIBS)
 dirs: $(_DIRS)
 
 $(_DIRS):
-	$(MKDIR) $(_DIRS)
+	$(MKDIR) $(call uniq,$(dir $(_OBJS) $(_LIBS) $(_BINS)))
 
-img: dirs $(_IMG) $(_BINARIES) $(_LIBRARIES)
 
-$(_IMG): $(BOOTBIN)
+$(_IMG): $(_BOOTBIN)
 	dd if=/dev/zero of=$(_IMG) bs=512 count=2880
-	dd if=$(BOOTBIN) of=$(_IMG) bs=512 conv=notrunc
+	dd if=$(_BOOTBIN) of=$(_IMG) bs=512 conv=notrunc
 # TODO: add ohwes.sys
 
 floppy: img
-	dd if=$(BOOTBIN) of=/dev/fd0 bs=512 conv=notrunc
+	dd if=$(_BOOTBIN) of=/dev/fd0 bs=512 conv=notrunc
 
 clean:
-	$(RM) $(_IMG) $(_BINARIES) $(_LIBRARIES) $(_OBJECTS) $(_DEPENDS)
+	$(RM) $(_IMG) $(_BINS) $(_LIBS) $(_OBJS) $(_DEPS)
 
 nuke:
-	$(RM) -r $(BIN_ROOT) $(OBJ_ROOT) $(LIB_ROOT)
+	$(RM) -r $(BIN) $(OBJ)
 
 # -------------------------------------------------------------------------------------------------
 
 run-qemu: img
-	$(SCRIPTS)/run.sh qemu $(BIN_ROOT)/ohwes.img
+	$(SCRIPTS)/run.sh qemu $(BIN)/ohwes.img
 
 run-qemu-dbg:
-	$(SCRIPTS)/run.sh qemu $(BIN_ROOT)/ohwes.img debug
+	$(SCRIPTS)/run.sh qemu $(BIN)/ohwes.img debug
 
 run-bochs: img
 # TODO: try to make the bochs script less platform and directory dependent...
@@ -193,42 +190,5 @@ run-bochs: img
 
 # -------------------------------------------------------------------------------------------------
 
-debug-make:
-	@echo 'MODULES       = $(MODULES)'
-	@echo 'DEFINES       = $(DEFINES)'
-	@echo 'INCLUDES      = $(INCLUDES)'
-	@echo 'WARNINGS      = $(WARNINGS)'
-	@echo 'DEBUG         = $(DEBUG)'
-	@echo 'ASFLAGS       = $(ASFLAGS)'
-	@echo 'CFLAGS        = $(CFLAGS)'
-	@echo 'LDFLAGS       = $(LDFLAGS)'
-	@echo 'AR            = $(AR)'
-	@echo 'AS            = $(AS)'
-	@echo 'CC            = $(CC)'
-	@echo 'LD            = $(LD)'
-	@echo 'OBJCOPY       = $(OBJCOPY)'
-	@echo 'MKDIR         = $(MKDIR)'
-	@echo 'MV            = $(MV)'
-	@echo 'RM            = $(RM)'
-	@echo 'SCRIPTS       = $(SCRIPTS)'
-	@echo 'BIN_ROOT      = $(BIN_ROOT)'
-	@echo 'OBJ_ROOT      = $(OBJ_ROOT)'
-	@echo '--------------------------------------------------------------------------------'
-	@echo 'MAKEFILE_LIST = $(MAKEFILE_LIST)'
-	@echo '_MODULES      = $(_MODULES)'
-	@echo '_BINARIES      = $(_BINARIES)'
-	@echo '_LIBRARIES    = $(_LIBRARIES)'
-	@echo '_SOURCES      = $(_SOURCES)'
-	@echo '_INCLUDES     = $(_INCLUDES)'
-	@echo '_OBJECTS      = $(_OBJECTS)'
-	@echo '_DEPENDS      = $(_DEPENDS)'
-	@echo '_DIRS         = $(_DIRS)'
-
-# -------------------------------------------------------------------------------------------------
-
-# Generate object file rules from source list
-$(foreach _src, $(call get-c-src, $(_SOURCES)), $(eval $(call make-obj, $(call get-c-obj, $(_src)), $(_src))))
-$(foreach _src, $(call get-asm-src, $(_SOURCES)), $(eval $(call make-asm-obj, $(call get-asm-obj, $(_src)), $(_src))))
-
 # Include .d files
--include $(_DEPENDS)
+-include $(_DEPS)

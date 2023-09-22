@@ -20,33 +20,22 @@
 
 TARGETNAME = ohwes
 
-# TODO: buildsys: appending this is leaky
-INCLUDES += kernel/include
-
-# NOTE: entry.S must be first!
 SOURCES = \
-	entry.S \
 	console.c \
 	debug.c \
+	entry.S \
 	handler.c \
 	init.c \
 	interrupt.S \
 	irq.c \
 
-LINKLIBS = \
-	$(LIB_ROOT)/sdk/libc/libc.a \
+LINKLIBS = obj/crt/crt.lib
 
- # Code Origin
-LDFLAGS += -Ttext 0x100000		# TODO: LEAKY!!!
+CFLAGS  := -Isrc/kernel/include
+ASFLAGS := -Isrc/kernel/include
+LDFLAGS := -Ttext 0x100000
 
-# $(eval $(call make-lib, lib$(TARGETNAME).a, $(SOURCES)))
-$(eval $(call make-exe, $(TARGETNAME).elf, $(SOURCES), $(LINKLIBS)))
+# $(eval $(call make-lib,$(TARGETNAME).elf,$(SOURCES),$(CFLAGS),$(ASFLAGS)))
+$(eval $(call make-exe,$(TARGETNAME).elf,$(SOURCES),$(LINKLIBS),$(CFLAGS),$(ASFLAGS),$(LDFLAGS)))
+$(eval $(call make-sys,$(TARGETNAME).sys,$(TARGETNAME).elf))
 
-# Strip .elf to create .sys
-$(BIN_ROOT)/$(TARGETNAME).sys: $(BIN_ROOT)/$(TARGETNAME).elf
-	objcopy -Obinary $< $@
-
-# Make sure buildsys knows about .sys
-# TODO: this is kind of a hack
-_BINARIES += \
-	$(BIN_ROOT)/$(TARGETNAME).sys \

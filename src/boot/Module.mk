@@ -18,7 +18,7 @@
 #       Author: Wes Hampson
 # =============================================================================
 
-TARGET  = boot.elf
+TARGETNAME = boot
 
 # NOTE: stage1.S must come before stage2.S,
 #       or else entrypoint will end up in the wrong spot!
@@ -27,13 +27,13 @@ SOURCES = \
 	stage2.S \
 
 LINKLIBS = \
-	$(LIB_ROOT)/sdk/libc/libc.a \
+	obj/crt/crt.lib \
 
 # Code Origin
 LDFLAGS += -Ttext 0x7C00
 
 # Build BOOT.
-$(eval $(call make-exe, $(TARGET), $(SOURCES), $(LINKLIBS)))
+$(eval $(call make-exe,$(TARGETNAME).elf,$(SOURCES),$(LINKLIBS),,,$(LDFLAGS)))
 
 ###
 # split boot.elf into boot.bin, bootsect.bin and boot.sys
@@ -44,19 +44,19 @@ $(eval $(call make-exe, $(TARGET), $(SOURCES), $(LINKLIBS)))
 
 # Make sure the new files are recognized by the build system
 # TODO: this is kind of a hack
-_BINARIES += \
-	$(BIN_ROOT)/boot.bin \
-	$(BIN_ROOT)/bootsect.bin \
-	$(BIN_ROOT)/boot.sys \
+_BINS += \
+	$(BIN)/$(TARGETNAME).bin \
+	$(BIN)/$(TARGETNAME).sys \
+	$(BIN)/bootsect.bin \
 
-# strip
-$(BIN_ROOT)/boot.bin: $(BIN_ROOT)/boot.elf
-	objcopy -Obinary $< $@
+# strip elf
+$(BIN)/$(TARGETNAME).bin: $(BIN)/$(TARGETNAME).elf
+	$(OBJCOPY) -Obinary $< $@
 
-# extract boot sector
-$(BIN_ROOT)/bootsect.bin: $(BIN_ROOT)/boot.bin
+# extract boot sector (stage 1)
+$(BIN)/bootsect.bin: $(BIN)/$(TARGETNAME).bin
 	head -c 512 $< > $@
 
 # extract rest of boot loader (stage 2)
-$(BIN_ROOT)/boot.sys: $(BIN_ROOT)/boot.bin
+$(BIN)/$(TARGETNAME).sys: $(BIN)/$(TARGETNAME).bin
 	tail -c +513 $< > $@
