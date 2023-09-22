@@ -3,7 +3,7 @@
         {
             "name": "OH-WES [Win32]",
             "includePath": [
-                "${workspaceFolder}/include/*"
+                "${workspaceFolder}/src/include/*"
             ],
             "defines": [],
             "compilerPath": "c:/msys64/mingw32/bin/i686-elf-gcc",
