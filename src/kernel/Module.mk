@@ -18,24 +18,26 @@
 #       Author: Wes Hampson
 # =============================================================================
 
-TARGETNAME = ohwes
+TARGETNAME := kernel
+BINNAME    := ohwes
 
-SOURCES = \
-	console.c \
-	debug.c \
-	entry.S \
-	handler.c \
-	init.c \
-	interrupt.S \
-	irq.c \
+SOURCES := \
+    console.c \
+    debug.c \
+    entry.S \
+    handler.c \
+    init.c \
+    interrupt.S \
+    irq.c \
 
-LINKLIBS = obj/crt/crt.lib
+LNKLIBS := \
+    $(OBJ_ROOT)/crt/crt.lib
 
-CFLAGS  := -Isrc/kernel/include
-ASFLAGS := -Isrc/kernel/include
+CFLAGS  := -I$(SRC)/include
+ASFLAGS := -I$(SRC)/include
 LDFLAGS := -Ttext 0x100000
 
-# $(eval $(call make-lib,$(TARGETNAME).elf,$(SOURCES),$(CFLAGS),$(ASFLAGS)))
-$(eval $(call make-exe,$(TARGETNAME).elf,$(SOURCES),$(LINKLIBS),$(CFLAGS),$(ASFLAGS),$(LDFLAGS)))
-$(eval $(call make-sys,$(TARGETNAME).sys,$(TARGETNAME).elf))
-
+$(eval $(call COMPILE,$(TARGETNAME),$(SOURCES),$(CFLAGS),$(ASFLAGS)))
+$(eval $(call LINK,$(TARGETNAME),$(LNKLIBS),$(LDFLAGS)))
+$(eval $(call STRIP,$(TARGETNAME)))
+$(eval $(call BINPLACE,$(BINNAME).sys,$(OBJ)/$(TARGETNAME).bin))

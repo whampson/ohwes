@@ -29,14 +29,17 @@ export DEBUG      := 1
 export DEBUGFLAGS := -DDEBUG -g -Og
 
 # Important directories
-export BIN     := bin
-export OBJ     := obj
-export SRC     := src
-export SCRIPTS := scripts
-export MODULE   = $(patsubst %/$(_MODFILE),%,$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
+export SCRIPTS  := scripts
+export SRC_ROOT := src
+export OBJ_ROOT := obj
+export BIN_ROOT := bin
+export MODULE   = $(subst $(SRC_ROOT)/,,$(SRC))
+export SRC      = $(patsubst %/$(_MODFILE),%,$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
+export OBJ      = $(subst $(SRC_ROOT)/,$(OBJ_ROOT)/,$(SRC))
+export BIN      = $(BIN_ROOT)
 
-export _IMG     := $(BIN)/ohwes.img
-export _BOOTBIN := $(BIN)/boot.bin
+export _IMG     := $(BIN_ROOT)/ohwes.img
+export _BOOTBIN := $(BIN_ROOT)/boot.bin
 
 # Build tools
 export PREFIX  := i686-elf-
@@ -65,38 +68,38 @@ endif
 
 _MODFILE := Module.mk
 _OBJS    :=
-_LIBS    :=
 _BINS    :=
 _INCS     = $(INCLUDES)
-_DEPS     = $(_OBJS:.o=.d)
-_DIRS     = $(call uniq,$(dir $(_OBJS) $(_LIBS) $(_BINS)))
+_DEPS     = $(subst .o,.d,$(filter %.o,$(_OBJS)))
+_DIRS     = $(call uniq,$(dir $(_OBJS) $(_BINS)))
 
 # =================================================================================================
 
-# $(call make-sys, sys-path, elf-path)
-define make-sys
+define BINPLACE
   _BINS += $(addprefix $(BIN)/,$1)
-  $(addprefix $(BIN)/,$1):: $(addprefix $(BIN)/,$2)
+  $(addprefix $(BIN)/,$1):: $2
+	cp $$< $$@
+endef
+
+define STRIP
+  _OBJS += $(addprefix $(OBJ)/,$1.bin)
+  $(addprefix $(OBJ)/,$1.bin):: $(addprefix $(OBJ)/,$1.elf)
 	$(OBJCOPY) -Obinary $$< $$@
 endef
 
-# $(call make-exe, exe-path, src-list, [link-libs], [cflags], [asflags], [ldflags])
-define make-exe
-  _BINS += $(addprefix $(BIN)/,$1)
-  $(foreach _src,$(addprefix $(MODULE)/,$(filter %.S,$2)),$(eval $(call make-obj-asm,$(call get-objpath-asm,$(_src)),$(_src),$5)))
-  $(foreach _src,$(addprefix $(MODULE)/,$(filter %.c,$2)),$(eval $(call make-obj-c,$(call get-objpath-c,$(_src)),$(_src),$4)))
-  $(addprefix $(OBJ)/,$1):: $(call get-objpath-asm,$(addprefix $(MODULE)/,$(filter %.S,$2))) $(call get-objpath-c,$(addprefix $(MODULE)/,$(filter %.c,$2)))
-	$(AR) rcsv $$@ $$^
-  $(addprefix $(BIN)/,$1):: $(call get-objpath-asm,$(addprefix $(MODULE)/,$(filter %.S,$2))) $(call get-objpath-c,$(addprefix $(MODULE)/,$(filter %.c,$2))) $3
-	$(LD) -o $$@ $6 $(_LDFLAGS) $$^
+# $(call link, elf-path, link-libs, [ldflags])
+define LINK
+  _OBJS += $(addprefix $(OBJ)/,$1.elf)
+  $(addprefix $(OBJ)/,$1.elf):: $(addprefix $(OBJ)/,$1.lib) $2
+	$(LD) -o $$@ $3 $(_LDFLAGS) $$^
 endef
 
-# $(call make-lib, lib-path, src-list, [cflags], [asflags])
-define make-lib
-  _LIBS += $(addprefix $(OBJ)/,$1)
-  $(foreach _src,$(addprefix $(MODULE)/,$(filter %.S,$2)),$(eval $(call make-obj-asm,$(call get-objpath-asm,$(_src)),$(_src),$4)))
-  $(foreach _src,$(addprefix $(MODULE)/,$(filter %.c,$2)),$(eval $(call make-obj-c,$(call get-objpath-c,$(_src)),$(_src),$3)))
-  $(addprefix $(OBJ)/,$1):: $(call get-objpath-asm,$(addprefix $(MODULE)/,$(filter %.S,$2))) $(call get-objpath-c,$(addprefix $(MODULE)/,$(filter %.c,$2)))
+# $(call compile, lib-path, src-list, [cflags], [asflags])
+define COMPILE
+  _OBJS += $(addprefix $(OBJ)/,$1.lib)
+  $(foreach _src,$(addprefix $(SRC)/,$(filter %.S,$2)),$(eval $(call make-obj-asm,$(call get-objpath-asm,$(_src)),$(_src),$4)))
+  $(foreach _src,$(addprefix $(SRC)/,$(filter %.c,$2)),$(eval $(call make-obj-c,$(call get-objpath-c,$(_src)),$(_src),$3)))
+  $(addprefix $(OBJ)/,$1.lib):: $(call get-objpath-asm,$(addprefix $(SRC)/,$(filter %.S,$2))) $(call get-objpath-c,$(addprefix $(SRC)/,$(filter %.c,$2)))
 	$(AR) rcsv $$@ $$^
 endef
 
@@ -121,12 +124,12 @@ endef
 
 # $(call get-objpath-asm, src-path)
 define get-objpath-asm
-  $(subst $(SRC)/,$(OBJ)/,$(subst .S,.o,$(filter %.S,$1)))
+  $(subst $(SRC_ROOT)/,$(OBJ_ROOT)/,$(subst .S,.o,$(filter %.S,$1)))
 endef
 
 # $(call get-objpath-c, src-path)
 define get-objpath-c
-  $(subst $(SRC)/,$(OBJ)/,$(subst .c,.o,$(filter %.c,$1)))
+  $(subst $(SRC_ROOT)/,$(OBJ_ROOT)/,$(subst .c,.o,$(filter %.c,$1)))
 endef
 
 
@@ -150,16 +153,16 @@ endef
 all:
 
 vpath %.h $(_INCS)
-include $(addsuffix /$(_MODFILE), $(MODULES))
+include $(addsuffix /$(_MODFILE),$(MODULES))
 
 # -------------------------------------------------------------------------------------------------
 
-all: $(_DIRS) $(_BINS) $(_LIBS)
-img: $(_DIRS) $(_IMG) $(_BINS) $(_LIBS)
+all: $(_DIRS) $(_BINS)
+img: $(_DIRS) $(_IMG) $(_BINS)
 dirs: $(_DIRS)
 
 $(_DIRS):
-	$(MKDIR) $(call uniq,$(dir $(_OBJS) $(_LIBS) $(_BINS)))
+	$(MKDIR) $(call uniq,$(dir $(_OBJS) $(_BINS)))
 
 
 $(_IMG): $(_BOOTBIN)
@@ -171,18 +174,18 @@ floppy: img
 	dd if=$(_BOOTBIN) of=/dev/fd0 bs=512 conv=notrunc
 
 clean:
-	$(RM) $(_IMG) $(_BINS) $(_LIBS) $(_OBJS) $(_DEPS)
+	$(RM) $(_IMG) $(_BINS) $(_OBJS) $(_DEPS)
 
 nuke:
-	$(RM) -r $(BIN) $(OBJ)
+	$(RM) -r $(BIN_ROOT) $(OBJ_ROOT)
 
 # -------------------------------------------------------------------------------------------------
 
 run-qemu: img
-	$(SCRIPTS)/run.sh qemu $(BIN)/ohwes.img
+	$(SCRIPTS)/run.sh qemu $(BIN_ROOT)/ohwes.img
 
 run-qemu-dbg:
-	$(SCRIPTS)/run.sh qemu $(BIN)/ohwes.img debug
+	$(SCRIPTS)/run.sh qemu $(BIN_ROOT)/ohwes.img debug
 
 run-bochs: img
 # TODO: try to make the bochs script less platform and directory dependent...

@@ -18,11 +18,11 @@
 #       Author: Wes Hampson
 # =============================================================================
 
-TARGET  := crt/crt.lib
+TARGETNAME := crt
 SOURCES := \
     gcc.c \
     printf.c \
     puts.c \
     string.c \
 
-$(eval $(call make-lib,$(TARGET),$(SOURCES)))
+$(eval $(call COMPILE,$(TARGETNAME),$(SOURCES)))

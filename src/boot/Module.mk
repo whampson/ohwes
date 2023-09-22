@@ -26,14 +26,15 @@ SOURCES = \
 	stage1.S \
 	stage2.S \
 
-LINKLIBS = \
+LNKLIBS = \
 	obj/crt/crt.lib \
 
 # Code Origin
 LDFLAGS += -Ttext 0x7C00
 
-# Build BOOT.
-$(eval $(call make-exe,$(TARGETNAME).elf,$(SOURCES),$(LINKLIBS),,,$(LDFLAGS)))
+$(eval $(call COMPILE,$(TARGETNAME),$(SOURCES)))
+$(eval $(call LINK,$(TARGETNAME),$(LNKLIBS),$(LDFLAGS)))
+$(eval $(call BINPLACE,$(TARGETNAME).elf,$(OBJ)/$(TARGETNAME).elf))
 
 ###
 # split boot.elf into boot.bin, bootsect.bin and boot.sys
