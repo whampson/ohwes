@@ -73,6 +73,10 @@ _INCS     = $(INCLUDES)
 _DEPS     = $(subst .o,.d,$(filter %.o,$(_OBJS)))
 _DIRS     = $(call uniq,$(dir $(_OBJS) $(_BINS)))
 
+ifndef OHWES_ENVIRONMENT_SET
+  $(error "Environment not set! Please source $(SCRIPTS)/env.sh.")
+endif
+
 # =================================================================================================
 
 define BINPLACE
@@ -157,13 +161,11 @@ include $(addsuffix /$(_MODFILE),$(MODULES))
 
 # -------------------------------------------------------------------------------------------------
 
-all: $(_DIRS) $(_BINS)
-img: $(_DIRS) $(_IMG) $(_BINS)
-dirs: $(_DIRS)
+all: $(_BINS)
+img: $(_IMG) $(_BINS)
 
-$(_DIRS):
-	$(MKDIR) $(call uniq,$(dir $(_OBJS) $(_BINS)))
-
+# $(info $(MKDIR) $(_DIRS))
+$(shell $(MKDIR) $(_DIRS))
 
 $(_IMG): $(_BOOTBIN)
 	dd if=/dev/zero of=$(_IMG) bs=512 count=2880

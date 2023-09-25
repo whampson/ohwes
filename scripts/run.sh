@@ -14,7 +14,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     QEMU_PATH=qemu
     BOCHS_PATH=bochs
 elif [[ "$OSTYPE" == "msys" ]]; then
-    QEMU_PATH=/mingw32/bin/qemu-system-i386
+    QEMU_PATH=qemu-system-i386
     BOCHS_PATH=bochs
 fi
 
