@@ -28,9 +28,6 @@ if [[ "$OSTYPE" == "msys" ]]; then          # Windows/MINGW32
     if [ -d "$ELF_TOOLS" ]; then
         PATH=$PATH:$ELF_TOOLS
     fi
-
-    MINGW32_MAKE=$(command -v mingw32-make)
-    alias $MAKE_CMD=$(printf "%q" "$MINGW32_MAKE")
 else
     # TODO: darwin, linux
     echo "error: unsupported platform '$OSTYPE'!"
