@@ -9,6 +9,9 @@
         "editor.detectIndentation": false
     },
 
+    "explorer.sortOrder": "foldersNestsFiles",
+    "explorer.sortOrderLexicographicOptions": "upper",
+
     "files.associations": {
         "*.h": "c",
         "numbers": "c",
