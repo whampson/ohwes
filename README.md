@@ -1,6 +1,6 @@
 # OH-WES
-**OH-WES** is a toy operating system for the i386 architecture written by
-Wes Hampson. OH-WES is currently in early development.
+**OH-WES** is a toy operating system written by Wes Hampson. OH-WES is currently
+in early development.
 
 ## Cloning
 ```
@@ -24,15 +24,15 @@ restart the shell.
 MSYS2> pacman -Syuu
 ```
 
-3. Install 32-bit GCC cross-compiler. This will be used to build the operating system code. Currently, we are using GCC 7.1.0 graciously pre-compiled by *lordmilko* at [lordmilko/i386-elf-tools](https://github.com/lordmilko/i686-elf-tools).
+3. Install native build tools.
+```
+MSYS2> pacman -Syu msys2/make
+MSYS2> pacman -Syu mingw32/mingw-w64-i686-toolchain
+```
+
+4. Install cross-compiler. This will be used to build the operating system code. Currently, we are using GCC 7.1.0 graciously pre-compiled by *lordmilko* at [lordmilko/i386-elf-tools](https://github.com/lordmilko/i686-elf-tools).
     1. Download [i686-elf-tools-windows.zip](https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-windows.zip)
     2. Extract .zip to `tools/bin/i686-elf-tools-windows`
-
-4. Install 32-bit native toolchain. This will install GNU Make and GCC, among
-other tools, used for parsing the Makefile and building external tools.
-```
-MINGW32> pacman -Syu mingw32/mingw-w64-i686-toolchain
-```
 
 5. Use a MINGW32 shell to build OH-WES (see [Building OH-WES](#building-oh-wes))
 
