@@ -5,7 +5,8 @@
     "editor.bracketPairColorization.enabled": false,
     "[makefile]":{
         "editor.insertSpaces": false,
-        "editor.tabSize": 8
+        "editor.tabSize": 8,
+        "editor.detectIndentation": false
     },
 
     "files.associations": {
