@@ -4,4 +4,3 @@ SOURCES := \
     printf.c \
     puts.c \
     string.c \
-

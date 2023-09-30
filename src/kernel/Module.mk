@@ -1,4 +1,4 @@
-TARGET := libkernel.a
+TARGET := kernel/kernel.elf
 
 SOURCES := \
     entry.S \
@@ -9,6 +9,7 @@ SOURCES := \
     init.c \
     irq.c \
 
-TGT_LDLIBS := $(BUILD_DIR)/lib/libcrt.a
-TGT_INCDIRS := src/kernel/include
-TGT_LDFLAGS := -TText
+TGT_INCDIRS := include
+TGT_LDFLAGS := -Ttext 0x100000
+TGT_LDLIBS  := \
+    ${TARGET_DIR}/lib/libcrt.a \

@@ -1,24 +1,4 @@
-# =============================================================================
-# Copyright (C) 2023 Wes Hampson. All Rights Reserved.
-#
-# This file is part of the OH-WES Operating System.
-# OH-WES is free software; you may redistribute it and/or modify it under the
-# terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-# -----------------------------------------------------------------------------
-#         File: boot/Module.mk
-#      Created: March 12, 2023
-#       Author: Wes Hampson
-# =============================================================================
-
-TARGETNAME = boot
+TARGET = boot/boot.elf
 
 # NOTE: stage1.S must come before stage2.S,
 #       or else entrypoint will end up in the wrong spot!
@@ -26,15 +6,8 @@ SOURCES = \
 	stage1.S \
 	stage2.S \
 
-LNKLIBS = \
-	obj/crt/crt.lib \
-
-# Code Origin
-LDFLAGS += -Ttext 0x7C00
-
-$(eval $(call COMPILE,$(TARGETNAME),$(SOURCES)))
-$(eval $(call LINK,$(TARGETNAME),$(LNKLIBS),$(LDFLAGS)))
-$(eval $(call BINPLACE,$(TARGETNAME).elf,$(OBJ)/$(TARGETNAME).elf))
+TGT_LDFLAGS := -Ttext 0x7C00
+TGT_LDLIBS  := ${TARGET_DIR}/lib/libcrt.a
 
 ###
 # split boot.elf into boot.bin, bootsect.bin and boot.sys
@@ -43,21 +16,14 @@ $(eval $(call BINPLACE,$(TARGETNAME).elf,$(OBJ)/$(TARGETNAME).elf))
 #     boot.sys = bytes 512-end of boot.bin
 ###
 
-# Make sure the new files are recognized by the build system
-# TODO: this is kind of a hack
-_BINS += \
-	$(BIN)/$(TARGETNAME).bin \
-	$(BIN)/$(TARGETNAME).sys \
-	$(BIN)/bootsect.bin \
-
 # strip elf
-$(BIN)/$(TARGETNAME).bin: $(BIN)/$(TARGETNAME).elf
-	$(OBJCOPY) -Obinary $< $@
+${TARGET_DIR}/boot.bin: ${TARGET_DIR}/${TARGET}
+	${OBJCOPY} -Obinary $< $@
 
-# extract boot sector (stage 1)
-$(BIN)/bootsect.bin: $(BIN)/$(TARGETNAME).bin
-	head -c 512 $< > $@
+# # extract boot sector (stage 1)
+# $(BIN)/bootsect.bin: $(BIN)/$(TARGETNAME).bin
+# 	head -c 512 $< > $@
 
-# extract rest of boot loader (stage 2)
-$(BIN)/$(TARGETNAME).sys: $(BIN)/$(TARGETNAME).bin
-	tail -c +513 $< > $@
+# # extract rest of boot loader (stage 2)
+# $(BIN)/$(TARGETNAME).sys: $(BIN)/$(TARGETNAME).bin
+# 	tail -c +513 $< > $@
