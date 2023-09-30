@@ -1,3 +1,12 @@
+# include dirs, relative to the project root for some reason
+INCDIRS    := src/include
+
+# OS modules
+SUBMAKEFILES := \
+    crt/Module.mk \
+    kernel/Module.mk \
+    boot/Module.mk
+
 # use cross-compiler toolchain
 PREFIX     := i686-elf-
 AR         := $(PREFIX)ar
@@ -17,11 +26,17 @@ ifeq "${DEBUG}" "1"
   CFLAGS += ${DEBUGFLAGS}
 endif
 
-# include dirs, relative to the project root for some reason
-INCDIRS    := src/include
+# Create a raw binary executable, no symbols or anything
+#   1 - input ELF
+#   2 - output file
+define raw-bin
+	@mkdir -p $(dir $2)
+	${OBJCOPY} -Obinary $1 $2
+endef
 
-# OS modules
-SUBMAKEFILES := \
-    crt/Module.mk \
-    kernel/Module.mk \
-# boot/Module.mk
+# Create a system (.sys) file from the current TARGET file.
+#   1 - system file target path
+define make-sys
+  $(call raw-bin,${TARGET_DIR}/${TARGET},${TARGET_DIR}/$1)
+  $(eval TGT_POSTCLEAN += ${RM} ${TARGET_DIR}/$1)
+endef

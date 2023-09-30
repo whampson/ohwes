@@ -1,4 +1,7 @@
 TARGET = boot/boot.elf
+TARGETBIN = boot/boot.bin
+TARGET_STAGE1 = boot/bootsect.bin
+TARGET_STAGE2 = sys/boot.sys
 
 # NOTE: stage1.S must come before stage2.S,
 #       or else entrypoint will end up in the wrong spot!
@@ -16,14 +19,29 @@ TGT_LDLIBS  := ${TARGET_DIR}/lib/libcrt.a
 #     boot.sys = bytes 512-end of boot.bin
 ###
 
-# strip elf
-${TARGET_DIR}/boot.bin: ${TARGET_DIR}/${TARGET}
-	${OBJCOPY} -Obinary $< $@
+# make boot sector
+#   1 - raw boot loader file
+#   2 - output file
+define make-stage1
+	head -c 512 $1 > $2
+endef
 
-# # extract boot sector (stage 1)
-# $(BIN)/bootsect.bin: $(BIN)/$(TARGETNAME).bin
-# 	head -c 512 $< > $@
+# make stage2 boot loader
+#   1 - raw boot loader file
+#   2 - output file
+define make-stage2
+	tail -c +513 $1 > $2
+endef
 
-# # extract rest of boot loader (stage 2)
-# $(BIN)/$(TARGETNAME).sys: $(BIN)/$(TARGETNAME).bin
-# 	tail -c +513 $< > $@
+define boot-postmake
+  $(call raw-bin,${TARGET_DIR}/${TARGET},${TARGET_DIR}/${TARGETBIN})
+  $(call make-stage1,${TARGET_DIR}/${TARGETBIN},${TARGET_DIR}/${TARGET_STAGE1})
+  $(call make-stage2,${TARGET_DIR}/${TARGETBIN},${TARGET_DIR}/${TARGET_STAGE2})
+endef
+
+TGT_POSTMAKE := $(call boot-postmake)
+
+TGT_POSTCLEAN := \
+	${RM} ${TARGET_DIR}/${TARGETBIN}; \
+	${RM} ${TARGET_DIR}/${TARGET_STAGE1}; \
+	${RM} ${TARGET_DIR}/${TARGET_STAGE2}; \
