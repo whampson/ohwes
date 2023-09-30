@@ -1,6 +1,7 @@
 # boilermake: A reusable, but flexible, boilerplate Makefile.
 #
 # Copyright 2008, 2009, 2010 Dan Moulding, Alan T. DeKok
+# Copyright 2023 Wes Hampson
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,10 +16,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# boilermake:
+# Modifications made by Wes Hampson.
+#
+# 29 Sep 23:
+#  - Added support for compiling ASM files
+#
+
+# ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
 # Caution: Don't edit this Makefile! Create your own main.mk and other
 #          submakefiles, which will be included by this Makefile.
 #          Only edit this if you need to modify boilermake's behavior (fix
 #          bugs, add features, etc).
+# ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
 
 # Note: Parameterized "functions" in this makefile that are marked with
 #       "USE WITH EVAL" are only useful in conjuction with eval. This is
@@ -129,6 +139,19 @@ define COMPILE_CXX_CMDS
 	 rm -f ${@:%$(suffix $@)=%.d}
 endef
 
+# COMPILE_ASM_CMDS - Commands for compiling ASM source code.
+define COMPILE_ASM_CMDS
+	@mkdir -p $(dir $@)
+	$(strip ${AS} -o $@ -c -MD ${ASFLAGS} ${SRC_ASFLAGS} ${INCDIRS} \
+	    ${SRC_INCDIRS} ${SRC_DEFS} ${DEFS} $<)
+	@cp ${@:%$(suffix $@)=%.d} ${@:%$(suffix $@)=%.P}; \
+	 sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
+	     -e '/^$$/ d' -e 's/$$/ :/' < ${@:%$(suffix $@)=%.d} \
+	     >> ${@:%$(suffix $@)=%.P}; \
+	 rm -f ${@:%$(suffix $@)=%.d}
+endef
+
+
 # INCLUDE_SUBMAKEFILE - Parameterized "function" that includes a new
 #   "submakefile" fragment into the overall Makefile. It also recursively
 #   includes all submakefiles of the specified submakefile fragment.
@@ -141,6 +164,7 @@ define INCLUDE_SUBMAKEFILE
     TARGET        :=
     TGT_CFLAGS    :=
     TGT_CXXFLAGS  :=
+    TGT_ASFLAGS   :=
     TGT_DEFS      :=
     TGT_INCDIRS   :=
     TGT_LDFLAGS   :=
@@ -153,6 +177,7 @@ define INCLUDE_SUBMAKEFILE
     SOURCES       :=
     SRC_CFLAGS    :=
     SRC_CXXFLAGS  :=
+    SRC_ASFLAGS   :=
     SRC_DEFS      :=
     SRC_INCDIRS   :=
 
@@ -187,6 +212,7 @@ define INCLUDE_SUBMAKEFILE
         ALL_TGTS += $${TGT}
         $${TGT}_CFLAGS    := $${TGT_CFLAGS}
         $${TGT}_CXXFLAGS  := $${TGT_CXXFLAGS}
+        $${TGT}_ASFLAGS   := $${TGT_ASFLAGS}
         $${TGT}_DEFS      := $${TGT_DEFS}
         $${TGT}_DEPS      :=
         TGT_INCDIRS       := $$(call QUALIFY_PATH,$${DIR},$${TGT_INCDIRS})
@@ -206,6 +232,7 @@ define INCLUDE_SUBMAKEFILE
         TGT := $$(strip $$(call PEEK,$${TGT_STACK}))
         $${TGT}_CFLAGS    += $${TGT_CFLAGS}
         $${TGT}_CXXFLAGS  += $${TGT_CXXFLAGS}
+        $${TGT}_ASFLAGS   += $${TGT_ASFLAGS}
         $${TGT}_DEFS      += $${TGT_DEFS}
         TGT_INCDIRS       := $$(call QUALIFY_PATH,$${DIR},$${TGT_INCDIRS})
         TGT_INCDIRS       := $$(call CANONICAL_PATH,$${TGT_INCDIRS})
@@ -249,6 +276,7 @@ define INCLUDE_SUBMAKEFILE
         $${TGT}_DEPS += $${OBJS:%.o=%.P}
         $${OBJS}: SRC_CFLAGS   := $${$${TGT}_CFLAGS} $${SRC_CFLAGS}
         $${OBJS}: SRC_CXXFLAGS := $${$${TGT}_CXXFLAGS} $${SRC_CXXFLAGS}
+        $${OBJS}: SRC_ASFLAGS  := $${$${TGT}_ASFLAGS} $${SRC_ASFLAGS}
         $${OBJS}: SRC_DEFS     := $$(addprefix -D,$${$${TGT}_DEFS} $${SRC_DEFS})
         $${OBJS}: SRC_INCDIRS  := $$(addprefix -I,\
                                      $${$${TGT}_INCDIRS} $${SRC_INCDIRS})
@@ -327,7 +355,8 @@ endif
 # Define the source file extensions that we know how to handle.
 C_SRC_EXTS := %.c
 CXX_SRC_EXTS := %.C %.cc %.cp %.cpp %.CPP %.cxx %.c++
-ALL_SRC_EXTS := ${C_SRC_EXTS} ${CXX_SRC_EXTS}
+ASM_SRC_EXTS := %.S
+ALL_SRC_EXTS := ${C_SRC_EXTS} ${CXX_SRC_EXTS} ${ASM_SRC_EXTS}
 
 # Initialize global variables.
 ALL_TGTS :=
@@ -364,6 +393,12 @@ $(foreach TGT,${ALL_TGTS},\
   $(foreach EXT,${CXX_SRC_EXTS},\
     $(eval $(call ADD_OBJECT_RULE,${BUILD_DIR}/$(call CANONICAL_PATH,${TGT}),\
              ${EXT},$${COMPILE_CXX_CMDS}))))
+
+# Add pattern rule(s) for creating compiled object code from ASM source.
+$(foreach TGT,${ALL_TGTS},\
+  $(foreach EXT,${ASM_SRC_EXTS},\
+    $(eval $(call ADD_OBJECT_RULE,${BUILD_DIR}/$(call CANONICAL_PATH,${TGT}),\
+             ${EXT},$${COMPILE_ASM_CMDS}))))
 
 # Add "clean" rules to remove all build-generated files.
 .PHONY: clean
