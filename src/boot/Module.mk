@@ -39,9 +39,11 @@ define boot-postmake
   $(call make-stage2,${TARGET_DIR}/${TARGETBIN},${TARGET_DIR}/${TARGET_STAGE2})
 endef
 
-TGT_POSTMAKE := $(call boot-postmake)
+define boot-postclean
+	${RM} ${TARGET_DIR}/${TARGETBIN}
+	${RM} ${TARGET_DIR}/${TARGET_STAGE1}
+	${RM} ${TARGET_DIR}/${TARGET_STAGE2}
+endef
 
-TGT_POSTCLEAN := \
-	${RM} ${TARGET_DIR}/${TARGETBIN}; \
-	${RM} ${TARGET_DIR}/${TARGET_STAGE1}; \
-	${RM} ${TARGET_DIR}/${TARGET_STAGE2}; \
+TGT_POSTMAKE  := $(call boot-postmake)
+TGT_POSTCLEAN := $(call boot-postclean)
