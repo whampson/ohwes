@@ -112,13 +112,13 @@ const Command * FindCommand(const char *name)
 int PrintCommandHelp(const Command *cmd)
 {
     if (cmd->Synopsis)
-        printf("Usage: %s\n", cmd->Synopsis);
+        LogInfo("Usage: %s\n", cmd->Synopsis);
 
     if (cmd->Description)
-        printf("%s.\n", cmd->Description);
+        LogInfo("%s.\n", cmd->Description);
 
     if (cmd->Options)
-        printf("\nOptions:\n%s\n", cmd->Options);
+        LogInfo("\nOptions:\n%s\n", cmd->Options);
 
     return STATUS_SUCCESS;
 }
@@ -141,11 +141,11 @@ int Help(const Command *cmd, const CommandArgs *args)
         // Special case for 'help' command to print all valid commands
         const Command *cmds = GetCommands();
         int count = GetCommandCount();
-        printf("\nCommands:\n");
+        LogInfo("\nCommands:\n");
         for (int i = 0; i < count; i++) {
-            printf("  %-18s%s\n", cmds[i].Name, cmds[i].Description);
+            LogInfo("  %-18s%s\n", cmds[i].Name, cmds[i].Description);
         }
-        printf("\n");
+        LogInfo("\n");
     }
     return STATUS_SUCCESS;
 }

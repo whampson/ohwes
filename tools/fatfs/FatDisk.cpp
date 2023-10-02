@@ -757,8 +757,8 @@ bool FatDisk::WriteFile(const DirEntry *pFile, const char *pBuf)
     uint32_t existingCount = CountClusters(pFile);
     uint32_t totalCount = Max(newCount, existingCount);
 
-    LogInfo("newCount = %d, existingCount = %d, totalCount = %d\n",
-        newCount, existingCount, totalCount);
+    // LogInfo("newCount = %d, existingCount = %d, totalCount = %d\n",
+    //     newCount, existingCount, totalCount);
 
     if (newCount > CountFreeClusters()) {
         LogError("not enough space on disk!\n");

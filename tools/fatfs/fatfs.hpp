@@ -105,9 +105,17 @@ static inline const char * GetFileName(const char *path)
 	const char *p;
     const char *name;
 
-    name = path;    // TODO: handle backslash too
+    name = path;
 	if ((p = strrchr(path, '/')) != NULL) {
 	    name = p + 1;
+    }
+
+    if (strcmp(name, path) == 0) {
+        // very crude way of handling backslash paths,
+        // doesn't allow mixed slashes
+        if ((p = strrchr(path, '\\')) != NULL) {
+            name = p + 1;
+        }
     }
 
     return name;

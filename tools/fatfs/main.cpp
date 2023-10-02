@@ -36,8 +36,8 @@ int PrintHelp()
 
 int PrintVersion()
 {
-    printf("%s %s (%s)\n", PROG_NAME, PROG_VERSION, __DATE__);
-    printf(PROG_COPYRIGHT "\n");
+    LogInfo("%s %s (%s)\n", PROG_NAME, PROG_VERSION, __DATE__);
+    LogInfo(PROG_COPYRIGHT "\n");
 
     return STATUS_SUCCESS;
 }
@@ -47,24 +47,24 @@ int PrintGlobalHelp()
     const Command *cmds = GetCommands();
     int count = GetCommandCount();
 
-    printf("Usage: " PROG_NAME " [OPTIONS] COMMAND [ARGS]\n");
-    printf("FAT File System disk image manipulation tool.\n");
-    printf("\nCommands:\n");
+    LogInfo("Usage: " PROG_NAME " [OPTIONS] COMMAND [ARGS]\n");
+    LogInfo("FAT File System disk image manipulation tool.\n");
+    LogInfo("\nCommands:\n");
     for (int i = 0; i < count; i++) {
-        printf("  %-18s%s\n", cmds[i].Name, cmds[i].Description);
+        LogInfo("  %-18s%s\n", cmds[i].Name, cmds[i].Description);
     }
-    printf("\nGlobal Options:\n");
-    printf("  -p, --prefix      Prefix output with the program name\n");
-    printf("  -q, --quiet       Suppress informational output, keep errors (overrides -v)\n");
-    printf("      --quiet-all   Suppress all output (overrides -v)\n");
-    printf("  -v, --verbose     Make the operation more talkative\n");
-    printf("      --very-verbose Extra chatty output\n");
-    printf("      --help        Display this help message and exit\n");
-    printf("      --version     Display version information and exit\n");
-    printf("\nGlobal long options can be supplied anywhere in the argument string, while their\n");
-    printf("short option counterparts can only occur before COMMAND. This is done to avoid\n");
-    printf("potential conflicts with command-specific options.\n");
-    printf("\nTo get help about a command, run `" PROG_NAME " help COMMAND` or `" PROG_NAME " COMMAND --help`.\n");
+    LogInfo("\nGlobal Options:\n");
+    LogInfo("  -p, --prefix      Prefix output with the program name\n");
+    LogInfo("  -q, --quiet       Suppress informational output, keep errors (overrides -v)\n");
+    LogInfo("      --quiet-all   Suppress all output (overrides -v)\n");
+    LogInfo("  -v, --verbose     Make the operation more talkative\n");
+    LogInfo("      --very-verbose Extra chatty output\n");
+    LogInfo("      --help        Display this help message and exit\n");
+    LogInfo("      --version     Display version information and exit\n");
+    LogInfo("\nGlobal long options can be supplied anywhere in the argument string, while their\n");
+    LogInfo("short option counterparts can only occur before COMMAND. This is done to avoid\n");
+    LogInfo("potential conflicts with command-specific options.\n");
+    LogInfo("\nTo get help about a command, run `" PROG_NAME " help COMMAND` or `" PROG_NAME " COMMAND --help`.\n");
 
     // TODO: --offset=SECTOR
     // TODO: print these with command-specific help w/o the short opts
@@ -144,6 +144,7 @@ int main(int argc, char **argv)
     }
     if (s_CommandArgs.Argc == 0) {
         LogError_MissingCommand();
+        LogInfo("Run `" PROG_NAME " --help' for help.\n");
         return STATUS_INVALIDARG;
     }
 
