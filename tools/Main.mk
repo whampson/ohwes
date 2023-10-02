@@ -1,3 +1,7 @@
+#
+# NOTE: using native toolchain!!!
+#       do not call from ../Main.mk!
+#
 DEBUG      := 1
 DEBUGFLAGS := -DDEBUG -g -Og
 

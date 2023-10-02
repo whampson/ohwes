@@ -37,6 +37,9 @@ else
     return 1
 fi
 
+TOOLS_PATH=$PROJ_ROOT/tools/bin
+PATH=$PATH:$TOOLS_PATH
+
 echo "$MAKE => $(command -v $MAKE)"
 echo "$CC_NATIVE => $(command -v $CC_NATIVE)"
 echo "$CXX_NATIVE => $(command -v $CXX_NATIVE)"
