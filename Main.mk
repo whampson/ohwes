@@ -10,8 +10,10 @@ SCRIPT_DIR := scripts
 # boot image
 DISKIMG := ${TARGET_DIR}/boot/bootsect.bin
 
-# build the OS!
-SUBMAKEFILES := src/ohwes.mk
+
+SUBMAKEFILES := \
+    tools/tools.mk \
+    src/ohwes.mk \
 
 # do it all!
 .PHONY: all

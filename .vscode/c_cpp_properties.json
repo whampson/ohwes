@@ -18,6 +18,13 @@
             "configurationProvider": "ms-vscode.makefile-tools"
         },
         {
+            "name": "OH-WES Tools [Win32]",
+            "defines": [],
+            "compilerPath": "C:/msys64/mingw32/bin/gcc",
+            "intelliSenseMode": "gcc-x86",
+            "configurationProvider": "ms-vscode.makefile-tools"
+        },
+        {
             "name": "OH-WES [macOS]",
             "includePath": [
                 "${workspaceFolder}/include/*"
