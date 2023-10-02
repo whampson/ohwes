@@ -1,5 +1,5 @@
 
-TARGET = tools/fatfs
+TARGET = fatfs
 
 SOURCES = \
   Command_Add.cpp \

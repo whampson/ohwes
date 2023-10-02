@@ -10,26 +10,22 @@ SCRIPT_DIR := scripts
 # boot image
 DISKIMG := ${TARGET_DIR}/boot/bootsect.bin
 
-
 SUBMAKEFILES := \
-    tools/tools.mk \
     src/ohwes.mk \
 
-# do it all!
-.PHONY: all
+.PHONY: all tools nuke run run-debug
+
 all:
 
+tools:
+	@${MAKE} -C tools $(filter-out tools,${MAKECMDGOALS})
+
 # destroy everything!!!
-.PHONY: nuke
 nuke:
 	${RM} -r ${TARGET_DIR} ${BUILD_DIR}
 
-# run away!!
-.PHONY: run
 run: all
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG}
 
-# exterminate bugs!
-.PHONY: run-debug
 run-debug: all
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG} debug
