@@ -9,7 +9,8 @@ SCRIPT_DIR := scripts
 
 BOOTIMG := ${TARGET_DIR}/boot/bootsect.bin
 BOOTSYS := ${TARGET_DIR}/sys/boot.sys
-DISKIMG := ${TARGET_DIR}/img/ohwes.img
+KERNSYS := ${TARGET_DIR}/sys/ohwes.sys
+DISKIMG := ${TARGET_DIR}/ohwes.img
 
 SUBMAKEFILES := \
     src/ohwes.mk \
@@ -27,10 +28,11 @@ nuke:
 
 img: tools
 	@mkdir -p $(dir ${DISKIMG})
-	fatfs create ${DISKIMG} 2880
+	fatfs create --force ${DISKIMG} 2880
 	dd if=${BOOTIMG} of=${DISKIMG} bs=512 count=1 conv=notrunc
 	fatfs add ${DISKIMG} ${BOOTSYS} BOOT.SYS
 	fatfs attr -s ${DISKIMG} BOOT.SYS
+	fatfs add ${DISKIMG} ${KERNSYS} OHWES.SYS
 	fatfs list -a ${DISKIMG}
 
 run: all img
