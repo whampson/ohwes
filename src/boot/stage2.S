@@ -64,7 +64,7 @@ early_gdt_reg:
 ##
 .globl stage2
 stage2:
-        call            init_video
+        // call            init_video
         leaw            s_hello, %si
         call            bios_println
         call            get_hwinfo
@@ -417,7 +417,7 @@ g_RamHi_E801h:
         .long           0
 
 s_hello:
-        .asciz          "boot: entering stage 2..."
+        .asciz          "Entered BOOT.SYS"
 s_memerr:
         .asciz          "Error: unable to detect system memory!"
 s_a20err:

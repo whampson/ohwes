@@ -33,7 +33,8 @@ img: tools
 	fatfs add ${DISKIMG} ${BOOTSYS} BOOT.SYS
 	fatfs attr -s ${DISKIMG} BOOT.SYS
 	fatfs add ${DISKIMG} ${KERNSYS} OHWES.SYS
-	fatfs list -a ${DISKIMG}
+	fatfs attr -s ${DISKIMG} OHWES.SYS
+	fatfs list -Aa ${DISKIMG}
 
 run: all img
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG}

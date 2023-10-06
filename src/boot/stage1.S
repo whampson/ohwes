@@ -38,55 +38,98 @@ RESETMODE_NOMEMTEST     = 0x1234                # Skip memory test on soft reset
 #
 .globl _start
 _start:
-        jmp             stage1
+        jmp             Stage1
         nop
 
 #
 # BIOS Parameter Block for a FAT12-formatted 3.5" 1.44MB floppy disk.
 # Do NOT move this. Tweak with care.
 #
-oem_name:               .ascii                  "whampson"
-sector_size:            .short                  512
-sectors_per_cluster:    .byte                   1
-reserved_sectors:       .short                  1
-table_count:            .byte                   2
-root_dir_capacity:      .short                  224
-sector_count:           .short                  2880
-media_type:             .byte                   0xF0
-sectors_per_table:      .short                  9
-sectors_per_track:      .short                  18
-head_count:             .short                  2
-hidden_sectors:         .int                    0
-sector_count32:         .int                    0
-drive_number:           .byte                   0
-_reserved:              .byte                   0
-signature:              .byte                   0x29
-volume_id:              .int                    0xCA55E77E
-label:                  .ascii                  "OH-WES     "
-fs_type:                .ascii                  "FAT12   "
+OemName:                .ascii                  "whampson"
+SectorSize:             .short                  512
+SectorsPerCluster:      .byte                   1
+ReservedSectors:        .short                  1
+FatCount:               .byte                   2
+RootDirCapacity:        .short                  224
+SectorCount:            .short                  2880
+MediaType:              .byte                   0xF0
+SectorsPerFat:          .short                  9
+SectorsPerTrack:        .short                  18
+HeadCount:              .short                  2
+HiddenSectors:          .int                    0
+SectorCount32:          .int                    0
+DriveNumber:            .byte                   0
+_Reserved:              .byte                   0
+Signature:              .byte                   0x29
+VolumeId:               .int                    0xCA55E77E
+Label:                  .ascii                  "OH-WES     "
+FsType:                 .ascii                  "FAT12   "
+
+.macro PRINT str
+        leaw \str, %si
+        call bios_print
+.endm
 
 #
 # Initial boot loader code.
 # Gotta be tight; file must assemble to exactly 512 bytes!
 #
-stage1:
-        cld
-        xorw            %ax, %ax
+# We start off executing at 0x7C00. We set the stack pointer to this address
+# (remember, the stack grows towards 0!) and load BOOT.SYS at 0x7E00,
+# immediately after the boot sector in memory.
+#
+Stage1:
+        #
+        # init
+        #
+        cld                                     # clear direction bit
+        xorw            %ax, %ax                # zero segment regs
         movw            %ax, %ds
-        movw            %ax, %ss
-        movw            $0x07E0, %ax
         movw            %ax, %es
-        movw            $0x7C00, %bp
+        movw            %ax, %ss
+        movw            $0x7C00, %bp            # set up stack
         movw            %bp, %sp
+        PRINT           s_hello                 # print a welcome message
 
-        leaw            s_hello, %si
-        call            bios_println
-        xorw            %bx, %bx                # base = 07E0:0000h = 0x7E00
-        movw            $1, %ax                 # start sector (logical block address)
-        movw            $32, %cx                # sector count          (TODO: can't read more than 64 for some reason?)
+        #
+        # load root dir
+        #
+        movw            RootDirCapacity, %cx    # calculate root dir size
+        shlw            $5, %cx                 #   maxentries*32
+        subw            %cx, %sp                # make stack space
+        movw            %sp, %bx                # ex:bx = pDest = sp
+        movw            SectorsPerFat, %ax      # calculate root dir start sector
+        mulb            FatCount                #   nreserved+(nfatsectors*nfats)
+        addw            ReservedSectors, %ax
+        pushw           %ax                     # save start sector for later
+        decw            %cx                     # caclulate num sectors to read
+        shrw            $9, %cx                 #   ((nbytes-1)/512)+1
+        incw            %cx
+        pushw           %cx                     # save sector count for later
+        call            read_sectors            # read root dir
+
+        #
+        # load BOOT.SYS
+        # todo: scan root dir for file? or ensure it's always the first entry in the dir
+        #
+        popw            %ax                     # grab root dir sector count
+        popw            %bx                     # grab root dir start sector
+        addw            %bx, %ax                # calculate first data cluster address
+        movzwl          %sp, %ebx               # ebx = root dir entry pointer
+        movw            26(%ebx), %dx           # first cluster for file
+        subw            $2, %dx                 # cluster indices 0 and 1 reserved
+        addw            %dx, %ax                # sector address of first cluster in file
+        movw            28(%ebx), %cx           # file size in bytes
+        decw            %cx                     # calculate num clusters to read
+        shrw            $9, %cx                 #  ((nbytes-1)/512)+1
+        incw            %cx
+        xchgw           %ax, %cx
+        mulb            SectorsPerCluster
+        xchgw           %ax, %cx
+
+        movw            $0x7E00, %bx            # dest = 0x07E00
         call            read_sectors
-
-        # TODO: locate BOOT.SYS and OHWES.SYS within FAT file system
+        PRINT           s_newline
 
         jmp             stage2                  # onwards!
 
@@ -95,6 +138,10 @@ readkey_reset:
 reset:
         movw            $RESETMODE_NOMEMTEST, RESETMODE
         ljmp            $0xFFFF, $0x0000
+
+halt:
+        hlt
+        jmp             halt
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
@@ -109,7 +156,7 @@ reset:
 # Inputs:
 #       es:bx - buffer address
 #       ax - logical block address (starting sector)
-#       cx - sector count (max 128 if es=0000h)
+#       cx - sector count
 #
 # Clobbers:
 #       (everything, probably)
@@ -120,13 +167,14 @@ read_sectors:
 
         pushw           %bp
         movw            %sp, %bp
+
         pushw           %bx                     # bp-2: buffer
         pushw           %ax                     # bp-4: lba
         pushw           %cx                     # bp-6: count
 
 _read_sectors_loop:
-        movw            -4(%bp), %ax
-        call            lba2chs                 # returns: cx=cyl, dh=head, dl=sect
+        movw            -4(%bp), %ax            # ax = logical block address
+        call            lba2chs                 # returns: cx=cylinder, dh=head, dl=sector
 
         # need to combine cylinder and sector into cx like below:
         #   cx =       ---ch--- ---cl---
@@ -137,7 +185,7 @@ _read_sectors_loop:
         orb             %dl, %cl
 
         movw            -2(%bp), %bx            # es:bx=buffer
-        movb            drive_number, %dl       # dl=drive
+        movb            DriveNumber, %dl       # dl=drive
         movb            $1, %al                 # al=count
         movb            $0x02, %ah              # ah=fn:read_sectors
         int             $0x13                   # ch=cyl, dh=head, cl=sect
@@ -146,8 +194,8 @@ _read_sectors_loop:
         leaw            s_progress, %si
         call            bios_print
 
-        movw            sector_size, %ax
-        addw            %ax, -2(%bp)            # buf += sector_size
+        movw            SectorSize, %ax
+        addw            %ax, -2(%bp)            # buf += SectorSize
         incw            -4(%bp)                 # lba++
         decw            -6(%bp)                 # count--
 
@@ -155,8 +203,6 @@ _read_sectors_loop:
         jmp             _read_sectors_loop
 
 _read_sectors_done:
-        leaw            s_newline, %si
-        call            bios_print
         leave
         ret
 
@@ -194,8 +240,8 @@ lba2chs:
 
         # C = LBA / (HPC * SPT)
         movw            %ax, %cx                # save lba for later
-        movw            sectors_per_track, %bx  # bx = spt
-        imulw           head_count, %bx         # bx = hpc * spt
+        movw            SectorsPerTrack, %bx    # bx = spt
+        imulw           HeadCount, %bx          # bx = hpc * spt
         xorw            %dx, %dx                # clear dx
         idivw           %bx                     # ax = dx:ax / bx
         pushw           %ax                     # save cylinder for later
@@ -204,11 +250,11 @@ lba2chs:
         # S = (LBA mod SPT) + 1
         xorw            %dx, %dx                # clear dx
         movw            %cx, %ax                # ax = lba
-        idivw           sectors_per_track       # ax = dx:ax / spt, dx = dx:ax mod spt
+        idivw           SectorsPerTrack         # ax = dx:ax / spt, dx = dx:ax mod spt
         incw            %dx                     # +1
         movb            %dl, %cl                # save head for later
         xorw            %dx, %dx                # clear dx
-        idivw           head_count              # dx = dx:ax mod hpc (ax = lba / spt)
+        idivw           HeadCount              # dx = dx:ax mod hpc (ax = lba / spt)
         movb            %dl, %dh                # dh = head
         movb            %cl, %dl                # dl = sector
         popw            %cx                     # cx = cylinder
@@ -267,7 +313,7 @@ bios_readkey:
 .globl kernel_sectors
 
 s_hello:
-        .asciz          "boot: loading boot.sys"
+        .asciz          "Loading BOOT.SYS"
 
 s_diskerr:
         .ascii          "\r\nDiskette read error!"
@@ -278,4 +324,4 @@ s_progress:
         .asciz          "."
 
 .space          0x1FE - (. - _start), 0xCC      # padding
-        .short          0xAA55                          # boot signature
+        .short          0xAA55                          # boot Signature
