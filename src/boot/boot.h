@@ -29,6 +29,13 @@
 #define A20_PORT92h         2   // A20 enabled via IO port 92h
 #define A20_BIOS            3   // A20 enabled via BIOS INT=15h,AX=2401h
 
+// see http://www.ctyme.com/intr/rb-0069.htm
+#define VGA_MODE            0x03    // 0x03 = text, CGA/EGA/VGA, 16fg/8bg, B8000h
+#define VGA_CLEAR           0
+
+#define EARLY_CS            0x08
+#define EARLY_DS            0x10
+
 #define IDT_COUNT           256
 #define GDT_COUNT           8
 #define LDT_COUNT           2
@@ -52,9 +59,10 @@
 #define STAGE1_BASE         0x7C00
 #define STAGE2_BASE         0x7E00
 
-#define KERNEL_SEG_EARLY    0x1000
-#define KERNEL_BASE_EARLY   0x0000      // 64k = 0x010000
-#define KERNEL_BASE         0x100000    // 1M  = 0x100000
+#define EARLY_KERNEL_SEG    0x1000
+#define EARLY_KERNEL_BASE   0x0000      // = 64k = 0x010000
+
+#define KERNEL_BASE         0x100000    // = 1M
 #define KERNEL_ENTRY        (KERNEL_BASE)
 
 // #ifndef __ASSEMBLER__

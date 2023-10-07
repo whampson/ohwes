@@ -24,17 +24,6 @@
 
 #include "boot.h"
 
-PORT_PS2KBD_CMD         = 0x64          # read = status, write = command
-PORT_PS2KBD_DATA        = 0x60
-PORT_SYSCNTLA           = 0x92          # For "Fast" A20
-
-EARLY_CS                = 0x08          # Initial Code Segment Selector
-EARLY_DS                = 0x10          # Initial Data Segment Selector
-
-VGA_MODE                = 0x03          # 0x03 = text, CGA/EGA/VGA, 16 colors, B8000h
-
-CR0_PE                  = 1             # CR0 Protection Enable bit
-
 .text
 .code16
 
@@ -47,13 +36,12 @@ CR0_PE                  = 1             # CR0 Protection Enable bit
 ##
 .globl Stage2
 Stage2:
-        call            InitVga
-        PRINTLN         s_Hello2
+        call            EnableA20
         call            GetHwInfo
         call            DetectMemory
-        call            EnableA20
+        call            InitConsole
 
-CheckKernel:
+CheckKernelSize:
         movl            $ROOTDIR_BASE, %edx
         addl            $32, %edx               # 2nd root dir entry (TODO: scan dir for file)
         movzwl          28(%edx), %ecx
@@ -64,16 +52,17 @@ CheckKernel:
         jmp             Halt16
 
 LoadKernel:
-        movw            $KERNEL_SEG_EARLY, %ax
+        movw            $EARLY_KERNEL_SEG, %ax
         movw            %ax, %es
-        movw            $KERNEL_BASE_EARLY, %bx
+        movw            $EARLY_KERNEL_BASE, %bx
         call            LoadFile
+        PRINTLN         s_Hello2
 
 SwitchToProtectedMode:
         cli                                     # no interrupts
         lgdtl           EarlyGdtReg             # load the temp GDT
         movl            %cr0, %eax
-        orl             $CR0_PE, %eax           # set ProtectionEnable bit
+        orl             $1, %eax                # set ProtectionEnable bit
         movl            %eax, %cr0
         jmpl            $EARLY_CS, $Entry32     # reload CS and jump to 32-bit code
 
@@ -96,9 +85,9 @@ MoveKernel:
         # move kernel above 1M
         cld
         movl            g_KernelSize, %ecx
-        movl            $KERNEL_SEG_EARLY, %esi
+        movl            $EARLY_KERNEL_SEG, %esi
         shll            $4, %esi
-        orl             $KERNEL_BASE_EARLY, %esi
+        orl             $EARLY_KERNEL_BASE, %esi
         movl            $KERNEL_BASE, %edi
     rep movsb
 
@@ -106,11 +95,6 @@ EnterKernel:
         # springboard ourselves into the kernel!
         pushl           $KERNEL_ENTRY           # perform a long jump
         ret
-
-.globl Idleloop
-IdleLoop:
-        hlt
-        jmp             IdleLoop
 
 #
 # -------------------------- End 32-bit Code Section -------------------------
@@ -123,15 +107,56 @@ IdleLoop:
 
 ##
 # -----------------------------------------------------------------------------
-# InitVga
+# InitConsole
 # -----------------------------------------------------------------------------
-# Sets the VGA mode using a BIOS routine.
+# Sets the VGA mode using a BIOS routine and collects information about the
+# console.
 ##
-InitVga:
-        xorw            %ax, %ax
+InitConsole:
+        movb            $0x0F, %ah      # store video page
+        int             $0x10
+        jc              _VgaError
+        movb            %bh, g_VideoPage
+
+        movb            $0x03, %ah      # store cursor position (bh=page)
+        int             $0x10
+        jc              _VgaError
+        movb            %dh, g_CursorRow
+        movb            %dl, g_CursorColumn
+
+        movb            $0x00, %ah      # set video mode
         movb            $VGA_MODE, %al
-        int             $0x10   # sets video mode and clears the screen
+        movb            $VGA_CLEAR, %dl
+        notb            %dl
+        shlb            $7, %dl
+        orb             %dl, %al      # bit7 is clear screen (0=clear)
+        int             $0x10
+        jc              _VgaError
+
+        movb            $0x03, %ah      # store new cursor size
+        int             $0x10
+        jc              _VgaError
+        movb            %ch, g_CursorStartLine
+        movb            %cl, g_CursorEndLine
+
+        movb            $VGA_CLEAR, %al
+        cmpb            $1, %al
+        je              _VgaDone
+        xorw            %ax, %ax
+        movb            $0x02, %ah      # restore cursor position if screen not cleared
+        movb            g_VideoPage, %bh
+        movb            g_CursorRow, %dh
+        movb            g_CursorColumn, %dl
+        int             $0x10
+        jc              _VgaError
+
+_VgaDone:
         ret
+
+_VgaError:
+        PRINT           s_VideoError
+        jmp             Halt16
+
 ##
 # -----------------------------------------------------------------------------
 # GetHwInfo
@@ -328,10 +353,10 @@ _EnableA20_Bios:
 # Not supported on all systems.
 ##
 _EnableA20_Port92h:
-        inb             $PORT_SYSCNTLA, %al
+        inb             $0x92, %al
         orb             $0x02, %al          # A20 enable bit
         andb            $0xFE, %al          # clear (possible) reset flag
-        outb            %al, $PORT_SYSCNTLA
+        outb            %al, $0x92
         movw            $A20_PORT92h, g_A20Method
         ret
 
@@ -342,41 +367,41 @@ _EnableA20_Port92h:
 _EnableA20_Keyboard:
         call            KbOut_Wait
         movb            $0xAD, %al              # cmd: disable keyboard
-        outb            %al, $PORT_PS2KBD_CMD
+        outb            %al, $0x64
 
         call            KbOut_Wait
         movb            $0xD0, %al              # cmd: read controller output port
-        outb            %al, $PORT_PS2KBD_CMD
+        outb            %al, $0x64
 
         call            KbIn_Wait
-        inb             $PORT_PS2KBD_DATA, %al  # data: controller output port
+        inb             $0x60, %al  # data: controller output port
         pushw           %ax                     # save output port
 
         call            KbOut_Wait
         movb            $0xD1, %al              # cmd: write controller output port
-        outb            %al, $PORT_PS2KBD_CMD
+        outb            %al, $0x64
 
         call            KbOut_Wait
         popw            %ax
         orb             $0x02, %al              # A20 enable bit
-        outb            %al, $PORT_PS2KBD_DATA  # write output reg
+        outb            %al, $0x60  # write output reg
 
         call            KbOut_Wait
         movb            $0xAE, %al              # cmd: enable keyboard
-        outb            %al, $PORT_PS2KBD_CMD
+        outb            %al, $0x64
 
         call            KbOut_Wait            # (delay)
         movw            $A20_KEYBOARD, g_A20Method
         ret
 
 KbOut_Wait:
-        inb             $PORT_PS2KBD_CMD, %al   # (buffer from controller perspective)
+        inb             $0x64, %al   # (buffer from controller perspective)
         testb           $0x02, %al              # is input buffer full?
         jnz             KbOut_Wait            # continue checking 'til empty (consumed)
         ret
 
 KbIn_Wait:
-        inb             $PORT_PS2KBD_CMD, %al   # (buffer from controller perspective)
+        inb             $0x64, %al   # (buffer from controller perspective)
         testb           $0x01, %al              # is output buffer full?
         jz              KbIn_Wait             # continue checking 'til data arrives
         ret
@@ -414,6 +439,26 @@ g_HwFlags:
 g_A20Method:
         .long           A20_NONE
 
+.globl g_VideoCols
+g_VideoCols:
+        .long           0
+
+.globl g_VideoMode
+g_VideoMode:
+        .long           0
+
+g_VideoPage:
+        .long           0
+
+g_CursorStartLine:
+        .long           0
+g_CursorEndLine:
+        .long           0
+g_CursorRow:
+        .long           0
+g_CursorColumn:
+        .long           0
+
 .globl g_HasAcpiMemoryMap
 g_HasAcpiMemoryMap:
         .long           0
@@ -443,11 +488,13 @@ g_KernelSize:
         .long           0
 
 s_Hello2:
-        .asciz          "Welcome to The Machine"
+        .asciz          "\r\nWelcome to The Machine"
 s_MemError:
-        .asciz          "\r\nERROR: Unable to detect system memory!"
+        .asciz          "\r\nError detecting system memory!"
 s_A20Error:
-        .asciz          "\r\nERROR: Failed to enable A20!"
+        .asciz          "\r\nError enabling A20!"
+s_VideoError:
+        .asciz          "\r\nError initializing video!"
 s_KernelTooBig:
-        .ascii          "\r\nERROR: Kernel is too large!"
+        .ascii          "\r\nKernel is too large!"
         .asciz          "\r\nPlease update boot loader to handle files larger than 64k."

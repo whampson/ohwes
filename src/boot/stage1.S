@@ -66,16 +66,13 @@ FsType:                 .ascii                  "FAT12   "
 
 #
 # Initial boot loader code.
-# Gotta be tight; file must assemble to exactly 512 bytes!
+# Gotta be tight; file must assemble to no more than 512 bytes!
 #
 # We start off executing at 0x7C00. We set the stack pointer to this address
 # (remember, the stack grows towards 0!) and load BOOT.SYS at 0x7E00,
 # immediately after the boot sector in memory.
 #
 Stage1:
-        #
-        # init
-        #
         cld                                     # clear direction bit
         xorw            %ax, %ax                # zero segment regs
         movw            %ax, %ds
@@ -85,9 +82,7 @@ Stage1:
         movw            %bp, %sp
         PRINT           s_Hello1                # print a welcome message
 
-        #
-        # load root dir
-        #
+LoadRootDir:
         movw            RootDirCapacity, %cx    # calculate root dir size
         shlw            $5, %cx                 #   maxentries*32
         movw            $ROOTDIR_BASE, %bx
@@ -101,15 +96,13 @@ Stage1:
         addw            %cx, g_FirstCluster
         call            LoadSectors             # read root dir
 
-        #
-        # load BOOT.SYS
+LoadStage2:
         # TODO: scan root dir for file? or ensure it's always the first entry in the dir
-        #
         movl            $ROOTDIR_BASE, %edx     # 1st root dir entry
         movw            $STAGE2_BASE, %bx       # stage2 addr
         call            LoadFile
-        PRINT           s_NewLine
 
+GoToStage2:
         jmp             Stage2                  # go ahead and jump (jump!)
 
 # -----------------------------------------------------------------------------
@@ -134,7 +127,6 @@ LoadFile:
         xchgw           %ax, %cx
 
         call            LoadSectors             # read it in!
-        PRINT           s_NewLine
 
         ret
 
@@ -327,12 +319,13 @@ s_ProgressChar:
 
 .globl s_Hello1
 s_Hello1:
-        .asciz  "Loading BOOT.SYS"
+        .asciz  "\r\nLoading System"
 
 .globl s_NewLine
 s_DiskError:
         .ascii  "\r\nDiskette read error!"
         .asciz  "\r\nPress any key to try again..."
 
-.space          0x1FE - (. - Entry), 0xCC       # pad with debugbreak
+# pad the remaining space up to the size of a sector (512 bytes)
+.space          0x1FE - (. - Entry), 0xCC       # pad with debugbreak instr
 .short          0xAA55                          # boot sector indicator

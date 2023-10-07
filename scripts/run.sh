@@ -39,7 +39,7 @@ if [ "$1" = "qemu" ]; then
         DEBUG_BOOT=1
     fi
 
-    if [ $DEBUG_BOOT ] || [ $DEBUG_KERNEL ]; then
+    if [ $DEBUG_BOOT = 1 ] || [ $DEBUG_KERNEL = 1 ]; then
         QEMU_FLAGS+=" -S -s"
     fi
 
