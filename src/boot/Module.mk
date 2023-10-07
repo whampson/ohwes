@@ -9,7 +9,7 @@ SOURCES = \
 	stage1.S \
 	stage2.S \
 
-TGT_LDFLAGS := -Ttext 0x7C00
+TGT_LDFLAGS := -Ttext 0x7C00 -e Entry
 TGT_LDLIBS  := ${TARGET_DIR}/lib/libcrt.a
 
 ###

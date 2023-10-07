@@ -35,25 +35,8 @@ VGA_MODE                = 0x03          # 0x03 = text, CGA/EGA/VGA, 16 colors, B
 
 CR0_PE                  = 1             # CR0 Protection Enable bit
 
-KERNEL_ENTRY            = 0x100000      # 1M
-
 .text
 .code16
-
-##
-# Temporary GDT so we can get into Protected Mode.
-##
-.align 8
-early_gdt:
-        .quad           0x0                             # (not used)
-        .quad           0x00CF9A000000FFFF              # cs = 0x08
-        .quad           0x00CF92000000FFFF              # ds = 0x10
-early_gdt_end:
-
-        .word           0                               # (align)
-early_gdt_reg:
-        .word           early_gdt_end-early_gdt-1       # GDT limit
-        .long           early_gdt                       # GDT base, aligned
 
 # -----------------------------------------------------------------------------
 # ---------------------------------- Stage2 -----------------------------------
@@ -62,26 +45,45 @@ early_gdt_reg:
 ##
 # Stage 2 entry point.
 ##
-.globl stage2
-stage2:
-        // call            init_video
-        leaw            s_hello, %si
-        call            bios_println
-        call            get_hwinfo
-        call            detect_memory
-        call            enable_a20
-        call            load_kernel
+.globl Stage2
+Stage2:
+        call            InitVga
+        PRINTLN         s_Hello2
+        call            GetHwInfo
+        call            DetectMemory
+        call            EnableA20
 
-        # Enter Protected Mode
-        cli
-        lgdtl           early_gdt_reg
+CheckKernel:
+        movl            $ROOTDIR_BASE, %edx
+        addl            $32, %edx               # 2nd root dir entry (TODO: scan dir for file)
+        movzwl          28(%edx), %ecx
+        movl            %ecx, g_KernelSize      # store kernel size
+        cmpl            $0xFFFF, %ecx           # make sure we don't exceed a segment size (TODO: check wraparound)
+        jle             LoadKernel
+        PRINT           s_KernelTooBig
+        jmp             Halt16
+
+LoadKernel:
+        movw            $KERNEL_SEG_EARLY, %ax
+        movw            %ax, %es
+        movw            $KERNEL_BASE_EARLY, %bx
+        call            LoadFile
+
+SwitchToProtectedMode:
+        cli                                     # no interrupts
+        lgdtl           EarlyGdtReg             # load the temp GDT
         movl            %cr0, %eax
-        orl             $CR0_PE, %eax
+        orl             $CR0_PE, %eax           # set ProtectionEnable bit
         movl            %eax, %cr0
-        jmpl            $EARLY_CS, $boot32
+        jmpl            $EARLY_CS, $Entry32     # reload CS and jump to 32-bit code
 
+#
+# -------------------------- Begin 32-bit Code Section -------------------------
+#
 .code32
-boot32:
+
+Entry32:
+        # set up Protected Mode segment selectors
         movw            $EARLY_DS, %ax
         movw            %ax, %ds
         movw            %ax, %ss
@@ -90,53 +92,68 @@ boot32:
         movw            %ax, %fs
         movw            %ax, %gs
 
-        # Jump to kernel
-        pushl           $KERNEL_ENTRY
+MoveKernel:
+        # move kernel above 1M
+        cld
+        movl            g_KernelSize, %ecx
+        movl            $KERNEL_SEG_EARLY, %esi
+        shll            $4, %esi
+        orl             $KERNEL_BASE_EARLY, %esi
+        movl            $KERNEL_BASE, %edi
+    rep movsb
+
+EnterKernel:
+        # springboard ourselves into the kernel!
+        pushl           $KERNEL_ENTRY           # perform a long jump
         ret
 
-.globl Halt
-Halt:
-        jmp             Halt
+.globl Idleloop
+IdleLoop:
+        hlt
+        jmp             IdleLoop
+
+#
+# -------------------------- End 32-bit Code Section -------------------------
+#
+.code16
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
 # -----------------------------------------------------------------------------
 
-.code16
-
 ##
 # -----------------------------------------------------------------------------
-# init_video
+# InitVga
 # -----------------------------------------------------------------------------
 # Sets the VGA mode using a BIOS routine.
 ##
-init_video:
+InitVga:
         xorw            %ax, %ax
         movb            $VGA_MODE, %al
         int             $0x10   # sets video mode and clears the screen
         ret
 ##
 # -----------------------------------------------------------------------------
-# get_hwinfo
+# GetHwInfo
 # -----------------------------------------------------------------------------
 # Gets installed hardware flags using a BIOS routine.
 ##
-get_hwinfo:
+GetHwInfo:
         int             $0x11
         movw            %ax, g_HwFlags
         ret
 
 ##
 # -----------------------------------------------------------------------------
-# detect_memory
+# DetectMemory
 # -----------------------------------------------------------------------------
 # Gets memory capacity and physical memory map (if available) using BIOS
 # routines. If all methods fail, the system will display an error and halt.
 ##
-detect_memory:
-        call            detect_memory_e820
-        call            detect_memory_e801
-        call            detect_memory_legacy
+DetectMemory:
+        call            DetectMemory_e820
+        call            DetectMemory_e801
+        call            DetectMemory_Legacy
         ret
 
 ####
@@ -167,33 +184,33 @@ detect_memory:
 #  bit 2: slow access
 #  bit 3: hardware error logging area
 ####
-detect_memory_e820:
+DetectMemory_e820:
         clc
         xorl            %eax, %eax
         movw            %ax, %es
         movw            $MEMMAP_BASE, %di               # dest buffer
         xorl            %ebx, %ebx                      # continuation value (0 to begin)
-_detect_memory_e820_loop:
+_DetectMemory_e820_Loop:
         movl            $0x18, %ecx                     # table entry size
         movl            $0x534D4150, %edx               # 'SMAP'
         movl            $0xE820, %eax                   # ACPI Query System Address Map function
         int             $0x15
-        jc              _detect_memory_e820_done        # error or end of table
+        jc              _DetectMemory_e820_Done        # error or end of table
         cmpb            $0x80, %ah
-        je              _detect_memory_e820_done        # invalid command
+        je              _DetectMemory_e820_Done        # invalid command
         cmpb            $0x86, %ah
-        je              _detect_memory_e820_done        # unsupported function
+        je              _DetectMemory_e820_Done        # unsupported function
         testl           %ebx, %ebx
-        jz              _detect_memory_e820_success     # end of table
+        jz              _DetectMemory_e820_Success     # end of table
         addw            $0x18, %di                      # move table ptr
         cmpb            $0x14, %cl                      # if extended attr not present...
-        je              _detect_memory_e820_loop
+        je              _DetectMemory_e820_Loop
         movw            $0, -4(%edi)                    # ...ensure it is stored as zero
-        jmp             _detect_memory_e820_loop
+        jmp             _DetectMemory_e820_Loop
 
-_detect_memory_e820_success:
+_DetectMemory_e820_Success:
         movl            $1, g_HasAcpiMemoryMap
-_detect_memory_e820_done:
+_DetectMemory_e820_Done:
         ret
 
 ####
@@ -202,7 +219,7 @@ _detect_memory_e820_done:
 #
 # This function should work on BIOSes made after 1994.
 ####
-detect_memory_e801:
+DetectMemory_e801:
         # data can be returned in ax/bx or cx/dx; initialize all to zero
         xorw            %ax, %ax
         xorw            %bx, %bx
@@ -210,14 +227,14 @@ detect_memory_e801:
         xorw            %dx, %dx
         movw            $0xE801, %ax
         int             $0x15
-        jc              _detect_memory_e801_done        # unsupported function
-        jcxz            _detect_memory_e801_store       # cx = 0, use ax/bx
+        jc              _DetectMemory_e801_Done        # unsupported function
+        jcxz            _DetectMemory_e801_Store       # cx = 0, use ax/bx
         movw            %cx, %ax
         movw            %dx, %bx
-_detect_memory_e801_store:
+_DetectMemory_e801_Store:
         movw            %ax, g_RamLo_E801h              # contiguous RAM >1M in 1K blocks, up to 16M
         movw            %bx, g_RamHi_E801h              # contiguous RAM >16M in 64K blocks
-_detect_memory_e801_done:
+_DetectMemory_e801_Done:
         ret
 
 ####
@@ -227,60 +244,58 @@ _detect_memory_e801_done:
 # BIOS, so if this fails, either something is seriouly wrong or the system
 # probably does not have enough memory to run this OS!
 ####
-detect_memory_legacy:
+DetectMemory_Legacy:
         clc
         movb            $0x88, %ah
         int             $0x15
-        jc              detect_memory_legacy_lo
+        jc              _DetectMemory_Legacy_Lo
         cmpb            $0x80, %ah                      # (invalid command)
-        je              detect_memory_legacy_lo
+        je              _DetectMemory_Legacy_Lo
         cmpb            $0x86, %ah                      # (unsupported func)
-        je              detect_memory_legacy_lo
+        je              _DetectMemory_Legacy_Lo
         movw            %ax, g_RamHi_Legacy             # contiguous RAM >1M in 1K blocks
-detect_memory_legacy_lo:
+_DetectMemory_Legacy_Lo:
         clc
         int             $0x12
-        jc              _detect_memory_legacy_error
+        jc              _DetectMemory_Legacy_Error
         movw            %ax, g_RamLo_Legacy             # contiguous RAM <1M in 1K blocks
-        jz              _detect_memory_legacy_error
+        jz              _DetectMemory_Legacy_Error
         ret
 
-_detect_memory_legacy_error:
-        leaw            s_memerr, %si
-        call            bios_print
-        jmp             Halt
+_DetectMemory_Legacy_Error:
+        PRINT           s_MemError
+        jmp             Halt16
 
 ##
 # -----------------------------------------------------------------------------
-# enable_a20
+# EnableA20
 # -----------------------------------------------------------------------------
 # Attempts to enable the A20 gate. If unsuccessful, the system will halt;
 # otherwise there would be a very annoying non-contiguous memory hole.
 ###
-enable_a20:
-        call            test_a20
-        jnc             _enable_a20_done
-        call            enable_a20_bios
-        call            test_a20
-        jnc             _enable_a20_done
-        call            enable_a20_port92h
-        call            test_a20
-        jnc             _enable_a20_done
-        call            enable_a20_keyboard
-        call            test_a20
-        jc              _enable_a20_error
-_enable_a20_done:
+EnableA20:
+        call            TestA20
+        jnc             _EnableA20_Done
+        call            _EnableA20_Bios
+        call            TestA20
+        jnc             _EnableA20_Done
+        call            _EnableA20_Port92h
+        call            TestA20
+        jnc             _EnableA20_Done
+        call            _EnableA20_Keyboard
+        call            TestA20
+        jc              _EnableA20_error
+_EnableA20_Done:
         ret
 
-_enable_a20_error:
-        leaw            s_a20err, %si
-        call            bios_print
-        jmp             Halt
+_EnableA20_error:
+        PRINT           s_A20Error
+        jmp             Halt16
 
 ##
 # Test whether A20 gate is enabled.
 ##
-test_a20:
+TestA20:
         // wbinvd                                  # invalidate cache (i486+)
         xorw            %ax, %ax
         movw            %ax, %es                # ds = 0x0000
@@ -290,94 +305,101 @@ test_a20:
         movw            %es:0x7DFE, %dx         # [0x00FDFE] -> dx
         movw            %fs:0x7E0E, %ax         # [0x10FDFE] -> ax
         cmpw            %ax, %dx                # are they the same?
-        je              _test_a20_Off
+        je              _TestA20_Off
         clc
-        jmp             _test_a20_Done
-_test_a20_Off:
+        jmp             _TestA20_Done
+_TestA20_Off:
         stc                                     # CF=1 if A20 disabled
-_test_a20_Done:
+_TestA20_Done:
         ret
 
 ##
 # Enable A20 using BIOS INT=15h,AX=2401h.
 # Supported on newer systems.
 ##
-enable_a20_bios:
+_EnableA20_Bios:
         movw            $0x2401, %ax
         int             $0x15
-        movw            $A20METHOD_BIOS, g_A20Method
+        movw            $A20_BIOS, g_A20Method
         ret
 
 ##
 # Enable A20 by writing port 92h.
 # Not supported on all systems.
 ##
-enable_a20_port92h:
+_EnableA20_Port92h:
         inb             $PORT_SYSCNTLA, %al
         orb             $0x02, %al          # A20 enable bit
         andb            $0xFE, %al          # clear (possible) reset flag
         outb            %al, $PORT_SYSCNTLA
-        movw            $A20METHOD_PORT92h, g_A20Method
+        movw            $A20_PORT92h, g_A20Method
         ret
 
 ##
 # Enable A20 via the PS/2 keyboard controller.
 # This is the most common method and usually does the trick.
 ##
-enable_a20_keyboard:
-        call            kbd_out_wait
+_EnableA20_Keyboard:
+        call            KbOut_Wait
         movb            $0xAD, %al              # cmd: disable keyboard
         outb            %al, $PORT_PS2KBD_CMD
 
-        call            kbd_out_wait
+        call            KbOut_Wait
         movb            $0xD0, %al              # cmd: read controller output port
         outb            %al, $PORT_PS2KBD_CMD
 
-        call            kbd_in_wait
+        call            KbIn_Wait
         inb             $PORT_PS2KBD_DATA, %al  # data: controller output port
         pushw           %ax                     # save output port
 
-        call            kbd_out_wait
+        call            KbOut_Wait
         movb            $0xD1, %al              # cmd: write controller output port
         outb            %al, $PORT_PS2KBD_CMD
 
-        call            kbd_out_wait
+        call            KbOut_Wait
         popw            %ax
         orb             $0x02, %al              # A20 enable bit
         outb            %al, $PORT_PS2KBD_DATA  # write output reg
 
-        call            kbd_out_wait
+        call            KbOut_Wait
         movb            $0xAE, %al              # cmd: enable keyboard
         outb            %al, $PORT_PS2KBD_CMD
 
-        call            kbd_out_wait            # (delay)
-        movw            $A20METHOD_KEYBOARD, g_A20Method
+        call            KbOut_Wait            # (delay)
+        movw            $A20_KEYBOARD, g_A20Method
         ret
 
-kbd_out_wait:
+KbOut_Wait:
         inb             $PORT_PS2KBD_CMD, %al   # (buffer from controller perspective)
         testb           $0x02, %al              # is input buffer full?
-        jnz             kbd_out_wait            # continue checking 'til empty (consumed)
+        jnz             KbOut_Wait            # continue checking 'til empty (consumed)
         ret
 
-kbd_in_wait:
+KbIn_Wait:
         inb             $PORT_PS2KBD_CMD, %al   # (buffer from controller perspective)
         testb           $0x01, %al              # is output buffer full?
-        jz              kbd_in_wait             # continue checking 'til data arrives
-        ret
-
-##
-# -----------------------------------------------------------------------------
-# load_kernel
-# -----------------------------------------------------------------------------
-# Loads the kernel image from disk.
-##
-load_kernel:
+        jz              KbIn_Wait             # continue checking 'til data arrives
         ret
 
 # -----------------------------------------------------------------------------
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
+
+##
+# Temporary GDT so we can get into Protected Mode.
+##
+.align 8
+EarlyGdt:
+        .quad           0x0                             # (not used)
+        .quad           0x00CF9A000000FFFF              # cs = 0x08
+        .quad           0x00CF92000000FFFF              # ds = 0x10
+EarlyGdtEnd:
+
+        .word           0                               # (align)
+EarlyGdtReg:
+        .word           EarlyGdtEnd-EarlyGdt-1       # GDT limit
+        .long           EarlyGdt                       # GDT base, aligned
+
 
 // TODO: create a struct around these fields, then pass ptr to struct as
 // kernel argument
@@ -390,7 +412,7 @@ g_HwFlags:
 
 .globl g_A20Method
 g_A20Method:
-        .long           A20METHOD_NONE
+        .long           A20_NONE
 
 .globl g_HasAcpiMemoryMap
 g_HasAcpiMemoryMap:
@@ -416,9 +438,16 @@ g_RamLo_E801h:
 g_RamHi_E801h:
         .long           0
 
-s_hello:
-        .asciz          "Entered BOOT.SYS"
-s_memerr:
-        .asciz          "Error: unable to detect system memory!"
-s_a20err:
-        .asciz          "Error: failed to enable A20 gate!"
+.globl g_KernelSize
+g_KernelSize:
+        .long           0
+
+s_Hello2:
+        .asciz          "Welcome to The Machine"
+s_MemError:
+        .asciz          "\r\nERROR: Unable to detect system memory!"
+s_A20Error:
+        .asciz          "\r\nERROR: Failed to enable A20!"
+s_KernelTooBig:
+        .ascii          "\r\nERROR: Kernel is too large!"
+        .asciz          "\r\nPlease update boot loader to handle files larger than 64k."

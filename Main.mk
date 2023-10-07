@@ -39,5 +39,8 @@ img: tools
 run: all img
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG}
 
-run-debug: all img
+debug: all img
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG} debug
+
+debug-boot: all img
+	${SCRIPT_DIR}/run.sh qemu ${DISKIMG} debug-boot

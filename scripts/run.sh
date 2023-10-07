@@ -30,20 +30,35 @@ if [ "$1" = "qemu" ]; then
     QEMU_FLAGS+=" -boot a"          # boot drive A:
     QEMU_FLAGS+=" -fda $2"          # disk image
 
-    DEBUG=0
+    DEBUG_BOOT=0
+    DEBUG_KERNEL=0
     if [ "$3" = "debug" ]; then
-        DEBUG=1
+        DEBUG_KERNEL=1
+    fi
+    if [ "$3" = "debug-boot" ]; then
+        DEBUG_BOOT=1
+    fi
+
+    if [ $DEBUG_BOOT ] || [ $DEBUG_KERNEL ]; then
         QEMU_FLAGS+=" -S -s"
     fi
 
     echo "$QEMU_PATH" "$QEMU_FLAGS"
 
-    if [ $DEBUG = 1 ]; then
+    if [ $DEBUG_BOOT = 1 ]; then
         "$QEMU_PATH" $QEMU_FLAGS &
         gdb \
             -ex 'target remote localhost:1234' \
-            -ex 'add-symbol-file bin/boot.elf' \
-            -ex 'b boot32'
+            -ex 'add-symbol-file bin/boot/boot.elf' \
+            -ex 'b Entry' \
+            -ex 'b Stage2' \
+            -ex 'b Entry32'
+    elif [ $DEBUG_KERNEL = 1 ]; then
+        "$QEMU_PATH" $QEMU_FLAGS &
+        gdb \
+            -ex 'target remote localhost:1234' \
+            -ex 'add-symbol-file bin/kernel/kernel.elf' \
+            -ex 'b KeEntry'
     else
         "$QEMU_PATH" $QEMU_FLAGS
     fi
