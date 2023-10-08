@@ -41,25 +41,25 @@ Stage2:
         call            DetectMemory
         call            InitConsole
 
-CheckKernelSize:
-        movl            $ROOTDIR_BASE, %edx
-        addl            $32, %edx               # 2nd root dir entry (TODO: scan dir for file)
-        movzwl          28(%edx), %ecx
-        movl            %ecx, g_KernelSize      # store kernel size
-        cmpl            $0xFFFF, %ecx           # make sure we don't exceed a segment size (TODO: check wraparound)
-        jle             LoadKernel
-        PRINT           s_KernelTooBig
-        jmp             Halt
-
 LoadKernel:
         movw            $EARLY_KERNEL_SEG, %ax
         movw            %ax, %es
         movw            $EARLY_KERNEL_BASE, %bx
+        leaw            s_KernelFileName, %si
         call            LoadFile
         PRINTLN         s_Hello2
 
+CheckKernelSize:
+        movzwl          28(%di), %ecx
+        movl            %ecx, g_KernelSize      # store kernel size
+        // cmpl            $0xFFFF, %ecx           # make sure we don't exceed a segment size (TODO: check wraparound)
+        // jle             LoadKernel
+        // PRINT           s_KernelTooBig
+        // jmp             Halt
+
+
+
 SwitchToProtectedMode:
-        cli                                     # no interrupts
         lgdtl           EarlyGdtReg             # load the temp GDT
         movl            %cr0, %eax
         orl             $1, %eax                # set ProtectionEnable bit
@@ -80,6 +80,8 @@ Entry32:
         xorw            %ax, %ax
         movw            %ax, %fs
         movw            %ax, %gs
+        movl            $0x7C00, %esp
+        movl            %esp, %ebp
 
 MoveKernel:
         # move kernel above 1M

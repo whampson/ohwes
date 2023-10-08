@@ -50,6 +50,7 @@ if [ "$1" = "qemu" ]; then
         gdb \
             -ex 'target remote localhost:1234' \
             -ex 'add-symbol-file bin/boot/boot.elf' \
+            -ex 'lay src' -ex 'lay reg' \
             -ex 'b Entry' \
             -ex 'b Stage2' \
             -ex 'b Entry32'

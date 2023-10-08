@@ -77,6 +77,7 @@ FsType:                 .ascii          "FAT12   "
 # immediately after the boot sector in memory. We then jump to the stage 2 code.
 ##
 Stage1:
+        cli                             # clear interrupts
         cld                             # clear direction bit
         xorw    %ax, %ax                # set up segment regs and stack
         movw    %ax, %ds
@@ -136,15 +137,45 @@ GoToStage2:
 #       es:bx - destination buffer
 #       ds:si - file name ptr, e.g. "FILE    TXT"
 #
+# Outputs:
+#       es:di - dir entry ptr
+#
 # Clobbers:
 #       (potentially everything due to BIOS call)
 ##
 .globl LoadFile
 LoadFile:
-        // TODO: search for file name
-        movw    26(%edx), %ax           # first cluster for file
+        pushw   %bp
+        movw    %sp, %bp
+
+        movw    $ROOTDIR_BASE, %di
+        pushw   %bx                     # save dest buffer ptr
+        movw    RootDirCapacity, %bx    # loop count
+        pushw   %es
+        movw    %ds, %ax
+        movw    %ax, %es
+
+_FindFile:
+        pushw   %si                     # save file name to be searched for
+        pushw   %di                     # save dir ptr, offset 0 is file name
+        movw    $11, %cx                # file name length
+   repe cmpsb                           # match?
+        jz      _LoadFile               #  yep! load it!
+        popw    %di
+        popw    %si
+        addw    $32, %di                # otherwise: move ptr
+        decw    %bx                     # decrement counter
+        jz      _FileNotFound           # zero? doesn't exist!
+        jmp     _FindFile               # otherwise: keep searchin'
+
+_LoadFile:
+        movw    -8(%bp), %di            # grab the dir entry ptr
+        movw    -2(%bp), %bx            # grab the dest buffer ptr
+        movw    -4(%bp), %ax
+        movw    %ax, %es
+        movw    26(%di), %ax            # first cluster for file
         subw    $2, %ax                 # cluster indices 0 and 1 reserved
-        movw    28(%edx), %cx           # file size in bytes
+        movw    28(%di), %cx            # file size in bytes
 
         decw    %cx                     # calculate num clusters to read
         shrw    $9, %cx                 #  ((nbytes-1)/512)+1
@@ -152,11 +183,17 @@ LoadFile:
         xchgw   %ax, %cx                # convert nclusters to nsectors
         mulb    SectorsPerCluster
         xchgw   %ax, %cx
-        addw    g_FirstCluster, %cx     # calculate absolute sector address
+        addw    g_FirstCluster, %ax     # calculate absolute sector address
 
         call    LoadSectors             # read it in!
+        movw    -8(%bp), %di
 
+        leave
         ret
+
+_FileNotFound:
+        PRINT   s_FileNotFound
+        jmp     Halt
 
 ##
 # -----------------------------------------------------------------------------
@@ -376,12 +413,15 @@ s_KernelFileName:
 
 .globl s_Hello1
 s_Hello1:
-        .asciz  "\r\nLoading System"
+        .asciz  "\r\nOH-WES is loading"
 
 .globl s_NewLine
 s_DiskError:
         .ascii  "\r\nDiskette read error!"
         .asciz  "\r\nPress any key to try again..."
+
+s_FileNotFound:
+        .asciz  "\r\nFile not found!"
 
 # pad the remaining space up to the size of a sector (512 bytes)
 .space          0x1FE - (. - Entry), 0xCC       # pad with debugbreak opcode
