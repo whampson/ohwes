@@ -24,17 +24,24 @@
 
 #include <hw/x86.h>
 
-#define A20_NONE            0   // A20 already enabled (emulators only)
-#define A20_KEYBOARD        1   // A20 enabled via PS/2 keyboard controller
-#define A20_PORT92h         2   // A20 enabled via IO port 92h
-#define A20_BIOS            3   // A20 enabled via BIOS INT=15h,AX=2401h
+#define STACK_SEG           0x07C0
+#define STACK_BASE          0x0000  // 07C0:0000h = 0x7C00
+
+#define BIOS_DATA_SEG       0x0040  // BIOS data area segment
+#define BIOS_RESETFLAG      0x0072  // reset mode address
+#define RESETFLAG_WARM      0x1234  // perform a warm boot (no memory test)
+
+#define A20_NONE            0       // A20 already enabled (emulators only)
+#define A20_KEYBOARD        1       // A20 enabled via PS/2 keyboard controller
+#define A20_PORT92h         2       // A20 enabled via IO port 92h
+#define A20_BIOS            3       // A20 enabled via BIOS INT=15h,AX=2401h
 
 // see http://www.ctyme.com/intr/rb-0069.htm
-#define VGA_MODE            0x03    // 0x03 = text, CGA/EGA/VGA, 16fg/8bg, B8000h
-#define VGA_CLEAR           0
+#define VGA_MODE            0x03    // 0x03 = text,CGA/EGA/VGA,16fg/8bg,0xB8000
+#define VGA_CLEAR           0       // clear screen toggle
 
-#define EARLY_CS            0x08
-#define EARLY_DS            0x10
+#define EARLY_CS            0x08    // code segment in early GDT
+#define EARLY_DS            0x10    // data segment in early GDT
 
 #define IDT_COUNT           256
 #define GDT_COUNT           8

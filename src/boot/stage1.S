@@ -27,83 +27,90 @@
 .text
 .code16
 
-#
+# -----------------------------------------------------------------------------
+# --------------------------------- Stage 1 -----------------------------------
+# -----------------------------------------------------------------------------
+
+##
 # Boot loader entry point. This is where the BIOS drops us off.
 #
 # DO NOT MOVE, RENAME, OR MODIFY THIS FUNCTION IN ANY WAY.
 # This exact function is required by the FAT specification in order to keep the
 # FAT parameters in a known location. We are given exactly three bytes to jump
-# to the next section og code which follows the parameter table.
-#
+# to the next section of code which follows the parameter table.
+##
 .globl Entry
 Entry:
-        jmp             Stage1
+        jmp     Stage1
         nop
 
-#
+##
 # BIOS Parameter Block for a FAT12-formatted 3.5" 1.44MB floppy disk.
-# Do NOT move this. Tweak with care.
-#
-OemName:                .ascii                  "whampson"
-SectorSize:             .short                  512
-SectorsPerCluster:      .byte                   1
-ReservedSectors:        .short                  1
-FatCount:               .byte                   2
-RootDirCapacity:        .short                  224
-SectorCount:            .short                  2880
-MediaType:              .byte                   0xF0
-SectorsPerFat:          .short                  9
-SectorsPerTrack:        .short                  18
-HeadCount:              .short                  2
-HiddenSectors:          .int                    0
-SectorCount32:          .int                    0
-DriveNumber:            .byte                   0
-_Reserved:              .byte                   0
-Signature:              .byte                   0x29
-VolumeId:               .int                    0xCA55E77E
-Label:                  .ascii                  "OH-WES     "
-FsType:                 .ascii                  "FAT12   "
+# DO NOT MOVE THIS. Tweak with care.
+##
+OemName:                .ascii          "whampson"
+SectorSize:             .short          512
+SectorsPerCluster:      .byte           1
+ReservedSectors:        .short          1
+FatCount:               .byte           2
+RootDirCapacity:        .short          224
+SectorCount:            .short          2880
+MediaType:              .byte           0xF0
+SectorsPerFat:          .short          9
+SectorsPerTrack:        .short          18
+HeadCount:              .short          2
+HiddenSectors:          .int            0
+SectorCount32:          .int            0
+DriveNumber:            .byte           0
+_Reserved:              .byte           0
+Signature:              .byte           0x29
+VolumeId:               .int            0xCA55E77E
+Label:                  .ascii          "OH-WES     "
+FsType:                 .ascii          "FAT12   "
 
-#
+##
 # Initial boot loader code.
 # Gotta be tight; file must assemble to no more than 512 bytes!
 #
 # We start off executing at 0x7C00. We set the stack pointer to this address
 # (remember, the stack grows towards 0!) and load BOOT.SYS at 0x7E00,
-# immediately after the boot sector in memory.
-#
+# immediately after the boot sector in memory. We then jump to the stage 2 code.
+##
 Stage1:
-        cld                                     # clear direction bit
-        xorw            %ax, %ax                # zero segment regs
-        movw            %ax, %ds
-        movw            %ax, %es
-        movw            %ax, %ss
-        movw            $0x7C00, %bp            # set up stack
-        movw            %bp, %sp
-        PRINT           s_Hello1                # print a welcome message
+        cld                             # clear direction bit
+        xorw    %ax, %ax                # set up segment regs and stack
+        movw    %ax, %ds
+        movw    %ax, %es
+        movw    %ax, %fs
+        movw    $BIOS_DATA_SEG, %ax
+        movw    %ax, %gs
+        movw    $STACK_SEG, %ax
+        movw    %ax, %ss
+        movw    $0x0000, %bp
+        movw    %bp, %sp
+        PRINT   s_Hello1                # print a welcome message
 
 LoadRootDir:
-        movw            RootDirCapacity, %cx    # calculate root dir size
-        shlw            $5, %cx                 #   maxentries*32
-        movw            $ROOTDIR_BASE, %bx
-        movw            SectorsPerFat, %ax      # calculate root dir start sector
-        mulb            FatCount                #   nreserved+(nfatsectors*nfats)
-        addw            ReservedSectors, %ax
-        movw            %ax, g_FirstCluster
-        decw            %cx                     # caclulate num sectors to read
-        shrw            $9, %cx                 #   ((nbytes-1)/512)+1
-        incw            %cx
-        addw            %cx, g_FirstCluster
-        call            LoadSectors             # read root dir
+        movw    RootDirCapacity, %cx    # calculate root dir size
+        shlw    $5, %cx                 #   maxentries*32
+        movw    SectorsPerFat, %ax      # calculate root dir start sector
+        mulb    FatCount                #   nreserved+(nfatsectors*nfats)
+        addw    ReservedSectors, %ax
+        movw    %ax, g_FirstCluster     # store the sector index for later
+        decw    %cx                     # caclulate num sectors to read
+        shrw    $9, %cx                 #   ((nbytes-1)/512)+1
+        incw    %cx                     # first data cluster immediately follows
+        addw    %cx, g_FirstCluster     #   root dir, add nsectors here
+        movw    $ROOTDIR_BASE, %bx      # root dir base addr
+        call    LoadSectors             # read root dir
 
 LoadStage2:
-        # TODO: scan root dir for file? or ensure it's always the first entry in the dir
-        movl            $ROOTDIR_BASE, %edx     # 1st root dir entry
-        movw            $STAGE2_BASE, %bx       # stage2 addr
-        call            LoadFile
+        leaw    s_Stage2FileName, %si
+        movw    $STAGE2_BASE, %bx       # stage2 addr
+        call    LoadFile
 
 GoToStage2:
-        jmp             Stage2                  # go ahead and jump (jump!)
+        jmp     Stage2                  # go ahead and jump (jump!)
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
@@ -112,41 +119,60 @@ GoToStage2:
 # edx = dir entry ptr
 # es:bx = dest addr
 # TODO: take a file name and search root dir for dir entry
+
+##
+# -----------------------------------------------------------------------------
+# LoadFile
+# -----------------------------------------------------------------------------
+# Loads a file from the root directory on disk given a file name.
+#
+# NOTES:
+#     - File must be contiguous! In order to preserve space, this function does
+#       not read the cluster map, so a fragmented file cannot be loaded.
+#     - File cannot exceed 64k in size or be large enough to cross a segment
+#       boundary.
+#
+# Inputs:
+#       es:bx - destination buffer
+#       ds:si - file name ptr, e.g. "FILE    TXT"
+#
+# Clobbers:
+#       (potentially everything due to BIOS call)
+##
 .globl LoadFile
 LoadFile:
-        movw            26(%edx), %ax           # first cluster for file
-        subw            $2, %ax                 # cluster indices 0 and 1 reserved
-        addw            g_FirstCluster, %ax
-        movw            28(%edx), %cx           # file size in bytes
+        // TODO: search for file name
+        movw    26(%edx), %ax           # first cluster for file
+        subw    $2, %ax                 # cluster indices 0 and 1 reserved
+        movw    28(%edx), %cx           # file size in bytes
 
-        decw            %cx                     # calculate num clusters to read
-        shrw            $9, %cx                 #  ((nbytes-1)/512)+1
-        incw            %cx
-        xchgw           %ax, %cx                # clusters->sectors
-        mulb            SectorsPerCluster
-        xchgw           %ax, %cx
+        decw    %cx                     # calculate num clusters to read
+        shrw    $9, %cx                 #  ((nbytes-1)/512)+1
+        incw    %cx
+        xchgw   %ax, %cx                # convert nclusters to nsectors
+        mulb    SectorsPerCluster
+        xchgw   %ax, %cx
+        addw    g_FirstCluster, %cx     # calculate absolute sector address
 
-        call            LoadSectors             # read it in!
+        call    LoadSectors             # read it in!
 
         ret
 
-        # TOOD finish!!
-
-
+##
 # -----------------------------------------------------------------------------
 # LoadSectors
 # -----------------------------------------------------------------------------
 # Reads one or more sectors from the primary disk drive into a buffer.
-# In this case, the primary disk drive is (likely) floppy drive 0.
+# In this case, the primary disk drive is floppy drive 0.
 #
 # Inputs:
 #       es:bx - buffer address
-#       ax - logical block address (starting sector)
-#       cx - sector count
+#          ax - logical block address of starting sector
+#          cx - sector count
 #
 # Clobbers:
-#       (everything, probably)
-#
+#       (potentially everything due to BIOS call)
+##
 .globl LoadSectors
 LoadSectors:
         test            %cx, %cx
@@ -163,7 +189,7 @@ _LoadSectors_Loop:
         movw            -4(%bp), %ax            # ax = logical block address
         call            LbaToChs                # returns: cx=cylinder, dh=head, dl=sector
 
-        # need to combine cylinder and sector into cx like below:
+        # combine cylinder and sector into cx like below:
         #   cx =       ---ch--- ---cl---
         #   cylinder : 76543210 98
         #   sector   :            543210
@@ -176,7 +202,8 @@ _LoadSectors_Loop:
         movb            $1, %al                 # al=count
         movb            $0x02, %ah              # ah=fn:LoadSectors
         int             $0x13                   # ch=cyl, dh=head, cl=sect
-        jc              _LoadSectors_Error              # TODO: retry on error?
+        jc              _LoadSectors_Error
+        # TODO: retry read on error?
 
         PRINT           s_ProgressChar
 
@@ -197,6 +224,7 @@ _LoadSectors_Error:
         PRINT           s_DiskError
         jmp             ReadKeyThenReset
 
+##
 # -----------------------------------------------------------------------------
 # LbaToChs
 # -----------------------------------------------------------------------------
@@ -210,7 +238,8 @@ _LoadSectors_Error:
 #       dl - sector
 # Clobbers:
 #       ax, bx, cx, dx
-#
+##
+.globl LbaToChs
 LbaToChs:
         # For a disk with 2 heads, 80 tracks, and 18 sectors per track:
         #   0  = 0,0,1
@@ -246,6 +275,7 @@ LbaToChs:
         popw            %cx                     # cx = cylinder
         ret
 
+##
 # -----------------------------------------------------------------------------
 # PrintStr
 # -----------------------------------------------------------------------------
@@ -256,7 +286,7 @@ LbaToChs:
 #       ds:si - address of string to print
 # Clobbers:
 #       (potentially everything due to BIOS call)
-#
+##
 .globl PrintStr
 PrintStr:
         xorw            %ax, %ax
@@ -270,6 +300,7 @@ PrintStr:
 _PrintStr_done:
         ret
 
+##
 # -----------------------------------------------------------------------------
 # ReadKey
 # -----------------------------------------------------------------------------
@@ -279,27 +310,45 @@ _PrintStr_done:
 #       al - key pressed
 # Clobbers:
 #       (potentially everything due to BIOS call)
-#
+##
+.globl ReadKey
 ReadKey:
         xorb            %ah, %ah
         int             $0x16
         ret
 
+##
+# -----------------------------------------------------------------------------
+# ReadKeyThenReset
+# -----------------------------------------------------------------------------
+# Waits for keyboard input, then resets the machine.
+##
+.globl ReadKeyThenReset
 ReadKeyThenReset:
         call            ReadKey
-        # fallthrough...
+        jmp             Reset
 
+##
+# -----------------------------------------------------------------------------
+# Reset
+# -----------------------------------------------------------------------------
+# Performs a warm boot by jumping to the CPU reset vector.
+##
+.globl Reset
 Reset:
-        movw            $RESETMODE_NOMEMTEST, RESETMODE
+        movw            $RESETFLAG_WARM, %gs:BIOS_RESETFLAG
         ljmp            $0xFFFF, $0x0000
 
-.globl Halt16
-Halt16:
+##
+# -----------------------------------------------------------------------------
+# Halt
+# -----------------------------------------------------------------------------
+# Puts the system into an idle loop.
+##
+.globl Halt
+Halt:
         hlt
-        jmp             Halt16
-
-RESETMODE               = 0x0472                # soft reset mode address
-RESETMODE_NOMEMTEST     = 0x1234                # skip memory test on soft reset
+        jmp             Halt
 
 # -----------------------------------------------------------------------------
 # ------------------------------ Padding & Data -------------------------------
@@ -317,6 +366,14 @@ s_NewLine:
 s_ProgressChar:
         .asciz  "."
 
+.globl s_Stage2FileName
+s_Stage2FileName:
+        .asciz  "BOOT    SYS"
+
+.globl s_KernelFileName
+s_KernelFileName:
+        .asciz  "OHWES   SYS"
+
 .globl s_Hello1
 s_Hello1:
         .asciz  "\r\nLoading System"
@@ -327,5 +384,5 @@ s_DiskError:
         .asciz  "\r\nPress any key to try again..."
 
 # pad the remaining space up to the size of a sector (512 bytes)
-.space          0x1FE - (. - Entry), 0xCC       # pad with debugbreak instr
+.space          0x1FE - (. - Entry), 0xCC       # pad with debugbreak opcode
 .short          0xAA55                          # boot sector indicator

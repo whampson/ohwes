@@ -28,7 +28,7 @@
 .code16
 
 # -----------------------------------------------------------------------------
-# ---------------------------------- Stage2 -----------------------------------
+# --------------------------------- Stage 2 -----------------------------------
 # -----------------------------------------------------------------------------
 
 ##
@@ -49,7 +49,7 @@ CheckKernelSize:
         cmpl            $0xFFFF, %ecx           # make sure we don't exceed a segment size (TODO: check wraparound)
         jle             LoadKernel
         PRINT           s_KernelTooBig
-        jmp             Halt16
+        jmp             Halt
 
 LoadKernel:
         movw            $EARLY_KERNEL_SEG, %ax
@@ -155,7 +155,7 @@ _VgaDone:
 
 _VgaError:
         PRINT           s_VideoError
-        jmp             Halt16
+        jmp             Halt
 
 ##
 # -----------------------------------------------------------------------------
@@ -289,7 +289,7 @@ _DetectMemory_Legacy_Lo:
 
 _DetectMemory_Legacy_Error:
         PRINT           s_MemError
-        jmp             Halt16
+        jmp             Halt
 
 ##
 # -----------------------------------------------------------------------------
@@ -315,7 +315,7 @@ _EnableA20_Done:
 
 _EnableA20_error:
         PRINT           s_A20Error
-        jmp             Halt16
+        jmp             Halt
 
 ##
 # Test whether A20 gate is enabled.
