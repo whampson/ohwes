@@ -32,9 +32,19 @@ MSYS2> pacman -Syu mingw32/mingw-w64-i686-toolchain
 
 4. Install cross-compiler. This will be used to build the operating system code. Currently, we are using GCC 7.1.0 graciously pre-compiled by *lordmilko* at [lordmilko/i386-elf-tools](https://github.com/lordmilko/i686-elf-tools).
     1. Download [i686-elf-tools-windows.zip](https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-windows.zip)
-    2. Extract .zip to `tools/bin/i686-elf-tools-windows`
+    2. Extract .zip to `build/i686-elf-tools/bin`
 
 5. Use a MINGW32 shell to build OH-WES (see [Building OH-WES](#building-oh-wes))
+
+## Linux (Debian)
+1. Install build-essential
+```
+> apt-get install build-essential
+```
+
+2. Install cross-compiler. This will be used to build the operating system code. Currently, we are using GCC 7.1.0 graciously pre-compiled by *lordmilko* at [lordmilko/i386-elf-tools](https://github.com/lordmilko/i686-elf-tools).
+    1. Download [i686-elf-tools-linux.zip](https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-linux.zip)
+    2. Extract .zip to `build/i686-elf-tools/bin`
 
 ## Building OH-WES
 Open a Bash shell (MINGW32 on Windows) and navigate to the project root, then

@@ -15,7 +15,7 @@ DISKIMG := ${TARGET_DIR}/ohwes.img
 SUBMAKEFILES := \
     src/ohwes.mk \
 
-.PHONY: all img tools nuke run run-debug
+.PHONY: all img ohwes tools img run debug debug-boot nuke
 
 all:
 
@@ -24,9 +24,12 @@ ohwes: all
 tools:
 	@${MAKE} -C tools
 
-# destroy everything!!!
-nuke:
-	${RM} -r ${TARGET_DIR} ${BUILD_DIR}
+floppy: ohwes
+# mkdosfs -s 1 -S 512 /dev/fd0
+# TODO: this is Windows/MINGW only!
+	dd if=${BOOTIMG} of=/dev/fd0 bs=512 count=1 conv=notrunc
+	cp ${BOOTSYS} /a/
+	cp ${KERNSYS} /a/
 
 img: tools ohwes
 	@mkdir -p $(dir ${DISKIMG})
@@ -46,3 +49,7 @@ debug: img
 
 debug-boot: img
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG} debug-boot
+
+# destroy everything!!!
+nuke:
+	${RM} -r ${TARGET_DIR} ${BUILD_DIR}
