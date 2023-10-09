@@ -77,7 +77,6 @@ FsType:                 .ascii          "FAT12   "
 # immediately after the boot sector in memory. We then jump to the stage 2 code.
 ##
 Stage1:
-        cli                             # clear interrupts
         cld                             # clear direction bit
         xorw    %ax, %ax                # set up segment regs and stack
         movw    %ax, %ds

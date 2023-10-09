@@ -60,6 +60,7 @@ CheckKernelSize:
 
 
 SwitchToProtectedMode:
+        cli
         lgdtl           EarlyGdtReg             # load the temp GDT
         movl            %cr0, %eax
         orl             $1, %eax                # set ProtectionEnable bit

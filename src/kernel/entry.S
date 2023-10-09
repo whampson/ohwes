@@ -3,7 +3,8 @@
 
 .globl KeEntry
 KeEntry:
-        movw    $0xa421, 0xB8000
+        cli
+        movw    $0xd121, 0xB8000
         // call    OhWes
 
 .globl Halt

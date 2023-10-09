@@ -19,6 +19,8 @@ SUBMAKEFILES := \
 
 all:
 
+ohwes: all
+
 tools:
 	@${MAKE} -C tools
 
@@ -26,7 +28,7 @@ tools:
 nuke:
 	${RM} -r ${TARGET_DIR} ${BUILD_DIR}
 
-img: tools
+img: tools ohwes
 	@mkdir -p $(dir ${DISKIMG})
 	fatfs create --force ${DISKIMG} 2880
 	dd if=${BOOTIMG} of=${DISKIMG} bs=512 count=1 conv=notrunc
@@ -36,11 +38,11 @@ img: tools
 	fatfs attr -s ${DISKIMG} OHWES.SYS
 	fatfs list -Aa ${DISKIMG}
 
-run: all img
+run: img
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG}
 
-debug: all img
+debug: img
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG} debug
 
-debug-boot: all img
+debug-boot: img
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG} debug-boot
