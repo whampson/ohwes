@@ -102,8 +102,8 @@
  */
 enum Dpl
 {
-    DPL_KERNEL = 0,
-    DPL_USER = 3
+    KernelMode = 0,
+    UserMode = 3
 };
 
 /*

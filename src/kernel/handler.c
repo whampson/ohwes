@@ -20,8 +20,8 @@
  */
 
 #include <stdio.h>
-#include <os.h>
-#include <interrupt.h>
+#include <sys/os.h>
+#include <sys/interrupt.h>
 
 __fastcall void handle_syscall(struct iframe *frame)
 {

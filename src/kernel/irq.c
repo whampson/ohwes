@@ -20,9 +20,9 @@
  */
 
 #include <stddef.h>
-#include <os.h>
-#include <interrupt.h>
-#include <pic.h>
+#include <sys/os.h>
+#include <sys/interrupt.h>
+#include <sys/pic.h>
 
 #define PIC_MASTER  0
 #define PIC_SLAVE   1

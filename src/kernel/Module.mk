@@ -10,7 +10,7 @@ SOURCES := \
     init.c \
     irq.c \
 
-TGT_INCDIRS := include
+# TGT_INCDIRS := include
 TGT_LDFLAGS := -Ttext 0x100000 -e KeEntry
 TGT_LDLIBS  := \
     ${TARGET_DIR}/lib/libcrt.a \

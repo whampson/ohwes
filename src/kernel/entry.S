@@ -4,9 +4,10 @@
 .globl KeEntry
 KeEntry:
         cli
-        movw    $0xd121, 0xB8000
-        // TODO: set up stack at EBDA base
-        // call    KeMain
+        // movw    $0xd121, 0xB8000
+
+        # params: ecx = boot params ptr
+        call    KeMain
 
 .globl Halt
 Halt:

@@ -22,7 +22,7 @@
 # 32-bit Protected Mode with a flat memory model.
 # =============================================================================
 
-#include <ohwes/boot.h>
+#include <sys/boot.h>
 
 .text
 .code16
@@ -98,6 +98,7 @@ MoveKernel:
     rep movsb
 
 EnterKernel:
+        movl    $g_BootParams, %ecx
         # springboard ourselves into the kernel!
         pushl   $KERNEL_ENTRY           # perform a long jump
         ret
@@ -485,38 +486,41 @@ GdtBase:
 ##
 # struct BootParams
 ##
-m_HwFlags:
-        .long   0
-made_A20Method:
-        .long   A20_NONE
-m_VideoCols:
-        .long   0
-m_VideoMode:
-        .long   0
-m_VideoPage:
-        .long   0
-m_CursorStartLine:
-        .long   0
-m_CursorEndLine:
-        .long   0
-m_CursorRow:
-        .long   0
-m_CursorColumn:
-        .long   0
-m_HasAcpiMemoryMap:
-        .long   0
-m_pAcpiMemoryMap:
-        .long   MEMMAP_BASE
-m_RamLo_Legacy:
-        .long   0
-m_RamHi_Legacy:
-        .long   0
-m_RamLo_E801h:
-        .long   0
-m_RamHi_E801h:
-        .long   0
-m_KernelSize:
-        .long   0
+.globl g_BootParams
+g_BootParams:
+
+        m_HwFlags:
+                .long   0
+        made_A20Method:
+                .long   A20_NONE
+        m_VideoCols:
+                .long   0
+        m_VideoMode:
+                .long   0
+        m_VideoPage:
+                .long   0
+        m_CursorStartLine:
+                .long   0
+        m_CursorEndLine:
+                .long   0
+        m_CursorRow:
+                .long   0
+        m_CursorColumn:
+                .long   0
+        m_HasAcpiMemoryMap:
+                .long   0
+        m_pAcpiMemoryMap:
+                .long   MEMMAP_BASE
+        m_RamLo_Legacy:
+                .long   0
+        m_RamHi_Legacy:
+                .long   0
+        m_RamLo_E801h:
+                .long   0
+        m_RamHi_E801h:
+                .long   0
+        m_KernelSize:
+                .long   0
 
 ##
 # Strings

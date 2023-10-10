@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: boot/boot.h
+ *         File: sys/boot.h
  *      Created: March 21, 2023
  *       Author: Wes Hampson
  * =============================================================================
@@ -106,73 +106,53 @@
 
 #else
 
-// #include <stdbool.h>
-// #include <stdint.h>
+#include <stdbool.h>
+#include <stdint.h>
 
-// struct BootParams
-// {
-//     uint32_t m_HwFlags;
-//     uint32_t m_A20Method;
-//     uint32_t m_VideoCols;
-//     uint32_t m_VideoMode;
-//     uint32_t m_VideoPage;
-//     uint32_t m_CursorStartLine;
-//     uint32_t m_CursorEndLine;
-//     uint32_t m_CursorRow;
-//     uint32_t m_CursorColumn;
-//     uint32_t m_HasAcpiMemoryMap;
-//     uint32_t m_pAcpiMemoryMap;
-//     uint32_t m_RamLo_Legacy;
-//     uint32_t m_RamHi_Legacy;
-//     uint32_t m_RamLo_E801h;
-//     uint32_t m_RamHi_E801h;
-//     uint32_t m_KernelSize;
-// };
+typedef union HwFlags {
+    struct {
+        uint16_t HasDisketteDrive       : 1;
+        uint16_t HasCoprocessor         : 1;
+        uint16_t HasPs2Mouse            : 1;
+        uint16_t                        : 1;
+        uint16_t VideoMode              : 2;
+        uint16_t NumOtherDisketteDrives : 2;
+        uint16_t _Dma                   : 1;
+        uint16_t NumSerialPorts         : 3;
+        uint16_t HasGamePort            : 1;
+        uint16_t _HasPrinterOrModem     : 1;
+        uint16_t NumParallelPorts       : 2;
+    };
+    uint32_t _value;
+} HwFlags;
+_Static_assert(sizeof(HwFlags) == 4, "sizeof(HwFlags) == 4");
 
-// typedef union HwFlags {
-//     struct {
-//         uint16_t HasDisketteDrive       : 1;
-//         uint16_t HasCoprocessor         : 1;
-//         uint16_t HasPs2Mouse            : 1;
-//         uint16_t                        : 1;
-//         uint16_t VideoMode              : 2;
-//         uint16_t NumOtherDisketteDrives : 2;
-//         uint16_t _Dma                   : 1;
-//         uint16_t NumSerialPorts         : 3;
-//         uint16_t HasGamePort            : 1;
-//         uint16_t _HasPrinterOrModem     : 1;
-//         uint16_t NumParallelPorts       : 2;
-//     };
-//     uint16_t _value;
-// } HwFlags;
-// _Static_assert(sizeof(HwFlags) == 2, "sizeof(HwFlags) == 2");
+enum HwFlagsVideoMode {
+    HWFLAGS_VIDEOMODE_INVALID       = 0,
+    HWFLAGS_VIDEOMODE_40x25         = 1,
+    HWFLAGS_VIDEOMODE_80x25         = 2,
+    HWFLAGS_VIDEOMODE_80x25_MONO    = 3,
+};
 
-// enum HwFlagsVideoMode {
-//     HWFLAGS_VIDEOMODE_INVALID       = 0,
-//     HWFLAGS_VIDEOMODE_40x25         = 1,
-//     HWFLAGS_VIDEOMODE_80x25         = 2,
-//     HWFLAGS_VIDEOMODE_80x25_MONO    = 3,
-// };
+typedef struct AcpiMemoryMapEntry {
+    uint64_t Base;
+    uint64_t Length;
+    uint32_t Type;
+    uint32_t Attributes;
+} AcpiMemoryMapEntry;
+_Static_assert(sizeof(AcpiMemoryMapEntry) == 24, "sizeof(AcpiMemoryMapEntry) == 24");
 
-// typedef struct AcpiMemoryMapEntry {
-//     uint64_t Base;
-//     uint64_t Length;
-//     uint32_t Type;
-//     uint32_t Attributes;
-// } AcpiMemoryMapEntry;
-// _Static_assert(sizeof(AcpiMemoryMapEntry) == 24, "sizeof(AcpiMemoryMapEntry) == 24");
+typedef AcpiMemoryMapEntry AcpiMemoryMap;
 
-// typedef AcpiMemoryMapEntry AcpiMemoryMap;
-
-// enum AcpiMemoryMapType {
-//     ACPI_MMAP_TYPE_INVALID  = 0,    /* (invalid table entry, ignore) */
-//     ACPI_MMAP_TYPE_USABLE   = 1,    /* Available, free for use */
-//     ACPI_MMAP_TYPE_RESERVED = 2,    /* Reserved, do not use */
-//     ACPI_MMAP_TYPE_ACPI     = 3,    /* ACPI tables, can be reclaimed */
-//     ACPI_MMAP_TYPE_ACPI_NVS = 4,    /* ACPI non-volatile storage, do not use */
-//     ACPI_MMAP_TYPE_BAD      = 5,    /* Bad memory, do not use */
-//     /* Other values are reserved or OEM-specific, do not use */
-// };
+enum AcpiMemoryMapType {
+    ACPI_MMAP_TYPE_INVALID  = 0,    /* (invalid table entry, ignore) */
+    ACPI_MMAP_TYPE_USABLE   = 1,    /* Available, free for use */
+    ACPI_MMAP_TYPE_RESERVED = 2,    /* Reserved, do not use */
+    ACPI_MMAP_TYPE_ACPI     = 3,    /* ACPI tables, can be reclaimed */
+    ACPI_MMAP_TYPE_ACPI_NVS = 4,    /* ACPI non-volatile storage, do not use */
+    ACPI_MMAP_TYPE_BAD      = 5,    /* Bad memory, do not use */
+    /* Other values are reserved or OEM-specific, do not use */
+};
 
 // struct BootInfo
 // {
@@ -186,7 +166,28 @@
 //     const AcpiMemoryMapEntry *m_pMemoryMap;
 // };
 
-// extern struct BootInfo *g_pBootInfo;
+
+typedef struct BootParams {
+    HwFlags                     m_HwFlags;
+    uint32_t                    m_A20Method;
+    uint32_t                    m_VideoCols;
+    uint32_t                    m_VideoMode;
+    uint32_t                    m_VideoPage;
+    uint32_t                    m_CursorStartLine;
+    uint32_t                    m_CursorEndLine;
+    uint32_t                    m_CursorRow;
+    uint32_t                    m_CursorColumn;
+    uint32_t                    m_HasAcpiMemoryMap;
+    const AcpiMemoryMapEntry    *m_pAcpiMemoryMap;
+    uint32_t                    m_RamLo_Legacy;
+    uint32_t                    m_RamHi_Legacy;
+    uint32_t                    m_RamLo_E801h;
+    uint32_t                    m_RamHi_E801h;
+    uint32_t                    m_KernelSize;
+} BootParams;
+// TODO: offset checks
+
+extern BootParams *g_pBootParams;
 
 #endif
 
@@ -217,6 +218,7 @@
 #define IDT_COUNT           256
 #define IDT_BASE            0x1000
 #define IDT_LIMIT           (IDT_BASE+(IDT_COUNT*DESC_SIZE-1))
+#define IDT_SIZE            (IDT_LIMIT+1)
 
 
 /**
@@ -225,6 +227,8 @@
 #define GDT_COUNT           8
 #define GDT_BASE            0x1800
 #define GDT_LIMIT           (GDT_BASE+(GDT_COUNT*DESC_SIZE-1))
+#define GDT_SIZE            (GDT_LIMIT+1)
+
 #define EARLY_CS            0x08    // code segment in early GDT
 #define EARLY_DS            0x10    // data segment in early GDT
 
@@ -235,6 +239,7 @@
 #define LDT_COUNT           2
 #define LDT_BASE            0x1840
 #define LDT_LIMIT           (LDT_BASE+(LDT_COUNT*DESC_SIZE-1))
+#define LDT_SIZE            (LDT_LIMIT+1)
 
 
 /**

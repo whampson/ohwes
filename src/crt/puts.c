@@ -1,9 +1,9 @@
 #include <stdio.h>
-// #include <console.h>
+#include <sys/console.h>
 
 int putchar(int ch)
 {
-    // console_write((char) ch);       // TODO: use write() syscall
+    console_write((char) ch);       // TODO: use write() syscall
     return 1;
 }
 

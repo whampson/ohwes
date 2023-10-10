@@ -29,7 +29,7 @@
 # Designed for a 1.44MB floppy with 512-byte sectors and a FAT12 file system.
 # =============================================================================
 
-#include <ohwes/boot.h>
+#include <sys/boot.h>
 
 .text
 .code16
