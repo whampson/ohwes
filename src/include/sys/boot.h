@@ -184,6 +184,7 @@ typedef struct BootParams {
     uint32_t                    m_RamLo_E801h;
     uint32_t                    m_RamHi_E801h;
     uint32_t                    m_KernelSize;
+    const uint16_t              *m_pEbda;
 } BootParams;
 // TODO: offset checks
 

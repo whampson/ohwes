@@ -6,14 +6,14 @@
 void PrintHardwareInfo()
 {
     const HwFlags *pHwFlags = &g_pBootParams->m_HwFlags;
-    printf("boot: diskette drive? %s\n", pHwFlags->HasDisketteDrive ? "yes" : "no");
-    printf("boot: coprocessor? %s\n", pHwFlags->HasCoprocessor ? "yes" : "no");
-    printf("boot: PS/2 mouse? %s\n", pHwFlags->HasPs2Mouse ? "yes" : "no");
-    printf("boot: game port? %s\n", pHwFlags->HasGamePort ? "yes" : "no");
-    printf("boot: num serial ports = %d\n", pHwFlags->NumSerialPorts);
-    printf("boot: num parallel ports = %d\n", pHwFlags->NumParallelPorts);
-    printf("boot: num secondary diskette drives = %d\n", pHwFlags->NumOtherDisketteDrives);
-    printf("boot: video mode = ");
+    printf("boot: hwflags: diskette drive? %s\n", pHwFlags->HasDisketteDrive ? "yes" : "no");
+    printf("boot: hwflags: coprocessor? %s\n", pHwFlags->HasCoprocessor ? "yes" : "no");
+    printf("boot: hwflags: PS/2 mouse? %s\n", pHwFlags->HasPs2Mouse ? "yes" : "no");
+    printf("boot: hwflags: game port? %s\n", pHwFlags->HasGamePort ? "yes" : "no");
+    printf("boot: hwflags: num serial ports = %d\n", pHwFlags->NumSerialPorts);
+    printf("boot: hwflags: num parallel ports = %d\n", pHwFlags->NumParallelPorts);
+    printf("boot: hwflags: num secondary diskette drives = %d\n", pHwFlags->NumOtherDisketteDrives);
+    printf("boot: hwflags: video mode = ");
     switch (pHwFlags->VideoMode) {
         case HWFLAGS_VIDEOMODE_40x25:       printf("40x25\n"); break;
         case HWFLAGS_VIDEOMODE_80x25:       printf("80x25\n"); break;
@@ -38,7 +38,7 @@ void PrintMemoryInfo()
     printf("boot: g_RamHi_E801h = %d\n", g_pBootParams->m_RamHi_E801h << 6);    // 64K pages to 1K pages
 
     const AcpiMemoryMapEntry *memMap = g_pBootParams->m_pAcpiMemoryMap;
-    if (memMap) {
+    if (g_pBootParams->m_HasAcpiMemoryMap) {
         do {
             if (memMap->Length > 0) {
                 printf("boot: BIOS-E820h: %08x-%08x ",

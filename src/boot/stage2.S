@@ -84,6 +84,7 @@ SetupStack:
         # set stack up at base of EBDA (top of low memory)
         movzwl  ((BIOS_DATA_SEG<<4)+BIOS_EBDA), %eax
         shll    $4, %eax
+        movl    %eax, m_pEbda
         movl    %eax, %esp
         movl    %esp, %ebp
 
@@ -488,39 +489,23 @@ GdtBase:
 ##
 .globl g_BootParams
 g_BootParams:
-
-        m_HwFlags:
-                .long   0
-        made_A20Method:
-                .long   A20_NONE
-        m_VideoCols:
-                .long   0
-        m_VideoMode:
-                .long   0
-        m_VideoPage:
-                .long   0
-        m_CursorStartLine:
-                .long   0
-        m_CursorEndLine:
-                .long   0
-        m_CursorRow:
-                .long   0
-        m_CursorColumn:
-                .long   0
-        m_HasAcpiMemoryMap:
-                .long   0
-        m_pAcpiMemoryMap:
-                .long   MEMMAP_BASE
-        m_RamLo_Legacy:
-                .long   0
-        m_RamHi_Legacy:
-                .long   0
-        m_RamLo_E801h:
-                .long   0
-        m_RamHi_E801h:
-                .long   0
-        m_KernelSize:
-                .long   0
+  m_HwFlags:              .long   0
+  made_A20Method:         .long   A20_NONE
+  m_VideoCols:            .long   0
+  m_VideoMode:            .long   0
+  m_VideoPage:            .long   0
+  m_CursorStartLine:      .long   0
+  m_CursorEndLine:        .long   0
+  m_CursorRow:            .long   0
+  m_CursorColumn:         .long   0
+  m_HasAcpiMemoryMap:     .long   0
+  m_pAcpiMemoryMap:       .long   MEMMAP_BASE
+  m_RamLo_Legacy:         .long   0
+  m_RamHi_Legacy:         .long   0
+  m_RamLo_E801h:          .long   0
+  m_RamHi_E801h:          .long   0
+  m_KernelSize:           .long   0
+  m_pEbda:                .long   0
 
 ##
 # Strings

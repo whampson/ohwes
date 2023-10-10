@@ -67,8 +67,6 @@ static const IdtThunk IrqThunks[NUM_IRQ] =
 #define SEGSEL_USER_DATA    (0x28|UserMode)
 #define SEGSEL_TSS          (0x30|KernelMode)
 
-#define KERNEL_STACK        0x7C00
-
 SegDesc * const g_gdt = (SegDesc *) GDT_BASE;
 SegDesc * const g_idt = (SegDesc *) IDT_BASE;
 SegDesc * const g_ldt = (SegDesc *) LDT_BASE;
@@ -78,17 +76,19 @@ __align(2) DescReg g_gdtDesc = { GDT_LIMIT, GDT_BASE };
 __align(2) DescReg g_idtDesc = { IDT_LIMIT, IDT_BASE };
 
 __fastcall
-void KeMain(const BootParams *params)
+void KeMain(const BootParams *pParams)
 {
-    memcpy(g_pBootParams, params, sizeof(BootParams));
+    memcpy(g_pBootParams, pParams, sizeof(BootParams));
 
-    InitCpuDesc();
-
+    printf("\n");
     PrintHardwareInfo();
     PrintMemoryInfo();
 
-    sti();
+    InitCpuDesc();  // TODO: something in here overwrite mem map...
+
+    IrqInit();
     IrqUnmask(IRQ_KEYBOARD);
+    sti();
 }
 
 static void InitCpuDesc(void)
@@ -158,18 +158,17 @@ static void InitCpuDesc(void)
     lidt(g_idtDesc);
 
     //
-    // Local Descriptor Table (not used)
+    // Local Descriptor Table
     //
     memset(g_ldt, 0, LDT_SIZE);
     lldt(SEGSEL_LDT);
 
     //
-    // TSS (not used)
+    // TSS
     //
     memset(g_tss, 0, TSS_SIZE);
     g_tss->ldtSegSel = SEGSEL_LDT;
-    g_tss->esp0 = KERNEL_STACK;
+    g_tss->esp0 = (uint32_t) g_pBootParams->m_pEbda;
     g_tss->ss0 = SEGSEL_KERNEL_DATA;
     ltr(SEGSEL_TSS);
 }
-

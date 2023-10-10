@@ -10,6 +10,8 @@ SOURCES := \
     init.c \
     irq.c \
 
+TGT_CFLAGS := -Wno-unused-function
+
 # TGT_INCDIRS := include
 TGT_LDFLAGS := -Ttext 0x100000 -e KeEntry
 TGT_LDLIBS  := \
