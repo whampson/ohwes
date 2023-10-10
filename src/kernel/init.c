@@ -35,6 +35,7 @@
 static BootParams LocalBootParams = { };
 BootParams *g_pBootParams = &LocalBootParams;
 
+extern void con_init(void);
 extern void IrqInit(void);
 static void InitCpuDesc(void);
 
@@ -75,12 +76,20 @@ struct Tss * const g_tss = (struct Tss *) TSS_BASE;
 __align(2) DescReg g_gdtDesc = { GDT_LIMIT, GDT_BASE };
 __align(2) DescReg g_idtDesc = { IDT_LIMIT, IDT_BASE };
 
+#define OS_NAME_STRING      "OHWES"
+#define OS_VERSION_STRING   "0.1"
+#define OS_COPYRIGHT_STRING "(C) 2020-2023 Wes Hampson. All Rights Reserved."
+
 __fastcall
 void KeMain(const BootParams *pParams)
 {
     memcpy(g_pBootParams, pParams, sizeof(BootParams));
 
-    printf("\n");
+    con_init();
+    puts("\n\n");
+    puts(OS_NAME_STRING " " OS_VERSION_STRING "\n");
+    puts(OS_COPYRIGHT_STRING "\n");
+
     PrintHardwareInfo();
     PrintMemoryInfo();
 
