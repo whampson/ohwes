@@ -29,7 +29,7 @@
 # Designed for a 1.44MB floppy with 512-byte sectors and a FAT12 file system.
 # =============================================================================
 
-#include "boot.h"
+#include <ohwes/boot.h>
 
 .text
 .code16
@@ -94,7 +94,7 @@ Stage1:
         movw    $BIOS_DATA_SEG, %ax     # gs = (BIOS Data Area segment)
         movw    %ax, %gs
 
-        movw    $EARLY_STACK_BASE, %bp  # set up stack
+        movw    $BOOT_STACK, %bp        # set up stack
         movw    %bp, %sp
 
 LoadRootDir:

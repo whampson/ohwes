@@ -5,7 +5,8 @@
 KeEntry:
         cli
         movw    $0xd121, 0xB8000
-        // call    OhWes
+        // TODO: set up stack at EBDA base
+        // call    KeMain
 
 .globl Halt
 Halt:

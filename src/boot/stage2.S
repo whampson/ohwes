@@ -22,10 +22,12 @@
 # 32-bit Protected Mode with a flat memory model.
 # =============================================================================
 
-#include "boot.h"
+#include <ohwes/boot.h>
 
 .text
 .code16
+
+// TODO: Test some of this stuff, like A20 methods, or flick thru video modes
 
 # -----------------------------------------------------------------------------
 # --------------------------------- Stage 2 -----------------------------------
@@ -41,38 +43,14 @@ Stage2:
         call    DetectMemory
         call    InitConsole
 
-FindKernel:
+LoadKernel:
         leaw    s_KernelFileName, %si   # locate the kernel image on disk
         call    FindFile                # returns: di = dir entry ptr
         movl    DIRENTRY_SIZE(%di), %ecx
-        movl    %ecx, g_KernelSize      # store kernel size
+        movl    %ecx, m_KernelSize      # store kernel size
 
-#
-# Ensure the kernel will fit in low memory. To do this, we find the address of
-# the Extended BIOS Data Area, which is effectively the top of low memory. We
-# then calculate the available space by subtracting the early kernel base
-# address from the EBDA address. Finally, we compare the kernel file size with
-# the available space.
-#
-# We should have roughly 512k bytes available for the kernel. If we ever exceed
-# this size (hopefully not), we'll have to load the kernel in stages, which
-# would require a working floppy disk driver in Protected Mode (or make use of
-# the BIOS again in Unreal Mode).
-#
-CheckKernelSize:
-        xorl    %eax, %eax
-        movw    %gs:BIOS_EBDA, %ax      # Extended BIOS Data Area segment
-        shll    $4, %eax                # expand segment to full address
-        movl    $EARLY_KERNEL_SEG, %ebx # early kernel segment
-        shll    $4, %ebx                # expand to full address
-        addl    $EARLY_KERNEL_BASE, %ebx
-        subl    %ebx, %eax              # subtract to get max kernel space
-        cmpl    %eax, %ecx              # does the size exceed available space?
-        jbe     LoadKernel              #   if not, load the kernel!
-        PRINT   s_KernelTooBig
-        jmp     Halt
+        call    CheckKernelSize
 
-LoadKernel:
         movw    $EARLY_KERNEL_SEG, %ax
         movw    %ax, %es
         movw    $EARLY_KERNEL_BASE, %bx
@@ -81,7 +59,7 @@ LoadKernel:
 
 SwitchToProtectedMode:
         cli                             # make sure interrupts are off
-        lgdtl   EarlyGdtReg             # load the temp GDT
+        lgdtl   GdtReg                  # load the temp GDT
         movl    %cr0, %eax
         orl     $1, %eax                # set ProtectionEnable bit
         movl    %eax, %cr0
@@ -101,22 +79,27 @@ Entry32:
         xorw    %ax, %ax
         movw    %ax, %fs
         movw    %ax, %gs
-        movl    $EARLY_STACK_BASE, %esp
+
+SetupStack:
+        # set stack up at base of EBDA (top of low memory)
+        movzwl  ((BIOS_DATA_SEG<<4)+BIOS_EBDA), %eax
+        shll    $4, %eax
+        movl    %eax, %esp
         movl    %esp, %ebp
 
 MoveKernel:
         # move kernel into high memory
         cld
-        movl    g_KernelSize, %ecx
+        movl    m_KernelSize, %ecx
         movl    $EARLY_KERNEL_SEG, %esi
         shll    $4, %esi
         orl     $EARLY_KERNEL_BASE, %esi
         movl    $KERNEL_BASE, %edi
-    rep movsb                           # move kernel to high memory
+    rep movsb
 
 EnterKernel:
         # springboard ourselves into the kernel!
-        pushl           $KERNEL_ENTRY           # perform a long jump
+        pushl   $KERNEL_ENTRY           # perform a long jump
         ret
 
 #
@@ -141,55 +124,87 @@ Halt:
 
 ##
 # -----------------------------------------------------------------------------
+# CheckKernelSize
+# -----------------------------------------------------------------------------
+# Ensure the kernel will fit in low memory. To do this, we find the address of
+# the Extended BIOS Data Area, which is effectively the top of low memory. We
+# then calculate the available space by subtracting the early kernel base
+# address from the EBDA address. Finally, we compare the kernel file size with
+# the available space.
+#
+# We should have roughly 512k bytes available for the kernel. If we ever exceed
+# this size (hopefully not), we'll have to load the kernel in stages, which
+# would require a working floppy disk driver in Protected Mode (or make use of
+# the BIOS again in Unreal Mode).
+##
+CheckKernelSize:
+        movw    m_KernelSize, %ecx
+        xorl    %eax, %eax
+        movw    %gs:BIOS_EBDA, %ax      # Extended BIOS Data Area segment
+        shll    $4, %eax                # expand segment to full address
+        movl    $EARLY_KERNEL_SEG, %ebx # early kernel segment
+        shll    $4, %ebx                # expand to full address
+        addl    $EARLY_KERNEL_BASE, %ebx
+        subl    %ebx, %eax              # subtract to get max kernel space
+        cmpl    %eax, %ecx              # does the size exceed available space?
+        ja      _TooBig                 #   yep, fail
+        ret
+
+_TooBig:
+        PRINT   s_KernelTooBig
+        jmp     Halt
+
+##
+# -----------------------------------------------------------------------------
 # InitConsole
 # -----------------------------------------------------------------------------
 # Sets the VGA mode using a BIOS routine and collects information about the
 # console.
 ##
 InitConsole:
-        movb            $0x0F, %ah      # store video page
-        int             $0x10
-        jc              _VgaError
-        movb            %bh, g_VideoPage
+        movb    $0x0F, %ah      # store video page
+        int     $0x10
+        jc      _VgaError
+        movb    %bh, m_VideoPage
 
-        movb            $0x03, %ah      # store cursor position (bh=page)
-        int             $0x10
-        jc              _VgaError
-        movb            %dh, g_CursorRow
-        movb            %dl, g_CursorColumn
+        movb    $0x03, %ah      # store cursor position (bh=page)
+        int     $0x10
+        jc      _VgaError
+        movb    %dh, m_CursorRow
+        movb    %dl, m_CursorColumn
 
-        movb            $0x00, %ah      # set video mode
-        movb            $VGA_MODE, %al
-        movb            $VGA_CLEAR, %dl
-        notb            %dl
-        shlb            $7, %dl
-        orb             %dl, %al      # bit7 is clear screen (0=clear)
-        int             $0x10
-        jc              _VgaError
+        movb    $0x00, %ah      # set video mode
+        movb    $VGA_MODE, %al
+        movb    $VGA_CLEAR, %dl
+        notb    %dl
+        shlb    $7, %dl
+        orb     %dl, %al        # bit7 is clear screen (0=clear)
+        int     $0x10
+        jc      _VgaError
 
-        movb            $0x03, %ah      # store new cursor size
-        int             $0x10
-        jc              _VgaError
-        movb            %ch, g_CursorStartLine
-        movb            %cl, g_CursorEndLine
+        movb    $0x03, %ah      # store new cursor size
+        int     $0x10
+        jc      _VgaError
+        movb    %ch, m_CursorStartLine
+        movb    %cl, m_CursorEndLine
 
-        movb            $VGA_CLEAR, %al
-        cmpb            $1, %al
-        je              _VgaDone
-        xorw            %ax, %ax
-        movb            $0x02, %ah      # restore cursor position if screen not cleared
-        movb            g_VideoPage, %bh
-        movb            g_CursorRow, %dh
-        movb            g_CursorColumn, %dl
-        int             $0x10
-        jc              _VgaError
+        movb    $VGA_CLEAR, %al
+        cmpb    $1, %al
+        je      _VgaDone
+        xorw    %ax, %ax
+        movb    $0x02, %ah      # restore cursor position if screen not cleared
+        movb    m_VideoPage, %bh
+        movb    m_CursorRow, %dh
+        movb    m_CursorColumn, %dl
+        int     $0x10
+        jc      _VgaError
 
 _VgaDone:
         ret
 
 _VgaError:
-        PRINT           s_VideoError
-        jmp             Halt
+        PRINT   s_VideoError
+        jmp     Halt
 
 ##
 # -----------------------------------------------------------------------------
@@ -198,8 +213,8 @@ _VgaError:
 # Gets installed hardware flags using a BIOS routine.
 ##
 GetHwInfo:
-        int             $0x11
-        movw            %ax, g_HwFlags
+        int     $0x11
+        movw    %ax, m_HwFlags
         ret
 
 ##
@@ -210,9 +225,9 @@ GetHwInfo:
 # routines. If all methods fail, the system will display an error and halt.
 ##
 DetectMemory:
-        call            DetectMemory_e820
-        call            DetectMemory_e801
-        call            DetectMemory_Legacy
+        call    DetectMemory_e820
+        call    DetectMemory_e801
+        call    DetectMemory_Legacy
         ret
 
 ####
@@ -245,30 +260,30 @@ DetectMemory:
 ####
 DetectMemory_e820:
         clc
-        xorl            %eax, %eax
-        movw            %ax, %es
-        movw            $MEMMAP_BASE, %di               # dest buffer
-        xorl            %ebx, %ebx                      # continuation value (0 to begin)
+        xorl    %eax, %eax
+        movw    %ax, %es
+        movw    $MEMMAP_BASE, %di       # dest buffer
+        xorl    %ebx, %ebx              # continuation value (0 to begin)
 _DetectMemory_e820_Loop:
-        movl            $0x18, %ecx                     # table entry size
-        movl            $0x534D4150, %edx               # 'SMAP'
-        movl            $0xE820, %eax                   # ACPI Query System Address Map function
-        int             $0x15
-        jc              _DetectMemory_e820_Done        # error or end of table
-        cmpb            $0x80, %ah
-        je              _DetectMemory_e820_Done        # invalid command
-        cmpb            $0x86, %ah
-        je              _DetectMemory_e820_Done        # unsupported function
-        testl           %ebx, %ebx
-        jz              _DetectMemory_e820_Success     # end of table
-        addw            $0x18, %di                      # move table ptr
-        cmpb            $0x14, %cl                      # if extended attr not present...
-        je              _DetectMemory_e820_Loop
-        movw            $0, -4(%edi)                    # ...ensure it is stored as zero
-        jmp             _DetectMemory_e820_Loop
+        movl    $0x18, %ecx             # table entry size
+        movl    $0x534D4150, %edx       # 'SMAP'
+        movl    $0xE820, %eax           # ACPI Query System Address Map function
+        int     $0x15
+        jc      _DetectMemory_e820_Done # error or end of table
+        cmpb    $0x80, %ah
+        je      _DetectMemory_e820_Done # invalid command
+        cmpb    $0x86, %ah
+        je      _DetectMemory_e820_Done # unsupported function
+        testl   %ebx, %ebx
+        jz      _DetectMemory_e820_End  # end of table
+        addw    $0x18, %di              # move table ptr
+        cmpb    $0x14, %cl              # if extended attr not present...
+        je      _DetectMemory_e820_Loop
+        movw    $0, -4(%edi)            # ...ensure it is stored as zero
+        jmp     _DetectMemory_e820_Loop
+_DetectMemory_e820_End:
+        movl    $1, m_HasAcpiMemoryMap
 
-_DetectMemory_e820_Success:
-        movl            $1, g_HasAcpiMemoryMap
 _DetectMemory_e820_Done:
         ret
 
@@ -280,19 +295,19 @@ _DetectMemory_e820_Done:
 ####
 DetectMemory_e801:
         # data can be returned in ax/bx or cx/dx; initialize all to zero
-        xorw            %ax, %ax
-        xorw            %bx, %bx
-        xorw            %cx, %cx
-        xorw            %dx, %dx
-        movw            $0xE801, %ax
-        int             $0x15
-        jc              _DetectMemory_e801_Done        # unsupported function
-        jcxz            _DetectMemory_e801_Store       # cx = 0, use ax/bx
-        movw            %cx, %ax
-        movw            %dx, %bx
+        xorw    %ax, %ax
+        xorw    %bx, %bx
+        xorw    %cx, %cx
+        xorw    %dx, %dx
+        movw    $0xE801, %ax
+        int     $0x15
+        jc      _DetectMemory_e801_Done  # unsupported function
+        jcxz    _DetectMemory_e801_Store # cx = 0, use ax/bx
+        movw    %cx, %ax
+        movw    %dx, %bx
 _DetectMemory_e801_Store:
-        movw            %ax, g_RamLo_E801h              # contiguous RAM >1M in 1K blocks, up to 16M
-        movw            %bx, g_RamHi_E801h              # contiguous RAM >16M in 64K blocks
+        movw    %ax, m_RamLo_E801h  # contiguous RAM >1M in 1K blocks, up to 16M
+        movw    %bx, m_RamHi_E801h  # contiguous RAM >16M in 64K blocks
 _DetectMemory_e801_Done:
         ret
 
@@ -305,25 +320,26 @@ _DetectMemory_e801_Done:
 ####
 DetectMemory_Legacy:
         clc
-        movb            $0x88, %ah
-        int             $0x15
-        jc              _DetectMemory_Legacy_Lo
-        cmpb            $0x80, %ah                      # (invalid command)
-        je              _DetectMemory_Legacy_Lo
-        cmpb            $0x86, %ah                      # (unsupported func)
-        je              _DetectMemory_Legacy_Lo
-        movw            %ax, g_RamHi_Legacy             # contiguous RAM >1M in 1K blocks
+        movb    $0x88, %ah
+        int     $0x15
+        jc      _DetectMemory_Legacy_Lo
+        cmpb    $0x80, %ah                     # (invalid command)
+        je      _DetectMemory_Legacy_Lo
+        cmpb    $0x86, %ah                     # (unsupported func)
+        je      _DetectMemory_Legacy_Lo
+        movw    %ax, m_RamHi_Legacy            # contiguous RAM >1M in 1K blocks
+
 _DetectMemory_Legacy_Lo:
         clc
-        int             $0x12
-        jc              _DetectMemory_Legacy_Error
-        movw            %ax, g_RamLo_Legacy             # contiguous RAM <1M in 1K blocks
-        jz              _DetectMemory_Legacy_Error
+        int     $0x12
+        jc      _DetectMemory_Legacy_Error
+        movw    %ax, m_RamLo_Legacy            # contiguous RAM <1M in 1K blocks
+        jz      _DetectMemory_Legacy_Error
         ret
 
 _DetectMemory_Legacy_Error:
-        PRINT           s_MemError
-        jmp             Halt
+        PRINT   s_MemError
+        jmp     Halt
 
 ##
 # -----------------------------------------------------------------------------
@@ -333,42 +349,41 @@ _DetectMemory_Legacy_Error:
 # otherwise there would be a very annoying non-contiguous memory hole.
 ###
 EnableA20:
-        call            TestA20
-        jnc             _EnableA20_Done
-        call            _EnableA20_Bios
-        call            TestA20
-        jnc             _EnableA20_Done
-        call            _EnableA20_Port92h
-        call            TestA20
-        jnc             _EnableA20_Done
-        call            _EnableA20_Keyboard
-        call            TestA20
-        jc              _EnableA20_error
+        call    TestA20
+        jnc     _EnableA20_Done
+        call    _EnableA20_Bios
+        call    TestA20
+        jnc     _EnableA20_Done
+        call    _EnableA20_Port92h
+        call    TestA20
+        jnc     _EnableA20_Done
+        call    _EnableA20_Keyboard
+        call    TestA20
+        jc      _EnableA20_Error
 _EnableA20_Done:
         ret
 
-_EnableA20_error:
-        PRINT           s_A20Error
-        jmp             Halt
+_EnableA20_Error:
+        PRINT   s_A20Error
+        jmp     Halt
 
 ##
 # Test whether A20 gate is enabled.
 ##
 TestA20:
-        // wbinvd                                  # invalidate cache (i486+)
-        xorw            %ax, %ax
-        movw            %ax, %es                # ds = 0x0000
-        decw            %ax                     # fs = 0xFFFF
-        movw            %ax, %fs
-        rorw            $4, %ds:0x7DFE          # tweak the boot sector ID
-        movw            %es:0x7DFE, %dx         # [0x00FDFE] -> dx
-        movw            %fs:0x7E0E, %ax         # [0x10FDFE] -> ax
-        cmpw            %ax, %dx                # are they the same?
-        je              _TestA20_Off
+        xorw    %ax, %ax
+        movw    %ax, %es                # ds = 0x0000
+        decw    %ax                     # fs = 0xFFFF
+        movw    %ax, %fs
+        rorw    $4, %ds:0x7DFE          # tweak the boot sector ID
+        movw    %es:0x7DFE, %dx         # [0x00FDFE] -> dx
+        movw    %fs:0x7E0E, %ax         # [0x10FDFE] -> ax
+        cmpw    %ax, %dx                # are they the same?
+        je      _TestA20_Off
         clc
-        jmp             _TestA20_Done
+        jmp     _TestA20_Done
 _TestA20_Off:
-        stc                                     # CF=1 if A20 disabled
+        stc                             # CF=1 if A20 disabled
 _TestA20_Done:
         ret
 
@@ -377,9 +392,9 @@ _TestA20_Done:
 # Supported on newer systems.
 ##
 _EnableA20_Bios:
-        movw            $0x2401, %ax
-        int             $0x15
-        movw            $A20_BIOS, g_A20Method
+        movw    $0x2401, %ax
+        int     $0x15
+        movw    $A20_BIOS, made_A20Method
         ret
 
 ##
@@ -387,11 +402,11 @@ _EnableA20_Bios:
 # Not supported on all systems.
 ##
 _EnableA20_Port92h:
-        inb             $0x92, %al
-        orb             $0x02, %al          # A20 enable bit
-        andb            $0xFE, %al          # clear (possible) reset flag
-        outb            %al, $0x92
-        movw            $A20_FAST, g_A20Method
+        inb     $0x92, %al
+        orb     $0x02, %al          # A20 enable bit
+        andb    $0xFE, %al          # clear (possible) reset flag
+        outb    %al, $0x92
+        movw    $A20_FAST, made_A20Method
         ret
 
 ##
@@ -399,45 +414,45 @@ _EnableA20_Port92h:
 # This is the most common method and usually does the trick.
 ##
 _EnableA20_Keyboard:
-        call            KbOut_Wait
-        movb            $0xAD, %al              # cmd: disable keyboard
-        outb            %al, $0x64
+        call    KbOut_Wait
+        movb    $0xAD, %al      # cmd: disable keyboard
+        outb    %al, $0x64
 
-        call            KbOut_Wait
-        movb            $0xD0, %al              # cmd: read controller output port
-        outb            %al, $0x64
+        call    KbOut_Wait
+        movb    $0xD0, %al      # cmd: read controller output port
+        outb    %al, $0x64
 
-        call            KbIn_Wait
-        inb             $0x60, %al  # data: controller output port
-        pushw           %ax                     # save output port
+        call    KbIn_Wait
+        inb     $0x60, %al      # data: controller output port
+        pushw   %ax             # save output port
 
-        call            KbOut_Wait
-        movb            $0xD1, %al              # cmd: write controller output port
-        outb            %al, $0x64
+        call    KbOut_Wait
+        movb    $0xD1, %al      # cmd: write controller output port
+        outb    %al, $0x64
 
-        call            KbOut_Wait
-        popw            %ax
-        orb             $0x02, %al              # A20 enable bit
-        outb            %al, $0x60  # write output reg
+        call    KbOut_Wait
+        popw    %ax
+        orb     $0x02, %al      # A20 enable bit
+        outb    %al, $0x60      # write output reg
 
-        call            KbOut_Wait
-        movb            $0xAE, %al              # cmd: enable keyboard
-        outb            %al, $0x64
+        call    KbOut_Wait
+        movb    $0xAE, %al      # cmd: enable keyboard
+        outb    %al, $0x64
 
-        call            KbOut_Wait            # (delay)
-        movw            $A20_KEYBOARD, g_A20Method
+        call    KbOut_Wait      # (delay)
+        movw    $A20_KEYBOARD, made_A20Method
         ret
 
 KbOut_Wait:
-        inb             $0x64, %al   # (buffer from controller perspective)
-        testb           $0x02, %al              # is input buffer full?
-        jnz             KbOut_Wait            # continue checking 'til empty (consumed)
+        inb     $0x64, %al      # (from controller perspective)
+        testb   $0x02, %al      # is input buffer full?
+        jnz     KbOut_Wait      #   yes: continue checking data arrives
         ret
 
 KbIn_Wait:
-        inb             $0x64, %al   # (buffer from controller perspective)
-        testb           $0x01, %al              # is output buffer full?
-        jz              KbIn_Wait             # continue checking 'til data arrives
+        inb     $0x64, %al      # (from controller perspective)
+        testb   $0x01, %al      # is output buffer full?
+        jz      KbIn_Wait       #   yes: continue checking 'til empty (consumed)
         ret
 
 # -----------------------------------------------------------------------------
@@ -449,15 +464,17 @@ KbIn_Wait:
 ##
 .align 8
 EarlyGdt:
-        .quad           0x0                             # (not used)
-        .quad           0x00CF9A000000FFFF              # cs = 0x08
-        .quad           0x00CF92000000FFFF              # ds = 0x10
+        .quad   0x0                     # (not used)
+        .quad   0x00CF9A000000FFFF      # cs = 0x08
+        .quad   0x00CF92000000FFFF      # ds = 0x10
 EarlyGdtEnd:
 
-        .word           0                               # (align)
-EarlyGdtReg:
-        .word           EarlyGdtEnd-EarlyGdt-1       # GDT limit
-        .long           EarlyGdt                       # GDT base, aligned
+        .word   0   # (align)
+GdtReg:
+GdtLimit:
+        .word   EarlyGdtEnd-EarlyGdt-1
+GdtBase:
+        .long   EarlyGdt
 
 
 // TODO: create a struct around these fields, then pass ptr to struct as
@@ -465,62 +482,45 @@ EarlyGdtReg:
 
 .align 4
 
-.globl g_HwFlags
-g_HwFlags:
-        .long           0
+##
+# struct BootParams
+##
+m_HwFlags:
+        .long   0
+made_A20Method:
+        .long   A20_NONE
+m_VideoCols:
+        .long   0
+m_VideoMode:
+        .long   0
+m_VideoPage:
+        .long   0
+m_CursorStartLine:
+        .long   0
+m_CursorEndLine:
+        .long   0
+m_CursorRow:
+        .long   0
+m_CursorColumn:
+        .long   0
+m_HasAcpiMemoryMap:
+        .long   0
+m_pAcpiMemoryMap:
+        .long   MEMMAP_BASE
+m_RamLo_Legacy:
+        .long   0
+m_RamHi_Legacy:
+        .long   0
+m_RamLo_E801h:
+        .long   0
+m_RamHi_E801h:
+        .long   0
+m_KernelSize:
+        .long   0
 
-.globl g_A20Method
-g_A20Method:
-        .long           A20_NONE
-
-.globl g_VideoCols
-g_VideoCols:
-        .long           0
-
-.globl g_VideoMode
-g_VideoMode:
-        .long           0
-
-g_VideoPage:
-        .long           0
-
-g_CursorStartLine:
-        .long           0
-g_CursorEndLine:
-        .long           0
-g_CursorRow:
-        .long           0
-g_CursorColumn:
-        .long           0
-
-.globl g_HasAcpiMemoryMap
-g_HasAcpiMemoryMap:
-        .long           0
-
-.globl g_AcpiMemoryMap
-g_AcpiMemoryMap:
-        .long           MEMMAP_BASE
-
-.globl g_RamLo_Legacy
-g_RamLo_Legacy:
-        .long           0
-
-.globl g_RamHi_Legacy
-g_RamHi_Legacy:
-        .long           0
-
-.globl g_RamLo_E801h
-g_RamLo_E801h:
-        .long           0
-
-.globl g_RamHi_E801h
-g_RamHi_E801h:
-        .long           0
-
-.globl g_KernelSize
-g_KernelSize:
-        .long           0
-
+##
+# Strings
+##
 s_KernelFileName:
         .asciz          "OHWES   SYS"
 s_Hello2:

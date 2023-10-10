@@ -29,6 +29,7 @@ if [ "$1" = "qemu" ]; then
     QEMU_FLAGS+=" -m 32M"           # 32 MB of RAM
     QEMU_FLAGS+=" -boot a"          # boot drive A:
     QEMU_FLAGS+=" -fda $2"          # disk image
+    QEMU_FLAGS+=" -monitor stdio"
 
     DEBUG_BOOT=0
     DEBUG_KERNEL=0
