@@ -36,36 +36,56 @@
 ##
 .globl Stage2
 Stage2:
-        call            EnableA20
-        call            GetHwInfo
-        call            DetectMemory
-        call            InitConsole
+        call    EnableA20               # initialize hardware and collect info
+        call    GetHwInfo
+        call    DetectMemory
+        call    InitConsole
+
+FindKernel:
+        leaw    s_KernelFileName, %si   # locate the kernel image on disk
+        call    FindFile                # returns: di = dir entry ptr
+        movl    DIRENTRY_SIZE(%di), %ecx
+        movl    %ecx, g_KernelSize      # store kernel size
+
+#
+# Ensure the kernel will fit in low memory. To do this, we find the address of
+# the Extended BIOS Data Area, which is effectively the top of low memory. We
+# then calculate the available space by subtracting the early kernel base
+# address from the EBDA address. Finally, we compare the kernel file size with
+# the available space.
+#
+# We should have roughly 512k bytes available for the kernel. If we ever exceed
+# this size (hopefully not), we'll have to load the kernel in stages, which
+# would require a working floppy disk driver in Protected Mode (or make use of
+# the BIOS again in Unreal Mode).
+#
+CheckKernelSize:
+        xorl    %eax, %eax
+        movw    %gs:BIOS_EBDA, %ax      # Extended BIOS Data Area segment
+        shll    $4, %eax                # expand segment to full address
+        movl    $EARLY_KERNEL_SEG, %ebx # early kernel segment
+        shll    $4, %ebx                # expand to full address
+        addl    $EARLY_KERNEL_BASE, %ebx
+        subl    %ebx, %eax              # subtract to get max kernel space
+        cmpl    %eax, %ecx              # does the size exceed available space?
+        jbe     LoadKernel              #   if not, load the kernel!
+        PRINT   s_KernelTooBig
+        jmp     Halt
 
 LoadKernel:
-        movw            $EARLY_KERNEL_SEG, %ax
-        movw            %ax, %es
-        movw            $EARLY_KERNEL_BASE, %bx
-        leaw            s_KernelFileName, %si
-        call            LoadFile
-        PRINTLN         s_Hello2
-
-CheckKernelSize:
-        movzwl          28(%di), %ecx
-        movl            %ecx, g_KernelSize      # store kernel size
-        // cmpl            $0xFFFF, %ecx           # make sure we don't exceed a segment size (TODO: check wraparound)
-        // jle             LoadKernel
-        // PRINT           s_KernelTooBig
-        // jmp             Halt
-
-
+        movw    $EARLY_KERNEL_SEG, %ax
+        movw    %ax, %es
+        movw    $EARLY_KERNEL_BASE, %bx
+        call    LoadFile                # load the kernel into low memory
+        PRINT   s_Hello2
 
 SwitchToProtectedMode:
-        cli
-        lgdtl           EarlyGdtReg             # load the temp GDT
-        movl            %cr0, %eax
-        orl             $1, %eax                # set ProtectionEnable bit
-        movl            %eax, %cr0
-        jmpl            $EARLY_CS, $Entry32     # reload CS and jump to 32-bit code
+        cli                             # make sure interrupts are off
+        lgdtl   EarlyGdtReg             # load the temp GDT
+        movl    %cr0, %eax
+        orl     $1, %eax                # set ProtectionEnable bit
+        movl    %eax, %cr0
+        jmpl    $EARLY_CS, $Entry32     # reload CS and jump to 32-bit code
 
 #
 # -------------------------- Begin 32-bit Code Section -------------------------
@@ -73,26 +93,26 @@ SwitchToProtectedMode:
 .code32
 
 Entry32:
-        # set up Protected Mode segment selectors
-        movw            $EARLY_DS, %ax
-        movw            %ax, %ds
-        movw            %ax, %ss
-        movw            %ax, %es
-        xorw            %ax, %ax
-        movw            %ax, %fs
-        movw            %ax, %gs
-        movl            $0x7C00, %esp
-        movl            %esp, %ebp
+        # set up Protected Mode segment selectors and stack
+        movw    $EARLY_DS, %ax
+        movw    %ax, %ds
+        movw    %ax, %ss
+        movw    %ax, %es
+        xorw    %ax, %ax
+        movw    %ax, %fs
+        movw    %ax, %gs
+        movl    $EARLY_STACK_BASE, %esp
+        movl    %esp, %ebp
 
 MoveKernel:
-        # move kernel above 1M
+        # move kernel into high memory
         cld
-        movl            g_KernelSize, %ecx
-        movl            $EARLY_KERNEL_SEG, %esi
-        shll            $4, %esi
-        orl             $EARLY_KERNEL_BASE, %esi
-        movl            $KERNEL_BASE, %edi
-    rep movsb
+        movl    g_KernelSize, %ecx
+        movl    $EARLY_KERNEL_SEG, %esi
+        shll    $4, %esi
+        orl     $EARLY_KERNEL_BASE, %esi
+        movl    $KERNEL_BASE, %edi
+    rep movsb                           # move kernel to high memory
 
 EnterKernel:
         # springboard ourselves into the kernel!
@@ -107,6 +127,17 @@ EnterKernel:
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
 # -----------------------------------------------------------------------------
+
+##
+# -----------------------------------------------------------------------------
+# Halt
+# -----------------------------------------------------------------------------
+# Puts the system into an idle loop.
+##
+.globl Halt
+Halt:
+        hlt
+        jmp     Halt
 
 ##
 # -----------------------------------------------------------------------------
@@ -360,7 +391,7 @@ _EnableA20_Port92h:
         orb             $0x02, %al          # A20 enable bit
         andb            $0xFE, %al          # clear (possible) reset flag
         outb            %al, $0x92
-        movw            $A20_PORT92h, g_A20Method
+        movw            $A20_FAST, g_A20Method
         ret
 
 ##
@@ -490,8 +521,10 @@ g_RamHi_E801h:
 g_KernelSize:
         .long           0
 
+s_KernelFileName:
+        .asciz          "OHWES   SYS"
 s_Hello2:
-        .asciz          "\r\nWelcome to The Machine"
+        .asciz          "\r\nWelcome to The Machine!"
 s_MemError:
         .asciz          "\r\nError detecting system memory!"
 s_A20Error:
@@ -499,5 +532,4 @@ s_A20Error:
 s_VideoError:
         .asciz          "\r\nError initializing video!"
 s_KernelTooBig:
-        .ascii          "\r\nKernel is too large!"
-        .asciz          "\r\nPlease update boot loader to handle files larger than 64k."
+        .ascii          "\r\nKernel cannot fit in low memory!"
