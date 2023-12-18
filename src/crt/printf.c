@@ -139,7 +139,9 @@ int snprintf(char *str, size_t n, const char *fmt, ...)
 
 int vprintf(const char *fmt, va_list args)
 {
-    struct printf_params p = { 0 };
+    struct printf_params p = {};
+    memset(&p, 0, sizeof(struct printf_params));
+
     va_copy(p.args, args);
     p.fmt = fmt;
     // p.args = args;

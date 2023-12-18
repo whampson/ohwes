@@ -1,11 +1,11 @@
 .text
 .code32
 
+# TODO: ensure this starts at the very top of the kernel image.
+
 .globl KeEntry
 KeEntry:
         cli
-        // movw    $0xd121, 0xB8000
-
         # params: ecx = boot params ptr
         call    KeMain
 

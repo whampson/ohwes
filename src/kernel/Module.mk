@@ -5,7 +5,6 @@ SOURCES := \
     entry.S \
     interrupt.S \
     console.c \
-    debug.c \
     handler.c \
     init.c \
     irq.c \
@@ -14,7 +13,7 @@ SOURCES := \
 TGT_CFLAGS := -Wno-unused-function
 
 # TGT_INCDIRS := include
-TGT_LDFLAGS := -Ttext 0x100000 -e KeEntry
+TGT_LDFLAGS := -Ttext 0x10000 -e KeEntry
 TGT_LDLIBS  := \
     ${TARGET_DIR}/lib/libcrt.a \
 

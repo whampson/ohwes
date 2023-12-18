@@ -23,6 +23,7 @@
 # =============================================================================
 
 #include <sys/boot.h>
+#include "x86_boot.h"
 
 .text
 .code16
@@ -38,24 +39,25 @@
 ##
 .globl Stage2
 Stage2:
-        call    EnableA20               # initialize hardware and collect info
-        call    GetHwInfo
-        call    DetectMemory
+        popl    %ecx                    # ...we made it!
+        movl    %ecx, m_Stage2Size      # store stage2 size
+
+        call    CollectBootParams
         call    InitConsole
+        call    EnableA20
+        call    DetectMemory
 
 LoadKernel:
-        leaw    s_KernelFileName, %si   # locate the kernel image on disk
+        leaw    sz_KernelFileName, %si  # locate the kernel image on disk
         call    FindFile                # returns: di = dir entry ptr
-        movl    DIRENTRY_SIZE(%di), %ecx
+        movl    DIRENTRY_FILESIZE(%di), %ecx
         movl    %ecx, m_KernelSize      # store kernel size
-
         call    CheckKernelSize
 
-        movw    $EARLY_KERNEL_SEG, %ax
+        movw    $KERNEL_SEGMENT, %ax
         movw    %ax, %es
-        movw    $EARLY_KERNEL_BASE, %bx
+        movw    $KERNEL_OFFSET, %bx
         call    LoadFile                # load the kernel into low memory
-        PRINT   s_Hello2
 
 SwitchToProtectedMode:
         cli                             # make sure interrupts are off
@@ -63,66 +65,62 @@ SwitchToProtectedMode:
         movl    %cr0, %eax
         orl     $1, %eax                # set ProtectionEnable bit
         movl    %eax, %cr0
-        jmpl    $EARLY_CS, $Entry32     # reload CS and jump to 32-bit code
+        ljmpl   $BOOT_CS, $Entry32      # reload CS and jump to 32-bit code
 
-#
-# -------------------------- Begin 32-bit Code Section -------------------------
-#
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~ Begin 32-bit Code Section ~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .code32
 
 Entry32:
         # set up Protected Mode segment selectors and stack
-        movw    $EARLY_DS, %ax
+        movw    $BOOT_DS, %ax
         movw    %ax, %ds
-        movw    %ax, %ss
         movw    %ax, %es
+        movw    %ax, %ss
         xorw    %ax, %ax
         movw    %ax, %fs
         movw    %ax, %gs
 
-SetupStack:
-        # set stack up at base of EBDA (top of low memory)
-        movzwl  ((BIOS_DATA_SEG<<4)+BIOS_EBDA), %eax
-        shll    $4, %eax
-        movl    %eax, m_pEbda
-        movl    %eax, %esp
-        movl    %esp, %ebp
-
-MoveKernel:
-        # move kernel into high memory
-        cld
-        movl    m_KernelSize, %ecx
-        movl    $EARLY_KERNEL_SEG, %esi
-        shll    $4, %esi
-        orl     $EARLY_KERNEL_BASE, %esi
-        movl    $KERNEL_BASE, %edi
-    rep movsb
-
 EnterKernel:
-        movl    $g_BootParams, %ecx
-        # springboard ourselves into the kernel!
-        pushl   $KERNEL_ENTRY           # perform a long jump
-        ret
+        movl    $KERNEL_BASE, m_KernelBase      # store the kernel base
+        movl    m_KernelBase, %ebp              # set up a larger stack
+        movl    %ebp, m_StackBase
+        movl    %ebp, %esp
+        movl    $g_BootParams, %ecx             # pass bootparams ptr to kernel
+        ljmpl   $BOOT_CS, $KERNEL_ENTRY         # bye bye bootloader!
 
-#
-# -------------------------- End 32-bit Code Section -------------------------
-#
+Halt32:
+        hlt
+        jmp     Halt32
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~ End 32-bit Code Section ~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .code16
+
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
 # -----------------------------------------------------------------------------
 
+
 ##
 # -----------------------------------------------------------------------------
-# Halt
+# CollectBootParams
 # -----------------------------------------------------------------------------
-# Puts the system into an idle loop.
+# Gets installed hardware flags using a BIOS routine.
 ##
-.globl Halt
-Halt:
-        hlt
-        jmp     Halt
+CollectBootParams:
+        xorl    %eax, %eax
+        int     $0x11
+        movw    %ax, m_HwFlags
+        movl    $STAGE2_BASE, m_Stage2Base
+        movzwl  %gs:BDA_EBDA_ADDR, %ebx
+        shll    $4, %ebx
+        movl    %ebx, m_pEbda
+        ret
+
 
 ##
 # -----------------------------------------------------------------------------
@@ -140,21 +138,25 @@ Halt:
 # the BIOS again in Unreal Mode).
 ##
 CheckKernelSize:
-        movw    m_KernelSize, %ecx
-        xorl    %eax, %eax
-        movw    %gs:BIOS_EBDA, %ax      # Extended BIOS Data Area segment
-        shll    $4, %eax                # expand segment to full address
-        movl    $EARLY_KERNEL_SEG, %ebx # early kernel segment
-        shll    $4, %ebx                # expand to full address
-        addl    $EARLY_KERNEL_BASE, %ebx
-        subl    %ebx, %eax              # subtract to get max kernel space
-        cmpl    %eax, %ecx              # does the size exceed available space?
-        ja      _TooBig                 #   yep, fail
+        movl    m_KernelSize, %ecx
+        movl    $KERNEL_BASE, %eax
+        cmpl    $0, m_pEbda
+        jz      _NoEbda
+        movl    m_pEbda, %ebx           # EBDA -> effective top of low memory
+        jmp     _KernelSizeCheck
+_NoEbda:
+        movl    m_RamLo_Legacy, %ebx
+        shll    $10, %ebx
+_KernelSizeCheck:
+        subl    %eax, %ebx              # Capacity = pTopOfMem - pKernelBase
+        cmpl    %ecx, %ebx              # Capacity - KernelSize < 0?
+        jl      _KernelTooBig           #   yep, fail
         ret
 
-_TooBig:
-        PRINT   s_KernelTooBig
+_KernelTooBig:
+        PRINT   sz_KernelTooBig
         jmp     Halt
+
 
 ##
 # -----------------------------------------------------------------------------
@@ -172,52 +174,58 @@ InitConsole:
         movb    $0x03, %ah      # store cursor position (bh=page)
         int     $0x10
         jc      _VgaError
-        movb    %dh, m_CursorRow
-        movb    %dl, m_CursorColumn
+        movb    %dh, _m_CursorRow
+        movb    %dl, _m_CursorColumn
 
-        movb    $0x00, %ah      # set video mode
-        movb    $VGA_MODE, %al
-        movb    $VGA_CLEAR, %dl
-        notb    %dl
-        shlb    $7, %dl
-        orb     %dl, %al        # bit7 is clear screen (0=clear)
-        int     $0x10
-        jc      _VgaError
+        # VGA Stuff
+        # See http://www.ctyme.com/intr/rb-0069.htm
 
-        movb    $0x03, %ah      # store new cursor size
+        // VGA_MODE = 0x03 // 0x03 = text,CGA/EGA/VGA,16fg/8bg,0xB8000
+        // VGA_CLEAR = 0   // clear screen toggle
+
+        // movb    $0x00, %ah      # set video mode
+        // movb    $VGA_MODE, %al
+        // movb    $VGA_CLEAR, %dl
+        // notb    %dl
+        // shlb    $7, %dl
+        // andb    $0x80, %dl
+        // orb     %dl, %al        # bit7 is clear screen (0=clear)
+        // int     $0x10
+        // jc      _VgaError
+
+        movb    $0x03, %ah      # gather and store new cursor size
         int     $0x10
         jc      _VgaError
         movb    %ch, m_CursorStartLine
         movb    %cl, m_CursorEndLine
 
-        movb    $VGA_CLEAR, %al
-        cmpb    $1, %al
-        je      _VgaDone
+        // movb    $VGA_CLEAR, %al
+        // cmpb    $1, %al
+        // je      _VgaDone
         xorw    %ax, %ax
         movb    $0x02, %ah      # restore cursor position if screen not cleared
         movb    m_VideoPage, %bh
-        movb    m_CursorRow, %dh
-        movb    m_CursorColumn, %dl
+        movb    _m_CursorRow, %dh
+        movb    _m_CursorColumn, %dl
         int     $0x10
         jc      _VgaError
 
 _VgaDone:
+        movb    $0x0F, %ah      # gather and store video params
+        int     $0x10
+        jc      _VgaError
+        movb    %al, m_VideoMode
+        movb    %bh, m_VideoPage
+        movb    %ah, m_VideoCols
         ret
 
 _VgaError:
-        PRINT   s_VideoError
+        PRINT   sz_VideoError
         jmp     Halt
 
-##
-# -----------------------------------------------------------------------------
-# GetHwInfo
-# -----------------------------------------------------------------------------
-# Gets installed hardware flags using a BIOS routine.
-##
-GetHwInfo:
-        int     $0x11
-        movw    %ax, m_HwFlags
-        ret
+_m_CursorRow:    .long   0
+_m_CursorColumn: .long   0
+
 
 ##
 # -----------------------------------------------------------------------------
@@ -284,7 +292,7 @@ _DetectMemory_e820_Loop:
         movw    $0, -4(%edi)            # ...ensure it is stored as zero
         jmp     _DetectMemory_e820_Loop
 _DetectMemory_e820_End:
-        movl    $1, m_HasAcpiMemoryMap
+        movl    $MEMMAP_BASE, m_pMemoryMap
 
 _DetectMemory_e820_Done:
         ret
@@ -340,7 +348,7 @@ _DetectMemory_Legacy_Lo:
         ret
 
 _DetectMemory_Legacy_Error:
-        PRINT   s_MemError
+        PRINT   sz_MemError
         jmp     Halt
 
 ##
@@ -366,7 +374,7 @@ _EnableA20_Done:
         ret
 
 _EnableA20_Error:
-        PRINT   s_A20Error
+        PRINT   sz_A20Error
         jmp     Halt
 
 ##
@@ -396,7 +404,7 @@ _TestA20_Done:
 _EnableA20_Bios:
         movw    $0x2401, %ax
         int     $0x15
-        movw    $A20_BIOS, made_A20Method
+        movw    $A20_BIOS, m_A20Method
         ret
 
 ##
@@ -408,7 +416,7 @@ _EnableA20_Port92h:
         orb     $0x02, %al          # A20 enable bit
         andb    $0xFE, %al          # clear (possible) reset flag
         outb    %al, $0x92
-        movw    $A20_FAST, made_A20Method
+        movw    $A20_FAST, m_A20Method
         ret
 
 ##
@@ -442,7 +450,7 @@ _EnableA20_Keyboard:
         outb    %al, $0x64
 
         call    KbOut_Wait      # (delay)
-        movw    $A20_KEYBOARD, made_A20Method
+        movw    $A20_KEYBOARD, m_A20Method
         ret
 
 KbOut_Wait:
@@ -456,6 +464,18 @@ KbIn_Wait:
         testb   $0x01, %al      # is output buffer full?
         jz      KbIn_Wait       #   yes: continue checking 'til empty (consumed)
         ret
+
+##
+# -----------------------------------------------------------------------------
+# Halt
+# -----------------------------------------------------------------------------
+# Puts the system into an idle loop.
+##
+.globl Halt
+Halt:
+        hlt
+        jmp     Halt
+
 
 # -----------------------------------------------------------------------------
 # ----------------------------------- Data ------------------------------------
@@ -479,46 +499,47 @@ GdtBase:
         .long   EarlyGdt
 
 
-// TODO: create a struct around these fields, then pass ptr to struct as
-// kernel argument
-
-.align 4
-
 ##
 # struct BootParams
 ##
+.align 4
 .globl g_BootParams
 g_BootParams:
-  m_HwFlags:              .long   0
-  made_A20Method:         .long   A20_NONE
-  m_VideoCols:            .long   0
-  m_VideoMode:            .long   0
-  m_VideoPage:            .long   0
-  m_CursorStartLine:      .long   0
-  m_CursorEndLine:        .long   0
-  m_CursorRow:            .long   0
-  m_CursorColumn:         .long   0
-  m_HasAcpiMemoryMap:     .long   0
-  m_pAcpiMemoryMap:       .long   MEMMAP_BASE
-  m_RamLo_Legacy:         .long   0
-  m_RamHi_Legacy:         .long   0
-  m_RamLo_E801h:          .long   0
-  m_RamHi_E801h:          .long   0
-  m_KernelSize:           .long   0
-  m_pEbda:                .long   0
+  m_KernelBase:         .long   0
+  m_KernelSize:         .long   0
+  m_Stage2Base:         .long   0
+  m_Stage2Size:         .long   0
+  m_StackBase:          .long   0
+
+  m_RamLo_Legacy:       .long   0
+  m_RamHi_Legacy:       .long   0
+  m_RamLo_E801h:        .long   0
+  m_RamHi_E801h:        .long   0
+  m_pMemoryMap:         .long   0
+
+  m_HwFlags:            .long   0
+  m_A20Method:          .long   A20_NONE
+  m_VideoMode:          .long   0
+  m_VideoPage:          .long   0
+  m_VideoCols:          .long   0
+  m_CursorStartLine:    .long   0
+  m_CursorEndLine:      .long   0
+
+  m_pEbda:              .long   0
+
 
 ##
 # Strings
 ##
-s_KernelFileName:
+sz_KernelFileName:
         .asciz          "OHWES   SYS"
-s_Hello2:
-        .asciz          "\r\nWelcome to The Machine!"
-s_MemError:
-        .asciz          "\r\nError detecting system memory!"
-s_A20Error:
-        .asciz          "\r\nError enabling A20!"
-s_VideoError:
-        .asciz          "\r\nError initializing video!"
-s_KernelTooBig:
-        .ascii          "\r\nKernel cannot fit in low memory!"
+sz_MemError:
+        .asciz          "\r\nMemory detection error!"
+sz_VideoError:
+        .asciz          "\r\nVideo initialization error!"
+sz_A20Error:
+        .asciz          "\r\nA20 not enabled!"
+sz_Stage2TooBig:
+        .asciz          "\r\nStage 2 too big!"
+sz_KernelTooBig:
+        .asciz          "\r\nKernel too big!"

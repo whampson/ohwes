@@ -211,6 +211,8 @@ void con_init(void)
     defaults(&consoles[curr_con]);
     read_cursor();
     save();
+    con_write('\r');
+    con_write('\n');
     m_initialized = true;
 }
 

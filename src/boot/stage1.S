@@ -30,6 +30,7 @@
 # =============================================================================
 
 #include <sys/boot.h>
+#include "x86_boot.h"
 
 .text
 .code16
@@ -55,54 +56,55 @@ Entry:
 # BIOS Parameter Block for a FAT12-formatted 3.5" 1.44MB floppy disk.
 # DO NOT MOVE THIS. Tweak with care.
 ##
-OemName:                .ascii          "whampson"
-SectorSize:             .short          512
-SectorsPerCluster:      .byte           1
-ReservedSectors:        .short          1
-FatCount:               .byte           2
-RootDirCapacity:        .short          224
-SectorCount:            .short          2880
-MediaType:              .byte           0xF0
-SectorsPerFat:          .short          9
-SectorsPerTrack:        .short          18
-HeadCount:              .short          2
-HiddenSectors:          .int            0
-SectorCount32:          .int            0
-DriveNumber:            .byte           0
-_Reserved:              .byte           0
-Signature:              .byte           0x29
-VolumeId:               .int            0xCA55E77E
-Label:                  .ascii          "OH-WES     "
-FsType:                 .ascii          "FAT12   "
+.globl g_Bpb
+g_Bpb:
+  m_OemName:            .ascii          "WHAM!SON"
+  m_SectorSize:         .short          512
+  m_SectorsPerCluster:  .byte           1
+  m_ReservedSectors:    .short          1
+  m_FatCount:           .byte           2
+  m_RootDirCapacity:    .short          224
+  m_SectorCount:        .short          2880
+  m_MediaType:          .byte           0xF0
+  m_SectorsPerFat:      .short          9
+  m_SectorsPerTrack:    .short          18
+  m_HeadCount:          .short          2
+  m_HiddenSectors:      .int            0
+  m_SectorCount32:      .int            0
+  m_DriveNumber:        .byte           0
+  _Reserved:            .byte           0
+  m_Signature:          .byte           0x29
+  m_VolumeId:           .int            0xCA55E77E
+  m_Label:              .ascii          "OH-WES     "
+  m_FsType:             .ascii          "FAT12   "
 
 ##
 # Initial boot loader code.
 # Gotta be tight; file must assemble to no more than 512 bytes!
 #
-# We start off executing at 0x7C00 in 16-bit Real Mode. We set the stack pointer
-# to this address (remember, the stack grows towards 0) and load BOOT.SYS at
-# 0x7E00, immediately after the boot sector in memory. Then, we jump to the
-# stage 2 code.
+# We start off executing at 0x7C00 in 16-bit Real Mode. We load BOOT.SYS at
+# 0x7E00, immediately after the boot sector in memory, then jump to the stage 2
+# code.
 ##
 Stage1:
         cli                             # no interrupts!
         xorw    %ax, %ax                # set up segment regs
-        movw    %ax, %ss                # ss = 0
         movw    %ax, %ds                # ds = 0
         movw    %ax, %es                # es = 0
         movw    %ax, %fs                # fs = 0
-        movw    $BIOS_DATA_SEG, %ax     # gs = (BIOS Data Area segment)
-        movw    %ax, %gs
-
-        movw    $BOOT_STACK, %bp        # set up stack
+        movw    $BDA_SEGMENT, %ax
+        movw    %ax, %gs                # gs = (BIOS Data Area segment)
+        movw    $STACK_SEGMENT, %ax
+        movw    %ax, %ss                # ss = (Stack Segment)
+        movw    $STACK_OFFSET, %bp
         movw    %bp, %sp
 
 LoadRootDir:
-        movw    RootDirCapacity, %cx    # calculate root dir size
+        movw    m_RootDirCapacity, %cx  # calculate root dir size
         shlw    $5, %cx                 #   maxentries*32
-        movw    SectorsPerFat, %ax      # calculate root dir start sector
-        mulb    FatCount                #   nreserved+(nfatsectors*nfats)
-        addw    ReservedSectors, %ax
+        movw    m_SectorsPerFat, %ax    # calculate root dir start sector
+        mulb    m_FatCount              #   nreserved+(nfatsectors*nfats)
+        addw    m_ReservedSectors, %ax
         movw    %ax, g_FirstCluster     # store the sector index for later
         decw    %cx                     # caclulate num sectors to read
         shrw    $9, %cx                 #   ((nbytes-1)/512)+1
@@ -112,13 +114,15 @@ LoadRootDir:
         call    LoadSectors             # read root dir
 
 LoadStage2:
-        leaw    s_Stage2FileName, %si
+        leaw    sz_Stage2FileName, %si
         call    FindFile                # returns: di = dir entry ptr
+        movl    DIRENTRY_FILESIZE(%di), %ecx
+        pushl   %ecx                    # put stage2 size on stack
         movw    $STAGE2_BASE, %bx
         call    LoadFile                # load stage 2!
 
 GoToStage2:
-        jmp     Stage2                  # let's go!
+        jmp     Stage2                  # let's go...!
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
@@ -130,6 +134,9 @@ GoToStage2:
 # -----------------------------------------------------------------------------
 # Locates the directory entry of a file in the root directory given a file name.
 # If the file cannot be found, the system will enter an error state.
+#
+# WARNING: ASSUMES FILE IS NOT FRAGMENTED!
+#          This routine does not follow the cluster chain by reading the FAT.
 #
 # Inputs:
 #       ds:si - file name ptr, e.g. "FILE    TXT"
@@ -150,7 +157,7 @@ FindFile:
         movw    %ax, %es                # ensure es == ds (for cmpsb)
 
         movw    $ROOTDIR_BASE, %di      # start at the top of the root dir
-        movw    RootDirCapacity, %bx    # loop count
+        movw    m_RootDirCapacity, %bx  # loop count
         cld                             # clear direction flag
 
 _FindFile_Loop:
@@ -199,13 +206,13 @@ LoadFile:
 
         movw    DIRENTRY_CLUSTER(%di), %ax # first cluster for file
         subw    $2, %ax                 # cluster indices 0 and 1 reserved
-        movl    DIRENTRY_SIZE(%di), %ecx # file size in bytes
+        movl    DIRENTRY_FILESIZE(%di), %ecx # file size in bytes
 
         decw    %cx                     # calculate num clusters to read
         shrw    $9, %cx                 #  ((nbytes-1)/512)+1
         incw    %cx
         xchgw   %ax, %cx                # convert nclusters to nsectors
-        mulb    SectorsPerCluster       #  nclusters = (nsectors*spt)
+        mulb    m_SectorsPerCluster     #  nclusters = (nsectors*spt)
         xchgw   %ax, %cx
         addw    g_FirstCluster, %ax     # calculate absolute sector address
 
@@ -255,7 +262,7 @@ _LoadSectors_Loop:
         orb     %dl, %cl
 
         movw    -2(%bp), %bx            # es:bx=buffer
-        movb    DriveNumber, %dl        # dl=drive
+        movb    m_DriveNumber, %dl      # dl=drive
         movb    $1, %al                 # al=count
         movb    $0x02, %ah              # ah=fn:LoadSectors
         int     $0x13                   # ch=cyl, dh=head, cl=sect
@@ -266,11 +273,11 @@ _LoadSectors_Loop:
         jmp     _LoadSectors_Loop
 
 _LoadSectors_Next:
-        PRINT   s_ProgressChar          # visual feedback that it's working!
+        PRINT   sz_ProgressChar          # visual feedback that it's working!
 
         movw    -2(%bp), %bx            # save old buf
-        movw    SectorSize, %ax
-        addw    %ax, -2(%bp)            # buf += SectorSize
+        movw    m_SectorSize, %ax
+        addw    %ax, -2(%bp)            # buf += m_SectorSize
         cmpw    %bx, -2(%bp)            # did we wrap?
         jbe     DiskError               #   yep, fail! file is too large!
                                         #   TODO: increment segment reg?
@@ -319,8 +326,8 @@ LbaToChs:
 
         # C = LBA / (HPC * SPT)
         movw    %ax, %cx                # save lba for later
-        movw    SectorsPerTrack, %bx    # bx = spt
-        imulw   HeadCount, %bx          # bx = hpc * spt
+        movw    m_SectorsPerTrack, %bx  # bx = spt
+        imulw   m_HeadCount, %bx        # bx = hpc * spt
         xorw    %dx, %dx                # clear dx
         idivw   %bx                     # ax = dx:ax / bx
         pushw   %ax                     # save cylinder for later
@@ -329,11 +336,11 @@ LbaToChs:
         # S = (LBA mod SPT) + 1
         xorw    %dx, %dx                # clear dx
         movw    %cx, %ax                # ax = lba
-        idivw   SectorsPerTrack         # ax = dx:ax / spt, dx = dx:ax mod spt
+        idivw   m_SectorsPerTrack       # ax = dx:ax / spt, dx = dx:ax mod spt
         incw    %dx                     # +1
         movb    %dl, %cl                # save head for later
         xorw    %dx, %dx                # clear dx
-        idivw   HeadCount               # dx = dx:ax mod hpc (ax = lba / spt)
+        idivw   m_HeadCount             # dx = dx:ax mod hpc (ax = lba / spt)
         movb    %dl, %dh                # dh = head
         movb    %cl, %dl                # dl = sector
         popw    %cx                     # cx = cylinder
@@ -392,7 +399,7 @@ ReadKey:
 ##
 .globl ReadKeyThenReset
 ReadKeyThenReset:
-        PRINT   s_KeyPress
+        PRINT   sz_KeyPress
         call    ReadKey
         jmp     Reset
 
@@ -404,7 +411,7 @@ ReadKeyThenReset:
 ##
 .globl Reset
 Reset:
-        movw    $RESETFLAG_WARMBOOT, %gs:BIOS_RESETFLAG
+        movw    $RESETFLAG_WARMBOOT, %gs:BDA_RESETFLAG
         ljmp    $0xFFFF, $0x0000
 
 ##
@@ -416,7 +423,7 @@ Reset:
 ##
 .globl FileNotFound
 FileNotFound:
-        PRINT   s_FileNotFound
+        PRINT   sz_FileNotFound
         jmp     ReadKeyThenReset
 
 ##
@@ -427,7 +434,7 @@ FileNotFound:
 ##
 .globl DiskError
 DiskError:
-        PRINT   s_DiskError
+        PRINT   sz_DiskError
         jmp     ReadKeyThenReset
 
 
@@ -437,15 +444,15 @@ DiskError:
 
 g_FirstCluster:
         .word   0
-s_ProgressChar:
+sz_ProgressChar:
         .asciz  "."
-s_Stage2FileName:
+sz_Stage2FileName:
         .asciz  "BOOT    SYS"
-s_FileNotFound:
+sz_FileNotFound:
         .asciz  "\r\nFile not found!"
-s_DiskError:
+sz_DiskError:
         .asciz  "\r\nDiskette read error!"
-s_KeyPress:
+sz_KeyPress:
         .asciz  "\r\nPress any key to try again..."
 
 # pad the remaining space up to the size of a sector (512 bytes)

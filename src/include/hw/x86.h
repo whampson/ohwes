@@ -234,10 +234,11 @@ _Static_assert(sizeof(SegSel) == 2, "sizeof(SegSel) == 2");
  */
 typedef struct DescReg_
 {
-    uint16_t limit;     /* Descriptor Table Limit */
-    uint32_t base;      /* Descriptor Table Base */
-} __attribute__((packed)) DescReg;
-_Static_assert(sizeof(DescReg) == 6, "sizeof(DescReg) == 6");
+    uint32_t        :16;    /* (pad) */
+    uint32_t limit  :16;    /* Descriptor Table Limit */
+    uint32_t base;          /* Descriptor Table Base */
+} DescReg;
+_Static_assert(sizeof(DescReg) == 8, "sizeof(DescReg) == 8");
 
 /*
  * Task State Segment

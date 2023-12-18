@@ -44,7 +44,7 @@ img: tools ohwes
 run: img
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG}
 
-run-bochs:
+run-bochs: img
 	${SCRIPT_DIR}/run.sh bochs bochsrc.bxrc
 
 debug: img

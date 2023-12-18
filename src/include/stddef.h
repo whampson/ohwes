@@ -45,8 +45,8 @@ typedef int32_t ptrdiff_t;
 #define NULL ((void *) 0)
 #endif
 
-#define offsetof(type,member)   \
-    ((size_t)((char *)&((type *)(0))->member-(char *)0))
+#define offsetof(type,member) \
+    ((size_t)((char *)&((type *)0)->member - (char *)0))
 
 typedef uint64_t max_align_t;
 
