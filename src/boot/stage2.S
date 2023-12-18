@@ -22,7 +22,7 @@
 # 32-bit Protected Mode with a flat memory model.
 # =============================================================================
 
-#include <sys/boot.h>
+#include <boot.h>
 #include "x86_boot.h"
 
 .text

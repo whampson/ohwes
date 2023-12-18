@@ -18,9 +18,9 @@
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
-#include <sys/vga.h>
-#include <sys/interrupt.h>
-#include <sys/io.h>
+#include <vga.h>
+#include <interrupt.h>
+#include <io.h>
 
 /* TODO: color registers */
 

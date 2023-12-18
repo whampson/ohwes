@@ -29,7 +29,7 @@
 # Designed for a 1.44MB floppy with 512-byte sectors and a FAT12 file system.
 # =============================================================================
 
-#include <sys/boot.h>
+#include <boot.h>
 #include "x86_boot.h"
 
 .text

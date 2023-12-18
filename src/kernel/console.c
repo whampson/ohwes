@@ -129,11 +129,9 @@ enum ascii_cntl
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/vga.h>
-#include <sys/console.h>
-// #include <sys/kernel.h>
-#include <sys/interrupt.h>
-// #include <sys/ohwes.h>
+#include <vga.h>
+#include <console.h>
+#include <interrupt.h>
 
 #define DEFAULT_FG          VGA_WHT
 #define DEFAULT_BG          VGA_BLK

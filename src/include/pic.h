@@ -25,7 +25,7 @@
 #define __PIC_H
 
 #include <stdint.h>
-#include <sys/io.h>
+#include <io.h>
 
 /* I/O Ports */
 #define I8259_PORT_PIC0_CMD     0x20        /* Master PIC Command Port */

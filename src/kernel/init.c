@@ -26,12 +26,11 @@
 #include <stdio.h>
 
 // #include <console.h>
-#include <sys/boot.h>
-#include <sys/io.h>
-#include <sys/interrupt.h>
-#include <sys/os.h>
-
-#include <hw/x86.h>
+#include <boot.h>
+#include <io.h>
+#include <interrupt.h>
+#include <os.h>
+#include <x86.h>
 
 extern void con_init(void);
 // extern void IrqInit(void);
