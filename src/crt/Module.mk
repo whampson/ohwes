@@ -2,5 +2,5 @@ TARGET := lib/libcrt.a
 SOURCES := \
     division.c \
     printf.c \
-    puts.c \
+    stdio.c \
     string.c \

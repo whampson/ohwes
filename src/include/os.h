@@ -26,7 +26,7 @@
 #include <stdio.h>
 #include <compiler.h>
 
-extern void Halt(); // see boot/stage2.S    TODO: move this to a stub /in/ the kernel
+extern void Halt(); // see entry.S
 
 #define panic(...)                                                              \
 do {                                                                            \

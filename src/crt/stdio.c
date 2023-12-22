@@ -3,8 +3,8 @@
 
 int putchar(int ch)
 {
-    con_write((char) ch);       // TODO: use write() syscall
-    return 1;
+    con_write((char) ch);
+    return ch;
 }
 
 int puts(const char *str)
@@ -13,8 +13,10 @@ int puts(const char *str)
     int n = 0;
     while ((c = *(str++)) != '\0')
     {
-        n += putchar(c);
+        con_write(c);
+        n += 1;
     }
+    con_write('\n');
 
-    return n;
+    return n;       // string length
 }

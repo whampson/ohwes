@@ -9,6 +9,7 @@ SOURCES := \
     init.c \
     irq.c \
     vga.c \
+    test.c \
 
 TGT_CFLAGS := -Wno-unused-function
 

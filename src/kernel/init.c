@@ -32,9 +32,6 @@
 #include <os.h>
 #include <x86.h>
 
-extern void con_init(void);
-// extern void IrqInit(void);
-// static void InitCpuDesc(void);
 
 // static const IdtThunk ExceptionThunks[NUM_EXCEPTION] =
 // {
@@ -79,72 +76,48 @@ __align(2) DescReg g_idtDesc = { IDT_LIMIT, IDT_BASE };
 
 #define BootPrint(fmt,...)  printf("boot: " fmt, __VA_ARGS__)
 
+#define CHECK(x) if (x) { panic(#x " failed!\n"); }
+
+extern bool run_tests(void);
+extern void con_init(void);
+// extern void IrqInit(void);
+// static void InitCpuDesc(void);
+
 __fastcall
 void KeMain(const BootParams * const pBootInfo)
 {
     con_init();
-
-    // InitCpuDesc();  // TODO: something in here crashes...
-    // IrqInit();
-    // IrqUnmask(IRQ_KEYBOARD);
-    // sti();
+    bool pass = run_tests();
+    if (!pass) {
+        panic("tests failed!");
+    }
 
     printf("Hello, world!\n");
 
-    {
-        #define PrintParam(x) BootPrint(#x " = 0x%x\n", x);
+    // const AcpiMemoryMapEntry *memMap = pBootInfo->m_pMemoryMap;
+    // if (pBootInfo->m_pMemoryMap) {
+    //     do {
+    //         if (memMap->Length > 0) {
+    //             printf("boot: BIOS-E820h: %08x-%08x ",
+    //                 (uint32_t) memMap->Base,
+    //                 (uint32_t) memMap->Base + memMap->Length - 1);
 
-        PrintParam(pBootInfo->m_HwFlags.HasDisketteDrive);
-        PrintParam(pBootInfo->m_HwFlags.HasCoprocessor);
-        PrintParam(pBootInfo->m_HwFlags.HasPs2Mouse);
-        PrintParam(pBootInfo->m_HwFlags.VideoMode);
-        PrintParam(pBootInfo->m_HwFlags.NumOtherDisketteDrives);
-        // // PrintParam(pBootInfo->m_HwFlags._Dma);
-        PrintParam(pBootInfo->m_HwFlags.NumSerialPorts);
-        PrintParam(pBootInfo->m_HwFlags.HasGamePort);
-        // PrintParam(pBootInfo->m_HwFlags._HasPrinterOrModem);
-        PrintParam(pBootInfo->m_HwFlags.NumParallelPorts);
-        // PrintParam(pBootInfo->m_A20Method);
-        // PrintParam(pBootInfo->m_VideoMode);
-        // PrintParam(pBootInfo->m_VideoPage);
-        // PrintParam(pBootInfo->m_VideoCols);
-        // PrintParam(pBootInfo->m_CursorStartLine);
-        // PrintParam(pBootInfo->m_CursorEndLine);
+    //             switch (memMap->Type) {
+    //                 case ACPI_MMAP_TYPE_USABLE:     printf("usable\n"); break;
+    //                 case ACPI_MMAP_TYPE_RESERVED:   printf("reserved\n"); break;
+    //                 case ACPI_MMAP_TYPE_ACPI:       printf("ACPI\n"); break;
+    //                 case ACPI_MMAP_TYPE_ACPI_NVS:   printf("ACPI NV\n"); break;
+    //                 case ACPI_MMAP_TYPE_BAD:        printf("bad\n"); break;
+    //                 default:                        printf("reserved (%d)\n", memMap->Type); break;
+    //             }
+    //         }
+    //     } while ((memMap++)->Type != ACPI_MMAP_TYPE_INVALID);
+    // }
 
-        PrintParam(pBootInfo->m_KernelBase);
-        PrintParam(pBootInfo->m_KernelSize);
-        PrintParam(pBootInfo->m_Stage2Base);
-        PrintParam(pBootInfo->m_Stage2Size);
-        PrintParam(pBootInfo->m_StackBase);
-        PrintParam(pBootInfo->m_RamLo_Legacy);
-        PrintParam(pBootInfo->m_RamHi_Legacy);
-        PrintParam(pBootInfo->m_RamLo_E801h);
-        PrintParam(pBootInfo->m_RamHi_E801h << 6);
-        PrintParam(pBootInfo->m_pMemoryMap);
-        PrintParam(pBootInfo->m_pEbda);
-
-        #undef PrintParam
-
-        const AcpiMemoryMapEntry *memMap = pBootInfo->m_pMemoryMap;
-        if (pBootInfo->m_pMemoryMap) {
-            do {
-                if (memMap->Length > 0) {
-                    printf("boot: BIOS-E820h: %08x-%08x ",
-                        (uint32_t) memMap->Base,
-                        (uint32_t) memMap->Base + memMap->Length - 1);
-
-                    switch (memMap->Type) {
-                        case ACPI_MMAP_TYPE_USABLE:     printf("usable\n"); break;
-                        case ACPI_MMAP_TYPE_RESERVED:   printf("reserved\n"); break;
-                        case ACPI_MMAP_TYPE_ACPI:       printf("ACPI\n"); break;
-                        case ACPI_MMAP_TYPE_ACPI_NVS:   printf("ACPI NV\n"); break;
-                        case ACPI_MMAP_TYPE_BAD:        printf("bad\n"); break;
-                        default:                        printf("reserved (%d)\n", memMap->Type); break;
-                    }
-                }
-            } while ((memMap++)->Type != ACPI_MMAP_TYPE_INVALID);
-        }
-    }
+        // InitCpuDesc();  // TODO: something in here crashes...
+    // IrqInit();
+    // IrqUnmask(IRQ_KEYBOARD);
+    // sti();
 
 
 }

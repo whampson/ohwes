@@ -594,8 +594,6 @@ static int write_char(struct printf_params *p, char c)
         return sizeof(char);
     }
 
-    // TODO: return write(p->fd, &c, sizeof(char));
-
     putchar(c);
     return 1;
 }

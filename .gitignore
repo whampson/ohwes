@@ -1,10 +1,14 @@
+# Build dirs
 bin/
 obj/
 
+# Mac stuff
 .DS_Store
 .fseventsd
 .Spotlight-V100
 .TemporaryItems
 .Trashes
 
+# Config files and test programs
 bochsrc.bxrc
+*.exe
