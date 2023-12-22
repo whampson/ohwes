@@ -170,7 +170,7 @@ _FindFile_Loop:
         popw    %si                     #   pop vars
         addw    $32, %di                #   advance ptr
         decw    %bx                     #   decrement loop counter
-        jz      FileNotFound            # zero? file not found!
+        jz      DiskError               # zero? file not found!
         jmp     _FindFile_Loop          # otherwise: keep searchin'
 
 _FindFile_Done:
@@ -208,8 +208,8 @@ LoadFile:
         subw    $2, %ax                 # cluster indices 0 and 1 reserved
         movl    DIRENTRY_FILESIZE(%di), %ecx # file size in bytes
 
-        decw    %cx                     # calculate num clusters to read
-        shrw    $9, %cx                 #  ((nbytes-1)/512)+1
+        decl    %ecx                    # calculate num clusters to read
+        shrl    $9, %ecx                #  ((nbytes-1)/512)+1
         incw    %cx
         xchgw   %ax, %cx                # convert nclusters to nsectors
         mulb    m_SectorsPerCluster     #  nclusters = (nsectors*spt)
@@ -278,12 +278,18 @@ _LoadSectors_Next:
         movw    -2(%bp), %bx            # save old buf
         movw    m_SectorSize, %ax
         addw    %ax, -2(%bp)            # buf += m_SectorSize
-        cmpw    %bx, -2(%bp)            # did we wrap?
-        jbe     DiskError               #   yep, fail! file is too large!
-                                        #   TODO: increment segment reg?
+        cmpw    %bx, -2(%bp)            # did we wrap? (64k)
+        jnc     _LoadSectors_Continue   #   if not, continue on
+
+_LoadSectors_IncSegReg:                 # otherwise increment the segment reg
+        movw    %es, %ax
+        addw    $0x1000, %ax
+        movw    %ax, %es
+
+_LoadSectors_Continue:
+        movw    $RETRY_COUNT, -8(%bp)   # reset nretries
         incw    -4(%bp)                 # ++lba
         decw    -6(%bp)                 # --count
-        movw    $RETRY_COUNT, -8(%bp)   # reset nretries (flags not affected)
 
         jz      _LoadSectors_Done       # done if count == 0
         jmp     _LoadSectors_Loop
@@ -416,18 +422,6 @@ Reset:
 
 ##
 # -----------------------------------------------------------------------------
-# FileNotFound
-# -----------------------------------------------------------------------------
-# Prints a file not found error message, waits for a key press, then resets the
-# system.
-##
-.globl FileNotFound
-FileNotFound:
-        PRINT   sz_FileNotFound
-        jmp     ReadKeyThenReset
-
-##
-# -----------------------------------------------------------------------------
 # DiskError
 # -----------------------------------------------------------------------------
 # Prints a disk error message, waits for a key press, then resets the system.
@@ -448,13 +442,12 @@ sz_ProgressChar:
         .asciz  "."
 sz_Stage2FileName:
         .asciz  "BOOT    SYS"
-sz_FileNotFound:
-        .asciz  "\r\nFile not found!"
 sz_DiskError:
         .asciz  "\r\nDiskette read error!"
 sz_KeyPress:
         .asciz  "\r\nPress any key to try again..."
 
 # pad the remaining space up to the size of a sector (512 bytes)
+# TODO: find way to error if assembly >510
 .space          0x1FE - (. - Entry), 0xCC       # pad with debugbreak opcode
 .short          0xAA55                          # boot sector indicator
