@@ -1,6 +1,6 @@
-TARGET := lib/libcrt.a
+TARGET := lib/klibc.a
 SOURCES := \
-    division.c \
+    math.c \
     printf.c \
     stdio.c \
     string.c \

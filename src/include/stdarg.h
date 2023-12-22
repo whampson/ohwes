@@ -34,7 +34,7 @@ typedef void *va_list;
     (void) ((list) = ((char *) &(param) + sizeof(param)))
 
 #define va_arg(list,type) \
-    ((type *) ((list) = ((char *) (list) + sizeof(type))))[-1]
+    (((type *) ((list) = ((list) + sizeof(type))))[-1])
 
 #define va_end(list) \
     (list = (void *) 0)

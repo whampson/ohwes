@@ -92,7 +92,7 @@ void KeMain(const BootParams * const pBootInfo)
         panic("tests failed!");
     }
 
-    printf("Hello, world!\n");
+    printf("Hello %s world! %s '%s'\n", "fucking", "eat shit", "bitch");
 
     // const AcpiMemoryMapEntry *memMap = pBootInfo->m_pMemoryMap;
     // if (pBootInfo->m_pMemoryMap) {

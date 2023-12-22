@@ -3,6 +3,8 @@ TARGETBIN = boot/boot.bin
 TARGET_STAGE1 = boot/bootsect.bin
 TARGET_STAGE2 = sys/boot.sys
 
+.SECONDARY: ${TARGET_STAGE1} ${TARGET_STAGE2}
+
 # NOTE: stage1.S must come before stage2.S,
 #       or else entrypoint will end up in the wrong spot!
 SOURCES = \
@@ -10,7 +12,6 @@ SOURCES = \
 	stage2.S \
 
 TGT_LDFLAGS := -Ttext 0x7C00 -e Entry
-TGT_LDLIBS  := ${TARGET_DIR}/lib/libcrt.a
 
 ###
 # split boot.elf into boot.bin, bootsect.bin and boot.sys
@@ -23,6 +24,7 @@ TGT_LDLIBS  := ${TARGET_DIR}/lib/libcrt.a
 #   1 - raw boot loader file
 #   2 - output file
 define make-stage1
+	@mkdir -p $(dir $2)
 	head -c 512 $1 > $2
 endef
 
@@ -30,6 +32,7 @@ endef
 #   1 - raw boot loader file
 #   2 - output file
 define make-stage2
+	@mkdir -p $(dir $2)
 	tail -c +513 $1 > $2
 endef
 

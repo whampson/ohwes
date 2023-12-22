@@ -16,7 +16,9 @@ TGT_CFLAGS := -Wno-unused-function
 # TGT_INCDIRS := include
 TGT_LDFLAGS := -Ttext 0x10000 -e KeEntry
 TGT_LDLIBS  := \
-    ${TARGET_DIR}/lib/libcrt.a \
+    ${TARGET_DIR}/lib/klibc.a \
+
+TGT_PREREQS += lib/klibc.a
 
 TGT_POSTMAKE := $(call make-sys,${TARGETSYS})
 # TODO: do this automatically when TARGETSYS is set?

@@ -60,6 +60,7 @@ if [ "$1" = "qemu" ]; then
         gdb \
             -ex 'target remote localhost:1234' \
             -ex 'add-symbol-file bin/kernel/kernel.elf' \
+            -ex 'lay src' -ex 'lay reg' \
             -ex 'b KeEntry'
     else
         "$QEMU_PATH" $QEMU_FLAGS

@@ -3,9 +3,9 @@ INCDIRS    := src/include
 
 # OS modules
 SUBMAKEFILES := \
-    crt/Module.mk \
-    kernel/Module.mk \
-    boot/Module.mk
+    boot/x86_boot.mk \
+    kernel/klibc.mk \
+    kernel/kernel.mk \
 
 # use cross-compiler toolchain
 PREFIX     := i686-elf-
