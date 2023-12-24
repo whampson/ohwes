@@ -19,7 +19,9 @@
  * =============================================================================
  */
 
+#include <compiler.h>
 #include <ctype.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <console.h>
@@ -29,6 +31,8 @@
 
 // printf family spec:
 // https://en.cppreference.com/w/c/io/fprintf
+
+#define NUM_BUFSIZ 64
 
 int _doprintf(const char *format, va_list *args, void (*putc)(char))
 {
@@ -44,14 +48,22 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         bool signpad = false;
         bool altflag = false;
         bool zeropad = false;
-        register int width = 0;
-        register int prec = 1;
+        bool capital = false;
         bool default_prec = true;
+        register int prec = 1;
+        register int width = 0;
+        register int radix = 10;
+        register int len = 0;
+        register char c = 0;
+        register char *p = NULL;
+        char sign_char = 0;
+        char buf[NUM_BUFSIZ];
+        uintmax_t num = 0;
 
         //
         // next char
         //
-        register char c = *format++;
+        c = *format++;
         if (c != '%') {
             write(c);
             continue;
@@ -60,8 +72,8 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         //
         // flags
         //
-        bool parse_flag = true;
-        while (parse_flag && *format != '\0') {
+        bool parse = true;
+        while (parse && *format != '\0') {
             c = *format++;
             switch (c) {
                 case '-': ljustify = true; break;
@@ -69,7 +81,7 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
                 case ' ': signpad = true; break;
                 case '#': altflag = true; break;
                 case '0': zeropad = true; break;
-                default: parse_flag = false;
+                default: parse = false;
             }
         }
 
@@ -122,53 +134,199 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         }
 
         //
+        // length modifier
+        //
+        enum {
+            L_DEFAULT,  // no length specified
+            L_HH,       // 'hh',byte
+            L_H,        // 'h', short
+            L_L,        // 'l', long
+            L_LL,       // 'll',long long
+            L_J,        // 'j', intmax_t
+            L_Z,        // 'z', size_t
+            L_T         // 't', ptrdiff_t
+        };
+        int length = L_DEFAULT;
+
+        parse = true;
+        while (parse) {
+            switch (c) {
+                case 'h':
+                    if (length == L_DEFAULT) {
+                        length = L_H;
+                        break;
+                    }
+                    else if (length == L_H) {
+                        length = L_HH;
+                    }
+                    parse = false;
+                    break;
+                case 'l':
+                    if (length == L_DEFAULT) {
+                        length = L_L;
+                        break;
+                    }
+                    else if (length == L_L) {
+                        length = L_LL;
+                    }
+                    parse = false;
+                    break;
+                case 'j':
+                    if (length == L_DEFAULT) {
+                        length = L_J;
+                    }
+                    parse = false;
+                    break;
+                case 'z':
+                    if (length == L_DEFAULT) {
+                        length = L_Z;
+                    }
+                    parse = false;
+                    break;
+                case 't':
+                    if (length == L_DEFAULT) {
+                        length = L_T;
+                    }
+                    parse = false;
+                    break;
+            }
+            if (length != L_DEFAULT && *format != '\0') {
+                c = *format++;
+            }
+            else {
+                parse = false;
+            }
+        }
+
+        //
         // conversion specifier
         //
         switch (c) {
-            case '%': {
-                write(c);
-                break;
-            }
             case 'c': {
-                unsigned char ch = (unsigned char) va_arg(*args, int);
-                write(ch);
-                break;
+                c = (unsigned char) va_arg(*args, int);
+                __fallthrough;
+            }
+            case '%': __fallthrough;
+            default: {
+                write(c);
+                continue;
             }
             case 's': {
-                const char *str = va_arg(*args, const char*);
-                if (str == NULL) {
-                    str = "(null)";
-                }
+                if (length == L_DEFAULT) {
+                    const char *str = va_arg(*args, const char*);
+                    if (str == NULL) {
+                        str = "(null)";
+                    }
 
-                int len = strlen(str);
-                if (default_prec) {
-                    prec = len;
-                }
-                else {
-                    len = prec;
-                }
+                    len = strlen(str);
+                    if (default_prec) {
+                        prec = len;
+                    }
+                    else {
+                        len = prec;
+                    }
 
-                if (!ljustify) {
-                    while (width-- > prec) {
-                        write(' ');
+                    if (!ljustify) {
+                        while (width-- > prec) {
+                            write(' ');
+                        }
+                    }
+
+                    while (len-- > 0 && *str != '\0') write(*str++);
+
+                    if (ljustify) {
+                        while (width-- > prec) {
+                            write(' ');
+                        }
                     }
                 }
-
-                while (len-- > 0 && *str != '\0') write(*str++);
-
-                if (ljustify) {
-                    while (width-- > prec) {
-                        write(' ');
-                    }
+                else if (length == L_L) {
+                    // TODO: wchar_t support
                 }
 
                 continue;
             }
-            default: {
+            case 'o': {
+                radix = 8;
+                goto get_unsigned;
+            }
+            case 'X': {
+                capital = true;
+                __fallthrough;
+            }
+            case 'x': {
+                radix = 16;
+                goto get_unsigned;
+            }
+            case 'd': __fallthrough;
+            case 'i': {
+                intmax_t n = 0;
+                switch (length) {
+                    default:    n = va_arg(*args, int); break;
+                    case L_HH:  n = va_arg(*args, signed char); break;
+                    case L_H:   n = va_arg(*args, short); break;
+                    case L_L:   n = va_arg(*args, long); break;
+                    case L_LL:  n = va_arg(*args, long long); break;
+                    case L_J:   n = va_arg(*args, intmax_t); break;
+                    case L_Z:   n = va_arg(*args, size_t); break;
+                    case L_T:   n = va_arg(*args, ptrdiff_t); break;
+                }
+                if (signpad && n > 0) {
+                    sign_char = ' ';
+                }
+                if (n < 0) {
+                    sign_char = '-';
+                    n = -n;
+                }
+                else if (signflag) {
+                    sign_char = '+';
+                }
+                num = n;
+                break;
+            }
+            case 'u': {
+            get_unsigned:
+                switch (length) {
+                    default:    num = va_arg(*args, unsigned int); break;
+                    case L_HH:  num = va_arg(*args, unsigned char); break;
+                    case L_H:   num = va_arg(*args, unsigned short); break;
+                    case L_L:   num = va_arg(*args, unsigned long); break;
+                    case L_LL:  num = va_arg(*args, unsigned long long); break;
+                    case L_J:   num = va_arg(*args, uintmax_t); break;
+                    case L_Z:   num = va_arg(*args, size_t); break;
+                    case L_T:   num = va_arg(*args, ptrdiff_t); break;
+                }
                 break;
             }
         }
 
+        static char digits[]     = "0123456789abcdefghijklmnopqrstuvwxyz";
+        static char digits_cap[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+        len = 0;
+        p = &buf[NUM_BUFSIZ-1];
+        if (num == 0) {
+            *p-- = '0';
+            len++;
+        }
+        while (num) {
+            if (capital) {
+                *p-- = digits_cap[num % radix];
+            }
+            else {
+                *p-- = digits[num % radix];
+            }
+            num /= radix;
+            len++;
+        }
+
+        if (sign_char) {
+            write(sign_char);
+        }
+
+        while (++p != &buf[NUM_BUFSIZ]) {
+            write(*p);
+        }
     }
 
     return nwritten;
