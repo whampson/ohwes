@@ -32,12 +32,12 @@
 
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
-typedef uint32_t size_t;
+typedef __typeof__(sizeof(int)) size_t;
 #endif
 
 #ifndef __NULL_DEFINED
 #define __NULL_DEFINED
-#define NULL ((void *) 0)
+#define NULL ((void*)0)
 #endif
 
 char * itoa(int value, char *str, int base);    /* Non-standard */

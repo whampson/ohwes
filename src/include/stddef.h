@@ -28,26 +28,18 @@
 #ifndef __STDDEF_H
 #define __STDDEF_H
 
-#include <stdint.h>
-
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
-typedef uint32_t size_t;
-#endif
-
-#ifndef __PTRDIFF_T_DEFINED
-#define __PTRDIFF_T_DEFINED
-typedef int32_t ptrdiff_t;
+typedef __typeof__(sizeof(int)) size_t;
 #endif
 
 #ifndef __NULL_DEFINED
 #define __NULL_DEFINED
-#define NULL ((void *) 0)
+#define NULL ((void*)0)
 #endif
 
-#define offsetof(type,member) \
-    ((size_t)((char *)&((type *)0)->member - (char *)0))
+typedef __typeof__(((int*)NULL)-((int*)NULL)) ptrdiff_t;
 
-typedef uint64_t max_align_t;
+#define offsetof(type,member) ((size_t)((char*)&((type*)0)->member-(char*)0))
 
 #endif /* __STDDEF_H */
