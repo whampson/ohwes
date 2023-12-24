@@ -40,8 +40,4 @@ typedef __typeof__(sizeof(int)) size_t;
 #define NULL ((void*)0)
 #endif
 
-char * itoa(int value, char *str, int base);    /* Non-standard */
-char * itoa64(int64_t value, char *str, int base);    /* Non-standard */
-
-
 #endif /* __STDLIB_H */
