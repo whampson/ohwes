@@ -1,6 +1,11 @@
 # debug build toggle and params
 DEBUG      := 1
-DEBUGFLAGS := -DDEBUG -g -Og
+DEBUGOPT   := 1
+DEBUGFLAGS := -DDEBUG -g
+
+ifeq "${DEBUGOPT}" "1"
+  DEBUGFLAGS += -Og
+endif
 
 # important dirs
 TARGET_DIR := bin
