@@ -136,6 +136,7 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
                 prec = va_arg(*args, int);
                 if (prec < 0) { // precision ignored if negative
                     default_prec = true;
+                    prec = 1;
                 }
                 c = *format++;
             }
