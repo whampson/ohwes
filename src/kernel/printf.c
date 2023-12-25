@@ -42,13 +42,16 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         (*putc)(c); \
         nwritten++; \
 
-    while (format != NULL && *format != '\0') {
+    while (format != NULL && *format != '\0')
+    {
         bool ljustify = false;
         bool signflag = false;
         bool signpad = false;
         bool altflag = false;
         bool zeropad = false;
         bool capital = false;
+        bool negative = false;
+        bool signd = false;
         bool default_prec = true;
         register int prec = 1;
         register int width = 0;
@@ -260,6 +263,7 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
             }
             case 'd': __fallthrough;
             case 'i': {
+                signd = true;
                 intmax_t n = 0;
                 switch (length) {
                     default:    n = va_arg(*args, int); break;
@@ -271,17 +275,11 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
                     case L_Z:   n = va_arg(*args, size_t); break;
                     case L_T:   n = va_arg(*args, ptrdiff_t); break;
                 }
-                if (signpad && n > 0) {
-                    sign_char = ' ';
-                }
                 if (n < 0) {
-                    sign_char = '-';
+                    negative = true;
                     n = -n;
                 }
-                else if (signflag) {
-                    sign_char = '+';
-                }
-                num = n;
+                num = n;    // store unsigned
                 break;
             }
             case 'u': {
@@ -303,12 +301,8 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         static char digits[]     = "0123456789abcdefghijklmnopqrstuvwxyz";
         static char digits_cap[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-        len = 0;
+        // convert num to string
         p = &buf[NUM_BUFSIZ-1];
-        if (num == 0) {
-            *p-- = '0';
-            len++;
-        }
         while (num) {
             if (capital) {
                 *p-- = digits_cap[num % radix];
@@ -317,15 +311,84 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
                 *p-- = digits[num % radix];
             }
             num /= radix;
+        }
+        len = &buf[NUM_BUFSIZ] - (p+1);
+
+        // count the number of zeros needed for precision
+        // keep track of total string length
+        int num_zeros = 0;
+        while (prec > len) {
+            num_zeros++;
             len++;
         }
 
-        if (sign_char) {
-            write(sign_char);
+        // determine sign char, tally new length
+        if (signd) {
+            if (negative) {
+                sign_char = '-';
+                len++;
+            }
+            else if (signflag) {
+                sign_char = '+';
+                len++;
+            }
+            else if (signpad) {
+                sign_char = ' ';
+                len++;
+            }
         }
 
-        while (++p != &buf[NUM_BUFSIZ]) {
-            write(*p);
+        // collect length for alternative representation (#)
+        if (altflag) {
+            if (radix == 8 && num_zeros == 0) {
+                len++;
+                num_zeros++;
+            }
+            else if (radix == 16) {
+                len += 2;
+            }
+        }
+
+        //
+        // number printing
+        //
+
+        // handle right justification
+        if (!ljustify) {
+            if (zeropad && default_prec) {
+                while (width > len) num_zeros++;
+            }
+            else {
+                while (width-- > len) write(' ');       // spaces always come first...
+            }
+        }
+
+        // write sign char
+        if (sign_char) {
+            write(sign_char);                           // followed by the sign...
+        }
+
+        // write any radix prefixes
+        if (altflag) {
+            if (radix == 16 && num != 0) {
+                write('0');
+                write((capital) ? 'X' : 'x');           // then the radix prefix (0x etc)...
+            }
+        }
+
+        // write any leading zeros
+        while (num_zeros-- > 0) {
+            write('0');                                 // then any leading zeros...
+        }
+
+        // write stringifed number
+        while (++p != &buf[NUM_BUFSIZ]) write(*p);      // next, the number itself...
+
+        // write padding for left justify
+        if (ljustify) {
+            while (width-- > len) {
+                write(' ');                             // and finally, trailing spaces.
+            }
         }
     }
 

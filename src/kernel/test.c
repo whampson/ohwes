@@ -454,7 +454,7 @@ bool run_tests(void)
 #ifdef MAIN
 int main(int argc, char **argv)
 {
-    bool pass= run_tests();
+    bool pass = run_tests();
     return (pass) ? 0 : 1;
 }
 #endif
