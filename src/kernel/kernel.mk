@@ -5,6 +5,7 @@ SOURCES := \
     entry.S \
     interrupt.S \
     console.c \
+    cpu.c \
     handler.c \
     init.c \
     irq.c \
@@ -18,6 +19,9 @@ TGT_LDFLAGS := -Ttext 0x10000 -e KeEntry
 TGT_LDLIBS  := \
     ${TARGET_DIR}/lib/klibc.a \
 
+ifeq "${TEST_BUILD}" "1"
+  TGT_CFLAGS += -DTEST_BUILD
+endif
 TGT_PREREQS += lib/klibc.a
 
 TGT_POSTMAKE := $(call make-sys,${TARGETSYS})

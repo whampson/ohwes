@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifdef TEST_BUILD
+
 void testprint(const char *msg)
 {
     const char *a = msg;
@@ -370,6 +372,12 @@ bool test_printf()
     TEST("0x000123",    "%#.6x", 0x123);    // alternative representation w/ large precision
     TEST("0x123",       "%#.3x", 0x123);    // alternative representation w/ equal precision
     TEST("0x123",       "%#.1x", 0x123);    // alternative representation w/ small precision
+    TEST("0",           "%#0x", 0);
+    TEST("00000000",    "%#08x", 0);
+    TEST("       0",    "%#8x", 0);
+    TEST("       0",    "%8x", 0);
+    TEST("00000000",    "%08x", 0);
+    TEST("00000000",    "%.8x", 0);
     TEST("      0x000000000123456789abcdef", "%+#32.24llx", 0x123456789ABCDEFULL); // big complicated format
 
     // hexadecimal, uppercase (%X)
@@ -458,3 +466,5 @@ int main(int argc, char **argv)
     return (pass) ? 0 : 1;
 }
 #endif
+
+#endif // TEST_BUILD

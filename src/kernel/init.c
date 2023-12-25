@@ -80,37 +80,47 @@ __align(2) DescReg g_idtDesc = { IDT_LIMIT, IDT_BASE };
 
 extern bool run_tests(void);
 extern void con_init(void);
+extern void init_cpu(void);
 // extern void IrqInit(void);
 // static void InitCpuDesc(void);
 
-__fastcall
-void KeMain(const BootParams * const pBootInfo)
+
+void test_klibc()
 {
-    con_init();
+#ifdef TEST_BUILD
     bool pass = run_tests();
     if (!pass) {
         panic("tests failed!");
     }
+#endif
+}
 
-    // const AcpiMemoryMapEntry *memMap = pBootInfo->m_pMemoryMap;
-    // if (pBootInfo->m_pMemoryMap) {
-    //     do {
-    //         if (memMap->Length > 0) {
-    //             printf("boot: BIOS-E820h: %08x-%08x ",
-    //                 (uint32_t) memMap->Base,
-    //                 (uint32_t) memMap->Base + memMap->Length - 1);
+__fastcall
+void kmain(const BootParams * const pBootInfo)
+{
+    con_init();     // get the vga console working first
+    init_cpu();     // then finish setting up the CPU
+    test_klibc();   // run some tests on the kernel runtime library
 
-    //             switch (memMap->Type) {
-    //                 case ACPI_MMAP_TYPE_USABLE:     printf("usable\n"); break;
-    //                 case ACPI_MMAP_TYPE_RESERVED:   printf("reserved\n"); break;
-    //                 case ACPI_MMAP_TYPE_ACPI:       printf("ACPI\n"); break;
-    //                 case ACPI_MMAP_TYPE_ACPI_NVS:   printf("ACPI NV\n"); break;
-    //                 case ACPI_MMAP_TYPE_BAD:        printf("bad\n"); break;
-    //                 default:                        printf("reserved (%d)\n", memMap->Type); break;
-    //             }
-    //         }
-    //     } while ((memMap++)->Type != ACPI_MMAP_TYPE_INVALID);
-    // }
+    const AcpiMemoryMapEntry *memMap = pBootInfo->m_pMemoryMap;
+    if (pBootInfo->m_pMemoryMap) {
+        do {
+            if (memMap->Length > 0) {
+                printf("boot: BIOS-E820h: %08x-%08x ",
+                    (uint32_t) memMap->Base,
+                    (uint32_t) memMap->Base + memMap->Length - 1);
+
+                switch (memMap->Type) {
+                    case ACPI_MMAP_TYPE_USABLE:     printf("usable\n"); break;
+                    case ACPI_MMAP_TYPE_RESERVED:   printf("reserved\n"); break;
+                    case ACPI_MMAP_TYPE_ACPI:       printf("ACPI\n"); break;
+                    case ACPI_MMAP_TYPE_ACPI_NVS:   printf("ACPI NV\n"); break;
+                    case ACPI_MMAP_TYPE_BAD:        printf("bad\n"); break;
+                    default:                        printf("reserved (%d)\n", memMap->Type); break;
+                }
+            }
+        } while ((memMap++)->Type != ACPI_MMAP_TYPE_INVALID);
+    }
 
         // InitCpuDesc();  // TODO: something in here crashes...
     // IrqInit();

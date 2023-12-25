@@ -7,7 +7,7 @@
 KeEntry:
         cli
         # params: ecx = boot params ptr
-        call    KeMain
+        call    kmain
 
 .globl Halt
 Halt:

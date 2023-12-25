@@ -3,6 +3,8 @@ DEBUG      := 1
 DEBUGOPT   := 1
 DEBUGFLAGS := -DDEBUG -g
 
+TEST_BUILD := 1
+
 ifeq "${DEBUGOPT}" "1"
   DEBUGFLAGS += -Og
 endif

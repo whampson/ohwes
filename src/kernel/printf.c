@@ -52,6 +52,7 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         bool capital = false;
         bool negative = false;
         bool signd = false;
+        bool zero = false;
         bool default_prec = true;
         register int prec = 1;
         register int width = 0;
@@ -301,6 +302,8 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         static char digits[]     = "0123456789abcdefghijklmnopqrstuvwxyz";
         static char digits_cap[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+        zero = (num == 0);
+
         // convert num to string
         p = &buf[NUM_BUFSIZ-1];
         while (num) {
@@ -344,7 +347,7 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
                 len++;
                 num_zeros++;
             }
-            else if (radix == 16) {
+            else if (radix == 16 && !zero) {
                 len += 2;
             }
         }
@@ -356,10 +359,10 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         // handle right justification
         if (!ljustify) {
             if (zeropad && default_prec) {
-                while (width > len) num_zeros++;
+                while (width > len) { num_zeros++; len++; }
             }
             else {
-                while (width-- > len) write(' ');       // spaces always come first...
+                while (width > len) { width--; write(' '); }       // spaces always come first...
             }
         }
 
@@ -370,7 +373,7 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
 
         // write any radix prefixes
         if (altflag) {
-            if (radix == 16 && num != 0) {
+            if (radix == 16 && !zero) {
                 write('0');
                 write((capital) ? 'X' : 'x');           // then the radix prefix (0x etc)...
             }
@@ -386,7 +389,8 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
 
         // write padding for left justify
         if (ljustify) {
-            while (width-- > len) {
+            while (width > len) {
+                width--;
                 write(' ');                             // and finally, trailing spaces.
             }
         }
