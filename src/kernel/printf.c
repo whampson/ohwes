@@ -42,6 +42,8 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         (*putc)(c); \
         nwritten++; \
 
+    const char *format_start = format;
+
     while (format != NULL && *format != '\0')
     {
         bool ljustify = false;
@@ -72,6 +74,8 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
             write(c);
             continue;
         }
+
+        format_start = format;
 
         //
         // flags
@@ -205,14 +209,24 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         //
         // conversion specifier
         //
-        switch (c) {
-            case 'c': {
-                c = (unsigned char) va_arg(*args, int);
-                __fallthrough;
-            }
-            case '%': __fallthrough;
+        switch (c)
+        {
+            //
+            // strings: write then continue to top of loop
+            //
             default: {
+                write ('%');        // abort! just write the format string
+                while (format_start < format) {
+                    write(*format_start++);
+                }
+                continue;
+            }
+            case '%': {
                 write(c);
+                continue;
+            }
+            case 'c': {
+                write((char) va_arg(*args, int));
                 continue;
             }
             case 's': {
@@ -247,9 +261,12 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
                 else if (length == L_L) {
                     // TODO: wchar_t support
                 }
-
                 continue;
             }
+
+            //
+            // numerics: set params then write below
+            //
             case 'o': {
                 radix = 8;
                 goto get_unsigned;
