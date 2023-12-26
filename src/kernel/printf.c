@@ -39,8 +39,10 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
     int nwritten = 0;
 
     #define write(c) \
+    do { \
         (*putc)(c); \
         nwritten++; \
+    } while(0)
 
     const char *format_start = format;
 
@@ -100,8 +102,6 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         if (ljustify && zeropad) {
             zeropad = false;    // 0 ignored if - present
         }
-
-        (void) altflag;
 
         //
         // width
@@ -216,7 +216,7 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
             // strings: write then continue to top of loop
             //
             default: {
-                write ('%');        // abort! just write the format string
+                write('%');         // abort! just write the format string
                 while (format_start < format) {
                     write(*format_start++);
                 }
