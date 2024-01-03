@@ -23,17 +23,14 @@
 #include <os.h>
 #include <interrupt.h>
 
-__fastcall void handle_syscall(struct iframe *frame)
+__fastcall
+void handle_syscall(struct iframe *frame)
 {
-    panic("unexpected system call %d\n", frame->eax);
+    panic("unexpected system call %d at address %#08x!", frame->eax, frame->eip);
 }
 
-__fastcall void handle_exception(struct iframe *frame)
+__fastcall
+void handle_exception(struct iframe *frame)
 {
-    panic("exception 0x%02x\n", frame->vecNum);
+    panic("exception %02x occurred at address %#08x!", frame->vecNum, frame->eip);
 }
-
-// __fastcall void handle_irq(struct iframe *frame)
-// {
-//     printf("got irq %d\n", ~frame->vecNum);
-// }

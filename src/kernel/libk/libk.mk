@@ -1,6 +1,6 @@
-TARGET := lib/klibc.a
+TARGET := lib/libk.a
 SOURCES := \
-    math.c \
+    ctype.c \
     printf.c \
     stdio.c \
     string.c \

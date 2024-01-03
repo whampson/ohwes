@@ -3,8 +3,9 @@ INCDIRS    := src/include
 
 # OS modules
 SUBMAKEFILES := \
+    libgcc/libgcc.mk \
     boot/x86_boot.mk \
-    kernel/klibc.mk \
+    kernel/libk/libk.mk \
     kernel/kernel.mk \
 
 # use cross-compiler toolchain
@@ -18,7 +19,7 @@ OBJCOPY    := $(PREFIX)objcopy
 # flags, etc.
 ARFLAGS    := -rcsv
 ASFLAGS    := -Wall -Werror -D__ASSEMBLER__
-CFLAGS     := -Wall -Werror -nostdinc -ffreestanding -std=c99
+CFLAGS     := -Wall -Werror -nostdinc -ffreestanding -std=c11
 LDFLAGS    := -nostdlib
 
 ifeq "${DEBUG}" "1"

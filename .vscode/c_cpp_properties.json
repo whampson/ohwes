@@ -6,6 +6,7 @@
                 "${workspaceFolder}/src/include/*"
             ],
             "defines": [
+                "DEBUG",
                 "TEST_BUILD"
             ],
             "compilerPath": "${workspaceFolder}/build/i686-elf-tools/bin/i686-elf-gcc",

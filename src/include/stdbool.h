@@ -14,15 +14,13 @@
  * SOFTWARE.
  * -----------------------------------------------------------------------------
  *         File: include/stdbool.h
- *      Created: December 13, 2020
+ *      Created: December 29, 2023
  *       Author: Wes Hampson
- *       Module: C Standard Library (C99)
+ *
+ * Boolean types.
+ *
+ * https://en.cppreference.com/w/c/types (C11)
  * =============================================================================
- */
-
-/**
- * Status: DONE
- * https://en.cppreference.com/w/c/types
  */
 
 #ifndef __STDBOOL_H
@@ -35,4 +33,4 @@
 
 #define __bool_true_false_are_defined 1
 
-#endif
+#endif // __STDBOOL_H

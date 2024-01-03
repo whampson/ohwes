@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: compiler.h
+ *         File: include/compiler.h
  *      Created: December 30, 2020
  *       Author: Wes Hampson
  *
@@ -30,13 +30,17 @@
 
 /**
  * 'fastcall' calling convention.
- * Passes the first two arguments through ECX and EDX respectively.
+ * Ensures the first two function arguments are passed through ECX and EDX
+ * respectively. Remaining arguments are passed on the stack. Callee is
+ * responsible for cleaning up the stack. ECX and EDX are not preserved by the
+ * caller.
  */
 #define __fastcall      __attribute__((fastcall))
 
 /**
  * 'syscall' calling convention.
- * Ensures parameters are always retrieved from the stack.
+ * Ensures function arguments are always passed on the stack. Caller is
+ * responsible for cleaning up the stack.
  */
 #define __syscall       __attribute__((regparm(0)))
 
@@ -55,18 +59,6 @@
  * of 2.
  */
 #define __align(n)      __attribute__((aligned(n)))
-
-/**
- * 64-bit division functions.
- */
-
-int64_t __moddi3(int64_t, int64_t);
-int64_t __divdi3(int64_t, int64_t);
-int64_t __divmoddi4(int64_t, int64_t, int64_t *);
-
-uint64_t __umoddi3(uint64_t, uint64_t);
-uint64_t __udivdi3(uint64_t, uint64_t);
-uint64_t __udivmoddi4(uint64_t, uint64_t, uint64_t *);
 
 #else
 #error "Please compile using GCC."

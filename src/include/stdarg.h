@@ -14,15 +14,13 @@
  * SOFTWARE.
  * -----------------------------------------------------------------------------
  *         File: include/stdarg.h
- *      Created: December 13, 2020
+ *      Created: December 29, 2023
  *       Author: Wes Hampson
- *       Module: C Standard Library (C99)
+ *
+ * Variable argument list handling.
+ *
+ * https://en.cppreference.com/w/c/variadic (C11)
  * =============================================================================
- */
-
-/**
- * Status: DONE
- * https://en.cppreference.com/w/c/variadic
  */
 
 #ifndef __STDARG_H

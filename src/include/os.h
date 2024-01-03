@@ -26,12 +26,13 @@
 #include <stdio.h>
 #include <compiler.h>
 
-extern void Halt(); // see entry.S
+#define dbgbrk()    __asm__ volatile ("int $3")
+#define halt()      __asm__ volatile (".%=: hlt; jmp .%=" : : )
 
-#define panic(...)                                                              \
-do {                                                                            \
-    printf("panic: " __VA_ARGS__);                                              \
-    Halt();                                                                     \
+#define panic(...)                  \
+do {                                \
+    printf("panic: " __VA_ARGS__);  \
+    halt();                         \
 } while (0)
 
 #endif // __OS_H

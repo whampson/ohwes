@@ -13,17 +13,16 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/boot/boot.h
- *      Created: Dec 14, 2023
+ *         File: src/boot/x86_boot.h
+ *      Created: December 14, 2023
  *       Author: Wes Hampson
  *
  * x86 Boot Stuff
  * =============================================================================
  */
 
-// #ifndef __ASSEMBLER__
-// #error "Assembler only header!"
-// #endif
+#ifndef __X86_BOOT
+#define __X86_BOOT
 
 /*----------------------------------------------------------------------------*
  * Memory
@@ -109,3 +108,5 @@
       call    PrintStr
   .endm
 #endif
+
+#endif // __X86_BOOT

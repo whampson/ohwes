@@ -19,71 +19,29 @@
  * =============================================================================
  */
 
-#include "init.h"
-
+#include <assert.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
-// #include <console.h>
 #include <boot.h>
 #include <io.h>
 #include <interrupt.h>
 #include <os.h>
-#include <x86.h>
-
-
-// static const IdtThunk ExceptionThunks[NUM_EXCEPTION] =
-// {
-//     Exception00h, Exception01h, Exception02h, Exception03h,
-//     Exception04h, Exception05h, Exception06h, Exception07h,
-//     Exception08h, Exception09h, Exception0Ah, Exception0Bh,
-//     Exception0Ch, Exception0Dh, Exception0Eh, Exception0Fh,
-//     Exception10h, Exception11h, Exception12h, Exception13h,
-//     Exception14h, Exception15h, Exception16h, Exception17h,
-//     Exception18h, Exception19h, Exception1Ah, Exception19h,
-//     Exception1Ch, Exception1Ch, Exception1Eh, Exception1Fh
-// };
-
-// static const IdtThunk IrqThunks[NUM_IRQ] =
-// {
-//     Irq00h, Irq01h, Irq02h, Irq03h,
-//     Irq04h, Irq05h, Irq06h, Irq07h,
-//     Irq08h, Irq09h, Irq0Ah, Irq0Bh,
-//     Irq0Ch, Irq0Dh, Irq0Eh, Irq0Fh
-// };
-
-/* Segment Selectors */
-#define SEGSEL_NULL         (0x0)
-#define SEGSEL_LDT          (0x08|KernelMode)
-#define SEGSEL_KERNEL_CODE  (0x10|KernelMode)
-#define SEGSEL_KERNEL_DATA  (0x18|KernelMode)
-#define SEGSEL_USER_CODE    (0x20|UserMode)
-#define SEGSEL_USER_DATA    (0x28|UserMode)
-#define SEGSEL_TSS          (0x30|KernelMode)
-
-SegDesc * const g_gdt = (SegDesc *) GDT_BASE;
-SegDesc * const g_idt = (SegDesc *) IDT_BASE;
-SegDesc * const g_ldt = (SegDesc *) LDT_BASE;
-struct Tss * const g_tss = (struct Tss *) TSS_BASE;
-
-__align(2) DescReg g_gdtDesc = { GDT_LIMIT, GDT_BASE };
-__align(2) DescReg g_idtDesc = { IDT_LIMIT, IDT_BASE };
 
 #define OS_NAME_STRING      "OHWES"
 #define OS_VERSION_STRING   "0.1"
 #define OS_COPYRIGHT_STRING "(C) 2020-2023 Wes Hampson. All Rights Reserved."
 
-#define BootPrint(fmt,...)  printf("boot: " fmt, __VA_ARGS__)
-
-#define CHECK(x) if (x) { panic(#x " failed!\n"); }
+#define BootPrint(...)  printf("boot: " __VA_ARGS__)
 
 extern bool run_tests(void);
 extern void con_init(void);
 extern void init_cpu(void);
-// extern void IrqInit(void);
-// static void InitCpuDesc(void);
 
+BootInfo g_bootInfo;
+BootInfo * const g_pBootInfo = &g_bootInfo;
 
 void test_klibc()
 {
@@ -95,119 +53,57 @@ void test_klibc()
 #endif
 }
 
-__fastcall
-void kmain(const BootParams * const pBootInfo)
+void print_memmap(void)
 {
-    con_init();     // get the vga console working first
-    init_cpu();     // then finish setting up the CPU
-    test_klibc();   // run some tests on the kernel runtime library
-
-    const AcpiMemoryMapEntry *memMap = pBootInfo->m_pMemoryMap;
-    if (pBootInfo->m_pMemoryMap) {
-        do {
-            if (memMap->Length > 0) {
-                printf("boot: BIOS-E820h: %08x-%08x ",
-                    (uint32_t) memMap->Base,
-                    (uint32_t) memMap->Base + memMap->Length - 1);
-
-                switch (memMap->Type) {
-                    case ACPI_MMAP_TYPE_USABLE:     printf("usable\n"); break;
-                    case ACPI_MMAP_TYPE_RESERVED:   printf("reserved\n"); break;
-                    case ACPI_MMAP_TYPE_ACPI:       printf("ACPI\n"); break;
-                    case ACPI_MMAP_TYPE_ACPI_NVS:   printf("ACPI NV\n"); break;
-                    case ACPI_MMAP_TYPE_BAD:        printf("bad\n"); break;
-                    default:                        printf("reserved (%d)\n", memMap->Type); break;
-                }
-            }
-        } while ((memMap++)->Type != ACPI_MMAP_TYPE_INVALID);
+    const AcpiMemoryMapEntry *memMap = g_pBootInfo->pMemoryMap;
+    if (!g_pBootInfo->pMemoryMap) {
+        BootPrint("ACPI memory map not found!\n");
+        return;
     }
 
-        // InitCpuDesc();  // TODO: something in here crashes...
-    // IrqInit();
-    // IrqUnmask(IRQ_KEYBOARD);
-    // sti();
-
-
+    do {
+        char buf[64];
+        char *p = buf;
+        if (memMap->length > 0) {
+            int n = snprintf(buf, sizeof(buf), "BIOS-E820h: %08x-%08x ",
+                (uint32_t) memMap->base,
+                (uint32_t) memMap->base + memMap->length - 1);
+            p = &buf[n];
+            size_t s = sizeof(buf) - (p - buf);
+            switch (memMap->type) {
+                case ACPI_MMAP_TYPE_USABLE:     snprintf(p, s, "usable"); break;
+                case ACPI_MMAP_TYPE_RESERVED:   snprintf(p, s, "reserved"); break;
+                case ACPI_MMAP_TYPE_ACPI:       snprintf(p, s, "ACPI"); break;
+                case ACPI_MMAP_TYPE_ACPI_NVS:   snprintf(p, s, "ACPI NV"); break;
+                case ACPI_MMAP_TYPE_BAD:        snprintf(p, s, "bad"); break;
+                default:                        snprintf(p, s, "reserved (%d)", memMap->type); break;
+            }
+            BootPrint("%s\n", buf);
+        }
+    } while ((memMap++)->type != ACPI_MMAP_TYPE_INVALID);
 }
 
-// static void InitCpuDesc(void)
-// {
-//     //
-//     // Global Descriptor Table
-//     //
-//     SegDesc *gdt = (SegDesc *) GDT_BASE;
-//     memset(gdt, 0, GDT_SIZE);
+__fastcall
+void kmain(const BootInfo * const pBootInfo)
+{
+    memcpy(g_pBootInfo, pBootInfo, sizeof(BootInfo));
 
-//     MakeSegDesc(
-//         GetDescPtr(gdt, SEGSEL_KERNEL_CODE),
-//         KernelMode,
-//         0x0, LIMIT_MAX,
-//         DESC_MEM_CODE_XR);
-//     MakeSegDesc(
-//         GetDescPtr(gdt, SEGSEL_KERNEL_DATA),
-//         KernelMode,
-//         0x0, LIMIT_MAX,
-//         DESC_MEM_DATA_RW);
-//     MakeSegDesc(
-//         GetDescPtr(gdt, SEGSEL_USER_CODE),
-//         UserMode,
-//         0x0, LIMIT_MAX,
-//         DESC_MEM_CODE_XR);
-//     MakeSegDesc(
-//         GetDescPtr(gdt, SEGSEL_USER_DATA),
-//         UserMode,
-//         0x0, LIMIT_MAX,
-//         DESC_MEM_DATA_RW);
-//     MakeLdtDesc(
-//         GetDescPtr(gdt, SEGSEL_LDT),
-//         KernelMode,
-//         LDT_BASE, LDT_SIZE - 1);
-//     MakeTssDesc(
-//         GetDescPtr(gdt, SEGSEL_TSS),
-//         KernelMode,
-//         TSS_BASE, TSS_SIZE - 1);
+    con_init();     // get the vga console working first
+    init_cpu();     // then finish setting up the CPU.
 
-//     lgdt(g_gdtDesc);
-//     LoadCs(SEGSEL_KERNEL_CODE);
-//     LoadDs(SEGSEL_KERNEL_DATA);
-//     LoadEs(SEGSEL_KERNEL_DATA);
-//     LoadFs(0);
-//     LoadGs(0);
-//     LoadSs(SEGSEL_KERNEL_DATA);
+    test_klibc();   // run some tests on the kernel runtime library
 
-//     //
-//     // Interrupt Descriptor Table
-//     //
-//     int count = IDT_SIZE / sizeof(SegDesc);
-//     for (int idx = 0, e = 0, i = 0; idx < count; idx++) {
-//         e = idx - INT_EXCEPTION;
-//         i = idx - INT_IRQ;
-//         SegDesc *desc = g_idt + idx;
+    print_memmap();
 
-//         if (idx >= INT_EXCEPTION && e < NUM_EXCEPTION) {
-//             MakeTrapDesc(desc, SEGSEL_KERNEL_CODE, KernelMode, ExceptionThunks[e]);
-//         }
-//         else if (idx >= INT_IRQ && i < NUM_IRQ) {
-//             MakeIntrDesc(desc, SEGSEL_KERNEL_CODE, KernelMode, IrqThunks[i]);
-//         }
-//         else if (idx == INT_SYSCALL) {
-//             MakeTrapDesc(desc, SEGSEL_KERNEL_CODE, UserMode, Syscall);
-//         }
-//     }
-//     lidt(g_idtDesc);
+    printf("INT8_MIN = %d\n", INT8_MIN);
+    printf("INT_LEAST8_MIN = %d\n", INT_LEAST8_MIN);
+    printf("INT8_MIN = %d\n", INT8_MAX);
+    printf("INT_LEAST8_MIN = %d\n", INT_LEAST8_MAX);
 
-//     //
-//     // Local Descriptor Table
-//     //
-//     memset(g_ldt, 0, LDT_SIZE);
-//     lldt(SEGSEL_LDT);
+    volatile int x = 3;
+    assert(x == 3);
+    assert(x == 4);
 
-//     //
-//     // TSS
-//     //
-//     memset(g_tss, 0, TSS_SIZE);
-//     g_tss->ldtSegSel = SEGSEL_LDT;
-//     g_tss->esp0 = (uint32_t) g_BootParams->m_p;
-//     g_tss->ss0 = SEGSEL_KERNEL_DATA;
-//     ltr(SEGSEL_TSS);
-// }
+    (void) x;
+
+}

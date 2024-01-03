@@ -3,7 +3,7 @@ DEBUG      := 1
 DEBUGOPT   := 1
 DEBUGFLAGS := -DDEBUG -g
 
-TEST_BUILD := 1
+TEST_BUILD := 0
 
 ifeq "${DEBUGOPT}" "1"
   DEBUGFLAGS += -Og

@@ -14,7 +14,7 @@
  * SOFTWARE.
  * -----------------------------------------------------------------------------
  *         File: kernel/printf.c
- *      Created: Dec 22, 2023
+ *      Created: December 22, 2023
  *       Author: Wes Hampson
  * =============================================================================
  */
@@ -386,7 +386,7 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
 
         // write sign char
         if (sign_char) {
-            write(sign_char);                           // followed by the sign...
+            write(sign_char);                               // followed by the sign...
         }
 
         // write any radix prefixes

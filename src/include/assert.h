@@ -1,5 +1,5 @@
 /* =============================================================================
- * Copyright (C) 2020-2023 Wes Hampson. All Rights Reserved.
+ * Copyright (C) 2023 Wes Hampson. All Rights Reserved.
  *
  * This file is part of the OH-WES Operating System.
  * OH-WES is free software; you may redistribute it and/or modify it under the
@@ -13,35 +13,31 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/stddef.h
- *      Created: December 29, 2023
+ *         File: include/assert.h
+ *      Created: December 26, 2023
  *       Author: Wes Hampson
  *
- * Common definitions.
- *
- * https://en.cppreference.com/w/c/types (C11)
+ * https://en.cppreference.com/w/c/error (C11)
  * =============================================================================
  */
 
-#ifndef __STDDEF_H
-#define __STDDEF_H
+#ifndef __ASSERT_H
+#define __ASSERT_H
 
-#ifndef __SIZE_T_DEFINED
-#define __SIZE_T_DEFINED
-typedef __typeof__(sizeof(int)) size_t;
+#include <os.h>     // for panic()
+
+#ifdef DEBUG
+    // TOOD: call abort() instead of panic
+#define assert(x) \
+do { \
+    if (!(x)) { \
+        panic("%s:%d assertion failed: " #x "\n", __FILE__, __LINE__); \
+    } \
+} while (0)
+#else
+#define assert(x) (void) 0
 #endif
 
-#ifndef __NULL_DEFINED
-#define __NULL_DEFINED
-#define NULL ((void*)0)
-#endif
+#define static_assert _Static_assert
 
-typedef __typeof__(((int*)NULL)-((int*)NULL)) ptrdiff_t;
-
-#define offsetof(type,member) ((size_t)((char*)&((type*)0)->member-(char*)0))
-
-typedef long long max_align_t;
-
-// typedef short wchar_t;
-
-#endif /* __STDDEF_H */
+#endif  // __ASSERT_H
