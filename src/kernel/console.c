@@ -127,7 +127,6 @@ enum ascii_cntl
 
 // #include <ascii.h>
 #include <ctype.h>
-#include <stdio.h>
 #include <string.h>
 #include <vga.h>
 #include <console.h>

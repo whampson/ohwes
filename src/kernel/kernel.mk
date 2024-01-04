@@ -18,9 +18,9 @@ TGT_CFLAGS := -Wno-unused-function
 TGT_LDFLAGS := -Ttext 0x10000 -e KeEntry
 
 TGT_LDLIBS  += \
-    ${TARGET_DIR}/lib/libk.a \
+    ${TARGET_DIR}/lib/libc.a \
 
-TGT_PREREQS += lib/libk.a
+TGT_PREREQS += lib/libc.a
 
 # TODO: some kind of macro to add link libs in one step
 TGT_LDLIBS  += \

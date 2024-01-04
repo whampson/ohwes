@@ -28,8 +28,6 @@
 #ifndef __STRING_H
 #define __STRING_H
 
-#include <stdint.h>
-
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
 typedef __typeof__(sizeof(int)) size_t;

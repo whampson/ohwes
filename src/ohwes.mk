@@ -3,9 +3,9 @@ INCDIRS    := src/include
 
 # OS modules
 SUBMAKEFILES := \
-    libgcc/libgcc.mk \
+    lib/libc/libc.mk \
+    lib/libgcc/libgcc.mk \
     boot/x86_boot.mk \
-    kernel/libk/libk.mk \
     kernel/kernel.mk \
 
 # use cross-compiler toolchain

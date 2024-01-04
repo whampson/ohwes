@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: gcc/math.c
+ *         File: lib/libgcc/math.c
  *      Created: December 26, 2023
  *       Author: Wes Hampson
  *

@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/printf.c
+ *         File: lib/libc/printf.c
  *      Created: December 22, 2023
  *       Author: Wes Hampson
  * =============================================================================
@@ -21,8 +21,8 @@
 
 #include <compiler.h>
 #include <ctype.h>
+#include <stdarg.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <string.h>
 #include <console.h>
 

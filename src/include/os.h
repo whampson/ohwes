@@ -23,7 +23,6 @@
 #ifndef __OS_H
 #define __OS_H
 
-#include <stdio.h>
 #include <compiler.h>
 
 #define dbgbrk()    __asm__ volatile ("int $3")

@@ -24,7 +24,6 @@
 #include <boot.h>
 #include <compiler.h>
 #include <interrupt.h>
-#include <stdio.h>
 #include <x86.h>
 
 //

@@ -1,5 +1,4 @@
 #include <string.h>
-#include <stdlib.h>
 
 // TODO: scrutinize and document these
 
