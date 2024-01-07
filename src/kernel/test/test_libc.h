@@ -1,12 +1,12 @@
 #ifndef __TEST_LIBC_H
 #define __TEST_LIBC_H
 
-#include <stdbool.h>
+#include <test.h>
 
 #ifdef TEST_BUILD
 
-bool test_printf(void);
-bool test_strings(void);
+void test_printf(void);
+void test_strings(void);
 
 #endif
 

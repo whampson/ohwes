@@ -3,12 +3,10 @@
 
 #ifdef TEST_BUILD
 
-bool test_libc(void)
+void test_libc(void)
 {
-    bool pass = true;
-    pass &= test_printf();
-    pass &= test_strings();
-    return pass;
+    test_printf();
+    test_strings();
 }
 
 #endif

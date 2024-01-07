@@ -35,10 +35,7 @@ BootInfo * const g_pBootInfo = &g_bootInfo;
 static void run_tests(void)
 {
 #if TEST_BUILD
-    bool pass = test_libc();
-    if (!pass) {
-        panic("TESTS FAILED!!");
-    }
+    test_libc();
 #endif
 }
 

@@ -67,14 +67,174 @@ void strlen_reference(void)
     printf("with null character:    %zu\n", sizeof str);
 }
 
-bool test_strings(void)
+void test_memset(void)
 {
-    memset_reference();
-    memcmp_reference();
-    strcmp_reference();
-    strlen_reference();
+    //
+    // test writing a single byte value to every slot in a buffer
+    //
 
-    return true;
+    char buf[64] = {};
+    void *ret;
+
+    ret = memset(buf, 'A', sizeof(buf));
+    VERIFY_ARE_EQUAL(ret, buf);
+
+    for (int i = 0; i < sizeof(buf); i++) {
+        char c = buf[i];
+        VERIFY_ARE_EQUAL(c, 'A');
+    }
+}
+
+void test_memcpy(void)
+{
+    //
+    // test copying bytes between non-overlapping buffers
+    // assumes memset works
+    //
+
+    char src[64];
+    char dst[64];
+    void *ret;
+
+    //
+    // test copy entire src buffer to dst
+    //
+    memset(src, 'A', sizeof(src));
+    memset(dst, 'B', sizeof(dst));
+
+    ret = memcpy(dst, src, sizeof(src));
+    VERIFY_ARE_EQUAL(ret, dst);
+
+    for (int i = 0; i < sizeof(dst); i++) {
+        VERIFY_ARE_EQUAL(dst[i], src[i]);
+    }
+
+    //
+    // test count == 0
+    //
+    memset(src, 'X', sizeof(src));
+    memcpy(dst, src, 0);
+
+    for (int i = 0; i < sizeof(dst); i++) {
+        VERIFY_ARE_EQUAL(dst[i], 'A');
+    }
+}
+
+void test_memmove(void)
+{
+    //
+    // test copying bytes between potentially overlapping buffers
+    // assumes memset works
+    //
+
+    char buf[64];
+    char *src;
+    char *dst;
+    const int count = 32;
+
+    #define TEST(x,y) \
+    do { \
+        src = &buf[x]; \
+        dst = &buf[y]; \
+        memset(buf, '-', sizeof(buf)); \
+        memset(src, 'a', count); \
+        VERIFY_ARE_EQUAL(dst, memmove(dst, src, count)); \
+        for (int i = 0; i < count; i++) { \
+            VERIFY_ARE_EQUAL(dst[i], 'a'); \
+        } \
+    } while (0)
+
+    //
+    // non-overlapping buffers (memcpy)
+    // ++++++++
+    //         --------
+    //
+    TEST(0, 32);
+
+    //
+    // overlap from left
+    // ++++++++
+    //     --------
+    //
+    TEST(0, 16);
+
+    //
+    // overlap from right
+    //     ++++++++
+    // --------
+    //
+    TEST(16, 0);
+
+    #undef TEST
+}
+
+void test_memcmp(void)
+{
+    char a[4];
+    char b[4];
+    const int count = 4;
+
+    #define SETUP(x,y) \
+    do {\
+        memset(a,x,count); \
+        memset(b,y,count); \
+    } while (0)
+
+    SETUP(1, 2);
+    VERIFY_IS_TRUE(memcmp(a, b, 0) == 0);
+    VERIFY_IS_TRUE(memcmp(a, b, count) < 0);
+    SETUP(2, 1);
+    VERIFY_IS_TRUE(memcmp(a, b, count) > 0);
+    SETUP(2, 2);
+    VERIFY_IS_TRUE(memcmp(a, b, count) == 0);
+
+    #undef SETUP
+}
+
+void test_strcmp(void)
+{
+    char *a;
+    char *b;
+    const int count = 4;
+
+    #define SETUP(x,y) \
+    do {\
+        a = x; \
+        b = y; \
+    } while (0)
+
+    SETUP("ABCD", "EFGH");
+    VERIFY_IS_TRUE(memcmp(a, b, 0) == 0);
+    VERIFY_IS_TRUE(memcmp(a, b, count) < 0);
+    SETUP("MNOP", "IJKL");
+    VERIFY_IS_TRUE(memcmp(a, b, count) > 0);
+    SETUP("QRST", "QRST");
+    VERIFY_IS_TRUE(memcmp(a, b, count) == 0);
+    SETUP("AAAA", "aaaa");
+    VERIFY_IS_TRUE(memcmp(a, b, count) < 0);
+
+    #undef SETUP
+}
+
+void test_strlen(void)
+{
+    VERIFY_ARE_EQUAL(0, strlen(""));
+    VERIFY_ARE_EQUAL(13, strlen("Hello, world!"));
+}
+
+void test_strings(void)
+{
+    // memset_reference();
+    // memcmp_reference();
+    // strcmp_reference();
+    // strlen_reference();
+
+    test_memset();
+    test_memcpy();
+    test_memmove();
+    test_memcmp();
+    test_strcmp();
+    test_strlen();
 }
 
 #endif

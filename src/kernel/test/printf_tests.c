@@ -55,14 +55,11 @@ void printf_reference()
                                      UINT32_MAX,     UINT32_MAX );
 }
 
-bool test_printf()
+void test_printf(void)
 {
     // printf_reference();
 
-    const bool panic_on_failure = true;
-    bool pass = true;
     char buf[256];
-    int ret;
 
     // ------------------------------------------------------------------------
     //
@@ -75,17 +72,17 @@ bool test_printf()
     //
     {
         #define _TEST_SPRINTF(exp_ret,exp_buf,...) \
-            ret = sprintf(buf, __VA_ARGS__); \
-            bool _pass = (ret == (exp_ret)) && (strcmp(buf, exp_buf) == 0); \
+            int _ret = sprintf(buf, __VA_ARGS__); \
+            bool _pass = (_ret == (exp_ret)) && (strcmp(buf, exp_buf) == 0); \
 
         #define _TEST_SNPRINTF(exp_ret,exp_buf,n,...) \
-            ret = snprintf(buf, n, __VA_ARGS__); \
-            bool _pass = (ret == (exp_ret)) && (exp_buf == NULL || strcmp(buf, exp_buf) == 0); \
+            int _ret = snprintf(buf, n, __VA_ARGS__); \
+            bool _pass = (_ret == (exp_ret)) && (exp_buf == NULL || strcmp(buf, exp_buf) == 0); \
 
         #define _TEST_CHECK(exp_ret,exp_buf,...) \
             if (!_pass) { \
                 testprint("!! sprintf SANITY CHECK FAILED: " #__VA_ARGS__ "\n"); \
-                if (ret != (exp_ret)) { \
+                if (_ret != (exp_ret)) { \
                     testprint("!! return value does not match expected value of " #exp_ret "\n"); \
                 } \
                 testprint("!! \texp='" exp_buf "'\n"); \
@@ -93,20 +90,19 @@ bool test_printf()
                 testprint(buf); \
                 testprint("'\n"); \
             } \
-            pass &= _pass; \
 
         #define TEST_SPRINTF(exp_ret,exp_buf,...) \
         do { \
             _TEST_SPRINTF(exp_ret,exp_buf,__VA_ARGS__) \
             _TEST_CHECK(exp_ret,exp_buf,__VA_ARGS__) \
-            if (panic_on_failure && !pass) { panic("TEST FAILED!!\n"); } \
+            VERIFY_IS_TRUE(_pass); \
         } while (0)
 
         #define TEST_SNPRINTF(exp_ret,exp_buf,n,...) \
         do { \
             _TEST_SNPRINTF(exp_ret,exp_buf,n,__VA_ARGS__) \
             _TEST_CHECK(exp_ret,exp_buf,__VA_ARGS__) \
-            if (panic_on_failure && !pass) { panic("TEST FAILED!!\n"); } \
+            VERIFY_IS_TRUE(_pass); \
         } while (0)
     }
 
@@ -151,13 +147,12 @@ bool test_printf()
             testprint(buf); \
             testprint("'\n"); \
         } \
-        pass &= _pass; \
 
     #define TEST(expected,...) \
     do { \
         _TEST_FN(expected, __VA_ARGS__) \
         _TEST_CHECK(expected, __VA_ARGS__) \
-        if (panic_on_failure && !pass) { panic("TEST FAILED!!\n"); } \
+        VERIFY_IS_TRUE(_pass); \
     } while (0)
 
     //
@@ -464,8 +459,6 @@ bool test_printf()
     #undef TEST
     #undef _TEST_CHECK
     #undef _TEST_FN
-
-    return pass;
 }
 
 #endif // TEST_BUILD

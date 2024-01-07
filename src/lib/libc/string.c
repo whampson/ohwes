@@ -42,16 +42,8 @@ void * memmove(void *dest, const void *src, size_t count)
         return dest;
     }
 
-    // right overlap, copy forwards from head
+    // right overlap, copy backwards from tail
     if (dest < src && dest + count > src) {
-        while (count--) {
-            *d++ = *s++;    // less evil
-        }
-        return dest;
-    }
-
-    // left overlap, copy backwards from tail
-    if (src < dest && src + count > dest) {
         d += count; s += count;
         while (count--) {
             *--d = *--s;    // evil
@@ -59,7 +51,15 @@ void * memmove(void *dest, const void *src, size_t count)
         return dest;
     }
 
-    // no overlap, go fast >:)
+    // left overlap, copy forwards from head
+    else if (src < dest && src + count > dest) {
+        while (count--) {
+            *d++ = *s++;
+        }
+        return dest;
+    }
+
+    // no overlap
     return memcpy(dest, src, count);
 }
 
@@ -78,7 +78,11 @@ int memcmp(const void *lhs, const void *rhs, size_t count)
     const char *l = lhs;
     const char *r = rhs;
 
-    while ((*l == *r) && count--) {
+    if (count == 0) {
+        return 0;
+    }
+
+    while ((*l == *r) && --count) {
         l++; r++;
     }
 
