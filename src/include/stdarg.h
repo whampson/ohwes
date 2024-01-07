@@ -26,7 +26,10 @@
 #ifndef __STDARG_H
 #define __STDARG_H
 
+#ifndef __VA_LIST_DEFINED
+#define __VA_LIST_DEFINED
 typedef void *va_list;
+#endif
 
 #define va_start(list,param) \
     (void) ((list) = ((char *) &(param) + sizeof(param)))

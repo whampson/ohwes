@@ -110,24 +110,24 @@ static void init_gdt(void)
 
 static void init_idt(void)
 {
-    static const IdtThunk ExceptionThunks[NUM_EXCEPTION] =
+    idt_thunk excepts[NUM_EXCEPTION] =
     {
-        Exception00h, Exception01h, Exception02h, Exception03h,
-        Exception04h, Exception05h, Exception06h, Exception07h,
-        Exception08h, Exception09h, Exception0Ah, Exception0Bh,
-        Exception0Ch, Exception0Dh, Exception0Eh, Exception0Fh,
-        Exception10h, Exception11h, Exception12h, Exception13h,
-        Exception14h, Exception15h, Exception16h, Exception17h,
-        Exception18h, Exception19h, Exception1Ah, Exception19h,
-        Exception1Ch, Exception1Ch, Exception1Eh, Exception1Fh
+        _thunk_except00h, _thunk_except01h, _thunk_except02h, _thunk_except03h,
+        _thunk_except04h, _thunk_except05h, _thunk_except06h, _thunk_except07h,
+        _thunk_except08h, _thunk_except09h, _thunk_except0Ah, _thunk_except0Bh,
+        _thunk_except0Ch, _thunk_except0Dh, _thunk_except0Eh, _thunk_except0Fh,
+        _thunk_except10h, _thunk_except11h, _thunk_except12h, _thunk_except13h,
+        _thunk_except14h, _thunk_except15h, _thunk_except16h, _thunk_except17h,
+        _thunk_except18h, _thunk_except19h, _thunk_except1Ah, _thunk_except19h,
+        _thunk_except1Ch, _thunk_except1Ch, _thunk_except1Eh, _thunk_except1Fh
     };
 
-    static const IdtThunk IrqThunks[NUM_IRQ] =
+    idt_thunk irqs[NUM_IRQ] =
     {
-        Irq00h, Irq01h, Irq02h, Irq03h,
-        Irq04h, Irq05h, Irq06h, Irq07h,
-        Irq08h, Irq09h, Irq0Ah, Irq0Bh,
-        Irq0Ch, Irq0Dh, Irq0Eh, Irq0Fh
+        _thunk_irq00h, _thunk_irq01h, _thunk_irq02h, _thunk_irq03h,
+        _thunk_irq04h, _thunk_irq05h, _thunk_irq06h, _thunk_irq07h,
+        _thunk_irq08h, _thunk_irq09h, _thunk_irq0Ah, _thunk_irq0Bh,
+        _thunk_irq0Ch, _thunk_irq0Dh, _thunk_irq0Eh, _thunk_irq0Fh
     };
 
     // Zero IDT
@@ -137,18 +137,24 @@ static void init_idt(void)
     int count = IDT_SIZE / sizeof(x86Desc);
     for (int idx = 0, e = 0, i = 0; idx < count; idx++) {
         x86Desc *desc = ((x86Desc *) IDT_BASE) + idx;
-        e = idx - INT_EXCEPTION;        // exception num
-        i = idx - INT_IRQ;              // irq num
+        e = idx - INT_EXCEPTION;
+        i = idx - INT_IRQ;
 
         if (idx >= INT_EXCEPTION && e < NUM_EXCEPTION) {
-            make_intr_desc(desc, SEGSEL_KERNEL_CODE, DPL_KERNEL, ExceptionThunks[e]);   // TODO: interrupt or trap gate?
+            // interrupt gate for exceptions
+            make_intr_gate(desc, SEGSEL_KERNEL_CODE, DPL_KERNEL, excepts[e]);
         }
         else if (idx >= INT_IRQ && i < NUM_IRQ) {
-            make_intr_desc(desc, SEGSEL_KERNEL_CODE, DPL_KERNEL, IrqThunks[i]); // TODO: make_trap_gate?
+            // interrupt gate for device IRQs, we don't want other devices
+            // interrupting this one's handler
+            make_intr_gate(desc, SEGSEL_KERNEL_CODE, DPL_KERNEL, irqs[i]);
         }
         else if (idx == INT_SYSCALL) {
-            make_trap_desc(desc, SEGSEL_KERNEL_CODE, DPL_USER, Syscall);
+            // user-mode accessible trap gate, so devices can interrupt
+            // system call
+            make_trap_gate(desc, SEGSEL_KERNEL_CODE, DPL_USER, _thunk_syscall);
         }
+        // else, keep it NULL! Will generate another exception
     }
 
     PseudoDesc idtDesc = { .base = IDT_BASE, .limit = IDT_LIMIT };

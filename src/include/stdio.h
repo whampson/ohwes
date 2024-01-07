@@ -32,11 +32,18 @@ typedef __typeof__(sizeof(int)) size_t;
 #define NULL ((void*)0)
 #endif
 
+#ifndef __VA_LIST_DEFINED
+#define __VA_LIST_DEFINED
+typedef void *va_list;
+#endif
+
 int putchar(int c);
 int puts(const char *str);
 
 int printf(const char *format, ...);
 int sprintf(char *buffer, const char *format, ...);
 int snprintf(char *buffer, size_t bufsz, const char *format, ...);
+
+int vprintf(const char *format, va_list args);
 
 #endif // __STDIO_H

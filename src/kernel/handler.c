@@ -19,18 +19,38 @@
  * =============================================================================
  */
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <os.h>
 #include <interrupt.h>
 
-__fastcall
-void handle_syscall(struct iframe *frame)
+void panic(const char *reason, ...)
 {
-    panic("unexpected system call %d at address %#08x!", frame->eax, frame->eip);
+    // TODO: should we get to panic graveyard via from interrupt or syscall rather than direct call?
+
+    va_list args;
+    va_start(args, reason);
+
+    printf("panic: ");
+    vprintf(reason, args);
+    halt();
 }
 
 __fastcall
-void handle_exception(struct iframe *frame)
+void recv_interrupt(struct iregs *regs)
 {
-    panic("exception %02x occurred at address %#08x!", frame->vecNum, frame->eip);
+    if (regs->vec_num >= INT_EXCEPTION &&
+        regs->vec_num < INT_EXCEPTION + NUM_EXCEPTION)
+    {
+        panic("exception %02x occurred at %#08x! (error code = %d)", regs->vec_num, regs->eip, regs->err_code);
+    }
+
+    panic("unexpected interrupt %d at %#08x!", regs->eax, regs->eip);
+}
+
+
+__fastcall
+void recv_syscall(struct iregs *regs)
+{
+    panic("unexpected system call %d at %#08x!", regs->eax, regs->eip);
 }

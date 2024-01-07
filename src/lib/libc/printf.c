@@ -451,6 +451,11 @@ int printf(const char *format, ...)
     return nwritten;
 }
 
+int vprintf(const char *format, va_list args)
+{
+    return _doprintf(format, &args, con_write);
+}
+
 /**
  * "Writes the results to a character string buffer. The behavior is undefined if
  * the string to be written (plus the terminating null character) exceeds the

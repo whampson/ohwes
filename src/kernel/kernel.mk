@@ -3,7 +3,6 @@ TARGETSYS := sys/ohwes.sys
 
 SOURCES := \
     entry.S \
-    interrupt.S \
     console.c \
     cpu.c \
     handler.c \
@@ -21,7 +20,7 @@ endif
 TGT_CFLAGS := -Wno-unused-function
 
 # TGT_INCDIRS := include
-TGT_LDFLAGS := -Ttext 0x10000 -e KeEntry
+TGT_LDFLAGS := -Ttext 0x10000 -e kentry
 
 TGT_LDLIBS  += \
     ${TARGET_DIR}/lib/libc.a \

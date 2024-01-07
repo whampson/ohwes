@@ -17,7 +17,7 @@ PROJ_ROOT=$(realpath $(dirname $BASH_SOURCE[0])/..)
 
 # Makefile Autocompletion
 # https://stackoverflow.com/a/38415982
-complete -W "\`grep -oE '^[a-zA-Z0-9_.-]+:([^=]|$)' ?akefile | sed 's/[^a-zA-Z0-9_.-]*$//'\`" make
+complete -W "\`grep -oE '^[a-zA-Z0-9_.-]+:([^=]|$)' *.mk | sed 's/[^a-zA-Z0-9_.-]*$//'\`" make
 
 # Executables
 CC=i686-elf-gcc

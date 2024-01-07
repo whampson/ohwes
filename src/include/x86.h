@@ -398,7 +398,7 @@ static inline void make_tss_desc(x86Desc *pDesc, int dpl, int base, int limit)
  * @param tssSegSel TSS Segment Selector
  * @param dpl task gate privilege level
  */
-static inline void make_task_desc(x86Desc *pDesc, int tssSegSel, int dpl)
+static inline void make_task_gate(x86Desc *pDesc, int tssSegSel, int dpl)
 {
     pDesc->_value = 0;
     pDesc->task.type = DESCTYPE_TASK;
@@ -419,7 +419,7 @@ static inline void make_task_desc(x86Desc *pDesc, int tssSegSel, int dpl)
  * @param paramCount number of stack parameters
  * @param pHandler a pointer to the call handler function
  */
-static inline void make_call_desc(x86Desc *pDesc, int segSel, int dpl, int paramCount, void *pHandler)
+static inline void make_call_gate(x86Desc *pDesc, int segSel, int dpl, int paramCount, void *pHandler)
 {
     pDesc->_value = 0;
     pDesc->call.type = DESCTYPE_CALL32;
@@ -442,7 +442,7 @@ static inline void make_call_desc(x86Desc *pDesc, int segSel, int dpl, int param
  * @param dpl interrupt Gate descriptor privilege level
  * @param pHandler a pointer to the interrupt handler function
  */
-static inline void make_intr_desc(x86Desc *pDesc, int segSel, int dpl, void *pHandler)
+static inline void make_intr_gate(x86Desc *pDesc, int segSel, int dpl, void *pHandler)
 {
     pDesc->_value = 0;
     pDesc->intr.type = DESCTYPE_INTR32;
@@ -464,7 +464,7 @@ static inline void make_intr_desc(x86Desc *pDesc, int segSel, int dpl, void *pHa
  * @param pl trap handler privilege level
  * @param handler a pointer to the trap handler function
  */
-static inline void make_trap_desc(x86Desc *pDesc, int segSel, int dpl, void *pHandler)
+static inline void make_trap_gate(x86Desc *pDesc, int segSel, int dpl, void *pHandler)
 {
     pDesc->_value = 0;
     pDesc->trap.type = DESCTYPE_TRAP32;

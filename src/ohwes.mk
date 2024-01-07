@@ -18,7 +18,7 @@ OBJCOPY    := $(PREFIX)objcopy
 
 # flags, etc.
 ARFLAGS    := -rcsv
-ASFLAGS    := -Wall -Werror -D__ASSEMBLER__
+ASFLAGS    := -Wall -Werror
 CFLAGS     := -Wall -Werror -nostdinc -ffreestanding -std=c11
 LDFLAGS    := -nostdlib
 

@@ -19,15 +19,20 @@
  * =============================================================================
  */
 
+#include <compiler.h>
 #include <stdio.h>
 #include <string.h>
 
 #include <boot.h>
 #include <os.h>
+#include <io.h>
+#include <irq.h>
+#include <interrupt.h>
 #include <test.h>
 
 extern void con_init(void);
 extern void init_cpu(void);
+extern void init_irq(void);
 
 BootInfo g_bootInfo;
 BootInfo * const g_pBootInfo = &g_bootInfo;
@@ -46,6 +51,9 @@ void kmain(const BootInfo * const pBootInfo)
 
     con_init();     // get the vga console working first
     init_cpu();     // then finish setting up the CPU.
-
+    init_irq();
     run_tests();
+
+    irq_unmask(IRQ_KEYBOARD);
+    sti();
 }
