@@ -13,9 +13,9 @@ SOURCES := \
 
 ifeq "${TEST_BUILD}" "1"
   SOURCES += \
-    test/test.c \
-    test/test_printf.c \
-    test/test_strings.c
+    test/test_libc.c \
+    test/printf_tests.c \
+    test/string_tests.c
 endif
 
 TGT_CFLAGS := -Wno-unused-function

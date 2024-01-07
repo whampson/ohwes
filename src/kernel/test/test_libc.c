@@ -11,17 +11,4 @@ bool test_libc(void)
     return pass;
 }
 
-bool run_tests(void)
-{
-    return test_libc();
-}
-
-#ifdef MAIN
-int main(int argc, char **argv)
-{
-    bool pass = run_tests();
-    return (pass) ? 0 : 1;
-}
-#endif
-
 #endif

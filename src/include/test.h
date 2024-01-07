@@ -5,7 +5,7 @@
 
 #ifdef TEST_BUILD
 
-bool run_tests(void);
+bool test_libc(void);
 
 #endif
 
