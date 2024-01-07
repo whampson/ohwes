@@ -8,7 +8,6 @@
 #include "test_libc.h"
 
 #ifdef TEST_BUILD
-bool g_PanicOnFailure = true;
 
 void testprint(const char *msg)
 {
@@ -60,10 +59,85 @@ bool test_printf()
 {
     // printf_reference();
 
+    const bool panic_on_failure = true;
     bool pass = true;
     char buf[256];
+    int ret;
 
-    // Assumes terminal works to some extent
+    // ------------------------------------------------------------------------
+    //
+    // s(n)printf tests - assumes strcmp works and terminal works to some extent
+    //
+    // ------------------------------------------------------------------------
+
+    //
+    // ugg-lee macros :)
+    //
+    {
+        #define _TEST_SPRINTF(exp_ret,exp_buf,...) \
+            ret = sprintf(buf, __VA_ARGS__); \
+            bool _pass = (ret == (exp_ret)) && (strcmp(buf, exp_buf) == 0); \
+
+        #define _TEST_SNPRINTF(exp_ret,exp_buf,n,...) \
+            ret = snprintf(buf, n, __VA_ARGS__); \
+            bool _pass = (ret == (exp_ret)) && (exp_buf == NULL || strcmp(buf, exp_buf) == 0); \
+
+        #define _TEST_CHECK(exp_ret,exp_buf,...) \
+            if (!_pass) { \
+                testprint("!! sprintf SANITY CHECK FAILED: " #__VA_ARGS__ "\n"); \
+                if (ret != (exp_ret)) { \
+                    testprint("!! return value does not match expected value of " #exp_ret "\n"); \
+                } \
+                testprint("!! \texp='" exp_buf "'\n"); \
+                testprint("!! \tgot='"); \
+                testprint(buf); \
+                testprint("'\n"); \
+            } \
+            pass &= _pass; \
+
+        #define TEST_SPRINTF(exp_ret,exp_buf,...) \
+        do { \
+            _TEST_SPRINTF(exp_ret,exp_buf,__VA_ARGS__) \
+            _TEST_CHECK(exp_ret,exp_buf,__VA_ARGS__) \
+            if (panic_on_failure && !pass) { panic("TEST FAILED!!\n"); } \
+        } while (0)
+
+        #define TEST_SNPRINTF(exp_ret,exp_buf,n,...) \
+        do { \
+            _TEST_SNPRINTF(exp_ret,exp_buf,n,__VA_ARGS__) \
+            _TEST_CHECK(exp_ret,exp_buf,__VA_ARGS__) \
+            if (panic_on_failure && !pass) { panic("TEST FAILED!!\n"); } \
+        } while (0)
+    }
+
+    //
+    // quick sprintf and snprintf buffer sanity checks - assumes strcmp works
+    //
+
+    // sprintf return value is num chars printed
+    TEST_SPRINTF(0, "", "");
+    TEST_SPRINTF(14, "Hello, world!\n", "Hello, world!\n");
+
+    // snprintf return value is num chars that would've been printed had limit
+    //   not been reached
+    TEST_SNPRINTF(0, "", 0, NULL);  // NULL ok if n==0
+    TEST_SNPRINTF(3, "a", 1, "abc");
+    TEST_SNPRINTF(3, "abc", 3, "abc");
+    TEST_SNPRINTF(3, "", 0, "abc");
+    TEST_SNPRINTF(3, "a", 1, "abc");
+
+    #undef TEST_SPRINTF
+    #undef TEST_SNPRINTF
+    #undef _TEST_SPRINTF
+    #undef _TEST_SNPRINTF
+    #undef _TEST_CHECK
+
+
+    // ------------------------------------------------------------------------
+    //
+    // printf tests - assumes snprintf works and terminal works to some extent
+    //
+    // ------------------------------------------------------------------------
 
     #define _TEST_FN(expected,...) \
         snprintf(buf, sizeof(buf), __VA_ARGS__); \
@@ -71,7 +145,7 @@ bool test_printf()
 
     #define _TEST_CHECK(expected,...) \
         if (!_pass) { \
-            testprint("!! PRINTF FAILED: " #__VA_ARGS__ "\n"); \
+            testprint("!! printf FAILED: " #__VA_ARGS__ "\n"); \
             testprint("!! \texp='" expected "'\n"); \
             testprint("!! \tgot='"); \
             testprint(buf); \
@@ -83,56 +157,60 @@ bool test_printf()
     do { \
         _TEST_FN(expected, __VA_ARGS__) \
         _TEST_CHECK(expected, __VA_ARGS__) \
-        if (g_PanicOnFailure && !pass) { panic("TEST FAILED!!\n"); } \
+        if (panic_on_failure && !pass) { panic("TEST FAILED!!\n"); } \
     } while (0)
 
     //
     // invalid format specifiers
     //
-    TEST("%q","%q");                        // unknown format char
-    TEST("%q widgets","%q widgets", 35);    // unknown format char w/ arg
-    TEST("%q widgets made in 35 days", "%q widgets made in %d days", 35, 17);   // unknown and known format char
-    TEST("%&d", "%&d");                     // known format char w/ unknown flag
-    TEST("%0&d", "%0&d");                   // known format char w/ known and unknown flags
-    TEST("%0&#.d", "%0&#.d");               // ""
-    TEST("%.-8d", "%.-8d");                 // known format char w/ invalid numeric param
-    TEST("%.-8d", "%%.-8d");                // oops! you typed a double percent
-    TEST("A %#045.123q B", "A %#045.123q B");// unknown format char, complicated
-    TEST("dfs%qwerty%,l;'p", "dfs%qwerty%,l;'p");   // straight gibberish
+    {
+        TEST("%q","%q");                        // unknown format char
+        TEST("%q widgets","%q widgets", 35);    // unknown format char w/ arg
+        TEST("%q widgets made in 35 days", "%q widgets made in %d days", 35, 17);   // unknown and known format char
+        TEST("%&d", "%&d");                     // known format char w/ unknown flag
+        TEST("%0&d", "%0&d");                   // known format char w/ known and unknown flags
+        TEST("%0&#.d", "%0&#.d");               // ""
+        TEST("%.-8d", "%.-8d");                 // known format char w/ invalid numeric param
+        TEST("%.-8d", "%%.-8d");                // oops! you typed a double percent
+        TEST("A %#045.123q B", "A %#045.123q B");// unknown format char, complicated
+        TEST("dfs%qwerty%,l;'p", "dfs%qwerty%,l;'p");   // straight gibberish
+    }
 
     //
     // string, char (%s, %c)
     //
-    TEST("",            "");                // empty
-    TEST("",            "%s", "");          // empty string using format
-    TEST("A",           "A");               // nonempty string string
-    TEST("A",           "%s", "A");         // nonempty string w/ format
-    // TEST(L"A",          "%ls", L"A");       // wide string
-    TEST("%",           "%%");              // percent signs
-    TEST("\n",          "\n");              // newline
-    TEST("A",           "%c", 'A');         // char
-    TEST("%",           "%c", '%');         // char w/ percent
-    TEST("\n",          "%c", '\n');        // char w/ newline
-    // TEST(L"A",          "%lc", L'A');       // wide char
-    TEST("a%",          "a%%");             // string w/ percent, prepend
-    TEST("%a",          "%%a");             // string w/ percent, append
-    TEST("a%",          "%c%%", 'a');       // mixed format and percent, prepend
-    TEST("%a",          "%%%c", 'a');       // mixed format and percent, append
-    TEST("ABC   ",      "%-6s", "ABC");     // left justify
-    TEST("   ABC",      "%6s", "ABC");      // right justify
-    TEST("ABC   ",      "%*s", -6, "ABC");  // left justify w/ * arg
-    TEST("   ABC",      "%*s", 6, "ABC");   // right justify w/ * arg
-    TEST("ABCDEFG",     "%3s", "ABCDEFG");  // width < length
-    TEST("abcdefghijlklmnopqrstuvwxyzABCDEFGHIJLKLMNOPQRSTUVWXYZ0123456789/*-+,./;'[]\\-=`<>?:\"{}|_+~", "abcdefghijlklmnopqrstuvwxyzABCDEFGHIJLKLMNOPQRSTUVWXYZ0123456789/*-+,./;'[]\\-=`<>?:\"{}|_+~");   // big unformatted string
-    TEST("abcdefghijlklmnopqrstuvwxyzABCDEFGHIJLKLMNOPQRSTUVWXYZ0123456789/*-+,./;'[]\\-=`<>?:\"{}|_+~", "%s", "abcdefghijlklmnopqrstuvwxyzABCDEFGHIJLKLMNOPQRSTUVWXYZ0123456789/*-+,./;'[]\\-=`<>?:\"{}|_+~");   // big formatted string
-    TEST("",            "%.s", "ABCDEFG");  // zero precision (implied)
-    TEST("",            "%.0s", "ABCDEFG"); // zero precision (explicit)
-    TEST("ABC",         "%.3s", "ABCDEFG"); // nonzero precision
-    TEST("ABCDEFG",     "%.10s", "ABCDEFG");// precision exceeds length
-    TEST("ABC",         "%.*s",3,"ABCDEFG");// precision w/ arg
-    TEST("   ABCDEFG",  "%10.*s", -3, "ABCDEFG");// negative precision (ignored)
-    TEST("   ABC",      "%*.*s", 6, 3, "ABCDEFG");  // precision & width w/ args
-    TEST("ABCDEFGHIJKLMN","%-13.14s", "ABCDEFGHIJKLMNOP");  // complicated format
+    {
+        TEST("",            "");                // empty
+        TEST("",            "%s", "");          // empty string using format
+        TEST("A",           "A");               // nonempty string string
+        TEST("A",           "%s", "A");         // nonempty string w/ format
+        // TEST(L"A",          "%ls", L"A");       // wide string
+        TEST("%",           "%%");              // percent signs
+        TEST("\n",          "\n");              // newline
+        TEST("A",           "%c", 'A');         // char
+        TEST("%",           "%c", '%');         // char w/ percent
+        TEST("\n",          "%c", '\n');        // char w/ newline
+        // TEST(L"A",          "%lc", L'A');       // wide char
+        TEST("a%",          "a%%");             // string w/ percent, prepend
+        TEST("%a",          "%%a");             // string w/ percent, append
+        TEST("a%",          "%c%%", 'a');       // mixed format and percent, prepend
+        TEST("%a",          "%%%c", 'a');       // mixed format and percent, append
+        TEST("ABC   ",      "%-6s", "ABC");     // left justify
+        TEST("   ABC",      "%6s", "ABC");      // right justify
+        TEST("ABC   ",      "%*s", -6, "ABC");  // left justify w/ * arg
+        TEST("   ABC",      "%*s", 6, "ABC");   // right justify w/ * arg
+        TEST("ABCDEFG",     "%3s", "ABCDEFG");  // width < length
+        TEST("abcdefghijlklmnopqrstuvwxyzABCDEFGHIJLKLMNOPQRSTUVWXYZ0123456789/*-+,./;'[]\\-=`<>?:\"{}|_+~", "abcdefghijlklmnopqrstuvwxyzABCDEFGHIJLKLMNOPQRSTUVWXYZ0123456789/*-+,./;'[]\\-=`<>?:\"{}|_+~");   // big unformatted string
+        TEST("abcdefghijlklmnopqrstuvwxyzABCDEFGHIJLKLMNOPQRSTUVWXYZ0123456789/*-+,./;'[]\\-=`<>?:\"{}|_+~", "%s", "abcdefghijlklmnopqrstuvwxyzABCDEFGHIJLKLMNOPQRSTUVWXYZ0123456789/*-+,./;'[]\\-=`<>?:\"{}|_+~");   // big formatted string
+        TEST("",            "%.s", "ABCDEFG");  // zero precision (implied)
+        TEST("",            "%.0s", "ABCDEFG"); // zero precision (explicit)
+        TEST("ABC",         "%.3s", "ABCDEFG"); // nonzero precision
+        TEST("ABCDEFG",     "%.10s", "ABCDEFG");// precision exceeds length
+        TEST("ABC",         "%.*s",3,"ABCDEFG");// precision w/ arg
+        TEST("   ABCDEFG",  "%10.*s", -3, "ABCDEFG");// negative precision (ignored)
+        TEST("   ABC",      "%*.*s", 6, 3, "ABCDEFG");  // precision & width w/ args
+        TEST("ABCDEFGHIJKLMN","%-13.14s", "ABCDEFGHIJKLMNOP");  // complicated format
+    }
 
     //
     // numeric limits (%d, %o, %u, %x, %X)
@@ -333,7 +411,6 @@ bool test_printf()
         TEST("123",         "%#d", 123);        // alternative representation (ignored on decimal integers)
         TEST("       +000009223372036854775807", "%+# 032.24lld", 0x7FFFFFFFFFFFFFFFLL); // big complicated format
     }
-
     {
         //
         // unsigned
@@ -352,7 +429,6 @@ bool test_printf()
         TEST("123     ",    "% -8u", 123);      // left justify, space (ignored due to unsigned)
 
     }
-
     {
         //
         // octal
@@ -368,8 +444,6 @@ bool test_printf()
         TEST("00000123",    "%#08o", 0123);     // alternative representation w/ width, zero-pad
         TEST("  000123",    "%#8.6o", 0123);    // alternative representation w/ width and precision
     }
-
-
     {
         //
         // hexadeciaml
@@ -387,8 +461,9 @@ bool test_printf()
         TEST("0XA55",       "%#X", 0xa55);      // uppercase, alternative representation
     }
 
-
     #undef TEST
+    #undef _TEST_CHECK
+    #undef _TEST_FN
 
     return pass;
 }
