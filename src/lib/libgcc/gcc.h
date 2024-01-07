@@ -13,20 +13,19 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/compiler.h
- *      Created: December 30, 2020
+ *         File: lib/libgcc/gcc.h
+ *      Created: January 7, 2024
  *       Author: Wes Hampson
  *
- * Compiler-specific stuff.
+ * Compiler-specific stuff -- macros for calling conventions, alignment,
+ * structure member packing, etc.
  * =============================================================================
  */
 
-#ifndef __COMPILER_H
-#define __COMPILER_H
+#ifndef __GCC_H
+#define __GCC_H
 
 #ifdef __GNUC__     // GCC
-
-#include <stdint.h>
 
 /**
  * 'fastcall' calling convention.
@@ -64,4 +63,4 @@
 #error "Please compile using GCC."
 #endif  /* __GNUC__ */
 
-#endif /* __COMPILER_H */
+#endif /* __GCC_H */

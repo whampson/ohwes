@@ -1,4 +1,4 @@
-# include dirs, relative to the project root for some reason
+# includes
 INCDIRS    := src/include
 
 # OS modules
@@ -20,6 +20,7 @@ OBJCOPY    := $(PREFIX)objcopy
 ARFLAGS    := -rcsv
 ASFLAGS    := -Wall -Werror
 CFLAGS     := -Wall -Werror -nostdinc -ffreestanding -std=c11
+CFLAGS     += -include src/lib/libgcc/gcc.h    # automatically include GCC stuff
 LDFLAGS    := -nostdlib
 
 ifeq "${DEBUG}" "1"
@@ -40,4 +41,11 @@ endef
 define make-sys
   $(call raw-bin,${TARGET_DIR}/${TARGET},${TARGET_DIR}/$1)
   $(eval TGT_POSTCLEAN += ${RM} ${TARGET_DIR}/$1)
+endef
+
+# Add libraries to link against for the current module.
+#   1 - list of objects to link against, relative to TARGET_DIR
+define add-linklibs
+  $(eval TGT_PREREQS += $1)
+  $(eval TGT_LDLIBS  += $(addprefix ${TARGET_DIR}/,$1))
 endef

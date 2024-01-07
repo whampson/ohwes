@@ -2,13 +2,11 @@
 DEBUG      := 1
 DEBUGOPT   := 1
 DEBUGFLAGS := -DDEBUG -g
-
 TEST_BUILD := 1
 
 ifeq "${TEST_BUILD}" "1"
   DEBUGFLAGS += -DTEST_BUILD
 endif
-
 ifeq "${DEBUGOPT}" "1"
   DEBUGFLAGS += -Og
 endif
@@ -69,6 +67,5 @@ debug: img
 debug-boot: img
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG} debug-boot
 
-# destroy everything!!!
 nuke:
 	${RM} -r ${TARGET_DIR} ${BUILD_DIR}
