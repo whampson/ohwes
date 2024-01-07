@@ -13,30 +13,33 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/stdio.h
- *      Created: January 3, 2024
+ *         File: lib/libc/stdio.c
+ *      Created: January 4, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __STDIO_H
-#define __STDIO_H
+#include <stdio.h>
+#include <console.h>
 
-#ifndef __SIZE_T_DEFINED
-#define __SIZE_T_DEFINED
-typedef __typeof__(sizeof(int)) size_t;
-#endif
+void stdout_fn(char c)
+{
+    con_write(c);
+}
 
-#ifndef __NULL_DEFINED
-#define __NULL_DEFINED
-#define NULL ((void*)0)
-#endif
+int putchar(int c)
+{
+    // TODO: write to stdout, return EOF on error
+    stdout_fn(c);
+    return c;
+}
 
-int putchar(int c);
-int puts(const char *str);
-
-int printf(const char *format, ...);
-int sprintf(char *buffer, const char *format, ...);
-int snprintf(char *buffer, size_t bufsz, const char *format, ...);
-
-#endif // __STDIO_H
+int puts(const char *str)
+{
+    // TODO: write to stdout, return EOF on error
+    while (*str) {
+        stdout_fn(*str++);
+    }
+    stdout_fn('\n');
+    return 1;
+}

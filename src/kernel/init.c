@@ -29,6 +29,7 @@
 #include <io.h>
 #include <interrupt.h>
 #include <os.h>
+#include <test.h>
 
 #define OS_NAME_STRING      "OHWES"
 #define OS_VERSION_STRING   "0.1"
@@ -36,22 +37,11 @@
 
 #define BootPrint(...)  printf("boot: " __VA_ARGS__)
 
-extern bool run_tests(void);
 extern void con_init(void);
 extern void init_cpu(void);
 
 BootInfo g_bootInfo;
 BootInfo * const g_pBootInfo = &g_bootInfo;
-
-void test_klibc()
-{
-#ifdef TEST_BUILD
-    bool pass = run_tests();
-    if (!pass) {
-        panic("tests failed!");
-    }
-#endif
-}
 
 void print_memmap(void)
 {
@@ -83,6 +73,16 @@ void print_memmap(void)
     } while ((memMap++)->type != ACPI_MMAP_TYPE_INVALID);
 }
 
+void tests()
+{
+#ifdef TEST_BUILD
+    bool pass = run_tests();
+    if (!pass) {
+        panic("tests failed!");
+    }
+#endif
+}
+
 __fastcall
 void kmain(const BootInfo * const pBootInfo)
 {
@@ -90,20 +90,7 @@ void kmain(const BootInfo * const pBootInfo)
 
     con_init();     // get the vga console working first
     init_cpu();     // then finish setting up the CPU.
+    // print_memmap();
 
-    test_klibc();   // run some tests on the kernel runtime library
-
-    print_memmap();
-
-    printf("INT8_MIN = %d\n", INT8_MIN);
-    printf("INT_LEAST8_MIN = %d\n", INT_LEAST8_MIN);
-    printf("INT8_MIN = %d\n", INT8_MAX);
-    printf("INT_LEAST8_MIN = %d\n", INT_LEAST8_MAX);
-
-    volatile int x = 3;
-    assert(x == 3);
-    assert(x == 4);
-
-    (void) x;
-
+    tests();
 }

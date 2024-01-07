@@ -159,51 +159,52 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
 
         parse = true;
         while (parse) {
+            bool match = true;
             switch (c) {
                 case 'h':
                     if (length == L_DEFAULT) {
                         length = L_H;
-                        break;
                     }
                     else if (length == L_H) {
                         length = L_HH;
+                        parse = false;
                     }
-                    parse = false;
                     break;
                 case 'l':
                     if (length == L_DEFAULT) {
                         length = L_L;
-                        break;
                     }
                     else if (length == L_L) {
                         length = L_LL;
+                        parse = false;
                     }
-                    parse = false;
                     break;
                 case 'j':
                     if (length == L_DEFAULT) {
                         length = L_J;
+                        parse = false;
                     }
-                    parse = false;
                     break;
                 case 'z':
                     if (length == L_DEFAULT) {
                         length = L_Z;
+                        parse = false;
                     }
-                    parse = false;
                     break;
                 case 't':
                     if (length == L_DEFAULT) {
                         length = L_T;
+                        parse = false;
                     }
+                    break;
+                default:
                     parse = false;
+                    match = false;
                     break;
             }
-            if (length != L_DEFAULT && *format != '\0') {
+
+            if (match) {
                 c = *format++;
-            }
-            else {
-                parse = false;
             }
         }
 

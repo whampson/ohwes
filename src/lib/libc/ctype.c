@@ -93,7 +93,6 @@ int isxdigit(int c)
         || (c >= 'a' && c <= 'f');
 }
 
-
 int tolower(int c)
 {
     if (isupper(c)) {

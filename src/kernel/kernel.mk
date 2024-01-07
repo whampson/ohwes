@@ -10,7 +10,13 @@ SOURCES := \
     init.c \
     irq.c \
     vga.c \
-    test.c \
+
+ifeq "${TEST_BUILD}" "1"
+  SOURCES += \
+    test/test.c \
+    test/test_printf.c \
+    test/test_strings.c
+endif
 
 TGT_CFLAGS := -Wno-unused-function
 
@@ -27,10 +33,6 @@ TGT_LDLIBS  += \
     ${TARGET_DIR}/lib/libgcc.a \
 
 TGT_PREREQS += lib/libgcc.a
-
-ifeq "${TEST_BUILD}" "1"
-  TGT_CFLAGS += -DTEST_BUILD
-endif
 
 TGT_POSTMAKE := $(call make-sys,${TARGETSYS})
 # TODO: do this automatically when TARGETSYS is set?

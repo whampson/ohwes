@@ -14,15 +14,9 @@
  * SOFTWARE.
  * -----------------------------------------------------------------------------
  *         File: include/string.h
- *      Created: December 13, 2020
+ *      Created: January 3, 2024
  *       Author: Wes Hampson
- *       Module: C Standard Library (C99)
  * =============================================================================
- */
-
-/**
- * Status: INCOMPLETE
- * https://en.cppreference.com/w/c/string/byte
  */
 
 #ifndef __STRING_H
@@ -38,34 +32,13 @@ typedef __typeof__(sizeof(int)) size_t;
 #define NULL ((void*)0)
 #endif
 
-void * memmove(void *dest, const void *src, size_t n);
-void * memcpy(void *dest, const void *src, size_t n);
-char * strcpy(char *dest, const char *src);
-char * strncpy(char *dest, const char *src, size_t n);
+void * memcpy(void *restrict dest, const void *restrict src, size_t count);
+void * memmove(void *dest, const void *src, size_t count);
+void * memset(void *dest, char c, size_t count);
+int memcmp(const void *lhs, const void *rhs, size_t count);
 
-// char * strcat(char *dst, const char *src);
-// char * strncat(char *dst, const char *src, size_t n);
-
-int memcmp(const void *ptr1, const void *ptr2, size_t n);
-int strcmp(const char *str1, const char *str2);
-int strncmp(const char *str1, const char *str2, size_t n);
-
-// int strcoll(const char *str1, const char *str2);
-// int strxfrm(char *dest, const char *src, size_t n);
-
-// void * memchr(const void *ptr, int value, size_t n);
-// char * strchr(const char *str, int ch);
-// char * strrchr(const char *str, int ch);
-// size_t strspn(const char *str1, const char *str2);
-// size_t strcspn(const char *str1, const char *str2);
-// char * strpbrk(const char *str1, const char *str2);
-// char * strstr(const char *str1, const char *str2);
-// char * strtok(char *str, const char *delim);
-
-void * memset(void *dest, int c, size_t n);
 
 size_t strlen(const char *str);
+int strcmp(const char *lhs, const char *rhs);
 
-// char * strerror(int errnum);
-
-#endif /* __STRING_H */
+#endif // __STRING_H

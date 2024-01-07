@@ -1,9 +1,14 @@
+
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <os.h>
+#include "test_libc.h"
 
 #ifdef TEST_BUILD
+bool g_PanicOnFailure = true;
 
 void testprint(const char *msg)
 {
@@ -39,7 +44,6 @@ void printf_reference()
     //
     // not supported:
     //
-
     // printf("Floating point:\n");
     // printf("\tRounding:\t%f %.0f %.32f\n", 1.5, 1.5, 1.3);
     // printf("\tPadding:\t%05.2f %.2f %5.2f\n", 1.5, 1.5, 1.5);
@@ -47,14 +51,14 @@ void printf_reference()
     // printf("\tHexadecimal:\t%a %A\n", 1.5, 1.5);
     // printf("\tSpecial values:\t0/0=%g 1/0=%g\n", 0.0/0.0, 1.0/0.0);
 
-    // printf("Fixed-width types:\n");
-    // printf("\tLargest 32-bit value is %" PRIu32 " or %#" PRIx32 "\n",
-    //                                     UINT32_MAX,     UINT32_MAX );
+    printf("Fixed-width types:\n");
+    printf("\tLargest 32-bit value is %" PRIu32 " or %#" PRIx32 "\n",
+                                     UINT32_MAX,     UINT32_MAX );
 }
 
 bool test_printf()
 {
-    printf_reference();
+    // printf_reference();
 
     bool pass = true;
     char buf[256];
@@ -79,6 +83,7 @@ bool test_printf()
     do { \
         _TEST_FN(expected, __VA_ARGS__) \
         _TEST_CHECK(expected, __VA_ARGS__) \
+        if (g_PanicOnFailure && !pass) { panic("TEST FAILED!!\n"); } \
     } while (0)
 
     //
@@ -323,7 +328,7 @@ bool test_printf()
         TEST("        ",    "%08.0d", 0);       // zero precision on zero w/ width, zero-pad (ignored)
         TEST("123",         "%.3d", 123);       // equal precision
         TEST("123",         "%.1d", 123);       // small precision
-        TEST("00000000",    "%.8d", 0);       // precision on zero
+        TEST("00000000",    "%.8d", 0);         // precision on zero
         TEST("  00000123",  "%*.*d",10,8,123);  // width & precision w/ arg
         TEST("123",         "%#d", 123);        // alternative representation (ignored on decimal integers)
         TEST("       +000009223372036854775807", "%+# 032.24lld", 0x7FFFFFFFFFFFFFFFLL); // big complicated format
@@ -387,20 +392,5 @@ bool test_printf()
 
     return pass;
 }
-
-bool run_tests(void)
-{
-    bool pass = true;
-    pass &= test_printf();
-    return pass;
-}
-
-#ifdef MAIN
-int main(int argc, char **argv)
-{
-    bool pass = run_tests();
-    return (pass) ? 0 : 1;
-}
-#endif
 
 #endif // TEST_BUILD
