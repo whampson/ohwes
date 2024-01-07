@@ -19,23 +19,12 @@
  * =============================================================================
  */
 
-#include <assert.h>
-#include <stdarg.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #include <boot.h>
-#include <io.h>
-#include <interrupt.h>
 #include <os.h>
 #include <test.h>
-
-#define OS_NAME_STRING      "OHWES"
-#define OS_VERSION_STRING   "0.1"
-#define OS_COPYRIGHT_STRING "(C) 2020-2023 Wes Hampson. All Rights Reserved."
-
-#define BootPrint(...)  printf("boot: " __VA_ARGS__)
 
 extern void con_init(void);
 extern void init_cpu(void);
@@ -43,42 +32,12 @@ extern void init_cpu(void);
 BootInfo g_bootInfo;
 BootInfo * const g_pBootInfo = &g_bootInfo;
 
-void print_memmap(void)
+static void run_tests(void)
 {
-    const AcpiMemoryMapEntry *memMap = g_pBootInfo->pMemoryMap;
-    if (!g_pBootInfo->pMemoryMap) {
-        BootPrint("ACPI memory map not found!\n");
-        return;
-    }
-
-    do {
-        char buf[64];
-        char *p = buf;
-        if (memMap->length > 0) {
-            int n = snprintf(buf, sizeof(buf), "BIOS-E820h: %08x-%08x ",
-                (uint32_t) memMap->base,
-                (uint32_t) memMap->base + memMap->length - 1);
-            p = &buf[n];
-            size_t s = sizeof(buf) - (p - buf);
-            switch (memMap->type) {
-                case ACPI_MMAP_TYPE_USABLE:     snprintf(p, s, "usable"); break;
-                case ACPI_MMAP_TYPE_RESERVED:   snprintf(p, s, "reserved"); break;
-                case ACPI_MMAP_TYPE_ACPI:       snprintf(p, s, "ACPI"); break;
-                case ACPI_MMAP_TYPE_ACPI_NVS:   snprintf(p, s, "ACPI NV"); break;
-                case ACPI_MMAP_TYPE_BAD:        snprintf(p, s, "bad"); break;
-                default:                        snprintf(p, s, "reserved (%d)", memMap->type); break;
-            }
-            BootPrint("%s\n", buf);
-        }
-    } while ((memMap++)->type != ACPI_MMAP_TYPE_INVALID);
-}
-
-void tests()
-{
-#ifdef TEST_BUILD
-    bool pass = run_tests();
+#if TEST_BUILD
+    bool pass = test_libc();
     if (!pass) {
-        panic("tests failed!");
+        panic("TESTS FAILED!!");
     }
 #endif
 }
@@ -90,7 +49,6 @@ void kmain(const BootInfo * const pBootInfo)
 
     con_init();     // get the vga console working first
     init_cpu();     // then finish setting up the CPU.
-    // print_memmap();
 
-    tests();
+    run_tests();
 }
