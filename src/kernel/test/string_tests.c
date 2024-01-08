@@ -128,42 +128,60 @@ void test_memmove(void)
     //
 
     char buf[64];
+    char tmpbuf[32];
     char *src;
     char *dst;
     const int count = 32;
 
-    #define TEST(x,y) \
+    //
+    // initialize buffer to descending ASCII chars;
+    // initialize source and temp buffer to ascending ascii chars;
+    // memmove src to test, buffers potentially overlap;
+    // verify that dest buffer matches temp buffer
+    //
+    #define TEST(d,s) \
     do { \
-        src = &buf[x]; \
-        dst = &buf[y]; \
-        memset(buf, '-', sizeof(buf)); \
-        memset(src, 'a', count); \
+        dst = &buf[d]; \
+        src = &buf[s]; \
+        for (int i = 0; i < count; i++) { \
+            dst[i] = ' ' + (count - i - 1); \
+        } \
+        for (int i = 0; i < count; i++) { \
+            src[i] = tmpbuf[i] = ' ' + i; \
+        } \
         VERIFY_ARE_EQUAL(dst, memmove(dst, src, count)); \
         for (int i = 0; i < count; i++) { \
-            VERIFY_ARE_EQUAL(dst[i], 'a'); \
+            VERIFY_ARE_EQUAL(dst[i], tmpbuf[i]); \
         } \
     } while (0)
 
     //
     // non-overlapping buffers (memcpy)
-    // ++++++++
-    //         --------
+    // dst:         --------
+    // src: ++++++++
+    //
+    TEST(32, 0);
+
+    //
+    // non-overlapping buffers (memcpy)
+    // dst: --------
+    // src:         ++++++++
     //
     TEST(0, 32);
 
     //
-    // overlap from left
-    // ++++++++
-    //     --------
+    // overlap from right
+    // dst:   --------
+    // src: ++++++++
     //
-    TEST(0, 16);
+    TEST(8, 0);
 
     //
-    // overlap from right
-    //     ++++++++
-    // --------
+    // overlap from left
+    // dst: --------
+    // src:   ++++++++
     //
-    TEST(16, 0);
+    TEST(0, 8);
 
     #undef TEST
 }

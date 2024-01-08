@@ -42,19 +42,20 @@ void * memmove(void *dest, const void *src, size_t count)
         return dest;
     }
 
-    // right overlap, copy backwards from tail
+    // left overlap, copy forwards from head
     if (dest < src && dest + count > src) {
-        d += count; s += count;
         while (count--) {
-            *--d = *--s;    // evil
+            *d++ = *s++;
         }
+
         return dest;
     }
 
-    // left overlap, copy forwards from head
+    // right overlap, copy backwards from tail
     else if (src < dest && src + count > dest) {
+        d += count; s += count;
         while (count--) {
-            *d++ = *s++;
+            *--d = *--s;    // evil
         }
         return dest;
     }
