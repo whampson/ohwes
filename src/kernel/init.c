@@ -29,7 +29,8 @@
 #include <test.h>
 #include <x86.h>
 
-extern void con_init(void);
+extern void init_vga(void);
+extern void init_console(void);
 extern void init_cpu(const struct bootinfo * const info);
 extern void init_irq(void);
 
@@ -51,10 +52,17 @@ static void run_tests(void)
 // 0x10000-(EBDA ): kernel and system
 
 __fastcall
-void kmain(const struct bootinfo * const info)
+void kmain(const struct bootinfo * const bootinfo)
 {
-    con_init();
-    init_cpu(info);
+    struct bootinfo info;
+    memcpy(&info, bootinfo, sizeof(struct bootinfo));
+
+    init_vga();
+    init_console();
+    init_cpu(&info);
     init_irq();
     run_tests();
+
+    irq_unmask(IRQ_KEYBOARD);
+    sti();
 }

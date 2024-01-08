@@ -444,7 +444,7 @@ int printf(const char *format, ...)
     va_list args;
 
     va_start(args, format);
-    int nwritten = _doprintf(format, &args, con_write);
+    int nwritten = _doprintf(format, &args, console_write);
     va_end(args);
 
     return nwritten;
@@ -452,7 +452,7 @@ int printf(const char *format, ...)
 
 int vprintf(const char *format, va_list args)
 {
-    return _doprintf(format, &args, con_write);
+    return _doprintf(format, &args, console_write);
 }
 
 /**

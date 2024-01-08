@@ -1,179 +1,68 @@
-// /* =============================================================================
-//  * Copyright (C) 2020-2023 Wes Hampson. All Rights Reserved.
-//  *
-//  * This file is part of the OH-WES Operating System.
-//  * OH-WES is free software; you may redistribute it and/or modify it under the
-//  * terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
-//  *
-//  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-//  * SOFTWARE.
-//  * -----------------------------------------------------------------------------
-//  *         File: kernel/console.c
-//  *      Created: March 26, 2023
-//  *       Author: Wes Hampson
-//  * =============================================================================
-//  */
-
-// #include <sys/console.h>
-// #include <sys/vga.h>
-
-// char * const g_VgaBuf = (char * const) 0xB8000;
-
-// uint16_t console_get_cursor()
-// {
-//     uint8_t cursorLocHi, cursorLocLo;
-//     cursorLocHi = vga_crtc_read(VGA_REG_CRTC_CL_HI);
-//     cursorLocLo = vga_crtc_read(VGA_REG_CRTC_CL_LO);
-
-//     return (cursorLocHi << 8) | cursorLocLo;
-// }
-
-// void console_set_cursor(uint16_t pos)
-// {
-//     vga_crtc_write(VGA_REG_CRTC_CL_HI, pos >> 8);
-//     vga_crtc_write(VGA_REG_CRTC_CL_LO, pos & 0xFF);
-// }
-
-// void console_write(char c)
-// {
-//     uint16_t pos = console_get_cursor();
-
-//     switch (c)
-//     {
-//         case '\r':
-//             pos -= (pos % 80);
-//             break;
-//         case '\n':
-//             pos += (80 - (pos % 80));   // TODO: CRLF vs LF
-//             break;
-
-//         default:
-//             g_VgaBuf[(pos++) << 1] = c;
-//             break;
-//     }
-
-//     console_set_cursor(pos);
-// }
-
-/*============================================================================*
- * Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                  *
- *                                                                            *
- * This file is part of the OHWES Operating System.                           *
- * OHWES is free software; you may redistribute it and/or modify it under the *
- * terms of the license agreement provided with this software.                *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- *============================================================================*
- *    File: kernel/console.c                                                  *
- * Created: December 13, 2020                                                 *
- *  Author: Wes Hampson                                                       *
- *============================================================================*/
-
-#ifndef __ASCII_H
-#define __ASCII_H
-
-/**
- * ASCII Control Characters
+/* =============================================================================
+ * Copyright (C) 2020-2023 Wes Hampson. All Rights Reserved.
+ *
+ * This file is part of the OH-WES Operating System.
+ * OH-WES is free software; you may redistribute it and/or modify it under the
+ * terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ * -----------------------------------------------------------------------------
+ *         File: kernel/console.c
+ *      Created: March 26, 2023
+ *       Author: Wes Hampson
+ * =============================================================================
  */
-enum ascii_cntl
-{
-    ASCII_NUL,          /* Null */
-    ASCII_SOH,          /* Start of Heading */
-    ASCII_STX,          /* Start of Text */
-    ASCII_ETX,          /* End of Text */
-    ASCII_EOT,          /* End of Transmission */
-    ASCII_ENQ,          /* Enquiry */
-    ASCII_ACK,          /* Acknowledgement */
-    ASCII_BEL,          /* Bell */
-    ASCII_BS,           /* Backspace */
-    ASCII_HT,           /* Horizontal Tab */
-    ASCII_LF,           /* Line Feed */
-    ASCII_VT,           /* Vertical Tab */
-    ASCII_FF,           /* Form Feed */
-    ASCII_CR,           /* Carriage Return */
-    ASCII_SO,           /* Shift Out */
-    ASCII_SI,           /* Shift In */
-    ASCII_DLE,          /* Data Link Escape */
-    ASCII_DC1,          /* Device Control 1 (XON) */
-    ASCII_DC2,          /* Device Control 2 */
-    ASCII_DC3,          /* Device Control 3 (XOFF) */
-    ASCII_DC4,          /* Device Control 4 */
-    ASCII_NAK,          /* Negative Acknowledgement */
-    ASCII_SYN,          /* Synchronous Idle */
-    ASCII_ETB,          /* End of Transmission Block */
-    ASCII_CAN,          /* Cancel */
-    ASCII_EM,           /* End of Medium */
-    ASCII_SUB,          /* Substitute */
-    ASCII_ESC,          /* Escape */
-    ASCII_FS,           /* File Separator */
-    ASCII_GS,           /* Group Separator */
-    ASCII_RS,           /* Record Separator */
-    ASCII_US,           /* Unit Separator */
-    ASCII_DEL = 0x7F    /* Delete */
-};
 
-#endif /* __ASCII_H */
-
-// #include <ascii.h>
+#include <assert.h>
+#include <console.h>
 #include <ctype.h>
 #include <string.h>
 #include <vga.h>
-#include <console.h>
 #include <x86.h>
 
-#define DEFAULT_FG          VGA_WHT
-#define DEFAULT_BG          VGA_BLK
-#define CURSOR_DEFAULT      0x0E0D
-#define CURSOR_BLOCK        0x0F00
-#define BLANK_CHAR          ' '
-#define CSIPARAM_DEFAULT    (-1)
-
-#define m_initialized   (consoles[curr_con].initialized)
-#define m_cols          (consoles[curr_con].cols)
-#define m_rows          (consoles[curr_con].rows)
-#define m_framebuf      ((struct vga_cell *) consoles[curr_con].framebuf)
-#define m_tabstop       (consoles[curr_con].tabstop)
-#define m_csiparam      (consoles[curr_con].csiparam)
-#define m_paramidx      (consoles[curr_con].paramidx)
-#define m_currparam     (m_csiparam[m_paramidx])
-#define m_disp          (consoles[curr_con].disp)
-#define m_attr          (consoles[curr_con].attr)
-#define m_attr_default  (consoles[curr_con].attr_default)
-#define m_cursor        (consoles[curr_con].cursor)
-#define m_saved         (consoles[curr_con].saved)
-#define m_defaults      (consoles[curr_con].defaults)
-#define m_state         (consoles[curr_con].state)
+#define NUM_CONSOLES    1
 
 static struct console consoles[NUM_CONSOLES] = { 0 };
-static int curr_con = 0;
+static int active_cons = 0;
 
-static const char CSI_COLORS[8] =
-{
-    VGA_BLK,
-    VGA_RED,
-    VGA_GRN,
-    VGA_BRN,
-    VGA_BLU,
-    VGA_MGT,
-    VGA_CYN,
-    VGA_WHT
-};
+//
+// This is totally something I yoinked from Linux. It allows for n consoles and
+// uses clever yet slightly evil macros which allow member access to the active
+// console in the console array. I don't know if I'll keep it but for now it'll
+// do.
+//
+#define m_initialized   (consoles[active_cons].initialized)
+#define m_cols          (consoles[active_cons].cols)
+#define m_rows          (consoles[active_cons].rows)
+#define m_framebuf      ((struct vga_cell *) consoles[active_cons].framebuf)
+#define m_tabstop       (consoles[active_cons].tabstop)
+#define m_csiparam      (consoles[active_cons].csiparam)
+#define m_paramidx      (consoles[active_cons].paramidx)
+#define m_currparam     (m_csiparam[m_paramidx])
+#define m_disp          (consoles[active_cons].disp)
+#define m_attr          (consoles[active_cons].attr)
+#define m_attr_default  (consoles[active_cons].attr_default)
+#define m_cursor        (consoles[active_cons].cursor)
+#define m_saved         (consoles[active_cons].saved)
+#define m_defaults      (consoles[active_cons].defaults)
+#define m_state         (consoles[active_cons].state)
 
-static void defaults(struct console *con);
-static void save(void);
-static void restore(void);
+#define CURSOR_SHAPE_UNDERLINE  0x0E0D
+#define CURSOR_SHAPE_BLOCK      0x0F00
+#define BLANK                   ' '
+#define DEFAULT_CSIPARAM        (-1)
+
+static void defaults(struct console *cons);
+static void save_state(void);
+static void restore_state(void);
 static void reset(void);
+static void beep(void);
 static void esc(char c);
 static void csi(char c);
 static void csi_m(char p);
@@ -186,7 +75,6 @@ static void scroll(int n);
 static void erase(int mode);
 static void erase_ln(int mode);
 static void set_vga_attr(struct vga_attr *a);
-static void update_vga_attr(int pos);
 static void cursor_up(int n);
 static void cursor_down(int n);
 static void cursor_left(int n);
@@ -196,165 +84,169 @@ static void cursor_restore(void);
 static void read_cursor(void);
 static void write_cursor(void);
 static void pos2xy(int pos, int *x, int *y);
-static int xy2pos(int x, int y);
+static int  xy2pos(int x, int y);
 
-
-
-void con_init(void)
+static void _direct_write(char *str)
 {
-    vga_init();
+    while (*str != '\0') {
+        console_write(*str++);
+    }
+}
 
-    curr_con = 0;
-    defaults(&consoles[curr_con]);
+void init_console(void)
+{
+    for (int i = 0; i < NUM_CONSOLES; i++) {
+        defaults(&consoles[i]);
+    }
+
+    active_cons = 0;
     read_cursor();
-    save();
-    con_write('\r');
-    con_write('\n');
+    save_state();
+    _direct_write("\r\n");
     m_initialized = true;
 }
 
-void con_reset(void)
+void console_reset(void)
 {
     reset();
 }
 
-void con_save(void)
+void console_save(void)
 {
-    save();
+    save_state();
 }
 
-void con_restore(void)
+void console_restore(void)
 {
-    restore();
+    restore_state();
 }
 
-void con_cursor_save(void)
+void console_save_cursor(void)
 {
     cursor_save();
 }
 
-void con_cursor_restore(void)
+void console_restore_cursor(void)
 {
     cursor_restore();
 }
 
-static void defaults(struct console *con)
+static void defaults(struct console *cons)
 {
-    con->cols = VGA_TEXT_COLS;
-    con->rows = VGA_TEXT_ROWS;
-    con->framebuf = (char *) /*VGA_FRAMEBUF_COLOR*/ 0xB8000;
-    con->disp.blink_on = false;
-    con->attr.bg = DEFAULT_BG;
-    con->attr.fg = DEFAULT_FG;
-    con->attr.bright = false;
-    con->attr.faint = false;
-    con->attr.italic = false;
-    con->attr.underline = false;
-    con->attr.blink = false;
-    con->attr.invert = false;
-    con->cursor.x = 0;
-    con->cursor.y = 0;
-    con->cursor.shape = CURSOR_DEFAULT;
-    con->cursor.hidden = false;
-    con->defaults.attr = con->attr;
-    con->defaults.cursor = con->cursor;
-    con->state = S_NORM;
-    con->paramidx = 0;
-    memset(con->csiparam, CSIPARAM_DEFAULT, MAX_CSIPARAMS);
+    cons->cols = VGA_COLS;
+    cons->rows = VGA_ROWS;
+    cons->framebuf = (void *) VGA_FRAMEBUF;
+    cons->disp.blink_on = false;
+    cons->attr.bg = VGA_BLACK;
+    cons->attr.fg = VGA_WHITE;
+    cons->attr.bright = false;
+    cons->attr.faint = false;
+    cons->attr.italic = false;
+    cons->attr.underline = false;
+    cons->attr.blink = false;
+    cons->attr.invert = false;
+    cons->cursor.x = 0;
+    cons->cursor.y = 0;
+    cons->cursor.shape = CURSOR_SHAPE_UNDERLINE;
+    cons->cursor.hidden = false;
+    cons->defaults.attr = cons->attr;
+    cons->defaults.cursor = cons->cursor;
+    cons->state = S_NORM;
+    cons->paramidx = 0;
+    memset(cons->csiparam, DEFAULT_CSIPARAM, MAX_CSIPARAMS);
     for (int i = 0; i < MAX_TABSTOPS; i++) {
-        m_tabstop[i] = (((i + 1) % 8) == 0);
+        m_tabstop[i] = (((i + 1) % TABSTOP_WIDTH) == 0);
     }
 }
 
-void con_write(char c)
+void console_write(char c)
 {
     uint32_t flags;
-
     cli_save(flags);
+
     read_cursor();
     int pos = xy2pos(m_cursor.x, m_cursor.y);
+
     bool update_char = false;
     bool update_attr = false;
-    bool update_curs = true;
-    bool needs_crlf = false;
+    bool update_cursor = true;
+    bool need_crlf = false;
 
-    /* CRNL conversion */
-    /* TODO: move this elsewhere, along with other output formatting */
+    // ONLCR conversion (newline to carriage return-newline)
     if (c == '\n') cr();
 
-    if (iscntrl(c)) {
-        goto cntrl;
+    // handle escape sequences if not a control character
+    if (!iscntrl(c)) {
+        switch (m_state) {
+            case S_ESC:
+                esc(c);
+                goto update;
+            case S_CSI:
+                csi(c);
+                goto update;
+            case S_NORM:
+                break;
+            default:
+                assert(!"invalid console state!");
+        }
     }
 
-    switch (m_state)
-    {
-        case S_ESC:
-            esc(c);
+    // control characters
+    switch (c) {
+        case '\a':      // ^G - BEL - beep!
+            beep();
             break;
-
-        case S_CSI:
-            csi(c);
+        case '\b':      // ^H - BS - backspace
+            if (m_cursor.x > 0) pos--;
+            bs();
+            __fallthrough;
+        case ASCII_DEL: // ^? - DEL - delete         TODO: remove?
+            c = BLANK;
+            update_char = true;
+            update_attr = true;
             break;
+        case '\t':      // ^I - HT - horizonal tab
+            tab();
+            break;
+        case '\n':      // ^J - LF - line feed
+        case '\v':      // ^K - VT - vertical tab
+        case '\f':      // ^L - FF - form feed
+            lf();
+            break;
+        case '\r':      // ^M - CR -  carriage return
+            cr();
+            break;
+        case ASCII_CAN: // ^X - CAN - cancel escape sequence    TODO: also ^Z?
+            m_state = S_NORM;
+            goto done;
+        case '\e':      // ^[ - ESC - start escape sequence
+            m_state = S_ESC;
+            goto done;
 
-    cntrl:
+    // everything else
         default:
-            switch (c)
-            {
-                case ASCII_BEL:     /* ^G   beep! */
-                    /*beep();*/
-                    break;
-                case ASCII_BS:      /* ^H   backspace char */
-                    if (m_cursor.x > 0) pos--;
-                    bs();
-                    c = BLANK_CHAR;
-                    update_char = true;
-                    update_attr = true;
-                    break;
-                case ASCII_HT:      /* ^I   horizonal tab */
-                    tab();
-                    break;
-                case ASCII_LF:      /* ^J   line feed */
-                case ASCII_VT:      /* ^K   vertical tab */
-                case ASCII_FF:      /* ^L   form feed */
-                    lf();
-                    break;
-                case ASCII_CR:      /* ^M   carriage return */
-                    cr();
-                    break;
-                case ASCII_CAN:     /* ^X   abort escape sequence */
-                    m_state = S_NORM;
-                    goto done;
-                case ASCII_ESC:     /* ^[   start escape sequence */
-                    m_state = S_ESC;
-                    goto done;
-                case ASCII_DEL:     /* ^?   delete char */
-                    c = BLANK_CHAR;
-                    update_char = true;
-                    update_attr = true;
-                    break;
-                default:
-                    if (iscntrl(c)) {
-                        goto done;
-                    }
-                    update_char = true;
-                    update_attr = true;
-                    if (++m_cursor.x >= m_cols) {
-                        needs_crlf = true;
-                    }
-                    break;
+            if (iscntrl(c)) {
+                goto done;
             }
+            update_char = true;
+            update_attr = true;
+            if (++m_cursor.x >= m_cols) {
+                need_crlf = true;
+            }
+            break;
     }
 
+update:
     if (update_char) {
         m_framebuf[pos].ch = c;
     }
     if (update_attr) {
-        update_vga_attr(pos);
+        set_vga_attr(&m_framebuf[pos].attr);
     }
-    if (needs_crlf) {
+    if (need_crlf) {
         cr(); lf();
     }
-    if (update_curs) {
+    if (update_cursor) {
         write_cursor();
     }
 
@@ -364,52 +256,65 @@ done:
 
 static void esc(char c)
 {
+    //
+    // Escape Sequences
+    //
+    // https://www.man7.org/linux/man-pages/man4/console_codes.4.html
+    // https://en.wikipedia.org/wiki/C0_and_C1_control_codes#C1_controls
+    //
     switch (c) {
-        case '3':       /* ESC 3    disable blink */
-            m_disp.blink_on = false;
-            vga_disable_blink();
-            break;
-        case '4':       /* ESC 4    enable blink */
-            m_disp.blink_on = true;
-            vga_enable_blink();
-            break;
-        case '5':       /* ESC 5    hide cursor */
-            m_cursor.hidden = true;
-            vga_hide_cursor();
-            break;
-        case '6':       /* ESC 6    show cursor */
-            m_cursor.hidden = false;
-            vga_show_cursor();
-            break;
-        case '7':       /* ESC 7    save console */
-            save();
-            break;
-        case '8':       /* ESC 8    restore console */
-            restore();
-            break;
-        case 'c':       /* ESC c    reset console */
-            reset();
-            break;
-        case 'E':       /* ESC E    newline (CRLF) */
+        //
+        // C1 sequences
+        //
+        case 'D':       // ESC D - IND - linefeed (LF)
             cr(); lf();
             break;
-        case 'I':       /* ESC I    reverse line feed */
-            r_lf();
+        case 'E':       // ESC E - NEL - newline (CRLF)
+            cr(); lf();
             break;
-        case 'M':       /* ESC M    line feed (LF) */
-            lf();
-            break;
-        case 'T':       /* ESC T    set tab stop */
+        case 'H':       // ESC H - HTS - set tab stop
             m_tabstop[m_cursor.x] = 1;
             break;
-        case 't':       /* ESC t    clear tab stop */
-            m_tabstop[m_cursor.x] = 0;
+        case 'M':       // ESC M - RI - reverse line feed
+            r_lf();
             break;
-        case '[':       /* ESC [    control sequence introducer */
-            memset(m_csiparam, CSIPARAM_DEFAULT, MAX_CSIPARAMS);
+        case '[':       // ESC [ - CSI - control sequence introducer
+            memset(m_csiparam, DEFAULT_CSIPARAM, MAX_CSIPARAMS);
             m_paramidx = 0;
             m_state = S_CSI;
             return;
+
+        //
+        // "Custom" console-related sequences
+        //
+        case '3':       // ESC 3    disable blink
+            m_disp.blink_on = false;
+            vga_disable_blink();
+            break;
+        case '4':       // ESC 4    enable blink
+            m_disp.blink_on = true;
+            vga_enable_blink();
+            break;
+        case '5':       // ESC 5    hide cursor
+            m_cursor.hidden = true;
+            vga_hide_cursor();
+            break;
+        case '6':       // ESC 6    show cursor
+            m_cursor.hidden = false;
+            vga_show_cursor();
+            break;
+        case '7':       // ESC 7    save console
+            save_state();
+            break;
+        case '8':       // ESC 8    restore console
+            restore_state();
+            break;
+        case 'c':       // ESC c    reset console
+            reset();
+            break;
+        case 'h':       // ESC h    clear tab stop
+            m_tabstop[m_cursor.x] = 0;
+            break;
         default:
             break;
     }
@@ -419,93 +324,107 @@ static void esc(char c)
 
 static void csi(char c)
 {
+    //
+    // ANSI Control Sequences
+    //
+    // https://www.man7.org/linux/man-pages/man3/termios.3.html
+    // https://en.wikipedia.org/wiki/ANSI_escape_code
+    //
 
-#define default_param(i,x)  do { if (m_csiparam[(i)] < (x)) m_csiparam[(i)] = (x); } while (0)
+    #define param_minimum(index,value)      \
+    do {                                    \
+        if (m_csiparam[index] < (value)) {  \
+            m_csiparam[index] = (value);    \
+        }                                   \
+    } while (0)
 
     int i = 0;
     switch (c)
     {
-        case 'A':       /* CSI n A      move cursor up n rows */
-            default_param(0, 1);
+        //
+        // "Standard" sequences
+        //
+        case 'A':       // CSI n A  - CUU - move cursor up n rows
+            param_minimum(0, 1);
             cursor_up(m_csiparam[0]);
             break;
-        case 'B':       /* CSI n B      move cursor down n rows */
-            default_param(0, 1);
+        case 'B':       // CSI n B  - CUD - move cursor down n rows
+            param_minimum(0, 1);
             cursor_down(m_csiparam[0]);
             break;
-        case 'C':       /* CSI n C      move cursor right n columns */
-            default_param(0, 1);
+        case 'C':       // CSI n C  - CUF - move cursor right (forward) n columns
+            param_minimum(0, 1);
             cursor_right(m_csiparam[0]);
             break;
-        case 'D':       /* CSI n D      move cursor left n columns */
-            default_param(0, 1);
+        case 'D':       // CSI n D  - CUB - move cursor left (back) n columns
+            param_minimum(0, 1);
             cursor_left(m_csiparam[0]);
             break;
-        case 'E':       /* CSI n E      move cursor to beginning of line, n rows down */
-            default_param(0, 1);
+        case 'E':       // CSI n E  - CNL - move cursor to beginning of line, n rows down
+            param_minimum(0, 1);
             m_cursor.x = 0;
             cursor_down(m_csiparam[0]);
             break;
-        case 'F':       /* CSI n F      move cursor to beginning of line, n rows up */
-            default_param(0, 1);
+        case 'F':       // CSI n F  - CPL - move cursor to beginning of line, n rows up
+            param_minimum(0, 1);
             m_cursor.x = 0;
             cursor_up(m_csiparam[0]);
             break;
-        case 'G':       /* CSI n G      move cursor to column n */
-            default_param(0, 1);
+        case 'G':       // CSI n G  - CHA - move cursor to column n
+            param_minimum(0, 1);
             if (m_csiparam[0] > m_cols) m_csiparam[0] = m_cols;
             m_cursor.x = m_csiparam[0] - 1;
             break;
-        case 'H':       /* CSI n ; m H  move cursor row n, column m */
-            default_param(0, 1);
-            default_param(1, 1);
+        case 'H':       // CSI n ; m H - CUP - move cursor row n, column m
+            param_minimum(0, 1);
+            param_minimum(1, 1);
             if (m_csiparam[0] > m_rows) m_csiparam[0] = m_rows;
             if (m_csiparam[1] > m_cols) m_csiparam[1] = m_cols;
             m_cursor.y = m_csiparam[0] - 1;
             m_cursor.x = m_csiparam[1] - 1;
             break;
-        case 'I':       /* CSI n I      emit n reverse-linefeeds */
-            default_param(0, 1);
-            for (i = 0; i < m_csiparam[0]; i++) r_lf();
-            break;
-        case 'M':       /* CSI n M      emit n linefeeds */
-            default_param(0, 1);
-            for (i = 0; i < m_csiparam[0]; i++) lf();
-            break;
-        case 'J':       /* CSI n J      erase in display (n = mode) */
-            default_param(0, 0);
+        case 'J':       // CSI n J  - ED - erase in display (n = mode)
+            param_minimum(0, 0);
             erase(m_csiparam[0]);
             break;
-        case 'K':       /* CSI n K      erase in line (n = mode) */
-            default_param(0, 0);
+        case 'K':       // CSI n K  - EL- erase in line (n = mode)
+            param_minimum(0, 0);
             erase_ln(m_csiparam[0]);
             break;
-        case 'S':       /* CSI n S      scroll n lines */
-            default_param(0, 1);
+        case 'S':       // CSI n S  - SU - scroll n lines
+            param_minimum(0, 1);
             scroll(m_csiparam[0]);
             break;
-        case 'T':       /* CSI n T      reverse scroll n lines */
-            default_param(0, 1);
+        case 'T':       // CSI n T  - ST - reverse scroll n lines
+            param_minimum(0, 1);
             scroll(-m_csiparam[0]);
             break;
-        case 'm':       /* CSI n m      set graphics attribute */
-            default_param(0, 0);
+        case 'm':       // CSI n m  - SGR - set graphics attribute
+            param_minimum(0, 0);
             while (i <= m_paramidx) csi_m(m_csiparam[i++]);
             break;
-        case 's':       /* CSI s        save cursor position */
+
+        //
+        // Custom (or "private") sequences
+        //
+        case 's':       // CSI s        save cursor position
             cursor_save();
             break;
-        case 'u':       /* CSI u        restore cursor position */
+        case 'u':       // CSI u        restore cursor position
             cursor_restore();
             break;
-        case ';':       /* (parameter separator) */
+
+        //
+        // CSI params
+        //
+        case ';':       // (parameter separator)
             if (++m_paramidx >= MAX_CSIPARAMS) {
                 break;
             }
             return;
-        default:        /* (parameter) */
+        default:        // (parameter)
             if (isdigit(c)) {
-                if (m_currparam == CSIPARAM_DEFAULT) {
+                if (m_currparam == DEFAULT_CSIPARAM) {
                     m_currparam = 0;
                 }
                 m_currparam *= 10;
@@ -516,61 +435,86 @@ static void csi(char c)
     }
 
     m_state = S_NORM;
+
+    #undef param_minimum
 }
 
 static void csi_m(char p)
 {
+    static const char CSI_COLORS[8] =
+    {
+        VGA_BLACK,
+        VGA_RED,
+        VGA_GREEN,
+        VGA_YELLOW,
+        VGA_BLUE,
+        VGA_MAGENTA,
+        VGA_CYAN,
+        VGA_WHITE
+    };
+
+    //
+    // Character Attributes via Set Graphics Rendition (SGR) control sequence.
+    // CSIm
+    //
+    // https://www.man7.org/linux/man-pages/man4/console_codes.4.html
+    // https://en.wikipedia.org/wiki/ANSI_escape_code
+    //
+
     switch (p) {
-        case 0:
+        case 0:     // reset to defaults
             m_attr = m_defaults.attr;
             break;
-        case 1:
+        case 1:     // set bright (bold)
             m_attr.bright = true;
             break;
-        case 2:
+        case 2:     // set faint (simulated with color)
             m_attr.faint = true;
             break;
-        case 3:
+        case 3:     // set italic (simulated with color)    // TODO: configure color ( ESC] ?)
             m_attr.italic = true;
             break;
-        case 4:
+        case 4:     // set underline (simulated with color) // TODO: configure color ( ESC] ?)
             m_attr.underline = true;
             break;
-        case 5:
+        case 5:     // set blink
             m_attr.blink = true;
             break;
-        case 7:
+        case 7:     // set fg/bg color inversion
             m_attr.invert = true;
             break;
-        case 21:
+        case 22:    // normal intensity (neither bright nor faint)
             m_attr.bright = false;
-            break;
-        case 22:
             m_attr.faint = false;
             break;
-        case 23:
+        case 23:    // disable italic
             m_attr.italic = false;
             break;
-        case 24:
+        case 24:    // disable underline
             m_attr.underline = false;
             break;
-        case 25:
+        case 25:    // disable blink
             m_attr.blink = false;
             break;
-        case 27:
+        case 27:    // disable fg/bg inversion
             m_attr.invert = false;
             break;
         default:
-            if (p >= 30 && p <= 37) m_attr.fg = CSI_COLORS[p - 30];
-            if (p >= 40 && p <= 47) m_attr.bg = CSI_COLORS[p - 40];
-            /* TODO: programmable defaults */
-            if (p == 38 || p == 39) m_attr.fg = m_defaults.attr.fg;
-            if (p == 48 || p == 49) m_attr.bg = m_defaults.attr.bg;
+            if (p >= 30 && p <= 37) m_attr.fg = CSI_COLORS[p - 30]; // select foreground color
+            if (p >= 40 && p <= 47) m_attr.bg = CSI_COLORS[p - 40]; // select background color
+            if (p == 39) m_attr.fg = m_defaults.attr.fg;    // select default foreground color (TODO: configure default)
+            if (p == 49) m_attr.bg = m_defaults.attr.bg;    // select default background color (TODO: configure default)
             break;
     }
 }
 
-static void save(void)
+static void beep(void)
+{
+    // TODO: beep!!
+    _direct_write("beep!");
+}
+
+static void save_state(void)
 {
     m_saved.disp = m_disp;
     m_saved.attr = m_attr;
@@ -578,7 +522,7 @@ static void save(void)
     memcpy(&m_saved.tabstop, &m_tabstop, MAX_TABSTOPS);
 }
 
-static void restore(void)
+static void restore_state(void)
 {
     m_disp = m_saved.disp;
     m_attr = m_saved.attr;
@@ -588,7 +532,7 @@ static void restore(void)
 
 static void reset(void)
 {
-    defaults(&consoles[curr_con]);
+    defaults(&consoles[active_cons]);
     write_cursor();
     erase(0);
 }
@@ -664,7 +608,7 @@ static void scroll(int n)
     dst = (reverse) ? &(m_framebuf[n_blank]) : m_framebuf;
     memmove(dst, src, n_bytes);
 
-    cell.ch = BLANK_CHAR;
+    cell.ch = BLANK;
     set_vga_attr(&cell.attr);
     for (i = 0; i < n_blank; i++) {
         m_framebuf[(reverse)? i: n_cells+i] = cell;
@@ -679,23 +623,23 @@ static void erase(int mode)
     int area = m_rows * m_cols;
 
     switch (mode) {
-        case 0:     /* erase screen from cursor down */
+        case ERASE_DOWN:    /* erase screen from cursor down */
             start = &m_framebuf[pos];
             count = area - pos;
             break;
-        case 1:     /* erase screen from cursor up /*/
+        case ERASE_UP:      /* erase screen from cursor up /*/
             start = m_framebuf;
             count = pos + 1;
             break;
-        case 2:     /* erase entire screen */
+        case ERASE_ALL:     /* erase entire screen */
             start = m_framebuf;
             count = area;
-        // default:
-        //     // TODO: assert!
+        default:
+            assert(!"invalid erase mode!");
     }
 
     for (int i = 0; i < count; i++) {
-        start[i].ch = BLANK_CHAR;
+        start[i].ch = BLANK;
         set_vga_attr(&start[i].attr);
     }
 }
@@ -708,21 +652,21 @@ static void erase_ln(int mode)
     int area = m_cols;
 
     switch (mode) {
-        case 0:     /* erase line from cursor down */
+        case ERASE_DOWN:    /* erase line from cursor down */
             start = &m_framebuf[pos];
             count = area - (pos % m_cols);
             break;
-        case 1:     /* erase line from cursor up /*/
+        case ERASE_UP:      /* erase line from cursor up /*/
             start = &m_framebuf[xy2pos(0, m_cursor.y)];
             count = (pos % m_cols) + 1;
             break;
-        case 2:     /* erase entire line */
+        case ERASE_ALL:     /* erase entire line */
             start = &m_framebuf[xy2pos(0, m_cursor.y)];
             count = area;
     }
 
     for (int i = 0; i < count; i++) {
-        start[i].ch = BLANK_CHAR;
+        start[i].ch = BLANK;
         set_vga_attr(&start[i].attr);
     }
 }
@@ -792,24 +736,15 @@ static inline int xy2pos(int x, int y)
     return y * m_cols + x;
 }
 
-static void update_vga_attr(int pos)
-{
-    set_vga_attr(&m_framebuf[pos].attr);
-}
-
-
-/**
- * Exchanges two values.
- */
-#define swap(a,b)           \
-do {                        \
-    (a) ^= (b);             \
-    (b) ^= (a);             \
-    (a) ^= (b);             \
-} while(0)
-
 static void set_vga_attr(struct vga_attr *a)
 {
+    #define swap(a,b)           \
+    do {                        \
+        (a) ^= (b);             \
+        (b) ^= (a);             \
+        (a) ^= (b);             \
+    } while(0)
+
     a->bg = m_attr.bg;
     a->fg = m_attr.fg;
 
@@ -817,15 +752,15 @@ static void set_vga_attr(struct vga_attr *a)
         a->bright = 1;
     }
     if (m_attr.faint) {
-        a->fg = VGA_BLK;    /* simulate with dark gray */
+        a->fg = VGA_BLACK;  // simulate faintness with dark gray
         a->bright = 1;
     }
     if (m_attr.italic) {
-        a->fg = VGA_GRN;    /* simulate with green */
+        a->fg = VGA_GREEN;  // simulate italics with green
         a->bright = 0;
     }
     if (m_attr.underline) {
-        a->fg = VGA_CYN;    /* simulate with cyan */
+        a->fg = VGA_CYAN;   // simulate underline with cyan
         a->bright = 0;
     }
     if (m_attr.blink) {

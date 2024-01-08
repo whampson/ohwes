@@ -22,6 +22,8 @@
 #ifndef __OHWES_H
 #define __OHWES_H
 
+#include <stdio.h>
+
 #define KERNEL_CS       0x10
 #define KERNEL_DS       0x18
 #define USER_CS         0x23

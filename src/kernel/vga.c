@@ -1,108 +1,115 @@
-/*============================================================================*
- * Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                  *
- *                                                                            *
- * This file is part of the OHWES Operating System.                           *
- * OHWES is free software; you may redistribute it and/or modify it under the *
- * terms of the license agreement provided with this software.                *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- *============================================================================*
- *    File: drivers/vga/vga.c                                                 *
- * Created: December 14, 2020                                                 *
- *  Author: Wes Hampson                                                       *
- *============================================================================*/
+/*============================================================================
+ * Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.
+ *
+ * This file is part of the OHWES Operating System.
+ * OHWES is free software; you may redistribute it and/or modify it under the
+ * terms of the license agreement provided with this software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ *============================================================================
+ *    File: kernel/vga.c
+ * Created: December 14, 2020
+ *  Author: Wes Hampson
+ *============================================================================
+ */
 
 #include <vga.h>
 #include <x86.h>
 #include <io.h>
 
-/* TODO: color registers */
-
-void vga_init(void)
+void init_vga(void)
 {
-    /* Set IOAS bit to ensure the VGA interface expects the Color Text Mode
-       ports where appropriate. */
-    uint8_t extl_mo = vga_extl_read(VGA_PORT_EXTL_MO_R);
-    extl_mo |= VGA_FLD_EXTL_MO_IOAS;
-    vga_extl_write(VGA_PORT_EXTL_MO_W, extl_mo);
+    //
+    // The BIOS should've dropped us off in VGA mode 3, so we can assume text
+    // mode, 80x25, 9x16 chars, 16 colors;
+    // but let's do a few sanity checks here anyways.
+    //
 
-    /* Ensure 0xB8000 is selected as frame buffer base address. */
-    uint8_t grfx_misc = vga_grfx_read(VGA_REG_GRFX_MISC);
-    grfx_misc &= ~VGA_FLD_GRFX_MISC_MMAP;
-    grfx_misc |= VGA_ENUM_GRFX_MISC_MMAP_32K_HI << 2;
-    vga_grfx_write(VGA_REG_GRFX_MISC, grfx_misc);
+    // ensure the I/O Address Select bit is set so we are using non-monochrome
+    // CRTC ports 0x3D4 and 0x3D5
+    uint8_t misc_out = vga_extl_read(VGA_EXTL_PORT_MO_R);
+    misc_out |= VGA_EXTL_FLD_MO_IOAS;
+    vga_extl_write(VGA_EXTL_PORT_MO_W, misc_out);
+    // TODO: readback & check?
 
-    /* Disable blink by default. */
+    // ensure 0xB8000 is selected as the frame buffer address
+    uint8_t grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
+    uint8_t mmap_sel = VGA_GRFX_ENUM_MISC_MMAP_32K_HI;  // 0xB8000-0xBFFFF
+    grfx_misc |= (mmap_sel << 2);   // bits [3:2] are the memory map select
+    vga_grfx_write(VGA_GRFX_REG_MISC, grfx_misc);
+    // TODO: readback & check?
+
+    // disable blink by default
     vga_disable_blink();
 
-    /* Make sure cursor is visible. */
+    // make sure the cursor is visible
     vga_show_cursor();
 }
 
 void vga_disable_blink(void)
 {
     uint8_t modectl;
-    modectl = vga_attr_read(VGA_REG_ATTR_MODE);
-    modectl &= ~VGA_FLD_ATTR_MODE_BLINK;
-    vga_attr_write(VGA_REG_ATTR_MODE, modectl);
+    modectl = vga_attr_read(VGA_ATTR_REG_MODE);
+    modectl &= ~VGA_ATTR_FLD_MODE_BLINK;        // clear blink bit
+    vga_attr_write(VGA_ATTR_REG_MODE, modectl);
 }
 
 void vga_enable_blink(void)
 {
     uint8_t modectl;
-    modectl = vga_attr_read(VGA_REG_ATTR_MODE);
-    modectl |= VGA_FLD_ATTR_MODE_BLINK;
-    vga_attr_write(VGA_REG_ATTR_MODE, modectl);
+    modectl = vga_attr_read(VGA_ATTR_REG_MODE);
+    modectl |= VGA_ATTR_FLD_MODE_BLINK;         // set blink bit
+    vga_attr_write(VGA_ATTR_REG_MODE, modectl);
 }
 
 void vga_hide_cursor(void)
 {
     uint8_t css;
-    css = vga_crtc_read(VGA_REG_CRTC_CSS);
-    css |= VGA_FLD_CRTC_CSS_CD_MASK;
-    vga_crtc_write(VGA_REG_CRTC_CSS, css);
+    css = vga_crtc_read(VGA_CRTC_REG_CSS);  // CSS = cursor scan line
+    css |= VGA_CRTC_FLD_CSS_CD_MASK;        // CD = cursor disable
+    vga_crtc_write(VGA_CRTC_REG_CSS, css);
 }
 
 void vga_show_cursor(void)
 {
     uint8_t css;
-    css = vga_crtc_read(VGA_REG_CRTC_CSS);
-    css &= ~VGA_FLD_CRTC_CSS_CD_MASK;
-    vga_crtc_write(VGA_REG_CRTC_CSS, css);
+    css = vga_crtc_read(VGA_CRTC_REG_CSS);
+    css &= ~VGA_CRTC_FLD_CSS_CD_MASK;
+    vga_crtc_write(VGA_CRTC_REG_CSS, css);
 }
 
 uint16_t vga_get_cursor_pos(void)
 {
     uint8_t poshi, poslo;
-    poshi = vga_crtc_read(VGA_REG_CRTC_CL_HI);
-    poslo = vga_crtc_read(VGA_REG_CRTC_CL_LO);
+    poshi = vga_crtc_read(VGA_CRTC_REG_CL_HI);  // CL = cursor location
+    poslo = vga_crtc_read(VGA_CRTC_REG_CL_LO);
     return (poshi << 8) | poslo;
 }
 
 void vga_set_cursor_pos(uint16_t pos)
 {
-    vga_crtc_write(VGA_REG_CRTC_CL_HI, pos >> 8);
-    vga_crtc_write(VGA_REG_CRTC_CL_LO, pos & 0xFF);
+    vga_crtc_write(VGA_CRTC_REG_CL_HI, pos >> 8);
+    vga_crtc_write(VGA_CRTC_REG_CL_LO, pos & 0xFF);
 }
 
 uint16_t vga_get_cursor_shape(void)
 {
     uint8_t shapehi, shapelo;
-    shapelo = vga_crtc_read(VGA_REG_CRTC_CSS) & VGA_FLD_CRTC_CSS_CSS_MASK;
-    shapehi = vga_crtc_read(VGA_REG_CRTC_CSE) & VGA_FLD_CRTC_CSE_CSE_MASK;
+    shapelo = vga_crtc_read(VGA_CRTC_REG_CSS) & VGA_CRTC_FLD_CSS_CSS_MASK;
+    shapehi = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
     return (shapehi << 8) | shapelo;
 }
 
 void vga_set_cursor_shape(uint8_t start, uint8_t end)
 {
-    vga_crtc_write(VGA_REG_CRTC_CSS, start & VGA_FLD_CRTC_CSS_CSS_MASK);
-    vga_crtc_write(VGA_REG_CRTC_CSE, end   & VGA_FLD_CRTC_CSE_CSE_MASK);
+    vga_crtc_write(VGA_CRTC_REG_CSS, start & VGA_CRTC_FLD_CSS_CSS_MASK);
+    vga_crtc_write(VGA_CRTC_REG_CSE, end   & VGA_CRTC_FLD_CSE_CSE_MASK);
 }
 
 uint8_t vga_crtc_read(uint8_t reg)
@@ -111,8 +118,8 @@ uint8_t vga_crtc_read(uint8_t reg)
     uint8_t data;
 
     cli_save(flags);
-    outb(VGA_PORT_CRTC_ADDR, reg);
-    data = inb(VGA_PORT_CRTC_DATA);
+    outb(VGA_CRTC_PORT_ADDR, reg);
+    data = inb(VGA_CRTC_PORT_DATA);
     restore_flags(flags);
 
     return data;
@@ -123,8 +130,8 @@ void vga_crtc_write(uint8_t reg, uint8_t data)
     int flags;
 
     cli_save(flags);
-    outb(VGA_PORT_CRTC_ADDR, reg);
-    outb(VGA_PORT_CRTC_DATA, data);
+    outb(VGA_CRTC_PORT_ADDR, reg);
+    outb(VGA_CRTC_PORT_DATA, data);
     restore_flags(flags);
 }
 
@@ -134,8 +141,8 @@ uint8_t vga_grfx_read(uint8_t reg)
     uint8_t data;
 
     cli_save(flags);
-    outb(VGA_PORT_GRFX_ADDR, reg);
-    data = inb(VGA_PORT_GRFX_DATA);
+    outb(VGA_GRFX_PORT_ADDR, reg);
+    data = inb(VGA_GRFX_PORT_DATA);
     restore_flags(flags);
 
     return data;
@@ -146,8 +153,8 @@ void vga_grfx_write(uint8_t reg, uint8_t data)
     int flags;
 
     cli_save(flags);
-    outb(VGA_PORT_GRFX_ADDR, reg);
-    outb(VGA_PORT_GRFX_DATA, data);
+    outb(VGA_GRFX_PORT_ADDR, reg);
+    outb(VGA_GRFX_PORT_DATA, data);
     restore_flags(flags);
 }
 
@@ -157,8 +164,8 @@ uint8_t vga_seqr_read(uint8_t reg)
     uint8_t data;
 
     cli_save(flags);
-    outb(VGA_PORT_SEQR_ADDR, reg);
-    data = inb(VGA_PORT_SEQR_DATA);
+    outb(VGA_SEQR_PORT_ADDR, reg);
+    data = inb(VGA_SEQR_PORT_DATA);
     restore_flags(flags);
 
     return data;
@@ -169,21 +176,21 @@ void vga_seqr_write(uint8_t reg, uint8_t data)
     int flags;
 
     cli_save(flags);
-    outb(VGA_PORT_SEQR_ADDR, reg);
-    outb(VGA_PORT_SEQR_DATA, data);
+    outb(VGA_SEQR_PORT_ADDR, reg);
+    outb(VGA_SEQR_PORT_DATA, data);
     restore_flags(flags);
 }
 
 uint8_t vga_attr_read(uint8_t reg)
 {
     int flags;
-    uint8_t addr = reg & VGA_FLD_ATTR_ADDR_ADDR;
+    uint8_t addr = reg & VGA_ATTR_FLD_ADDR_ADDR;
     uint8_t data;
 
     cli_save(flags);
-    (void) inb(VGA_PORT_EXTL_IS1);
-    outb(VGA_PORT_ATTR_ADDR, VGA_FLD_ATTR_ADDR_PAS | addr); /* keep PAS set */
-    data = inb(VGA_PORT_ATTR_DATA_R);
+    (void) inb(VGA_EXTL_PORT_IS1);
+    outb(VGA_ATTR_PORT_ADDR, VGA_ATTR_FLD_ADDR_PAS | addr); /* keep PAS set */
+    data = inb(VGA_ATTR_PORT_DATA_R);
     restore_flags(flags);
 
     return data;
@@ -192,12 +199,12 @@ uint8_t vga_attr_read(uint8_t reg)
 void vga_attr_write(uint8_t reg, uint8_t data)
 {
     int flags;
-    uint8_t addr = reg & VGA_FLD_ATTR_ADDR_ADDR;
+    uint8_t addr = reg & VGA_ATTR_FLD_ADDR_ADDR;
 
     cli_save(flags);
-    (void) inb(VGA_PORT_EXTL_IS1);
-    outb(VGA_PORT_ATTR_ADDR, VGA_FLD_ATTR_ADDR_PAS | addr); /* keep PAS set */
-    outb(VGA_PORT_ATTR_DATA_W, data);
+    (void) inb(VGA_EXTL_PORT_IS1);
+    outb(VGA_ATTR_PORT_ADDR, VGA_ATTR_FLD_ADDR_PAS | addr); /* keep PAS set */
+    outb(VGA_ATTR_PORT_DATA_W, data);
     restore_flags(flags);
 }
 

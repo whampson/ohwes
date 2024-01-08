@@ -24,7 +24,7 @@
 
 void stdout_fn(char c)
 {
-    con_write(c);
+    console_write(c);
 }
 
 int putchar(int c)

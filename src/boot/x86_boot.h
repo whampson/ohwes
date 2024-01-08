@@ -90,8 +90,8 @@
  * VGA Stuff
  * See http://www.ctyme.com/intr/rb-0069.htm
  *----------------------------------------------------------------------------*/
-#define VGA_MODE            0x03    // 0x03 = text,CGA/EGA/VGA,16fg/8bg,0xB8000
-#define VGA_CLEAR           0       // clear screen toggle
+#define VGA_MODE            0x03// 0x03=text,CGA/EGA,80x25,9x16,16fg/8bg,0xB8000
+#define VGA_CLEAR           0   // clear screen toggle
 
 /*----------------------------------------------------------------------------*
  * GDT Segment Descriptors
