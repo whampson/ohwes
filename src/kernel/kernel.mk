@@ -17,6 +17,7 @@ ifeq "${TEST_BUILD}" "1"
     test/string_tests.c
 endif
 
+TGT_CFLAGS  := -Wno-unused-function
 TGT_LDFLAGS := -Ttext 0x10000 -e kentry
 
 LINKLIBS := \

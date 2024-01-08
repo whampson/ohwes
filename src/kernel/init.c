@@ -30,11 +30,8 @@
 #include <x86.h>
 
 extern void con_init(void);
-extern void init_cpu(void);
+extern void init_cpu(const struct bootinfo * const info);
 extern void init_irq(void);
-
-BootInfo g_bootInfo;
-BootInfo * const g_pBootInfo = &g_bootInfo;
 
 static void run_tests(void)
 {
@@ -43,58 +40,21 @@ static void run_tests(void)
 #endif
 }
 
-__fastcall
-static void ring3_test(void)
-{
-    volatile int a = 0;
-    __asm__ volatile ("movl $1, %eax; int $0x80");
-    __asm__ volatile ("movl $2, %eax; int $0x80");
-    __asm__ volatile ("movl $3, %eax; int $0x80");
-    while (true) { (void) a; }
-}
-
-#define KERNEL_CS  0x10
-#define KERNEL_DS  0x18
-#define USER_CS    0x23
-#define USER_DS    0x2B
-
-struct iframe {
-    uint32_t eip;       // pushed by cpu
-    uint32_t cs;        // pushed by cpu
-    uint32_t eflags;    // pushed by cpu
-    uint32_t esp;       // pushed by cpu, only present when privilege level changes
-    uint32_t ss;        // pushed by cpu, only present when privilege level changes
-};
+// --- Crude Memory Map ---
+// 0x00000-0x004FF: reserved for Real Mode IVT and BDA (do we still need this?)
+// 0x00500-0x007FF: ACPI memory map table
+// 0x00800-0x00FFF: CPU data area (GDT/IDT/LDT/TSS/etc.)
+// 0x02400-0x0????: (<= 0xDC00 bytes of free space)
+//  (0x07C00-0x07DFF: stage 1 boot loader)
+//  (0x07E00-0x0????: stage 2 boot loader)
+// 0x0????-0x0FFFF: kernel stack (grows towards 0)
+// 0x10000-(EBDA ): kernel and system
 
 __fastcall
-void kmain(const BootInfo * const pBootInfo)
+void kmain(const struct bootinfo * const info)
 {
-    memcpy(g_pBootInfo, pBootInfo, sizeof(BootInfo));
-
-    uint32_t flags;
-    cli_save(flags);
-
-    con_init();     // get the vga console working first
-    init_cpu();     // then finish setting up the CPU.
+    con_init();
+    init_cpu(info);
     init_irq();
     run_tests();
-
-    __asm__ volatile ("movl $1, %eax; int $0x80");
-    __asm__ volatile ("movl $2, %eax; int $0x80");
-    __asm__ volatile ("movl $3, %eax; int $0x80");
-
-    __asm__ volatile (          // TODO: crashes on Bochs and real hardware...
-        "           \n\
-        pushl %0    \n\
-        pushl %1    \n\
-        pushl %2    \n\
-        pushl %3    \n\
-        pushl %4    \n\
-        iret        \n\
-        " : :
-        "r"(USER_DS),
-        "r"(0x7C00),
-        "r"(flags),
-        "r"(USER_CS),
-        "i"(ring3_test));
 }

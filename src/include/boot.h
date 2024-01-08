@@ -23,7 +23,7 @@
 #define __BOOT_H
 
 /*----------------------------------------------------------------------------*
- * A20 Enable Methods
+ * A20 Modes
  *----------------------------------------------------------------------------*/
 #define A20_NONE            0       // A20 already enabled (emulators only)
 #define A20_KEYBOARD        1       // A20 enabled via PS/2 keyboard controller
@@ -40,49 +40,74 @@
 #include <stddef.h>
 #include <stdint.h>
 
+
 /*----------------------------------------------------------------------------*
  * Hardware Flags
  *----------------------------------------------------------------------------*/
 
 /**
+ * Hardware flags as returned by INT 11h "Get BIOS Equipment List".
+ *
+ * https://www.stanislavs.org/helppc/int_11.html
+ * https://fragglet.github.io/dos-help-files/alang.hlp/11h_dot_des.html
+ * http://www.ctyme.com/intr/rb-0575.htm
+ */
+struct hwflags {
+    union {
+        struct {
+            uint16_t has_diskette_drive         : 1;
+            uint16_t has_coprocessor            : 1;
+            uint16_t has_ps2mouse               : 1;
+            uint16_t                            : 1;    // unused
+            uint16_t initial_video_mode         : 2;
+            uint16_t num_other_diskette_drives  : 2;
+            uint16_t _dma                       : 1;    // legacy
+            uint16_t num_serial_ports           : 3;
+            uint16_t has_gameport               : 1;
+            uint16_t _has_printer_or_modem      : 1;    // legacy
+            uint16_t num_parallel_ports         : 2;
+        };
+        uint32_t _value;
+    };
+};
+static_assert(sizeof(struct hwflags) == 4, "sizeof(struct hwflags) == 4");
+
+/**
  * Known values for the "videoMode" field in HwFlags.
  */
-enum HwFlagsVideoMode {
+enum hwflags_video_mode {
     HWFLAGS_VIDEOMODE_INVALID       = 0,
     HWFLAGS_VIDEOMODE_40x25         = 1,
     HWFLAGS_VIDEOMODE_80x25         = 2,
     HWFLAGS_VIDEOMODE_80x25_MONO    = 3,
 };
 
-/**
- * Hardware flags as returned by INT 11h "Get BIOS Equipment List".
- */
-typedef union HwFlags {
-    struct {
-        uint16_t hasDisketteDrive       : 1;
-        uint16_t hasCoprocessor         : 1;
-        uint16_t hasPs2Mouse            : 1;
-        uint16_t /* (unused) */         : 1;
-        uint16_t videoMode              : 2; // video mode at stage1 start
-        uint16_t numOtherDisketteDrives : 2;
-        uint16_t _dma                   : 1;
-        uint16_t numSerialPorts         : 3;
-        uint16_t hasGamePort            : 1;
-        uint16_t _hasPrinterOrModem     : 1;
-        uint16_t numParallelPorts       : 2;
-    };
-    uint32_t _value;
-} HwFlags;
-static_assert(sizeof(HwFlags) == 4, "sizeof(HwFlags) == 4");
 
 /*----------------------------------------------------------------------------*
  * ACPI Memory Map
  *----------------------------------------------------------------------------*/
 
 /**
- * Values for the "type" field in an AcpiMemoryMapEntry.
+ * Entry for ACPI Memory Map, as returned by INT 15h,AX=E820h.
  */
-enum AcpiMemoryMapType {
+struct acpi_mmap_entry {
+    uint64_t base;
+    uint64_t length;
+    uint32_t type;
+    uint32_t attributes;
+};
+static_assert(sizeof(struct acpi_mmap_entry) == 24, "sizeof(struct acpi_mmap_entry) == 24");
+
+/**
+ * ACPI Memory Map
+ * Memory map is an array of acpi_mmap_entry elements; final element is zeros.
+ */
+typedef struct acpi_mmap_entry acpi_mmap_t;
+
+/**
+ * Values for the "type" field in an acpi_mmap_entry.
+ */
+enum acpi_mmap_type {
     ACPI_MMAP_TYPE_INVALID  = 0,    // (invalid table entry, ignore)
     ACPI_MMAP_TYPE_USABLE   = 1,    // Available, free for use
     ACPI_MMAP_TYPE_RESERVED = 2,    // Reserved, do not use
@@ -92,22 +117,6 @@ enum AcpiMemoryMapType {
     // Other values are reserved or OEM-specific, do not use
 };
 
-/**
- * Entry for ACPI Memory Map, as returned by INT 15h,AX=E820h.
- */
-typedef struct AcpiMemoryMapEntry {
-    uint64_t base;
-    uint64_t length;
-    uint32_t type;
-    uint32_t attributes;
-} AcpiMemoryMapEntry;
-static_assert(sizeof(AcpiMemoryMapEntry) == 24, "sizeof(AcpiMemoryMapEntry) == 24");
-
-/**
- * ACPI Memory Map
- * Memory map is an array of AcpiMemoryMapEntry elements; final element is zeros.
- */
-typedef AcpiMemoryMapEntry AcpiMemoryMap;
 
 /*----------------------------------------------------------------------------*
  * System Boot Info
@@ -116,32 +125,35 @@ typedef AcpiMemoryMapEntry AcpiMemoryMap;
 /**
  * System information collected during boot and passed onto the kernel.
  */
-typedef struct BootInfo {
+struct bootinfo {
     //
     // !!! KEEP OFFSETS IN-LINE WITH s_BootInfo IN src/boot/stage2.h !!!
     //
-    intptr_t kernelBase;            // kernel image base address
-    uint32_t kernelSize;            // kernel image size bytes
-    intptr_t stage2Base;            // stage2 image base address
-    uint32_t stage2Size;            // stage2 image size bytes
-    intptr_t stackBase;             // stack base upon leaving stage2
+    intptr_t kernel_base;           // kernel image base address
+    uint32_t kernel_size;           // kernel image size bytes
+    intptr_t stage2_base;           // stage2 image base address
+    uint32_t stage2_size;           // stage2 image size bytes
+    intptr_t stack_base;            // stack base upon leaving stage2
 
-    uint32_t ramLo_Legacy;          // 1K pages 0 to 640K (BIOS INT 12h)
-    uint32_t ramHi_Legacy;          // 1K pages 1M to 16M (BIOS INT 15h,AX=88h)
-    uint32_t ramLo_E801h;           // 1K pages 1M to 16M (BIOS INT 15h,AX=E801h)
-    uint32_t ramHi_E801h;           // 64K pages 16M to 4G (BIOS INT 15h,AX=E801h)
-    const AcpiMemoryMap *pMemoryMap;// ACPI Memory Map (BIOS INT 15h,AX=E820h)
+    uint32_t ramlo_legacy;          // 1K pages 0 to 640K (BIOS INT 12h)
+    uint32_t ramhi_legacy;          // 1K pages 1M to 16M (BIOS INT 15h,AX=88h)
+    uint32_t ramlo_e801h;           // 1K pages 1M to 16M (BIOS INT 15h,AX=E801h)
+    uint32_t ramhi_e801h;           // 64K pages 16M to 4G (BIOS INT 15h,AX=E801h)
+    const acpi_mmap_t *mem_map;     // ACPI Memory Map (BIOS INT 15h,AX=E820h)
 
-    HwFlags hwFlags;                // system hardware flags (BIOS INT 11h)
-    uint32_t a20Method;             // method used to enable A20 line, one of A20_*
-    uint32_t videoMode;             // VGA video mode (BIOS INT 10h,AH=0Fh)
-    uint32_t videoPage;             // VGA active display page (BIOS INT 10h,AH=0Fh)
-    uint32_t videoCols;             // VGA column count (BIOS INT 10h,AH=0Fh)
-    uint32_t cursorStartLine;       // VGA cursor scan line top
-    uint32_t cursorEndLine;         // VGA cursor scan line bottom
+    struct hwflags hwflags;         // system hardware flags (BIOS INT 11h)
+    uint32_t a20_mode;              // method used to enable A20 line, one of A20_*
+    uint32_t video_mode;            // VGA video mode (BIOS INT 10h,AH=0Fh)
+    uint32_t video_page;            // VGA active display page (BIOS INT 10h,AH=0Fh)
+    uint32_t video_cols;            // VGA column count (BIOS INT 10h,AH=0Fh)
+    uint32_t cursor_start;          // VGA cursor scan line top
+    uint32_t cursor_end;            // VGA cursor scan line bottom
 
-    const void *m_pEbda;            // Extended BIOS Data Area
-} BootInfo;
+    const void *ebda;               // Extended BIOS Data Area
+    // TODO: BPB?
+};
+// TODO: define offsets assert offsets using define
+// and use defines in ASM code to keep in-line with struct
 
 #endif  // __ASSEMBLER__
 

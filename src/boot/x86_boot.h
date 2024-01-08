@@ -38,7 +38,7 @@
 // 0x0????-0x0FFFF: kernel stack (grows towards 0)
 // 0x10000-(EBDA ): kernel and system
 
-#define Seg2Flat(seg,off)   (((seg)<<4)+(off))
+#define SEG2FLAT(seg,off)   (((seg)<<4)+(off))
 
 #define MEMMAP_BASE         0x500   // max 32 entries
 #define ROOTDIR_BASE        0x800   // max 224 entries
@@ -51,7 +51,7 @@
 
 #define KERNEL_SEGMENT      0x1000  // kernel segment address
 #define KERNEL_OFFSET       0x0000  // kernel segment offset
-#define KERNEL_BASE         Seg2Flat(KERNEL_SEGMENT,KERNEL_OFFSET)
+#define KERNEL_BASE         SEG2FLAT(KERNEL_SEGMENT,KERNEL_OFFSET)
 #define KERNEL_ENTRY        KERNEL_BASE
 
 
