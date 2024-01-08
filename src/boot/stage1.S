@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (C) 2023 Wes Hampson. All Rights Reserved.
+# Copyright (C) 2020-2024 Wes Hampson. All Rights Reserved.
 #
 # This file is part of the OH-WES Operating System.
 # OH-WES is free software; you may redistribute it and/or modify it under the
@@ -13,7 +13,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 # -----------------------------------------------------------------------------
-#         File: src/boot/stage1.S
+#         File: boot/stage1.S
 #      Created: March 21, 2023
 #       Author: Wes Hampson
 #  Environment: 16-bit Real Mode

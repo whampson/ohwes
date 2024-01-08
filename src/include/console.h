@@ -1,5 +1,5 @@
 /*============================================================================*
- * Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                  *
+ * Copyright (C) 2020-2024 Wes Hampson. All Rights Reserved.
  *                                                                            *
  * This file is part of the OHWES Operating System.                           *
  * OHWES is free software; you may redistribute it and/or modify it under the *

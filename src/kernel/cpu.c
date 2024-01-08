@@ -1,5 +1,5 @@
 /* =============================================================================
- * Copyright (C) 2020-2023 Wes Hampson. All Rights Reserved.
+ * Copyright (C) 2020-2024 Wes Hampson. All Rights Reserved.
  *
  * This file is part of the OH-WES Operating System.
  * OH-WES is free software; you may redistribute it and/or modify it under the
