@@ -19,7 +19,7 @@
  *============================================================================*/
 
 #include <vga.h>
-#include <interrupt.h>
+#include <x86.h>
 #include <io.h>
 
 /* TODO: color registers */

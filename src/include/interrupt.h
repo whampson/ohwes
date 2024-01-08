@@ -27,7 +27,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <compiler.h>
 #endif
 
 /**
@@ -160,56 +159,56 @@ __fastcall void recv_interrupt(struct iregs *regs);
 __fastcall void recv_irq(struct iregs *regs);
 __fastcall void recv_syscall(struct iregs *regs);
 
-typedef void (*idt_thunk)(void);
-/*idt_thunk*/ void _thunk_except00h(void);
-/*idt_thunk*/ void _thunk_except01h(void);
-/*idt_thunk*/ void _thunk_except02h(void);
-/*idt_thunk*/ void _thunk_except03h(void);
-/*idt_thunk*/ void _thunk_except04h(void);
-/*idt_thunk*/ void _thunk_except05h(void);
-/*idt_thunk*/ void _thunk_except06h(void);
-/*idt_thunk*/ void _thunk_except07h(void);
-/*idt_thunk*/ void _thunk_except08h(void);
-/*idt_thunk*/ void _thunk_except09h(void);
-/*idt_thunk*/ void _thunk_except0Ah(void);
-/*idt_thunk*/ void _thunk_except0Bh(void);
-/*idt_thunk*/ void _thunk_except0Ch(void);
-/*idt_thunk*/ void _thunk_except0Dh(void);
-/*idt_thunk*/ void _thunk_except0Eh(void);
-/*idt_thunk*/ void _thunk_except0Fh(void);
-/*idt_thunk*/ void _thunk_except10h(void);
-/*idt_thunk*/ void _thunk_except11h(void);
-/*idt_thunk*/ void _thunk_except12h(void);
-/*idt_thunk*/ void _thunk_except13h(void);
-/*idt_thunk*/ void _thunk_except14h(void);
-/*idt_thunk*/ void _thunk_except15h(void);
-/*idt_thunk*/ void _thunk_except16h(void);
-/*idt_thunk*/ void _thunk_except17h(void);
-/*idt_thunk*/ void _thunk_except18h(void);
-/*idt_thunk*/ void _thunk_except19h(void);
-/*idt_thunk*/ void _thunk_except1Ah(void);
-/*idt_thunk*/ void _thunk_except1Bh(void);
-/*idt_thunk*/ void _thunk_except1Ch(void);
-/*idt_thunk*/ void _thunk_except1Dh(void);
-/*idt_thunk*/ void _thunk_except1Eh(void);
-/*idt_thunk*/ void _thunk_except1Fh(void);
-/*idt_thunk*/ void _thunk_irq00h(void);
-/*idt_thunk*/ void _thunk_irq01h(void);
-/*idt_thunk*/ void _thunk_irq02h(void);
-/*idt_thunk*/ void _thunk_irq03h(void);
-/*idt_thunk*/ void _thunk_irq04h(void);
-/*idt_thunk*/ void _thunk_irq05h(void);
-/*idt_thunk*/ void _thunk_irq06h(void);
-/*idt_thunk*/ void _thunk_irq07h(void);
-/*idt_thunk*/ void _thunk_irq08h(void);
-/*idt_thunk*/ void _thunk_irq09h(void);
-/*idt_thunk*/ void _thunk_irq0Ah(void);
-/*idt_thunk*/ void _thunk_irq0Bh(void);
-/*idt_thunk*/ void _thunk_irq0Ch(void);
-/*idt_thunk*/ void _thunk_irq0Dh(void);
-/*idt_thunk*/ void _thunk_irq0Eh(void);
-/*idt_thunk*/ void _thunk_irq0Fh(void);
-/*idt_thunk*/ void _thunk_syscall(void);
+typedef void (__fastcall *idt_thunk)(void);
+/*idt_thunk*/ __fastcall void _thunk_except00h(void);
+/*idt_thunk*/ __fastcall void _thunk_except01h(void);
+/*idt_thunk*/ __fastcall void _thunk_except02h(void);
+/*idt_thunk*/ __fastcall void _thunk_except03h(void);
+/*idt_thunk*/ __fastcall void _thunk_except04h(void);
+/*idt_thunk*/ __fastcall void _thunk_except05h(void);
+/*idt_thunk*/ __fastcall void _thunk_except06h(void);
+/*idt_thunk*/ __fastcall void _thunk_except07h(void);
+/*idt_thunk*/ __fastcall void _thunk_except08h(void);
+/*idt_thunk*/ __fastcall void _thunk_except09h(void);
+/*idt_thunk*/ __fastcall void _thunk_except0Ah(void);
+/*idt_thunk*/ __fastcall void _thunk_except0Bh(void);
+/*idt_thunk*/ __fastcall void _thunk_except0Ch(void);
+/*idt_thunk*/ __fastcall void _thunk_except0Dh(void);
+/*idt_thunk*/ __fastcall void _thunk_except0Eh(void);
+/*idt_thunk*/ __fastcall void _thunk_except0Fh(void);
+/*idt_thunk*/ __fastcall void _thunk_except10h(void);
+/*idt_thunk*/ __fastcall void _thunk_except11h(void);
+/*idt_thunk*/ __fastcall void _thunk_except12h(void);
+/*idt_thunk*/ __fastcall void _thunk_except13h(void);
+/*idt_thunk*/ __fastcall void _thunk_except14h(void);
+/*idt_thunk*/ __fastcall void _thunk_except15h(void);
+/*idt_thunk*/ __fastcall void _thunk_except16h(void);
+/*idt_thunk*/ __fastcall void _thunk_except17h(void);
+/*idt_thunk*/ __fastcall void _thunk_except18h(void);
+/*idt_thunk*/ __fastcall void _thunk_except19h(void);
+/*idt_thunk*/ __fastcall void _thunk_except1Ah(void);
+/*idt_thunk*/ __fastcall void _thunk_except1Bh(void);
+/*idt_thunk*/ __fastcall void _thunk_except1Ch(void);
+/*idt_thunk*/ __fastcall void _thunk_except1Dh(void);
+/*idt_thunk*/ __fastcall void _thunk_except1Eh(void);
+/*idt_thunk*/ __fastcall void _thunk_except1Fh(void);
+/*idt_thunk*/ __fastcall void _thunk_irq00h(void);
+/*idt_thunk*/ __fastcall void _thunk_irq01h(void);
+/*idt_thunk*/ __fastcall void _thunk_irq02h(void);
+/*idt_thunk*/ __fastcall void _thunk_irq03h(void);
+/*idt_thunk*/ __fastcall void _thunk_irq04h(void);
+/*idt_thunk*/ __fastcall void _thunk_irq05h(void);
+/*idt_thunk*/ __fastcall void _thunk_irq06h(void);
+/*idt_thunk*/ __fastcall void _thunk_irq07h(void);
+/*idt_thunk*/ __fastcall void _thunk_irq08h(void);
+/*idt_thunk*/ __fastcall void _thunk_irq09h(void);
+/*idt_thunk*/ __fastcall void _thunk_irq0Ah(void);
+/*idt_thunk*/ __fastcall void _thunk_irq0Bh(void);
+/*idt_thunk*/ __fastcall void _thunk_irq0Ch(void);
+/*idt_thunk*/ __fastcall void _thunk_irq0Dh(void);
+/*idt_thunk*/ __fastcall void _thunk_irq0Eh(void);
+/*idt_thunk*/ __fastcall void _thunk_irq0Fh(void);
+/*idt_thunk*/ __fastcall void _thunk_syscall(void);
 
 #endif /* __ASSEMBLER__ */
 

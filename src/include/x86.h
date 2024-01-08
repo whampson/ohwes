@@ -540,6 +540,63 @@ __asm__ volatile (          \
 #define load_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs))
 #define load_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss))
 
+/**
+ * Clears the interrupt flag, disabling interrupts.
+ */
+#define cli()               \
+__asm__ volatile (          \
+    "cli"                   \
+    :                       \
+    :                       \
+    : "cc"                  \
+)
+
+/**
+ * Sets the interrupt flag, enabling interrupts.
+ */
+#define sti()               \
+__asm__ volatile (          \
+    "sti"                   \
+    :                       \
+    :                       \
+    : "cc"                  \
+)
+
+/**
+ * Saves the EFLAGS register, then clears interrupts.
+ *
+ * @param flags - a 32-bit number used for storing the EFLAGS register;
+ *                note this NOT a pointer, due to the way GCC inline assembly
+ *                handles parameters
+ */
+#define cli_save(flags)     \
+__asm__ volatile (          \
+    "                       \n\
+    pushfl                  \n\
+    popl %0                 \n\
+    cli                     \n\
+    "                       \
+    : "=r"(flags)           \
+    :                       \
+    : "memory", "cc"        \
+)
+
+/**
+ * Sets the EFLAGS register.
+ *
+ * @param flags - a 32-bit number containing the EFLAGS to be set
+ */
+#define restore_flags(flags)\
+__asm__ volatile (          \
+    "                       \n\
+    push %0                 \n\
+    popfl                   \n\
+    "                       \
+    :                       \
+    : "r"(flags)            \
+    : "memory", "cc"        \
+)
+
 #endif /* __ASSEMBLER__ */
 
 #endif /* __X86_H */

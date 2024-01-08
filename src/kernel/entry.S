@@ -57,8 +57,8 @@ do_interrupt:
         # noncontiguous execution
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-end_irq:
 end_interrupt:
+end_irq:
         movl            IREGS_EAX(%esp), %eax   # syscall return value passed thru eax,
 end_syscall:                                    # so we need to preserve it callee side
         movl            IREGS_EBP(%esp), %ebp

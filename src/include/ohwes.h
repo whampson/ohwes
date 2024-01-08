@@ -13,17 +13,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/include/os.h
- *      Created: September 18, 2023
+ *         File: include/ohwes.h
+ *      Created: January 7, 2024
  *       Author: Wes Hampson
- *       Module: System Includes
  * =============================================================================
  */
 
-#ifndef __OS_H
-#define __OS_H
+#ifndef __OHWES_H
+#define __OHWES_H
 
 void halt(void);
-void panic(const char *reason, ...);
 
-#endif // __OS_H
+#define panic(...)                  \
+do {                                \
+    printf("panic: " __VA_ARGS__);  \
+    halt();                         \
+} while (0)
+
+#endif // __OHWES_H

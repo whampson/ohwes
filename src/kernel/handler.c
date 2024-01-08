@@ -21,20 +21,8 @@
 
 #include <stdarg.h>
 #include <stdio.h>
-#include <os.h>
+#include <ohwes.h>
 #include <interrupt.h>
-
-void panic(const char *reason, ...)
-{
-    // TODO: should we get to panic graveyard via from interrupt or syscall rather than direct call?
-
-    va_list args;
-    va_start(args, reason);
-
-    printf("panic: ");
-    vprintf(reason, args);
-    halt();
-}
 
 __fastcall
 void recv_interrupt(struct iregs *regs)
@@ -52,5 +40,6 @@ void recv_interrupt(struct iregs *regs)
 __fastcall
 void recv_syscall(struct iregs *regs)
 {
-    panic("unexpected system call %d at %#08x!", regs->eax, regs->eip);
+    printf("eip = %08x, esp = %08x, ss = %2x\n", regs->eip, regs->esp, regs->ss);
+    printf("unexpected system call %d at %#08x!\n", regs->eax, regs->eip);
 }

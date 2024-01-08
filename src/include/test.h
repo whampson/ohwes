@@ -3,7 +3,7 @@
 
 #if TEST_BUILD
 
-#include <os.h>
+#include <ohwes.h>
 #include <stdio.h>
 
 #define _VERIFY_PANIC(fn,...) \

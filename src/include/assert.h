@@ -24,10 +24,9 @@
 #ifndef __ASSERT_H
 #define __ASSERT_H
 
-#include <os.h>     // for panic()
+#include <ohwes.h>     // for panic()
 
 #ifdef DEBUG
-    // TOOD: call abort() instead of panic
 #define assert(x) \
 do { \
     if (!(x)) { \

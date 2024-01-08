@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <os.h>
+#include <ohwes.h>
 #include "test_libc.h"
 
 #ifdef TEST_BUILD

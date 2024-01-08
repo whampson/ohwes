@@ -22,7 +22,6 @@
  */
 
 #include <boot.h>
-#include <compiler.h>
 #include <interrupt.h>
 #include <x86.h>
 
@@ -110,7 +109,7 @@ static void init_gdt(void)
 
 static void init_idt(void)
 {
-    idt_thunk excepts[NUM_EXCEPTION] =
+    static const idt_thunk excepts[NUM_EXCEPTION] =
     {
         _thunk_except00h, _thunk_except01h, _thunk_except02h, _thunk_except03h,
         _thunk_except04h, _thunk_except05h, _thunk_except06h, _thunk_except07h,
@@ -122,7 +121,7 @@ static void init_idt(void)
         _thunk_except1Ch, _thunk_except1Ch, _thunk_except1Eh, _thunk_except1Fh
     };
 
-    idt_thunk irqs[NUM_IRQ] =
+    static const idt_thunk irqs[NUM_IRQ] =
     {
         _thunk_irq00h, _thunk_irq01h, _thunk_irq02h, _thunk_irq03h,
         _thunk_irq04h, _thunk_irq05h, _thunk_irq06h, _thunk_irq07h,
@@ -141,22 +140,24 @@ static void init_idt(void)
         i = idx - INT_IRQ;
 
         if (idx >= INT_EXCEPTION && e < NUM_EXCEPTION) {
-            // interrupt gate for exceptions
+            // interrupt gate for exceptions;
+            // probably a good idea to handle exceptions with no interruptions
             make_intr_gate(desc, SEGSEL_KERNEL_CODE, DPL_KERNEL, excepts[e]);
         }
         else if (idx >= INT_IRQ && i < NUM_IRQ) {
-            // interrupt gate for device IRQs, we don't want other devices
-            // interrupting this one's handler
+            // interrupt gate for device IRQs;
+            // we don't want other devices interrupting handler!
             make_intr_gate(desc, SEGSEL_KERNEL_CODE, DPL_KERNEL, irqs[i]);
         }
         else if (idx == INT_SYSCALL) {
-            // user-mode accessible trap gate, so devices can interrupt
-            // system call
+            // user-mode accessible trap gate for system calls;
+            // devices can interrupt system call
             make_trap_gate(desc, SEGSEL_KERNEL_CODE, DPL_USER, _thunk_syscall);
         }
-        // else, keep it NULL! Will generate another exception
+        // else, keep the vector NULL! will generate a double-fault exception
     }
 
+    // Load the IDTR
     PseudoDesc idtDesc = { .base = IDT_BASE, .limit = IDT_LIMIT };
     lidt(idtDesc);
 }
