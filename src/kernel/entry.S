@@ -1,5 +1,15 @@
 #include <interrupt.h>
 
+.macro LOAD_SEGREG addr, reg
+        movw    \addr, %ax
+        movw    %ax, \reg
+.endm
+
+.macro STORE_SEGREG reg, addr
+        movw    \reg, %ax
+        movw    %ax, \addr
+.endm
+
 .text
 .code32
 
@@ -36,14 +46,10 @@ do_interrupt:
         movl            %edi, IREGS_EDI(%esp)
         movl            %ebp, IREGS_EBP(%esp)
         movl            %eax, IREGS_EAX(%esp)
-        movw            %ds, %ax
-        movw            %ax, IREGS_DS(%esp)
-        movw            %es, %ax
-        movw            %ax, IREGS_ES(%esp)
-        movw            %fs, %ax
-        movw            %ax, IREGS_FS(%esp)
-        movw            %gs, %ax
-        movw            %ax, IREGS_GS(%esp)
+        STORE_SEGREG    %ds, IREGS_DS(%esp)
+        STORE_SEGREG    %es, IREGS_ES(%esp)
+        STORE_SEGREG    %fs, IREGS_FS(%esp)
+        STORE_SEGREG    %gs, IREGS_GS(%esp)
 
         movl            %esp, %ecx              # fastcall param (struct iregs *)
         movl            IREGS_VEC_NUM(%esp), %eax
@@ -67,6 +73,10 @@ end_syscall:                                    # so we need to preserve it call
         movl            IREGS_EDX(%esp), %edx
         movl            IREGS_ECX(%esp), %ecx
         movl            IREGS_EBX(%esp), %ebx
+        LOAD_SEGREG     IREGS_DS(%esp), %ds
+        LOAD_SEGREG     IREGS_ES(%esp), %es
+        LOAD_SEGREG     IREGS_FS(%esp), %fs
+        LOAD_SEGREG     IREGS_GS(%esp), %gs
         addl            $IREGS_EIP, %esp
         iret
 
