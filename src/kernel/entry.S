@@ -59,7 +59,7 @@ halt:
 ##
 .globl do_interrupt
 do_interrupt:
-        subl            $IREGS_MAIN_SIZE, %esp
+        subl            $SIZEOF_IREGS_CTX, %esp
         movl            %ebx, IREGS_EBX(%esp)
         movl            %ecx, IREGS_ECX(%esp)
         movl            %edx, IREGS_EDX(%esp)

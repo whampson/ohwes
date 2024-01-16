@@ -13,29 +13,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/handler.c
- *      Created: April 4, 2023
+ *         File: kernel/syscall.c
+ *      Created: January 15, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#include <stdarg.h>
-#include <stdio.h>
-#include <ohwes.h>
 #include <interrupt.h>
-
-__fastcall
-void recv_interrupt(struct iregs *regs)
-{
-    if (regs->vec_num >= INT_EXCEPTION &&
-        regs->vec_num < INT_EXCEPTION + NUM_EXCEPTION)
-    {
-        panic("exception %02x occurred at %#08x! (error code = %d)", regs->vec_num, regs->eip, regs->err_code);
-    }
-
-    panic("unexpected interrupt %d at %#08x!", regs->eax, regs->eip);
-}
-
 
 __fastcall
 void recv_syscall(struct iregs *regs)

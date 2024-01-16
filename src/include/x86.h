@@ -564,6 +564,13 @@ __asm__ volatile (          \
 #define load_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs))
 #define load_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss))
 
+#define store_cs(cs) __asm__ volatile ("movw %%cs, %%ax"     : "=a"(cs) :)
+#define store_ds(cs) __asm__ volatile ("movw %%ds, %%ax"     : "=a"(ds) :)
+#define store_es(cs) __asm__ volatile ("movw %%es, %%ax"     : "=a"(es) :)
+#define store_fs(cs) __asm__ volatile ("movw %%fs, %%ax"     : "=a"(fs) :)
+#define store_gs(cs) __asm__ volatile ("movw %%gs, %%ax"     : "=a"(gs) :)
+#define store_ss(cs) __asm__ volatile ("movw %%ss, %%ax"     : "=a"(ss) :)
+
 /**
  * Clears the interrupt flag, disabling interrupts.
  */

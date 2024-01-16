@@ -26,15 +26,22 @@
 
 #define KERNEL_CS       0x10
 #define KERNEL_DS       0x18
+#define KERNEL_SS       KERNEL_DS
 #define USER_CS         0x23
 #define USER_DS         0x2B
+#define USER_SS         USER_DS
 
-void halt(void);
+extern void halt(void); // see entry.S
+
+#define die()                       \
+do {                                \
+    for (;;);                       \
+} while (0)
 
 #define panic(...)                  \
 do {                                \
     printf("panic: " __VA_ARGS__);  \
-    halt();                         \
+    die();                          \
 } while (0)
 
 #endif // __OHWES_H

@@ -105,30 +105,34 @@
 #define IREGS_ESP           0x38
 #define IREGS_SS            0x3C
 
-#define IREGS_MAIN_SIZE     (IREGS_VEC_NUM-IREGS_EBX)
+#define SIZEOF_IREGS_CTX    (IREGS_VEC_NUM-IREGS_EBX)
+#define SIZEOF_IREGS        0x40
 
 #ifndef __ASSEMBLER__
 
 /**
- * Current process's register state upon entry to the kernel via interrupt.
+ * Register state upon receiving an interrupt.
  */
 struct iregs
 {
-    uint32_t ebx;       // pushed by main handler
-    uint32_t ecx;       // pushed by main handler
-    uint32_t edx;       // pushed by main handler
-    uint32_t esi;       // pushed by main handler
-    uint32_t edi;       // pushed by main handler
-    uint32_t ebp;       // pushed by main handler
-    uint32_t eax;       // pushed by main handler, not restored for syscall
-    uint16_t ds;        // pushed by main handler
-    uint16_t es;        // pushed by main handler
-    uint16_t fs;        // pushed by main handler
-    uint16_t gs;        // pushed by main handler
+// program context regs
+    uint32_t ebx;       // pushed by common handler
+    uint32_t ecx;       // pushed by common handler
+    uint32_t edx;       // pushed by common handler
+    uint32_t esi;       // pushed by common handler
+    uint32_t edi;       // pushed by common handler
+    uint32_t ebp;       // pushed by common handler
+    uint32_t eax;       // pushed by common handler, not restored for syscall
+    uint16_t ds;        // pushed by common handler
+    uint16_t es;        // pushed by common handler
+    uint16_t fs;        // pushed by common handler
+    uint16_t gs;        // pushed by common handler
 
+// interrupt info
     uint32_t vec_num;   // pushed by thunk
     uint32_t err_code;  // pushed by cpu or thunk
 
+// cpu control regs (system context, iret regs)
     uint32_t eip;       // pushed by cpu
     uint32_t cs;        // pushed by cpu
     uint32_t eflags;    // pushed by cpu
@@ -154,6 +158,7 @@ static_assert(offsetof(struct iregs, cs) == IREGS_CS, "offsetof(struct iregs, cs
 static_assert(offsetof(struct iregs, eflags) == IREGS_EFLAGS, "offsetof(struct iregs, eflags) == IREGS_EFLAGS");
 static_assert(offsetof(struct iregs, esp) == IREGS_ESP, "offsetof(struct iregs, esp) == IREGS_ESP");
 static_assert(offsetof(struct iregs, ss) == IREGS_SS, "offsetof(struct iregs, ss) == IREGS_SS");
+static_assert(sizeof(struct iregs) == SIZEOF_IREGS, "sizeof(struct iregs) == SIZEOF_IREGS");
 
 __fastcall void recv_interrupt(struct iregs *regs);
 __fastcall void recv_irq(struct iregs *regs);

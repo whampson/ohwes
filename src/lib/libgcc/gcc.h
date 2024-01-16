@@ -59,6 +59,11 @@
  */
 #define __align(n)      __attribute__((aligned(n)))
 
+/**
+ * Indicate that a function does not return.
+ */
+#define __noreturn      __attribute__((noreturn))
+
 #else
 #error "Please compile using GCC."
 #endif  /* __GNUC__ */

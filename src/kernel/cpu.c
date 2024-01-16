@@ -23,21 +23,21 @@
 
 #include <boot.h>
 #include <interrupt.h>
-#include <x86.h>
+#include <cpu.h>
 
-#define CPU_DATA_AREA       0x800
-#define PAGE_1              0x1000
+#define CPU_DATA_AREA       0x1000
+#define PAGE_2              0x2000
 
 //
 // x86 Descriptor table and TSS geometry.
 //
-// IDT
+// IDT                                              // 0x800
 #define IDT_COUNT           256
 #define IDT_BASE            CPU_DATA_AREA
 #define IDT_LIMIT           (IDT_COUNT*DESC_SIZE-1)
 #define IDT_SIZE            (IDT_LIMIT+1)
-// GDT
-#define GDT_COUNT           8
+// GDT                                              //
+#define GDT_COUNT           8                       //
 #define GDT_BASE            (IDT_BASE+IDT_SIZE)     // GDT immediately follows IDT
 #define GDT_LIMIT           (GDT_COUNT*DESC_SIZE-1)
 #define GDT_SIZE            (GDT_LIMIT+1)
@@ -48,12 +48,12 @@
 #define LDT_SIZE            (LDT_LIMIT+1)
 // TSS
 #define TSS_BASE            (LDT_BASE+LDT_SIZE)     // TSS immediately follows LDT
-#define TSS_LIMIT           (TSS_BASE+TSS_SIZE-1)   // TSS_SIZE fixed, defined in x86.h
+#define TSS_LIMIT           (TSS_SIZE-1)            // TSS_SIZE is fixed, defined in x86.h
 
 static_assert(IDT_BASE + IDT_LIMIT < GDT_BASE, "IDT overlaps GDT!");
 static_assert(GDT_BASE + GDT_LIMIT < LDT_BASE, "GDT overlaps LDT!");
 static_assert(LDT_BASE + LDT_LIMIT < TSS_BASE, "LDT overlaps TSS!");
-static_assert(TSS_BASE + TSS_LIMIT >= PAGE_1, "TSS overlaps into next page!");
+static_assert(TSS_BASE + TSS_LIMIT <= PAGE_2, "TSS overlaps into next page!");
 
 //
 // CPU Privilege Levels
@@ -79,55 +79,18 @@ static_assert(KERNEL_DS == SEGSEL_KERNEL_DATA, "KERNEL_DS invalid!");
 static_assert(USER_CS == SEGSEL_USER_CODE, "USER_CS invalid!");
 static_assert(USER_DS == SEGSEL_USER_DATA, "USER_DS invalid!");
 
-extern __fastcall void _thunk_except00h(void);
-extern __fastcall void _thunk_except01h(void);
-extern __fastcall void _thunk_except02h(void);
-extern __fastcall void _thunk_except03h(void);
-extern __fastcall void _thunk_except04h(void);
-extern __fastcall void _thunk_except05h(void);
-extern __fastcall void _thunk_except06h(void);
-extern __fastcall void _thunk_except07h(void);
-extern __fastcall void _thunk_except08h(void);
-extern __fastcall void _thunk_except09h(void);
-extern __fastcall void _thunk_except0Ah(void);
-extern __fastcall void _thunk_except0Bh(void);
-extern __fastcall void _thunk_except0Ch(void);
-extern __fastcall void _thunk_except0Dh(void);
-extern __fastcall void _thunk_except0Eh(void);
-extern __fastcall void _thunk_except0Fh(void);
-extern __fastcall void _thunk_except10h(void);
-extern __fastcall void _thunk_except11h(void);
-extern __fastcall void _thunk_except12h(void);
-extern __fastcall void _thunk_except13h(void);
-extern __fastcall void _thunk_except14h(void);
-extern __fastcall void _thunk_except15h(void);
-extern __fastcall void _thunk_except16h(void);
-extern __fastcall void _thunk_except17h(void);
-extern __fastcall void _thunk_except18h(void);
-extern __fastcall void _thunk_except19h(void);
-extern __fastcall void _thunk_except1Ah(void);
-extern __fastcall void _thunk_except1Bh(void);
-extern __fastcall void _thunk_except1Ch(void);
-extern __fastcall void _thunk_except1Dh(void);
-extern __fastcall void _thunk_except1Eh(void);
-extern __fastcall void _thunk_except1Fh(void);
-extern __fastcall void _thunk_irq00h(void);
-extern __fastcall void _thunk_irq01h(void);
-extern __fastcall void _thunk_irq02h(void);
-extern __fastcall void _thunk_irq03h(void);
-extern __fastcall void _thunk_irq04h(void);
-extern __fastcall void _thunk_irq05h(void);
-extern __fastcall void _thunk_irq06h(void);
-extern __fastcall void _thunk_irq07h(void);
-extern __fastcall void _thunk_irq08h(void);
-extern __fastcall void _thunk_irq09h(void);
-extern __fastcall void _thunk_irq0Ah(void);
-extern __fastcall void _thunk_irq0Bh(void);
-extern __fastcall void _thunk_irq0Ch(void);
-extern __fastcall void _thunk_irq0Dh(void);
-extern __fastcall void _thunk_irq0Eh(void);
-extern __fastcall void _thunk_irq0Fh(void);
-extern __fastcall void _thunk_syscall(void);
+struct tss * get_tss(struct tss *tss)
+{
+    return (struct tss *) TSS_BASE;
+}
+
+struct x86_desc * get_seg_desc(uint16_t segsel)
+{
+    if (segsel == 0 || segsel > GDT_LIMIT) {
+        panic("invalid segment selector");
+    }
+    return get_desc(GDT_BASE, segsel);
+}
 
 static void init_gdt(const struct bootinfo * const info);
 static void init_idt(const struct bootinfo * const info);
@@ -264,8 +227,9 @@ static void init_tss(const struct bootinfo * const info)
     // Fill TSS with LDT segment selector, kernel stack pointer,
     // and kernel stack segment selector
     tss->ldt_segsel = SEGSEL_LDT;
-    tss->esp0 = (uint32_t) info->stack_base;
+    tss->esp0 = (uint32_t) info->stack_base-0x2000;     // TODO: make this WELL-DEFINED!!
     tss->ss0 = SEGSEL_KERNEL_DATA;
+    printf("tss->esp0 = 0x%08x\n", tss->esp0);
 
     // Add TSS entry to GDT
     void *pTssDesc = get_desc(GDT_BASE, SEGSEL_TSS);
