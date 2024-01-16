@@ -20,16 +20,6 @@
 
 #include <interrupt.h>
 
-.macro LOAD_SEGREG addr, reg
-        movw    \addr, %ax
-        movw    %ax, \reg
-.endm
-
-.macro STORE_SEGREG reg, addr
-        movw    \reg, %ax
-        movw    %ax, \addr
-.endm
-
 .text
 .code32
 
@@ -42,6 +32,17 @@ kentry:
 halt:
         hlt
         jmp     halt
+
+
+.macro LOAD_SEGREG addr, reg
+        movw    \addr, %ax
+        movw    %ax, \reg
+.endm
+
+.macro STORE_SEGREG reg, addr
+        movw    \reg, %ax
+        movw    %ax, \addr
+.endm
 
 ##
 # Common interrupt entry point.
@@ -151,7 +152,7 @@ thunk_name:                                                                     
 ##
 # Device IRQ thunk.
 ##
-#define THUNK_IRQ(thunk_name, vec_num)                                          \
+#define IRQ_THUNK(thunk_name, vec_num)                                          \
 .globl thunk_name;                                                              \
 thunk_name:                                                                     \
         pushl   $0;                                                             \
@@ -161,7 +162,7 @@ thunk_name:                                                                     
 ##
 # System call thunk.
 ##
-#define THUNK_SYSCALL(thunk_name)                                               \
+#define SYSCALL_THUNK(thunk_name)                                               \
 .globl thunk_name;                                                              \
 thunk_name:                                                                     \
     pushl   $0;                                                                 \
@@ -212,26 +213,26 @@ EXCEPTION_THUNK         (_thunk_except1Eh, 30)              # (Intel reserved)
 EXCEPTION_THUNK         (_thunk_except1Fh, 31)              # (Intel reserved)
 
 # 32-47                 device IRQs
-THUNK_IRQ               (_thunk_irq00h, IRQ_TIMER)
-THUNK_IRQ               (_thunk_irq01h, IRQ_KEYBOARD)
-THUNK_IRQ               (_thunk_irq02h, IRQ_SLAVE)
-THUNK_IRQ               (_thunk_irq03h, IRQ_COM2)
-THUNK_IRQ               (_thunk_irq04h, IRQ_COM1)
-THUNK_IRQ               (_thunk_irq05h, IRQ_LPT2)
-THUNK_IRQ               (_thunk_irq06h, IRQ_FLOPPY)
-THUNK_IRQ               (_thunk_irq07h, IRQ_LPT1)
-THUNK_IRQ               (_thunk_irq08h, IRQ_RTC)
-THUNK_IRQ               (_thunk_irq09h, IRQ_ACPI)
-THUNK_IRQ               (_thunk_irq0Ah, IRQ_MISC1)
-THUNK_IRQ               (_thunk_irq0Bh, IRQ_MISC2)
-THUNK_IRQ               (_thunk_irq0Ch, IRQ_MOUSE)
-THUNK_IRQ               (_thunk_irq0Dh, IRQ_COPOCESSOR)
-THUNK_IRQ               (_thunk_irq0Eh, IRQ_ATA1)
-THUNK_IRQ               (_thunk_irq0Fh, IRQ_ATA2)
+IRQ_THUNK               (_thunk_irq00h, IRQ_TIMER)
+IRQ_THUNK               (_thunk_irq01h, IRQ_KEYBOARD)
+IRQ_THUNK               (_thunk_irq02h, IRQ_SLAVE)
+IRQ_THUNK               (_thunk_irq03h, IRQ_COM2)
+IRQ_THUNK               (_thunk_irq04h, IRQ_COM1)
+IRQ_THUNK               (_thunk_irq05h, IRQ_LPT2)
+IRQ_THUNK               (_thunk_irq06h, IRQ_FLOPPY)
+IRQ_THUNK               (_thunk_irq07h, IRQ_LPT1)
+IRQ_THUNK               (_thunk_irq08h, IRQ_RTC)
+IRQ_THUNK               (_thunk_irq09h, IRQ_ACPI)
+IRQ_THUNK               (_thunk_irq0Ah, IRQ_MISC1)
+IRQ_THUNK               (_thunk_irq0Bh, IRQ_MISC2)
+IRQ_THUNK               (_thunk_irq0Ch, IRQ_MOUSE)
+IRQ_THUNK               (_thunk_irq0Dh, IRQ_COPOCESSOR)
+IRQ_THUNK               (_thunk_irq0Eh, IRQ_ATA1)
+IRQ_THUNK               (_thunk_irq0Fh, IRQ_ATA2)
 
 # 48-79                 reserved
 
 # 80                    system call
-THUNK_SYSCALL           (_thunk_syscall)
+SYSCALL_THUNK           (_thunk_syscall)
 
 # 81-255                reserved
