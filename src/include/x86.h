@@ -330,16 +330,6 @@ struct tss
 static_assert(sizeof(struct tss) == TSS_SIZE, "sizeof(struct tss) == TSS_SIZE");
 
 /**
- * Gets a Segment Descriptor from a descriptor table.
- *
- * @param table a pointer to the descriptor table
- * @param segsel the segment selector used to index the table
- * @return a pointer to the segment descriptor specified by the segment selector
- */
-#define get_desc(table,segsel) \
-    (&((struct x86_desc*)(table))[(segsel)>>3])
-
-/**
  * Configures a Segment Descriptor as a 32-bit Code or Data Segment. Code/Data
  * Segment descriptors go in the GDT or LDT.
  *
@@ -557,19 +547,31 @@ __asm__ volatile (          \
     :                       \
 )
 
-#define load_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs))
-#define load_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      : : "a"(ds))
-#define load_es(es) __asm__ volatile ("movw %%ax, %%es"      : : "a"(es))
-#define load_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      : : "a"(fs))
-#define load_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs))
-#define load_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss))
+#define  load_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs))
+#define  load_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      : : "a"(ds))
+#define  load_es(es) __asm__ volatile ("movw %%ax, %%es"      : : "a"(es))
+#define  load_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      : : "a"(fs))
+#define  load_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs))
+#define  load_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss))
+#define store_cs(cs) __asm__ volatile ("movw %%cs, %%ax"      : "=a"(cs):)
+#define store_ds(cs) __asm__ volatile ("movw %%ds, %%ax"      : "=a"(ds):)
+#define store_es(cs) __asm__ volatile ("movw %%es, %%ax"      : "=a"(es):)
+#define store_fs(cs) __asm__ volatile ("movw %%fs, %%ax"      : "=a"(fs):)
+#define store_gs(cs) __asm__ volatile ("movw %%gs, %%ax"      : "=a"(gs):)
+#define store_ss(cs) __asm__ volatile ("movw %%ss, %%ax"      : "=a"(ss):)
 
-#define store_cs(cs) __asm__ volatile ("movw %%cs, %%ax"     : "=a"(cs) :)
-#define store_ds(cs) __asm__ volatile ("movw %%ds, %%ax"     : "=a"(ds) :)
-#define store_es(cs) __asm__ volatile ("movw %%es, %%ax"     : "=a"(es) :)
-#define store_fs(cs) __asm__ volatile ("movw %%fs, %%ax"     : "=a"(fs) :)
-#define store_gs(cs) __asm__ volatile ("movw %%gs, %%ax"     : "=a"(gs) :)
-#define store_ss(cs) __asm__ volatile ("movw %%ss, %%ax"     : "=a"(ss) :)
+#define  load_eax(eax) __asm__ volatile ("" : : "a"(eax))
+#define  load_ebx(ebx) __asm__ volatile ("" : : "b"(ebx))
+#define  load_ecx(ecx) __asm__ volatile ("" : : "c"(ecx))
+#define  load_edx(edx) __asm__ volatile ("" : : "d"(edx))
+#define  load_esi(esi) __asm__ volatile ("" : : "S"(esi))
+#define  load_edi(edi) __asm__ volatile ("" : : "D"(edi))
+#define store_eax(eax) __asm__ volatile ("" : "=a"(eax):)
+#define store_ebx(ebx) __asm__ volatile ("" : "=b"(ebx):)
+#define store_ecx(ecx) __asm__ volatile ("" : "=c"(ecx):)
+#define store_edx(edx) __asm__ volatile ("" : "=d"(edx):)
+#define store_esi(esi) __asm__ volatile ("" : "=S"(esi):)
+#define store_edi(edi) __asm__ volatile ("" : "=D"(edi):)
 
 /**
  * Clears the interrupt flag, disabling interrupts.

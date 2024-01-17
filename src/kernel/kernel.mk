@@ -5,10 +5,9 @@ SOURCES := \
     entry.S \
     console.c \
     cpu.c \
-    interrupt.c \
+    handler.c \
     init.c \
     irq.c \
-    syscall.c \
     vga.c \
 
 ifeq "${TEST_BUILD}" "1"
@@ -18,7 +17,7 @@ ifeq "${TEST_BUILD}" "1"
     test/string_tests.c
 endif
 
-TGT_CFLAGS  := -Wno-unused-function -Wno-noreturn
+TGT_CFLAGS  := -Wno-unused-function
 TGT_LDFLAGS := -Ttext 0x10000 -e kentry
 
 LINKLIBS := \

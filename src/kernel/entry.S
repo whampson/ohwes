@@ -58,6 +58,7 @@ halt:
 # bp -->                 (bp loaded by cpu from tss->esp0)
 ##
 .globl do_interrupt
+.globl switch_context
 do_interrupt:
         subl            $SIZEOF_IREGS_CTX, %esp
         movl            %ebx, IREGS_EBX(%esp)
@@ -71,7 +72,6 @@ do_interrupt:
         STORE_SEGREG    %es, IREGS_ES(%esp)
         STORE_SEGREG    %fs, IREGS_FS(%esp)
         STORE_SEGREG    %gs, IREGS_GS(%esp)
-
         movl            %esp, %ecx              # fastcall param (struct iregs *)
         movl            IREGS_VEC_NUM(%esp), %eax
         test            %eax, %eax
@@ -84,6 +84,8 @@ do_interrupt:
         # noncontiguous execution
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+switch_context:
+        movl            %ecx, %esp
 end_interrupt:
 end_irq:
         movl            IREGS_EAX(%esp), %eax   # syscall return value passed thru eax,

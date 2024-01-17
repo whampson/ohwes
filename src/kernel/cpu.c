@@ -55,29 +55,32 @@ static_assert(GDT_BASE + GDT_LIMIT < LDT_BASE, "GDT overlaps LDT!");
 static_assert(LDT_BASE + LDT_LIMIT < TSS_BASE, "LDT overlaps TSS!");
 static_assert(TSS_BASE + TSS_LIMIT <= PAGE_2, "TSS overlaps into next page!");
 
-//
-// CPU Privilege Levels
-//
-enum pl {
-    PL_KERNEL = 0,
-    PL_USER = 3,
-};
 
 //
 // GDT Segment Selectors
 //
 #define SEGSEL_NULL         (0x0)
-#define SEGSEL_LDT          (0x08|PL_KERNEL)
-#define SEGSEL_KERNEL_CODE  (0x10|PL_KERNEL)
-#define SEGSEL_KERNEL_DATA  (0x18|PL_KERNEL)
-#define SEGSEL_USER_CODE    (0x20|PL_USER)
-#define SEGSEL_USER_DATA    (0x28|PL_USER)
-#define SEGSEL_TSS          (0x30|PL_KERNEL)
+#define SEGSEL_LDT          (0x08|KERNEL_PL)
+#define SEGSEL_KERNEL_CODE  (0x10|KERNEL_PL)
+#define SEGSEL_KERNEL_DATA  (0x18|KERNEL_PL)
+#define SEGSEL_USER_CODE    (0x20|USER_PL)
+#define SEGSEL_USER_DATA    (0x28|USER_PL)
+#define SEGSEL_TSS          (0x30|KERNEL_PL)
 
 static_assert(KERNEL_CS == SEGSEL_KERNEL_CODE, "KERNEL_CS invalid!");
 static_assert(KERNEL_DS == SEGSEL_KERNEL_DATA, "KERNEL_DS invalid!");
 static_assert(USER_CS == SEGSEL_USER_CODE, "USER_CS invalid!");
 static_assert(USER_DS == SEGSEL_USER_DATA, "USER_DS invalid!");
+
+/**
+ * Gets a Segment Descriptor from a descriptor table.
+ *
+ * @param table a pointer to the descriptor table
+ * @param segsel the segment selector used to index the table
+ * @return a pointer to the segment descriptor specified by the segment selector
+ */
+#define get_desc(table,segsel) \
+    (&((struct x86_desc*)(table))[(segsel)>>3])
 
 struct tss * get_tss(struct tss *tss)
 {
@@ -86,8 +89,17 @@ struct tss * get_tss(struct tss *tss)
 
 struct x86_desc * get_seg_desc(uint16_t segsel)
 {
-    if (segsel == 0 || segsel > GDT_LIMIT) {
-        panic("invalid segment selector");
+    struct segsel *ss = (struct segsel *) &segsel;
+
+    if (ss->ti) {
+        if (segsel > LDT_LIMIT) {
+            panic("LDT segment selector out of range - %04x", segsel);
+        }
+        return get_desc(LDT_BASE, segsel);
+    }
+
+    if (segsel > GDT_LIMIT) {
+        panic("GDT segment selector out of range - %04x", segsel);
     }
     return get_desc(GDT_BASE, segsel);
 }
@@ -123,10 +135,10 @@ static void init_gdt(const struct bootinfo * const info)
     struct x86_desc *user_cs = get_desc(GDT_BASE, SEGSEL_USER_CODE);
     struct x86_desc *user_ds = get_desc(GDT_BASE, SEGSEL_USER_DATA);
 
-    make_seg_desc(kernel_cs, PL_KERNEL, 0x0, LIMIT_MAX, DESCTYPE_CODE_XR);  // KERNEL_CS -> DPL0, Execute/Read
-    make_seg_desc(kernel_ds, PL_KERNEL, 0x0, LIMIT_MAX, DESCTYPE_DATA_RW);  // KERNEL_DS -> DPL0, Read/Write
-    make_seg_desc(user_cs,   PL_USER,   0x0, LIMIT_MAX, DESCTYPE_CODE_XR);  // USER_CS   -> DPL3, Execute/Read
-    make_seg_desc(user_ds,   PL_USER,   0x0, LIMIT_MAX, DESCTYPE_DATA_RW);  // USER_DS   -> DPL3, Read/Write
+    make_seg_desc(kernel_cs, KERNEL_PL, 0x0, LIMIT_MAX, DESCTYPE_CODE_XR);  // KERNEL_CS -> DPL0, Execute/Read
+    make_seg_desc(kernel_ds, KERNEL_PL, 0x0, LIMIT_MAX, DESCTYPE_DATA_RW);  // KERNEL_DS -> DPL0, Read/Write
+    make_seg_desc(user_cs,   USER_PL,   0x0, LIMIT_MAX, DESCTYPE_CODE_XR);  // USER_CS   -> DPL3, Execute/Read
+    make_seg_desc(user_ds,   USER_PL,   0x0, LIMIT_MAX, DESCTYPE_DATA_RW);  // USER_DS   -> DPL3, Read/Write
 
     // Create GDT descriptor and use it to load GDTR, effectively "setting" the GDT
     struct pseudo_desc gdt_desc = { .base = GDT_BASE, .limit = GDT_LIMIT };
@@ -176,17 +188,17 @@ static void init_idt(const struct bootinfo * const info)
         if (idx >= INT_EXCEPTION && e < NUM_EXCEPTION) {
             // interrupt gate for exceptions;
             // probably a good idea to handle exceptions with no interruptions
-            make_intr_gate(desc, SEGSEL_KERNEL_CODE, PL_KERNEL, excepts[e]);
+            make_intr_gate(desc, SEGSEL_KERNEL_CODE, KERNEL_PL, excepts[e]);
         }
         else if (idx >= INT_IRQ && i < NUM_IRQ) {
             // interrupt gate for device IRQs;
             // we don't want other devices interrupting handler!
-            make_intr_gate(desc, SEGSEL_KERNEL_CODE, PL_KERNEL, irqs[i]);
+            make_intr_gate(desc, SEGSEL_KERNEL_CODE, KERNEL_PL, irqs[i]);
         }
         else if (idx == INT_SYSCALL) {
             // user-mode accessible trap gate for system calls;
             // devices can interrupt system call
-            make_trap_gate(desc, SEGSEL_KERNEL_CODE, PL_USER, _thunk_syscall);
+            make_trap_gate(desc, SEGSEL_KERNEL_CODE, USER_PL, _thunk_syscall);
         }
         // else, keep the vector NULL! will generate a double-fault exception
     }
@@ -207,7 +219,7 @@ static void init_ldt(const struct bootinfo * const info)
 
     // Create LDT entry in GDT using predefined LDT segment selector.
     void *ldt_desc = get_desc(GDT_BASE, SEGSEL_LDT);
-    make_ldt_desc(ldt_desc, PL_KERNEL, LDT_BASE, LDT_LIMIT);
+    make_ldt_desc(ldt_desc, KERNEL_PL, LDT_BASE, LDT_LIMIT);
 
     // Load LDTR
     lldt(SEGSEL_LDT);
@@ -227,13 +239,12 @@ static void init_tss(const struct bootinfo * const info)
     // Fill TSS with LDT segment selector, kernel stack pointer,
     // and kernel stack segment selector
     tss->ldt_segsel = SEGSEL_LDT;
-    tss->esp0 = (uint32_t) info->stack_base-0x2000;     // TODO: make this WELL-DEFINED!!
+    tss->esp0 = (uint32_t) info->stack_base;     // TODO: make this WELL-DEFINED!!
     tss->ss0 = SEGSEL_KERNEL_DATA;
-    printf("tss->esp0 = 0x%08x\n", tss->esp0);
 
     // Add TSS entry to GDT
     void *pTssDesc = get_desc(GDT_BASE, SEGSEL_TSS);
-    make_tss_desc(pTssDesc, PL_KERNEL, TSS_BASE, TSS_LIMIT);
+    make_tss_desc(pTssDesc, KERNEL_PL, TSS_BASE, TSS_LIMIT);
 
     // Load Task Register
     ltr(SEGSEL_TSS);

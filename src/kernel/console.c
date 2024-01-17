@@ -634,6 +634,7 @@ static void erase(int mode)
         case ERASE_ALL:     /* erase entire screen */
             start = m_framebuf;
             count = area;
+            break;
         default:
             assert(!"invalid erase mode!");
     }

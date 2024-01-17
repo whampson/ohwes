@@ -31,7 +31,9 @@
 #define USER_DS         0x2B
 #define USER_SS         USER_DS
 
-extern void halt(void); // see entry.S
+#define SYS_EXIT        0           // syscall test
+
+extern void halt(void);             // see entry.S
 
 #define die()                       \
 do {                                \
@@ -42,6 +44,27 @@ do {                                \
 do {                                \
     printf("panic: " __VA_ARGS__);  \
     die();                          \
+} while (0)
+
+#define _syscall0(func)             \
+do {                                \
+    __asm__ volatile (              \
+        "int %0"                    \
+        :                           \
+        : "i"(INT_SYSCALL),         \
+           "a"(func)                \
+    );                              \
+} while (0)
+
+#define _syscall1(func,arg0)        \
+do {                                \
+    __asm__ volatile (              \
+        "int %0"                    \
+        :                           \
+        : "i"(INT_SYSCALL),         \
+          "a"(func),                \
+          "b"(arg0)                 \
+    );                              \
 } while (0)
 
 #endif // __OHWES_H

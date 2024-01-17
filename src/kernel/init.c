@@ -22,8 +22,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <boot.h>
 #include <ohwes.h>
+#include <boot.h>
+#include <cpu.h>
 #include <irq.h>
 #include <interrupt.h>
 #include <test.h>
@@ -33,15 +34,8 @@ extern void init_vga(void);
 extern void init_console(void);
 extern void init_cpu(const struct bootinfo * const info);
 extern void init_irq(void);
+__fastcall extern void switch_context(struct iregs *regs);
 
-static void run_tests(void)
-{
-#if TEST_BUILD
-    test_libc();
-#endif
-}
-
-__fastcall
 void divide_by_zero(void)
 {
     volatile int a = 1;
@@ -50,17 +44,21 @@ void divide_by_zero(void)
     (void) c;
 }
 
-__fastcall
-void ring3_test(void)
+int ring3_start(void)
 {
-    // TODO: something's wrong on Bochs/VBox:
-    //   triple faults as soon as it executes the first instruction that accesses
-    //   memory
+    printf("got to ring3!\n");  // note: requires IOPL=3 due to console_write
+    divide_by_zero();
+    return 8675309;
+}
 
-    // divide_by_zero();
-    // printf("got to ring3!");
-    ((char *) 0xB8000)[0] = '@';
-    die();  // TODO: need a way to exit back to the kernel
+__noreturn
+void ring3_exit(void)
+{
+    int status = 0;
+    store_eax(status);
+
+    _syscall1(SYS_EXIT, status);
+    die();
 }
 
 __noreturn
@@ -69,31 +67,24 @@ void go_to_ring3(void *func)
     struct eflags eflags;
     cli_save(eflags);
 
-    eflags.intf = 1;
-    eflags.iopl = 0;
+    eflags.intf = 1;        // enable interrupts
+    eflags.iopl = USER_PL;  // so printf works
 
-#define TEMP_USER_STACK_SIZE 64
+    uint32_t *const ebp = (uint32_t * const) 0xC000;    // user stack
+    uint32_t *esp = ebp;
+    ebp[-1] = (uint32_t) ring3_exit;
+    esp = &ebp[-1];
 
-    intptr_t temp_user_stack[TEMP_USER_STACK_SIZE];
-    intptr_t *esp = &temp_user_stack[TEMP_USER_STACK_SIZE-1];
-
-    __asm__ volatile (
-        "               \n\
-        pushl   %0      \n\
-        pushl   %1      \n\
-        pushl   %2      \n\
-        pushl   %3      \n\
-        pushl   %4      \n\
-        iret            \n\
-        "
-        :
-        : "i"(USER_SS),
-          "r"(esp),
-          "r"(eflags),
-          "i"(USER_CS),
-          "r"(func)
-    );
-
+    struct iregs regs = {};
+    regs.cs = USER_CS;
+    regs.ds = USER_DS;
+    regs.es = USER_DS;
+    regs.ss = USER_SS;
+    regs.ebp = (uint32_t) ebp;
+    regs.esp = (uint32_t) esp;
+    regs.eip = (uint32_t) func;
+    regs.eflags = eflags._value;
+    switch_context(&regs);
     die();
 }
 
@@ -117,12 +108,11 @@ void kmain(const struct bootinfo * const bootinfo)
     init_console();
     init_cpu(&info);
     init_irq();
-    run_tests();
+#if TEST_BUILD
+    test_libc();
+#endif
 
     irq_unmask(IRQ_KEYBOARD);
-
-    go_to_ring3(ring3_test);
+    go_to_ring3(ring3_start);
     // divide_by_zero();
-
-    // __asm__ volatile ("int $0x81");
 }
