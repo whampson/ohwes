@@ -34,7 +34,20 @@ extern void init_vga(void);
 extern void init_console(void);
 extern void init_cpu(const struct bootinfo * const info);
 extern void init_irq(void);
-__fastcall extern void switch_context(struct iregs *regs);
+extern void init_memory(const struct bootinfo * const info);
+
+int getpl()
+{
+    struct segsel cs;
+    store_cs(cs);
+
+    return cs.rpl;
+}
+
+void gpfault(void)
+{
+    __asm__ volatile ("int $69");
+}
 
 void divide_by_zero(void)
 {
@@ -42,13 +55,6 @@ void divide_by_zero(void)
     volatile int b = 0;
     volatile int c = a / b;
     (void) c;
-}
-
-int ring3_start(void)
-{
-    printf("got to ring3!\n");  // note: requires IOPL=3 due to console_write
-    divide_by_zero();
-    return 8675309;
 }
 
 __noreturn
@@ -88,6 +94,9 @@ void go_to_ring3(void *func)
     die();
 }
 
+
+int main(void);
+
 __fastcall
 void kmain(const struct bootinfo * const bootinfo)
 {
@@ -106,13 +115,40 @@ void kmain(const struct bootinfo * const bootinfo)
 
     init_vga();
     init_console();
-    init_cpu(&info);
-    init_irq();
+    printf("\ecOH-WES 0.1 'Ronnie Raven'\n");    // Ronald Reagan lol
 #if TEST_BUILD
+    printf("TEST BUILD\n");
+    printf("testing libc\n");
     test_libc();
 #endif
-
+    printf("initializing CPU descriptors\n");
+    init_cpu(&info);
+    printf("initializing device IRQs\n");
+    init_irq();
     irq_unmask(IRQ_KEYBOARD);
-    go_to_ring3(ring3_start);
-    // divide_by_zero();
+    printf("initializing memory\n");
+    init_memory(&info);
+
+    printf("pl = %d\n", getpl());
+    go_to_ring3(main);
+    // "returns" to sys_exit
+}
+
+int sys_exit(int status)
+{
+    printf("back in the kernel... idling CPU\n");
+    printf("user mode returned %d\n", status);
+    // gpfault();
+
+    halt(); // TODO: switch to next task
+    return 0;
+}
+
+int main(void)
+{
+    printf("got to ring3!\n");  // note: requires IOPL=3 due to console_write
+    printf("pl = %d\n", getpl());
+    // gpfault();
+
+    return 8675309;
 }

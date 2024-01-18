@@ -24,15 +24,19 @@
 
 #include <stdio.h>
 
-#define KERNEL_CS       0x10
-#define KERNEL_DS       0x18
-#define KERNEL_SS       KERNEL_DS
-#define USER_CS         0x23
-#define USER_DS         0x2B
-#define USER_SS         USER_DS
+#define MIN_KB_REQUIRED     639     // let's see how long this lasts!
+#define SHOW_MEMMAP         1
 
-#define SYS_EXIT        0           // syscall test
+#define KERNEL_CS           0x10
+#define KERNEL_DS           0x18
+#define KERNEL_SS           KERNEL_DS
+#define USER_CS             0x23
+#define USER_DS             0x2B
+#define USER_SS             USER_DS
 
+#define SYS_EXIT            0       // syscall test
+
+extern int sys_exit(int status);
 extern void halt(void);             // see entry.S
 
 #define die()                       \

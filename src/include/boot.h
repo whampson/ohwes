@@ -127,7 +127,7 @@ enum acpi_mmap_type {
  */
 struct bootinfo {
     //
-    // !!! KEEP OFFSETS IN-LINE WITH s_BootInfo IN src/boot/stage2.h !!!
+    // !!! KEEP OFFSETS IN-LINE WITH src/boot/stage2.h !!!
     //
     intptr_t kernel_base;           // kernel image base address
     uint32_t kernel_size;           // kernel image size bytes
@@ -135,10 +135,10 @@ struct bootinfo {
     uint32_t stage2_size;           // stage2 image size bytes
     intptr_t stack_base;            // stack base upon leaving stage2
 
-    uint32_t ramlo_legacy;          // 1K pages 0 to 640K (BIOS INT 12h)
-    uint32_t ramhi_legacy;          // 1K pages 1M to 16M (BIOS INT 15h,AX=88h)
-    uint32_t ramlo_e801h;           // 1K pages 1M to 16M (BIOS INT 15h,AX=E801h)
-    uint32_t ramhi_e801h;           // 64K pages 16M to 4G (BIOS INT 15h,AX=E801h)
+    uint32_t kb_low;                // 1K pages 0 to 640K (BIOS INT 12h)
+    uint32_t kb_high;               // 1K pages 1M to 16M (BIOS INT 15h,AX=88h)
+    uint32_t kb_high_e801h;         // 1K pages 1M to 16M (BIOS INT 15h,AX=E801h)
+    uint32_t kb_extended;           // 64K pages 16M to 4G (BIOS INT 15h,AX=E801h)
     const acpi_mmap_t *mem_map;     // ACPI Memory Map (BIOS INT 15h,AX=E820h)
 
     struct hwflags hwflags;         // system hardware flags (BIOS INT 11h)

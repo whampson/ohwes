@@ -187,7 +187,8 @@ void console_write(char c)
             case S_NORM:
                 break;
             default:
-                assert(!"invalid console state!");
+                m_state = S_NORM;
+                panic("invalid console state!");
         }
     }
 
@@ -534,7 +535,7 @@ static void reset(void)
 {
     defaults(&consoles[active_cons]);
     write_cursor();
-    erase(0);
+    erase(ERASE_ALL);
 }
 
 static void bs(void)
@@ -635,8 +636,6 @@ static void erase(int mode)
             start = m_framebuf;
             count = area;
             break;
-        default:
-            assert(!"invalid erase mode!");
     }
 
     for (int i = 0; i < count; i++) {
@@ -723,7 +722,9 @@ static void read_cursor(void)
 static void write_cursor(void)
 {
     vga_set_cursor_pos(xy2pos(m_cursor.x, m_cursor.y));
-    vga_set_cursor_shape(m_cursor.shape & 0xFF, m_cursor.shape >> 8);
+    if (!m_cursor.hidden) {
+        vga_set_cursor_shape(m_cursor.shape & 0xFF, m_cursor.shape >> 8);
+    }
 }
 
 static inline void pos2xy(int pos, int *x, int *y)

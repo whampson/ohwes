@@ -8,6 +8,7 @@ SOURCES := \
     handler.c \
     init.c \
     irq.c \
+    memory.c \
     vga.c \
 
 ifeq "${TEST_BUILD}" "1"

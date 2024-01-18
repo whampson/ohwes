@@ -78,6 +78,17 @@ struct console
     } state;
 };
 
+enum console_color {
+    CONSOLE_BLACK,
+    CONSOLE_RED,
+    CONSOLE_GREEN,
+    CONSOLE_YELLOW,
+    CONSOLE_BLUE,
+    CONSOLE_MAGENTA,
+    CONSOLE_CYAN,
+    CONSOLE_WHITE
+};
+
 void console_write(char c);
 void console_reset(void);
 void console_save(void);

@@ -70,6 +70,9 @@ void recv_keypress()
 {
     uint8_t scancode = inb(0x60);
     printf("got scancode %d\n", scancode);
+    if (scancode == 69) {
+        __asm__ volatile ("int $69");
+    }
 }
 
 void init_irq(void)

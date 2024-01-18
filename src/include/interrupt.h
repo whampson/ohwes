@@ -162,7 +162,9 @@ static_assert(sizeof(struct iregs) == SIZEOF_IREGS, "sizeof(struct iregs) == SIZ
 
 __fastcall void recv_interrupt(struct iregs *regs);
 __fastcall void recv_irq(struct iregs *regs);
-__fastcall void recv_syscall(struct iregs *regs);
+__fastcall int recv_syscall(struct iregs *regs);
+
+__fastcall void switch_context(struct iregs *regs);
 
 typedef void (__fastcall *idt_thunk)(void);
 

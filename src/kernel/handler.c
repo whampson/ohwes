@@ -21,13 +21,15 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+
 #include <ohwes.h>
+#include <console.h>
 #include <interrupt.h>
 #include <x86.h>
 #include <cpu.h>
 
-#define FANCY_CRASH     1
-#define CRASH_COLOR     4       // blue
+#define FANCY_CRASH     0
+#define CRASH_COLOR     CONSOLE_RED
 #define CRASH_BANNER    " OH-WES "
 
 void fancy_crash_center_text(const char *str)
@@ -68,24 +70,19 @@ void exception(struct iregs *regs)
     }
 
 #if FANCY_CRASH
-
-#define BG 40
-#define FG 30
-
     char buf[256];
-
-    printf("\e[0;0H\e[37;%dm\e[2J", BG|CRASH_COLOR);
-    printf("\e[47;%dm\e[5B", FG|CRASH_COLOR);
+    printf("\e[0;0H\e[37;4%dm\e[2J\e5", CRASH_COLOR);   // cursor top left, set color, clear screen, hide cursor
+    printf("\n\n\n\n\n\n");
+    printf("\e[47;3%dm", CRASH_COLOR);    // set banner color
     fancy_crash_center_text(CRASH_BANNER);
-    printf("\e[37;%dm\n", BG|CRASH_COLOR);
-    printf("\n");
+    printf("\e[37;4%dm", CRASH_COLOR);                  // clear banner color
+    printf("\n\n");
     snprintf(
         buf, sizeof(buf),
         "A fatal exception %02x has occurred in ring %d at %08x.",
         regs->vec_num, fault_pl, regs->eip);
     fancy_crash_center_text(buf);
     printf("\n");
-
     if (regs->err_code) {
         snprintf(
             buf, sizeof(buf),
@@ -94,46 +91,20 @@ void exception(struct iregs *regs)
         fancy_crash_center_text(buf);
         printf("\n");
     }
-
-    // TODO: I think this should retain the current column...:
-    //      printf("\e[;5H");
-
-    int row = 17;
-    if (pl_change) {
-        row--;
-    }
-    printf("\e[%d;0H", row);
-    printf("\e5");
-
+    printf("\n\n\n\n");
+#else
+    panic("\nfatal exception %02x in ring %d at %08x!", regs->vec_num, fault_pl, regs->eip);
 #endif
-    printf("\nEAX=%08x EBX=%08x ECX=%08x EDX=%08x",
+
+    printf("\nEAX=%08x EBX=%08x\nECX=%08x EDX=%08x",
         regs->eax, regs->ebx, regs->ecx, regs->edx);
-    printf("\nESI=%08x EDI=%08x EBP=%08x %s=%08x",
+    printf("\nESI=%08x EDI=%08x\nEBP=%08x %s=%08x",
         regs->esi, regs->edi, regs->ebp,
         (pl_change) ? "ESP" : "EIP",
         (pl_change) ? regs->esp : regs->eip);
-    {
-        // printf("EFLAGS=%08x [", regs->eflags);
-        printf("\nIOPL=%d", flags->iopl);
-        if (flags->id)   printf(" ID");
-        if (flags->vip)  printf(" VIP");
-        if (flags->vif)  printf(" VIF");
-        if (flags->ac)   printf(" AC");
-        if (flags->vm)   printf(" VM");
-        if (flags->rf)   printf(" RF");
-        if (flags->nt)   printf(" NT");
-        if (flags->of)   printf(" OF");
-        if (flags->df)   printf(" DF");
-        if (flags->intf) printf(" IF");
-        if (flags->tf)   printf(" TF");
-        if (flags->sf)   printf(" SF");
-        if (flags->zf)   printf(" ZF");
-        if (flags->af)   printf(" AF");
-        if (flags->pf)   printf(" PF");
-        if (flags->cf)   printf(" CF");
-        // printf(" ]\n");
+    if (pl_change) {
+        printf("\nEIP=%08x", regs->eip);
     }
-
     printf("\nCS="); print_segsel(regs->cs);
     printf("\nDS="); print_segsel(regs->ds);
     printf("\nES="); print_segsel(regs->es);
@@ -142,10 +113,23 @@ void exception(struct iregs *regs)
     if (pl_change) {
         printf("\nSS="); print_segsel(regs->ss & 0xFFFF);
     }
-
-#if !FANCY_CRASH
-    panic("\nfatal exception %02x in ring %d at %08x!", regs->vec_num, fault_pl, regs->eip);
-#endif
+    printf("\nIOPL=%d", flags->iopl);
+    if (flags->id)   printf(" ID");
+    if (flags->vip)  printf(" VIP");
+    if (flags->vif)  printf(" VIF");
+    if (flags->ac)   printf(" AC");
+    if (flags->vm)   printf(" VM");
+    if (flags->rf)   printf(" RF");
+    if (flags->nt)   printf(" NT");
+    if (flags->of)   printf(" OF");
+    if (flags->df)   printf(" DF");
+    if (flags->intf) printf(" IF");
+    if (flags->tf)   printf(" TF");
+    if (flags->sf)   printf(" SF");
+    if (flags->zf)   printf(" ZF");
+    if (flags->af)   printf(" AF");
+    if (flags->pf)   printf(" PF");
+    if (flags->cf)   printf(" CF");
 
     die();
 }
@@ -163,18 +147,20 @@ void recv_interrupt(struct iregs *regs)
 }
 
 __fastcall
-void recv_syscall(struct iregs *regs)
+int recv_syscall(struct iregs *regs)
 {
     assert(regs->vec_num == INT_SYSCALL);
 
     uint32_t func = regs->eax;
+    int status = -1;
+
     switch (func) {
         case SYS_EXIT:
-            printf("back in the kernel... idling CPU\n");
-            printf("user mode returned %d\n", regs->ebx);
-            halt();
+            status = sys_exit(regs->ebx);
             break;
         default:
             panic("unexpected syscall %d at %08x\n", func, regs->eip);
     }
+
+    return status;
 }
