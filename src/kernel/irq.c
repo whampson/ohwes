@@ -70,8 +70,16 @@ void recv_keypress()
 {
     uint8_t scancode = inb(0x60);
     printf("got scancode %d\n", scancode);
+
+    // idiotic testing code
     if (scancode == 69) {
-        __asm__ volatile ("int $69");
+        __asm__ volatile ("int $69");   // crash
+    }
+    if (scancode == 73) {
+        printf("\e3");  // blink off
+    }
+    if (scancode == 74) {
+        printf("\e4");  // blink on
     }
 }
 

@@ -201,12 +201,12 @@ void console_write(char c)
             if (m_cursor.x > 0) pos--;
             bs();
             __fallthrough;
-        case ASCII_DEL: // ^? - DEL - delete         TODO: remove?
+        case ASCII_DEL: // ^? - DEL - delete
             c = BLANK;
             update_char = true;
             update_attr = true;
             break;
-        case '\t':      // ^I - HT - horizonal tab
+        case '\t':      // ^I - HT - horizontal tab
             tab();
             break;
         case '\n':      // ^J - LF - line feed
@@ -217,7 +217,7 @@ void console_write(char c)
         case '\r':      // ^M - CR -  carriage return
             cr();
             break;
-        case ASCII_CAN: // ^X - CAN - cancel escape sequence    TODO: also ^Z?
+        case ASCII_CAN: // ^X - CAN - cancel escape sequence
             m_state = S_NORM;
             goto done;
         case '\e':      // ^[ - ESC - start escape sequence
@@ -472,10 +472,10 @@ static void csi_m(char p)
         case 2:     // set faint (simulated with color)
             m_attr.faint = true;
             break;
-        case 3:     // set italic (simulated with color)    // TODO: configure color ( ESC] ?)
+        case 3:     // set italic (simulated with color)
             m_attr.italic = true;
             break;
-        case 4:     // set underline (simulated with color) // TODO: configure color ( ESC] ?)
+        case 4:     // set underline (simulated with color)
             m_attr.underline = true;
             break;
         case 5:     // set blink
@@ -501,10 +501,19 @@ static void csi_m(char p)
             m_attr.invert = false;
             break;
         default:
-            if (p >= 30 && p <= 37) m_attr.fg = CSI_COLORS[p - 30]; // select foreground color
-            if (p >= 40 && p <= 47) m_attr.bg = CSI_COLORS[p - 40]; // select background color
-            if (p == 39) m_attr.fg = m_defaults.attr.fg;    // select default foreground color (TODO: configure default)
-            if (p == 49) m_attr.bg = m_defaults.attr.bg;    // select default background color (TODO: configure default)
+            // colors
+            if (p >= 30 && p <= 37) m_attr.fg = CSI_COLORS[p - 30];     // yeah yeah this is ugly but it works for now
+            if (p >= 40 && p <= 47) m_attr.bg = CSI_COLORS[p - 40];
+            if (p == 39) m_attr.fg = m_defaults.attr.fg;
+            if (p == 49) m_attr.bg = m_defaults.attr.bg;
+            if (p >= 90 && p <= 97) {
+                m_attr.fg = CSI_COLORS[p - 90];
+                m_attr.bright = 1;
+            }
+            if (p >= 100 && p <= 107) {
+                m_attr.bg = CSI_COLORS[p - 100];
+                m_attr.bright = !m_attr.blink;
+            }
             break;
     }
 }
@@ -624,15 +633,16 @@ static void erase(int mode)
     int area = m_rows * m_cols;
 
     switch (mode) {
-        case ERASE_DOWN:    /* erase screen from cursor down */
+        case ERASE_DOWN:    // erase screen from cursor down
             start = &m_framebuf[pos];
             count = area - pos;
             break;
-        case ERASE_UP:      /* erase screen from cursor up /*/
+        case ERASE_UP:      // erase screen from cursor up
             start = m_framebuf;
             count = pos + 1;
             break;
-        case ERASE_ALL:     /* erase entire screen */
+        case ERASE_ALL:     // erase entire screen
+        default:
             start = m_framebuf;
             count = area;
             break;
@@ -652,15 +662,16 @@ static void erase_ln(int mode)
     int area = m_cols;
 
     switch (mode) {
-        case ERASE_DOWN:    /* erase line from cursor down */
+        case ERASE_DOWN:    // erase line from cursor down
             start = &m_framebuf[pos];
             count = area - (pos % m_cols);
             break;
-        case ERASE_UP:      /* erase line from cursor up /*/
+        case ERASE_UP:      // erase line from cursor up
             start = &m_framebuf[xy2pos(0, m_cursor.y)];
             count = (pos % m_cols) + 1;
             break;
-        case ERASE_ALL:     /* erase entire line */
+        case ERASE_ALL:     // erase entire line
+        default:
             start = &m_framebuf[xy2pos(0, m_cursor.y)];
             count = area;
     }
@@ -754,16 +765,17 @@ static void set_vga_attr(struct vga_attr *a)
         a->bright = 1;
     }
     if (m_attr.faint) {
-        a->fg = VGA_BLACK;  // simulate faintness with dark gray
+        a->color_fg = VGA_BLACK;  // simulate faintness with dark gray
         a->bright = 1;
-    }
-    if (m_attr.italic) {
-        a->fg = VGA_GREEN;  // simulate italics with green
-        a->bright = 0;
+        m_attr.bright = false;
     }
     if (m_attr.underline) {
-        a->fg = VGA_CYAN;   // simulate underline with cyan
-        a->bright = 0;
+        a->color_fg = VGA_CYAN;   // simulate underline with cyan
+        a->bright = m_attr.bright;
+    }
+    if (m_attr.italic) {
+        a->color_fg = VGA_GREEN;  // simulate italics with green
+        a->bright = m_attr.bright;
     }
     if (m_attr.blink) {
         a->blink = 1;

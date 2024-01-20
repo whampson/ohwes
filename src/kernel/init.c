@@ -129,8 +129,28 @@ void kmain(const struct bootinfo * const bootinfo)
     printf("initializing memory\n");
     init_memory(&info);
 
-    printf("pl = %d\n", getpl());
-    go_to_ring3(main);
+    printf("\e44dfs\e[1msdfs\e[2mdfs\e[3mfdgdfg\e[4mfgdds\e[5mfgd\e[0mfgdgd\r\n");
+    printf("dfs\e[1mfsfdf\e[3mdfsdf\e[4mfssf\e[23mfsfsf\e[22mdfsdfs\r\n");
+
+    printf("\r\n\e[m");
+    for (int i = 0; i < 10; i++) {
+        printf("\e[3%dmdsfgsf", i);
+    }
+    printf("\r\n\e[m");
+    for (int i = 0; i < 10; i++) {
+        printf("\e[4%dmcgdfg", i);
+    }
+    printf("\r\n\e[m");
+    for (int i = 0; i < 10; i++) {
+        printf("\e[9%dmdsfsdes", i);
+    }
+    printf("\r\n\e[m");
+    for (int i = 0; i < 10; i++) {
+        printf("\e[10%dmsffgsda", i);
+    }
+    sti();
+
+    // go_to_ring3(main);
     // "returns" to sys_exit
 }
 
@@ -146,6 +166,7 @@ int sys_exit(int status)
 
 int main(void)
 {
+    printf("\e[44;97m\e[2J");
     printf("got to ring3!\n");  // note: requires IOPL=3 due to console_write
     printf("pl = %d\n", getpl());
     // gpfault();

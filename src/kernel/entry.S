@@ -84,6 +84,9 @@ do_interrupt:
         # noncontiguous execution
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+temp_eax:
+        .long           0
+
 switch_context:
         movl            %ecx, %esp
 end_interrupt:
@@ -96,10 +99,12 @@ end_syscall:                                    # so we need to preserve it call
         movl            IREGS_EDX(%esp), %edx
         movl            IREGS_ECX(%esp), %ecx
         movl            IREGS_EBX(%esp), %ebx
+        movl            %eax, temp_eax
         LOAD_SEGREG     IREGS_DS(%esp), %ds
         LOAD_SEGREG     IREGS_ES(%esp), %es
         LOAD_SEGREG     IREGS_FS(%esp), %fs
         LOAD_SEGREG     IREGS_GS(%esp), %gs
+        movl            temp_eax, %eax
         addl            $IREGS_EIP, %esp
         iret
 

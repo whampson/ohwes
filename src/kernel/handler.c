@@ -28,8 +28,8 @@
 #include <x86.h>
 #include <cpu.h>
 
-#define FANCY_CRASH     0
-#define CRASH_COLOR     CONSOLE_RED
+#define FANCY_CRASH     1
+#define CRASH_COLOR     CONSOLE_BLUE
 #define CRASH_BANNER    " OH-WES "
 
 void fancy_crash_center_text(const char *str)
