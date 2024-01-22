@@ -22,8 +22,9 @@
  */
 
 #include <boot.h>
-#include <interrupt.h>
 #include <cpu.h>
+#include <interrupt.h>
+#include <irq.h>
 
 #define CPU_DATA_AREA       0x1000
 #define PAGE_2              0x2000
@@ -182,20 +183,20 @@ static void init_idt(const struct bootinfo * const info)
     int count = IDT_SIZE / sizeof(struct x86_desc);
     for (int idx = 0, e = 0, i = 0; idx < count; idx++) {
         struct x86_desc *desc = ((struct x86_desc *) IDT_BASE) + idx;
-        e = idx - INT_EXCEPTION;
-        i = idx - INT_IRQ;
+        e = idx - IVT_EXCEPTION;
+        i = idx - IVT_DEVICEIRQ;
 
-        if (idx >= INT_EXCEPTION && e < NUM_EXCEPTION) {
+        if (idx >= IVT_EXCEPTION && e < NUM_EXCEPTION) {
             // interrupt gate for exceptions;
             // probably a good idea to handle exceptions with no interruptions
             make_intr_gate(desc, SEGSEL_KERNEL_CODE, KERNEL_PL, excepts[e]);
         }
-        else if (idx >= INT_IRQ && i < NUM_IRQ) {
+        else if (idx >= IVT_DEVICEIRQ && i < NUM_IRQ) {
             // interrupt gate for device IRQs;
             // we don't want other devices interrupting handler!
             make_intr_gate(desc, SEGSEL_KERNEL_CODE, KERNEL_PL, irqs[i]);
         }
-        else if (idx == INT_SYSCALL) {
+        else if (idx == IVT_SYSCALL) {
             // user-mode accessible trap gate for system calls;
             // devices can interrupt system call
             make_trap_gate(desc, SEGSEL_KERNEL_CODE, USER_PL, _thunk_syscall);

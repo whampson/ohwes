@@ -13,8 +13,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/init.c
- *      Created: March 26, 2023
+ *         File: kernel/main.c
+ *      Created: January 22, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
@@ -25,16 +25,42 @@
 #include <ohwes.h>
 #include <boot.h>
 #include <cpu.h>
-#include <irq.h>
 #include <interrupt.h>
+#include <io.h>
+#include <irq.h>
+#include <pic.h>
 #include <test.h>
 #include <x86.h>
 
 extern void init_vga(void);
 extern void init_console(void);
 extern void init_cpu(const struct bootinfo * const info);
-extern void init_irq(void);
+extern void init_pic(void);
 extern void init_memory(const struct bootinfo * const info);
+
+
+void recv_keypress(void)
+{
+    uint8_t scancode = inb(0x60);
+    printf("got scancode %d\n", scancode);
+
+    // idiotic testing code
+    if (scancode == 69) {
+        __asm__ volatile ("int $69");   // crash
+    }
+    if (scancode == 73) {
+        printf("\e3");  // blink off
+    }
+    if (scancode == 74) {
+        printf("\e4");  // blink on
+    }
+}
+
+void init_kbd(void)
+{
+    irq_register(IRQ_KEYBOARD, recv_keypress);
+    pic_unmask(IRQ_KEYBOARD);
+}
 
 int getpl()
 {
@@ -113,6 +139,7 @@ void kmain(const struct bootinfo * const bootinfo)
     struct bootinfo info;
     memcpy(&info, bootinfo, sizeof(struct bootinfo));
 
+    cli();
     init_vga();
     init_console();
     printf("\ecOH-WES 0.1 'Ronnie Raven'\n");    // Ronald Reagan lol
@@ -121,36 +148,17 @@ void kmain(const struct bootinfo * const bootinfo)
     printf("testing libc\n");
     test_libc();
 #endif
-    printf("initializing CPU descriptors\n");
+    printf("init CPU descriptors\n");
     init_cpu(&info);
-    printf("initializing device IRQs\n");
-    init_irq();
-    irq_unmask(IRQ_KEYBOARD);
-    printf("initializing memory\n");
+    printf("init PIC\n");
+    init_pic();
+    printf("init devices\n");
+    init_kbd();
+    printf("init memory\n");
     init_memory(&info);
-
-    printf("\e44dfs\e[1msdfs\e[2mdfs\e[3mfdgdfg\e[4mfgdds\e[5mfgd\e[0mfgdgd\r\n");
-    printf("dfs\e[1mfsfdf\e[3mdfsdf\e[4mfssf\e[23mfsfsf\e[22mdfsdfs\r\n");
-
-    printf("\r\n\e[m");
-    for (int i = 0; i < 10; i++) {
-        printf("\e[3%dmdsfgsf", i);
-    }
-    printf("\r\n\e[m");
-    for (int i = 0; i < 10; i++) {
-        printf("\e[4%dmcgdfg", i);
-    }
-    printf("\r\n\e[m");
-    for (int i = 0; i < 10; i++) {
-        printf("\e[9%dmdsfsdes", i);
-    }
-    printf("\r\n\e[m");
-    for (int i = 0; i < 10; i++) {
-        printf("\e[10%dmsffgsda", i);
-    }
     sti();
 
-    // go_to_ring3(main);
+    go_to_ring3(main);
     // "returns" to sys_exit
 }
 
@@ -166,7 +174,6 @@ int sys_exit(int status)
 
 int main(void)
 {
-    printf("\e[44;97m\e[2J");
     printf("got to ring3!\n");  // note: requires IOPL=3 due to console_write
     printf("pl = %d\n", getpl());
     // gpfault();

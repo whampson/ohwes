@@ -13,19 +13,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/include/io.h
- *      Created: December 13, 2020
+ *         File: include/io.h
+ *      Created: January 22, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef _IO_H
-#define _IO_H
-
-#include <stdint.h>
-
-
-
+#ifndef __IO_H
+#define __IO_H
 
 /**
  * Write to this port to add a small delay to any I/O transaction.
@@ -34,69 +29,54 @@
  * By the time the OS is loaded, POST codes are pretty much useless. We can take
  * advantage of that fact and repurpose the port for I/O delay.
 */
-#define IO_DELAY_PORT   0x80
+#define IO_DELAY_PORT           0x80
 
-/**
- * Reads a byte from an I/O port.
- */
-static inline uint8_t inb(uint16_t port)
-{
-    uint8_t data;
-    __asm__ volatile (
-        "inb    %w1, %b0"
-        : "=a"(data)
-        : "d"(port)
-    );
+#define inb(port)               \
+({                              \
+    uint8_t _x;                 \
+    __asm__ volatile (          \
+        "inb    %w1, %b0"       \
+        : "=a"(_x)              \
+        : "d"(port)             \
+    );                          \
+    _x;                         \
+})
 
-    return data;
-}
+#define inb_delay(port)         \
+({                              \
+    uint8_t _x;                 \
+    __asm__ volatile (          \
+        "                       \n\
+        inb     %2              \n\
+        inb     %w1, %b0        \n\
+        "                       \
+        : "=a"(_x)              \
+        : "d"(port),            \
+          "i"(IO_DELAY_PORT)    \
+    );                          \
+    _x;                         \
+})
 
-/**
- * Reads a byte from an I/O port with a short delay before reading.
- */
-static inline uint8_t inb_delay(uint16_t port)
-{
-    uint8_t data;
-    __asm__ volatile (
-        "                   \n\
-        xorb    %b0, %b0    \n\
-        outb    %b0, %w2    \n\
-        inb     %w1, %b0    \n\
-        "
-        : "=a"(data)
-        : "d"(port), "i"(IO_DELAY_PORT)
-    );
+#define outb(port, data)        \
+do {                            \
+    __asm__ volatile (          \
+        "outb   %b0, %w1"       \
+        :                       \
+        : "a"(data), "d"(port)  \
+    );                          \
+} while (0)
 
-    return data;
-}
+#define outb_delay(port,data)   \
+do {                            \
+    __asm__ volatile (          \
+        "                       \n\
+        outb    %b0, %w1        \n\
+        inb     %2              \n\
+        "                       \
+        :                       \
+        : "a"(data), "d"(port), \
+          "i"(IO_DELAY_PORT)    \
+    );                          \
+} while (0)
 
-
-/**
- * Writes a byte to an I/O port.
- */
-static inline void outb(uint16_t port, uint8_t data)
-{
-    __asm__ volatile (
-        "outb   %b0, %w1"
-        :
-        : "a"(data), "d"(port)
-    );
-}
-
-/**
- * Writes a byte to an I/O port with a short delay after writing.
- */
-static inline void outb_delay(uint16_t port, uint8_t data)
-{
-    __asm__ volatile (
-        "                   \n\
-        outb    %b0, %w1    \n\
-        xorb    %b0, %b0    \n\
-        outb    %b0, %w2    \n\
-        "
-        :
-        : "a"(data), "d"(port), "n"(IO_DELAY_PORT)
-    );
-}
-
-#endif /* _IO_H */
+#endif /* __IO_H */

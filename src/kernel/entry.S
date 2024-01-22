@@ -19,29 +19,33 @@
 # =============================================================================
 
 #include <interrupt.h>
+#include <irq.h>
 
 .text
 .code32
 
+# ----------------------------------------------------------------------------
+
 .globl kentry
 kentry:
         cli
-        call    kmain
+        call            kmain
 
 .globl halt
 halt:
         hlt
-        jmp     halt
+        jmp             halt
 
+# ----------------------------------------------------------------------------
 
 .macro LOAD_SEGREG addr, reg
-        movw    \addr, %ax
-        movw    %ax, \reg
+        movw            \addr, %ax
+        movw            %ax, \reg
 .endm
 
 .macro STORE_SEGREG reg, addr
-        movw    \reg, %ax
-        movw    %ax, \addr
+        movw            \reg, %ax
+        movw            %ax, \addr
 .endm
 
 ##
@@ -76,7 +80,7 @@ do_interrupt:
         movl            IREGS_VEC_NUM(%esp), %eax
         test            %eax, %eax
         js              irq_trampoline
-        cmpl            $INT_SYSCALL, %eax
+        cmpl            $IVT_SYSCALL, %eax
         je              syscall_trampoline
         jmp             interrupt_trampoline
 
@@ -173,7 +177,7 @@ thunk_name:                                                                     
 .globl thunk_name;                                                              \
 thunk_name:                                                                     \
     pushl   $0;                                                                 \
-    pushl   $INT_SYSCALL;                                                       \
+    pushl   $IVT_SYSCALL;                                                       \
     jmp     do_interrupt
 
 #

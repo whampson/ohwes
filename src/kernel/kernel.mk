@@ -6,9 +6,10 @@ SOURCES := \
     console.c \
     cpu.c \
     handler.c \
-    init.c \
     irq.c \
+    main.c \
     memory.c \
+    pic.c \
     vga.c \
 
 ifeq "${TEST_BUILD}" "1"

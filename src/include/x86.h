@@ -497,12 +497,11 @@ static inline void make_trap_gate(struct x86_desc *desc, int segsel, int dpl, vo
  *              tricky; the limit field should be aligned to an odd-word address
  *              (address MOD 4 equals 2)
  */
-#define lgdt(desc)              \
-__asm__ volatile (              \
-    "lgdt %0"                   \
-    :                           \
-    : "m"(desc)                 \
-    :                           \
+#define lgdt(desc)          \
+__asm__ volatile (          \
+    "lgdt %0"               \
+    :                       \
+    : "m"(desc)             \
 )
 
 /**
@@ -518,7 +517,6 @@ __asm__ volatile (          \
     "lidt %0"               \
     :                       \
     : "m"(desc)             \
-    :                       \
 )
 
 /**
@@ -531,7 +529,6 @@ __asm__ volatile (          \
     "lldt %w0"              \
     :                       \
     : "r"(segsel)           \
-    :                       \
 )
 
 /**
@@ -544,7 +541,6 @@ __asm__ volatile (          \
     "ltr %w0"               \
     :                       \
     : "r"(segsel)           \
-    :                       \
 )
 
 #define  load_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs))
@@ -611,7 +607,7 @@ __asm__ volatile (          \
     "                       \
     : "=r"(flags)           \
     :                       \
-    : "memory", "cc"        \
+    : "cc"                  \
 )
 
 /**
@@ -627,7 +623,7 @@ __asm__ volatile (          \
     "                       \
     :                       \
     : "r"(flags)            \
-    : "memory", "cc"        \
+    : "cc"                  \
 )
 
 #endif /* __ASSEMBLER__ */

@@ -26,97 +26,9 @@
 #include <ohwes.h>
 #include <pic.h>
 
-
-#define PIC_MASTER  0
-#define PIC_SLAVE   1
-
-#define SLAVE_MASK  (1<<(IRQ_SLAVE))
-
-/* Initialization Command Words */
-#define PIC_ICW1    0x11            /* edge-triggered, 8 lines, cascade mode, ICW4 needed */
-#define PIC_ICW2_M  (INT_IRQ)       /* master PIC base interrupt vector */
-#define PIC_ICW2_S  (INT_IRQ+8)     /* slave PIC base interrupt vector */
-#define PIC_ICW3_M  (SLAVE_MASK)    /* mask of slave IRQ on master */
-#define PIC_ICW3_S  (IRQ_SLAVE)     /* slave IRQ number, to be sent to master */
-#define PIC_ICW4    0x01            /* not fully nested, not auto EOI, 8086 mode */
-
-/* End of Interrupt Command */
-#define PIC_EOI     0x60            /* specific EOI, needs IRQ num in low bits */
-
 #define valid_irq(n)    ((n) >= 0 && (n) < NUM_IRQ)
 
 static irq_handler handler_map[NUM_IRQ] = { 0 };  /* TODO: linked list */
-
-static void init_pic()
-{
-    /* configure master PIC */
-    i8259_cmd_write(PIC_MASTER, PIC_ICW1);
-    i8259_data_write(PIC_MASTER, PIC_ICW2_M);
-    i8259_data_write(PIC_MASTER, PIC_ICW3_M);
-    i8259_data_write(PIC_MASTER, PIC_ICW4);
-
-    /* configure slave PIC */
-    i8259_cmd_write(PIC_SLAVE, PIC_ICW1);
-    i8259_data_write(PIC_SLAVE, PIC_ICW2_S);
-    i8259_data_write(PIC_SLAVE, PIC_ICW3_S);
-    i8259_data_write(PIC_SLAVE, PIC_ICW4);
-
-    /* mask all IRQs, except slave line on master PIC */
-    i8259_data_write(PIC_MASTER, 0xFF & ~SLAVE_MASK);
-    i8259_data_write(PIC_SLAVE, 0xFF);
-}
-
-void recv_keypress()
-{
-    uint8_t scancode = inb(0x60);
-    printf("got scancode %d\n", scancode);
-
-    // idiotic testing code
-    if (scancode == 69) {
-        __asm__ volatile ("int $69");   // crash
-    }
-    if (scancode == 73) {
-        printf("\e3");  // blink off
-    }
-    if (scancode == 74) {
-        printf("\e4");  // blink on
-    }
-}
-
-void init_irq(void)
-{
-    init_pic();
-    irq_register(IRQ_KEYBOARD, recv_keypress);
-}
-
-void irq_mask(int irq_num)
-{
-    int pic_num = (irq_num >= 8);
-    int mask = (1 << (irq_num & 7));
-
-    uint8_t oldmask = i8259_data_read(pic_num);
-    i8259_data_write(pic_num, oldmask | mask);
-}
-
-void irq_unmask(int irq_num)
-{
-    int pic_num = (irq_num >= 8);
-    int mask = (1 << (irq_num & 7));
-
-    uint8_t oldmask = i8259_data_read(pic_num);
-    i8259_data_write(pic_num, oldmask & ~mask);
-}
-
-void irq_end(int irq_num)
-{
-    if (irq_num >= 8) {
-        i8259_cmd_write(PIC_SLAVE, PIC_EOI | (irq_num & 7));
-        i8259_cmd_write(PIC_MASTER, PIC_EOI | IRQ_SLAVE);
-    }
-    else {
-        i8259_cmd_write(PIC_MASTER, PIC_EOI | irq_num);
-    }
-}
 
 bool irq_register(int irq_num, irq_handler func)
 {
@@ -157,5 +69,5 @@ void recv_irq(struct iregs *regs)
         panic("unhandled IRQ %d", irq_num);
     }
 
-    irq_end(irq_num);    /* TODO: pass EOI responsibility onto handler? */
+    pic_eoi(irq_num);
 }

@@ -73,7 +73,7 @@ void exception(struct iregs *regs)
     char buf[256];
     printf("\e[0;0H\e[37;4%dm\e[2J\e5", CRASH_COLOR);   // cursor top left, set color, clear screen, hide cursor
     printf("\n\n\n\n\n\n");
-    printf("\e[47;3%dm", CRASH_COLOR);    // set banner color
+    printf("\e[47;3%dm", CRASH_COLOR);                  // set banner color
     fancy_crash_center_text(CRASH_BANNER);
     printf("\e[37;4%dm", CRASH_COLOR);                  // clear banner color
     printf("\n\n");
@@ -137,8 +137,8 @@ void exception(struct iregs *regs)
 __fastcall
 void recv_interrupt(struct iregs *regs)
 {
-    if (regs->vec_num >= INT_EXCEPTION &&
-        regs->vec_num < INT_EXCEPTION + NUM_EXCEPTION)
+    if (regs->vec_num >= IVT_EXCEPTION &&
+        regs->vec_num < IVT_EXCEPTION + NUM_EXCEPTION)
     {
         exception(regs);
     }
@@ -149,7 +149,7 @@ void recv_interrupt(struct iregs *regs)
 __fastcall
 int recv_syscall(struct iregs *regs)
 {
-    assert(regs->vec_num == INT_SYSCALL);
+    assert(regs->vec_num == IVT_SYSCALL);
 
     uint32_t func = regs->eax;
     int status = -1;

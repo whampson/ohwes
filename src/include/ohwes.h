@@ -56,7 +56,7 @@ do {                                \
         "int %0"                    \
         :                           \
         : "i"(INT_SYSCALL),         \
-           "a"(func)                \
+          "a"(func)                 \
     );                              \
 } while (0)
 
@@ -65,7 +65,7 @@ do {                                \
     __asm__ volatile (              \
         "int %0"                    \
         :                           \
-        : "i"(INT_SYSCALL),         \
+        : "i"(IVT_SYSCALL),         \
           "a"(func),                \
           "b"(arg0)                 \
     );                              \

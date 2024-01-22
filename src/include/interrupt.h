@@ -30,26 +30,11 @@
 #endif
 
 /**
- * Device IRQ numbers.
- * NOTE: these are NOT interrupt vector numbers!
+ * Important interrupt vector table numbers.
  */
-#define IRQ_TIMER           0       // Programmable Interval Timer (PIT)
-#define IRQ_KEYBOARD        1       // PS/2 Keyboard
-#define IRQ_SLAVE           2       // Slave PIC cascade signal
-#define IRQ_COM2            3       // Serial Port #2
-#define IRQ_COM1            4       // Serial Port #1
-#define IRQ_LPT2            5       // Parallel Port #2
-#define IRQ_FLOPPY          6       // Floppy Disk Controller
-#define IRQ_LPT1            7       // Parallel Port #1
-#define IRQ_RTC             8       // Real-Time Clock (RTC)
-#define IRQ_ACPI            9       // ACPI Control Interrupt
-#define IRQ_MISC1           10      // (possibly scsi or nic)
-#define IRQ_MISC2           11      // (possibly scsi or nic)
-#define IRQ_MOUSE           12      // PS/2 Mouse
-#define IRQ_COPOCESSOR      13      // Coprocessor Interrupt
-#define IRQ_ATA1            14      // ATA Channel #1
-#define IRQ_ATA2            15      // ATA Channel #2
-#define NUM_IRQ             16
+#define IVT_EXCEPTION       0x00    // Base interrupt vector for exceptions.
+#define IVT_DEVICEIRQ       0x20    // Base interurpt vector for device IRQs.
+#define IVT_SYSCALL         0x80    // Interrupt vector for syscalls.
 
 /**
  * Intel exception vector numbers.
@@ -75,13 +60,6 @@
 #define EXCEPTION_VE        0x14    // Virtualization Exception
 #define EXCEPTION_CP        0x15    // Control Protection Exception
 #define NUM_EXCEPTION       32
-
-/**
- * Other interrupt vector numbers.
- */
-#define INT_EXCEPTION       0x00    // Base interrupt vector for exceptions.
-#define INT_IRQ             0x20    // Base interurpt vector for device IRQs.
-#define INT_SYSCALL         0x80    // Interrupt vector for syscalls.
 
 /**
  * Interrupt register frame offsets.
