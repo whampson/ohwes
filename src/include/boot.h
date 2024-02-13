@@ -129,11 +129,11 @@ struct bootinfo {
     //
     // !!! KEEP OFFSETS IN-LINE WITH src/boot/stage2.h !!!
     //
-    intptr_t kernel_base;           // kernel image base address
+    intptr_t kernel;                // kernel image base address
     uint32_t kernel_size;           // kernel image size bytes
-    intptr_t stage2_base;           // stage2 image base address
+    intptr_t stage2;                // stage2 image base address
     uint32_t stage2_size;           // stage2 image size bytes
-    intptr_t stack_base;            // stack base upon leaving stage2
+    intptr_t stack;                 // stack base upon leaving stage2
 
     uint32_t kb_low;                // 1K pages 0 to 640K (BIOS INT 12h)
     uint32_t kb_high;               // 1K pages 1M to 16M (BIOS INT 15h,AX=88h)

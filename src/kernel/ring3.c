@@ -13,33 +13,59 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/assert.h
- *      Created: December 26, 2023
+ *         File: kernel/ring3.c
+ *      Created: January 26, 2024
  *       Author: Wes Hampson
  *
- * https://en.cppreference.com/w/c/error (C11)
+ * Ring 3 antics.
  * =============================================================================
  */
 
-#ifndef __ASSERT_H
-#define __ASSERT_H
+#include <ohwes.h>
 
-#ifndef __PANIC_DEFINED
-extern __noreturn void _dopanic(const char *, ...);
-#define panic(...)                  _dopanic(__VA_ARGS__)
-#endif
+int main(void)
+{
+    printf("got to ring3!\n");  // note: requires IOPL=3 due to console_write
+    printf("pl = %d\n", getpl());
+    // gpfault();
 
-#ifdef DEBUG
-#define assert(x) \
-do { \
-    if (!(x)) { \
-        panic("%s:%d assertion failed: " #x "\n", __FILE__, __LINE__); \
-    } \
-} while (0)
-#else
-#define assert(x) (void) 0
-#endif
+    return 8675309;
+}
 
-#define static_assert _Static_assert
+__noreturn
+void ring3_main(void)
+{
+    int status = main();
+    store_eax(status);
 
-#endif  // __ASSERT_H
+    _syscall1(SYS_EXIT, status);
+    die();
+}
+
+__noreturn
+void go_to_ring3(void)
+{
+    struct eflags eflags;
+    cli_save(eflags);
+
+    eflags.intf = 1;        // enable interrupts
+    eflags.iopl = USER_PL;  // so printf works
+
+    uint32_t *const ebp = (uint32_t * const) 0xC000;    // user stack
+    uint32_t *esp = ebp;
+    // ebp[-1] = (uint32_t) ring3_exit;
+    // esp = &ebp[-1];
+
+    struct iregs regs = {};
+    regs.cs = USER_CS;
+    regs.ds = USER_DS;
+    regs.es = USER_DS;
+    regs.ss = USER_SS;
+    regs.ebp = (uint32_t) ebp;
+    regs.esp = (uint32_t) esp;
+    regs.eip = (uint32_t) ring3_main;
+    regs.eflags = eflags._value;
+    switch_context(&regs);
+    die();
+}
+

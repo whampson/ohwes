@@ -19,6 +19,7 @@
  * =============================================================================
  */
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -62,69 +63,41 @@ void init_kbd(void)
     pic_unmask(IRQ_KEYBOARD);
 }
 
-int getpl()
-{
-    struct segsel cs;
-    store_cs(cs);
 
-    return cs.rpl;
+#define YN(cond)    ((cond) ? "yes" : "no")
+
+static void print_info(const struct bootinfo *const info)
+{
+    int nfloppies = info->hwflags.has_diskette_drive;
+    if (nfloppies) {
+        nfloppies += info->hwflags.num_other_diskette_drives;
+    }
+
+    int nserial = info->hwflags.num_serial_ports;
+    int nparallel = info->hwflags.num_parallel_ports;
+    bool gameport = info->hwflags.has_gameport;
+    bool mouse = info->hwflags.has_ps2mouse;
+
+    intptr_t kernel_end = info->kernel+info->kernel_size-1;
+    intptr_t stage2_end = info->stage2+info->stage2_size-1;
+
+    printf("boot info found at %08x\n", info);
+    printf("%12s: %02x\n",      "video mode",      info->video_mode);
+    printf("%12s: %d\n",        "floppy",   nfloppies);
+    printf("%12s: %d\n",        "serial",    nserial);
+    printf("%12s: %d\n",        "parallel",  nparallel);
+    printf("%12s: %s\n",        "game port",       YN(gameport));
+    printf("%12s: %s\n",        "ps/2 mouse",      YN(mouse));
+    printf("%12s: %08x-%08x\n", "kernel",          info->kernel, kernel_end);
+    printf("%12s: %08x-%08x\n", "stage2",          info->stage2, stage2_end);
+    printf("%12s: %08x\n",      "stack",           info->stack);
+    printf("%12s: %08x\n",      "ebda",            info->ebda);
 }
 
-void gpfault(void)
-{
-    __asm__ volatile ("int $69");
-}
-
-void divide_by_zero(void)
-{
-    volatile int a = 1;
-    volatile int b = 0;
-    volatile int c = a / b;
-    (void) c;
-}
-
-__noreturn
-void ring3_exit(void)
-{
-    int status = 0;
-    store_eax(status);
-
-    _syscall1(SYS_EXIT, status);
-    die();
-}
-
-__noreturn
-void go_to_ring3(void *func)
-{
-    struct eflags eflags;
-    cli_save(eflags);
-
-    eflags.intf = 1;        // enable interrupts
-    eflags.iopl = USER_PL;  // so printf works
-
-    uint32_t *const ebp = (uint32_t * const) 0xC000;    // user stack
-    uint32_t *esp = ebp;
-    ebp[-1] = (uint32_t) ring3_exit;
-    esp = &ebp[-1];
-
-    struct iregs regs = {};
-    regs.cs = USER_CS;
-    regs.ds = USER_DS;
-    regs.es = USER_DS;
-    regs.ss = USER_SS;
-    regs.ebp = (uint32_t) ebp;
-    regs.esp = (uint32_t) esp;
-    regs.eip = (uint32_t) func;
-    regs.eflags = eflags._value;
-    switch_context(&regs);
-    die();
-}
-
-
-int main(void);
+__noreturn void go_to_ring3(void);
 
 __fastcall
-void kmain(const struct bootinfo * const bootinfo)
+void kmain(const struct bootinfo *const info)
 {
     // --- Crude Memory Map ---
     // 0x00000-0x004FF: reserved for Real Mode IVT and BDA (do we still need this?)
@@ -136,30 +109,30 @@ void kmain(const struct bootinfo * const bootinfo)
     // 0x0????-0x0FFFF: kernel stack (grows towards 0)
     // 0x10000-(EBDA ): kernel and system
 
-    struct bootinfo info;
-    memcpy(&info, bootinfo, sizeof(struct bootinfo));
-
     cli();
+
     init_vga();
     init_console();
-    printf("\ecOH-WES 0.1 'Ronnie Raven'\n");    // Ronald Reagan lol
+    // safe to print now
+    printf(OS_NAME " " OS_VERSION " '" OS_MONIKER "'\n");
+    printf("build: " OS_BUILDDATE "\n");
+
 #if TEST_BUILD
     printf("TEST BUILD\n");
-    printf("testing libc\n");
+    printf("testing libc...\n");
     test_libc();
 #endif
-    printf("init CPU descriptors\n");
-    init_cpu(&info);
-    printf("init PIC\n");
+
+    print_info(info);
+
+    init_cpu(info);
     init_pic();
-    printf("init devices\n");
     init_kbd();
-    printf("init memory\n");
-    init_memory(&info);
+    init_memory(info);
+
     sti();
 
-    go_to_ring3(main);
-    // "returns" to sys_exit
+    go_to_ring3(); // "returns" to sys_exit via system call
 }
 
 int sys_exit(int status)
@@ -172,11 +145,15 @@ int sys_exit(int status)
     return 0;
 }
 
-int main(void)
+__noreturn
+void _dopanic(const char *fmt, ...)
 {
-    printf("got to ring3!\n");  // note: requires IOPL=3 due to console_write
-    printf("pl = %d\n", getpl());
-    // gpfault();
+    va_list args;
+    va_start(args, fmt);
 
-    return 8675309;
+    printf("panic: ");
+    vprintf(fmt, args);
+
+    va_end(args);
+    die();
 }

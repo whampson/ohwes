@@ -21,14 +21,6 @@
 
 #include <x86.h>
 
-/**
- * Privilege Levels
- */
-enum pl {
-    KERNEL_PL = 0,
-    USER_PL = 3,
-};
-
 struct tss * get_tss(struct tss *tss);
 struct x86_desc * get_seg_desc(uint16_t segsel);
 

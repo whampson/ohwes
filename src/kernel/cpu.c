@@ -21,6 +21,7 @@
  * =============================================================================
  */
 
+#include <ohwes.h>
 #include <boot.h>
 #include <cpu.h>
 #include <interrupt.h>
@@ -240,7 +241,7 @@ static void init_tss(const struct bootinfo * const info)
     // Fill TSS with LDT segment selector, kernel stack pointer,
     // and kernel stack segment selector
     tss->ldt_segsel = SEGSEL_LDT;
-    tss->esp0 = (uint32_t) info->stack_base;     // TODO: make this WELL-DEFINED!!
+    tss->esp0 = (uint32_t) info->stack;         // TODO: make this WELL-DEFINED!!
     tss->ss0 = SEGSEL_KERNEL_DATA;
 
     // Add TSS entry to GDT

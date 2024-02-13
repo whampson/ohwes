@@ -23,6 +23,13 @@
 #define __OHWES_H
 
 #include <stdio.h>
+#include <interrupt.h>
+#include <x86.h>
+
+#define OS_NAME             "OH-WES"
+#define OS_VERSION          "0.1"
+#define OS_MONIKER          "Ronnie Raven"
+#define OS_BUILDDATE        __DATE__ " " __TIME__
 
 #define MIN_KB_REQUIRED     639     // let's see how long this lasts!
 #define SHOW_MEMMAP         1
@@ -44,11 +51,10 @@ do {                                \
     for (;;);                       \
 } while (0)
 
-#define panic(...)                  \
-do {                                \
-    printf("panic: " __VA_ARGS__);  \
-    die();                          \
-} while (0)
+#ifndef __PANIC_DEFINED
+extern __noreturn void _dopanic(const char *, ...);
+#define panic(...)                  _dopanic(__VA_ARGS__)
+#endif
 
 #define _syscall0(func)             \
 do {                                \
@@ -70,5 +76,26 @@ do {                                \
           "b"(arg0)                 \
     );                              \
 } while (0)
+
+#define getpl()                     \
+({                                  \
+    struct segsel cs;               \
+    store_cs(cs);                   \
+    cs.rpl;                         \
+})
+
+#define gpfault()                   \
+({                                  \
+    __asm__ volatile ("int $69");   \
+})
+
+#define divzero()                   \
+({                                  \
+    volatile int a = 1;             \
+    volatile int b = 0;             \
+    volatile int c = a / b;         \
+    (void) c;                       \
+})
+
 
 #endif // __OHWES_H

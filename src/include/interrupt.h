@@ -22,13 +22,6 @@
 #ifndef __INTERRUPT_H
 #define __INTERRUPT_H
 
-#ifndef __ASSEMBLER__
-#include <assert.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdbool.h>
-#endif
-
 /**
  * Important interrupt vector table numbers.
  */
@@ -87,6 +80,18 @@
 #define SIZEOF_IREGS        0x40
 
 #ifndef __ASSEMBLER__
+#include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+/**
+ * Privilege Levels
+ */
+enum pl {
+    KERNEL_PL = 0,
+    USER_PL = 3,
+};
 
 /**
  * Register state upon receiving an interrupt.

@@ -10,6 +10,7 @@ SOURCES := \
     main.c \
     memory.c \
     pic.c \
+    ring3.c \
     vga.c \
 
 ifeq "${TEST_BUILD}" "1"
