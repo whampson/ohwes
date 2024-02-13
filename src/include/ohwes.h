@@ -56,6 +56,8 @@ extern __noreturn void _dopanic(const char *, ...);
 #define panic(...)                  _dopanic(__VA_ARGS__)
 #endif
 
+#define _countof(x)      (sizeof(x)/sizeof(x[0]))
+
 #define _syscall0(func)             \
 do {                                \
     __asm__ volatile (              \

@@ -25,9 +25,8 @@
 
 int main(void)
 {
-    printf("got to ring3!\n");  // note: requires IOPL=3 due to console_write
-    printf("pl = %d\n", getpl());
-    // gpfault();
+    printf("Got to ring3!\n");
+    // divzero();
 
     return 8675309;
 }
@@ -49,12 +48,10 @@ void go_to_ring3(void)
     cli_save(eflags);
 
     eflags.intf = 1;        // enable interrupts
-    eflags.iopl = USER_PL;  // so printf works
+    eflags.iopl = USER_PL;  // printf requires outb
 
     uint32_t *const ebp = (uint32_t * const) 0xC000;    // user stack
     uint32_t *esp = ebp;
-    // ebp[-1] = (uint32_t) ring3_exit;
-    // esp = &ebp[-1];
 
     struct iregs regs = {};
     regs.cs = USER_CS;

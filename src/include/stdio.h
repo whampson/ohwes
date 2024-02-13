@@ -45,5 +45,6 @@ int sprintf(char *buffer, const char *format, ...);
 int snprintf(char *buffer, size_t bufsz, const char *format, ...);
 
 int vprintf(const char *format, va_list args);
+int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args);
 
 #endif // __STDIO_H

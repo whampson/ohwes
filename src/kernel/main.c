@@ -64,7 +64,10 @@ void init_kbd(void)
 }
 
 
-#define YN(cond)    ((cond) ? "yes" : "no")
+#define HASNO(cond)     ((cond)?"has":"no")
+#define YN(cond)        ((cond)?"yes":"no")
+#define PLURAL(n,a)     (((n)==1)?a:a "s")
+#define PLURAL2(n,a,b)  (((n)==1)?a:b)
 
 static void print_info(const struct bootinfo *const info)
 {
@@ -78,20 +81,20 @@ static void print_info(const struct bootinfo *const info)
     bool gameport = info->hwflags.has_gameport;
     bool mouse = info->hwflags.has_ps2mouse;
 
-    intptr_t kernel_end = info->kernel+info->kernel_size-1;
-    intptr_t stage2_end = info->stage2+info->stage2_size-1;
+    // intptr_t kernel_end = info->kernel+info->kernel_size-1;
+    // intptr_t stage2_end = info->stage2+info->stage2_size-1;
 
-    printf("boot info found at %08x\n", info);
-    printf("%12s: %02x\n",      "video mode",      info->video_mode);
-    printf("%12s: %d\n",        "floppy",   nfloppies);
-    printf("%12s: %d\n",        "serial",    nserial);
-    printf("%12s: %d\n",        "parallel",  nparallel);
-    printf("%12s: %s\n",        "game port",       YN(gameport));
-    printf("%12s: %s\n",        "ps/2 mouse",      YN(mouse));
-    printf("%12s: %08x-%08x\n", "kernel",          info->kernel, kernel_end);
-    printf("%12s: %08x-%08x\n", "stage2",          info->stage2, stage2_end);
-    printf("%12s: %08x\n",      "stack",           info->stack);
-    printf("%12s: %08x\n",      "ebda",            info->ebda);
+    printf("Boot info found at %08X:\n", info);
+    printf("  %d %s, %d serial %s, %d parallel %s\n",
+        nfloppies, PLURAL2(nfloppies, "floppy", "floppies"),
+        nserial, PLURAL(nserial, "port"),
+        nparallel, PLURAL(nparallel, "port"));
+    printf("  %s ps/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
+    printf("  video mode is %02X\n", info->video_mode);
+    printf("  stage2\t%08X,%X\n", info->stage2, info->stage2_size);
+    printf("  kernel\t%08X,%X\n", info->kernel, info->kernel_size);
+    printf("  stack\t%08X\n", info->stack);
+    printf("  EBDA\t\t%08X\n", info->ebda);
 }
 
 __noreturn void go_to_ring3(void);
@@ -115,11 +118,11 @@ void kmain(const struct bootinfo *const info)
     init_console();
     // safe to print now
     printf(OS_NAME " " OS_VERSION " '" OS_MONIKER "'\n");
-    printf("build: " OS_BUILDDATE "\n");
+    printf("Build: " OS_BUILDDATE "\n");
 
 #if TEST_BUILD
     printf("TEST BUILD\n");
-    printf("testing libc...\n");
+    printf("Testing libc...\n");
     test_libc();
 #endif
 
@@ -137,8 +140,7 @@ void kmain(const struct bootinfo *const info)
 
 int sys_exit(int status)
 {
-    printf("back in the kernel... idling CPU\n");
-    printf("user mode returned %d\n", status);
+    printf("Ring 3 returned %d\n", status);
     // gpfault();
 
     halt(); // TODO: switch to next task

@@ -39,25 +39,23 @@ void init_memory(const struct bootinfo *const info)
         if (info->kb_high_e801h != 0) {
             kb_free_1M = info->kb_high_e801h;
             kb_free_16M = (info->kb_extended << 6);
-            // printf("\nbios-e801: ");
         }
         else {
             printf("bios-e801 memory map not available\n");
             kb_free_1M = info->kb_high;
-            // printf("\nbios-88: ");
         }
         kb_free_low = info->kb_low;
         kb_free = kb_free_low + kb_free_1M + kb_free_16M;
     }
     else {
-        printf("ACPI memory map found at %08x\n", info->mem_map);
+        printf("ACPI memory map found at %08X\n", info->mem_map);
         const acpi_mmap_t *e = info->mem_map;
         while (e->type != 0) {
             uint32_t base = (uint32_t) e->base;
             uint32_t limit = (uint32_t) e->length - 1;
 
 #if SHOW_MEMMAP
-            printf("    %08lx-%08lx ", base, base+limit, e->attributes, e->type);
+            printf("  %08lX-%08lX ", base, base+limit, e->attributes, e->type);
             switch (e->type) {
                 case ACPI_MMAP_TYPE_USABLE: printf("free"); break;
                 case ACPI_MMAP_TYPE_RESERVED: printf("reserved"); break;
@@ -67,7 +65,7 @@ void init_memory(const struct bootinfo *const info)
                 default: printf("unknown (%d)", e->type); break;
             }
             if (e->attributes) {
-                printf(" (attributes = %x)", e->attributes);
+                printf(" (attributes = %X)", e->attributes);
             }
             printf("\n");
 #endif

@@ -494,3 +494,13 @@ int snprintf(char *buffer, size_t bufsz, const char *format, ...)
 
     return nlength; // num chars which would've been written if bufsz ignored
 }
+
+int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args)
+{
+    sprintf_buffer = buffer;
+    *sprintf_buffer = '\0';
+    buffer_size = bufsz;
+    int nlength = _doprintf(format, &args, _snprintf_putc);
+
+    return nlength;
+}

@@ -95,13 +95,13 @@ struct x86_desc * get_seg_desc(uint16_t segsel)
 
     if (ss->ti) {
         if (segsel > LDT_LIMIT) {
-            panic("LDT segment selector out of range - %04x", segsel);
+            panic("LDT segment selector out of range - %04X", segsel);
         }
         return get_desc(LDT_BASE, segsel);
     }
 
     if (segsel > GDT_LIMIT) {
-        panic("GDT segment selector out of range - %04x", segsel);
+        panic("GDT segment selector out of range - %04X", segsel);
     }
     return get_desc(GDT_BASE, segsel);
 }

@@ -5,6 +5,7 @@ SOURCES := \
     entry.S \
     console.c \
     cpu.c \
+    crash.c \
     handler.c \
     irq.c \
     main.c \
