@@ -8,9 +8,13 @@ SOURCES := \
     crash.c \
     handler.c \
     irq.c \
+    keyboard.c \
+    ps2kbd.c \
+    i8042.c \
     main.c \
     memory.c \
     pic.c \
+    queue.c \
     ring3.c \
     vga.c \
 

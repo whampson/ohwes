@@ -29,6 +29,7 @@
 #include <interrupt.h>
 #include <io.h>
 #include <irq.h>
+#include <keyboard.h>
 #include <pic.h>
 #include <test.h>
 #include <x86.h>
@@ -37,6 +38,8 @@ extern void init_vga(void);
 extern void init_console(void);
 extern void init_cpu(const struct bootinfo * const info);
 extern void init_pic(void);
+extern void kbd_init(void);
+extern void ps2_init(void);
 extern void init_memory(const struct bootinfo * const info);
 
 
@@ -130,7 +133,9 @@ void kmain(const struct bootinfo *const info)
 
     init_cpu(info);
     init_pic();
-    init_kbd();
+    // ps2_init();
+    // init_kbd();
+    kbd_init();
     init_memory(info);
 
     sti();
@@ -142,6 +147,12 @@ int sys_exit(int status)
 {
     printf("Ring 3 returned %d\n", status);
     // gpfault();
+
+    char c;
+
+    while (true) {
+        while (kbd_read(&c, 1) == 0) { }
+    }
 
     halt(); // TODO: switch to next task
     return 0;

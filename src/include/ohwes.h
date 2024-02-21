@@ -46,17 +46,21 @@
 extern int sys_exit(int status);
 extern void halt(void);             // see entry.S
 
+#define _countof(x)     (sizeof(x)/sizeof(x[0]))
+
+#define has_flag(x,f)   (((x)&(f))==(f))
+
+#ifndef __PANIC_DEFINED
+extern __noreturn void _dopanic(const char *, ...);
+#define panic(...) _dopanic(__VA_ARGS__)
+#endif
+
+#define kprint(...) printf(__VA_ARGS__)
+
 #define die()                       \
 do {                                \
     for (;;);                       \
 } while (0)
-
-#ifndef __PANIC_DEFINED
-extern __noreturn void _dopanic(const char *, ...);
-#define panic(...)                  _dopanic(__VA_ARGS__)
-#endif
-
-#define _countof(x)      (sizeof(x)/sizeof(x[0]))
 
 #define _syscall0(func)             \
 do {                                \

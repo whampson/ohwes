@@ -30,13 +30,28 @@
 
 static irq_handler handler_map[NUM_IRQ] = { 0 };  /* TODO: linked list */
 
+void irq_mask(int irq_num)
+{
+    pic_mask(irq_num);
+}
+
+void irq_unmask(int irq_num)
+{
+    pic_unmask(irq_num);
+}
+
+uint16_t irq_getmask(void)
+{
+    return pic_getmask();
+}
+
 bool irq_register(int irq_num, irq_handler func)
 {
     if (!valid_irq(irq_num)) {
         return false;
     }
     if (handler_map[irq_num] != NULL) {
-        return false;
+        panic("irq %d handler already registered at %08X", irq_num, handler_map[irq_num]);
     }
 
     handler_map[irq_num] = func;
