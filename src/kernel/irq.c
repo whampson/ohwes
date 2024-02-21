@@ -28,7 +28,12 @@
 
 #define valid_irq(n)    ((n) >= 0 && (n) < NUM_IRQ)
 
-static irq_handler handler_map[NUM_IRQ] = { 0 };  /* TODO: linked list */
+static irq_handler handler_map[NUM_IRQ] = { };
+
+void init_irq(void)
+{
+    memset(handler_map, 0, sizeof(handler_map));
+}
 
 void irq_mask(int irq_num)
 {

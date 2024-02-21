@@ -31,36 +31,47 @@
 #include <irq.h>
 #include <keyboard.h>
 #include <pic.h>
+#include <ps2.h>
 #include <test.h>
 #include <x86.h>
 
 extern void init_vga(void);
 extern void init_console(void);
 extern void init_cpu(const struct bootinfo * const info);
+extern void init_irq(void);
 extern void init_pic(void);
+extern void init_ps2(void);
 extern void kbd_init(void);
-extern void ps2_init(void);
 extern void init_memory(const struct bootinfo * const info);
 
 
 void recv_keypress(void)
 {
-    uint8_t scancode = inb(0x60);
-    printf("got scancode %d\n", scancode);
+    uint8_t scancode;
+
+    scancode = ps2_read();
 
     // idiotic testing code
-    if (scancode == 69) {
-        __asm__ volatile ("int $69");   // crash
+    switch (scancode)
+    {
+        case 1:     // esc
+            ps2_cmd(PS2_CMD_SYSRESET);  // reset
+            break;
+        case 59:    // f1
+            printf("\e3");  // blink off
+            break;
+        case 60:    // f2
+            printf("\e4");  // blink on
+            break;
+        case 88:    // f12
+            __asm__ volatile ("int $69");   // crash
+            break;
     }
-    if (scancode == 73) {
-        printf("\e3");  // blink off
-    }
-    if (scancode == 74) {
-        printf("\e4");  // blink on
-    }
+
+    printf(" scancode %d", scancode);
 }
 
-void init_kbd(void)
+void init_keyboard(void)
 {
     irq_register(IRQ_KEYBOARD, recv_keypress);
     pic_unmask(IRQ_KEYBOARD);
@@ -132,10 +143,10 @@ void kmain(const struct bootinfo *const info)
     print_info(info);
 
     init_cpu(info);
+    init_irq();
     init_pic();
-    // ps2_init();
-    // init_kbd();
-    kbd_init();
+    init_ps2();
+    init_keyboard();
     init_memory(info);
 
     sti();
@@ -146,13 +157,12 @@ void kmain(const struct bootinfo *const info)
 int sys_exit(int status)
 {
     printf("Ring 3 returned %d\n", status);
-    // gpfault();
 
-    char c;
+    // char c;
 
-    while (true) {
-        while (kbd_read(&c, 1) == 0) { }
-    }
+    // while (true) {
+    //     while (kbd_read(&c, 1) == 0) { }
+    // }
 
     halt(); // TODO: switch to next task
     return 0;

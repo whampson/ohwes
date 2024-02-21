@@ -25,9 +25,7 @@
 
 int main(void)
 {
-    printf("Got to ring3!\n");
-    // divzero();
-
+    printf("\e[5;33mHello, world!\e[m\n");
     return 8675309;
 }
 

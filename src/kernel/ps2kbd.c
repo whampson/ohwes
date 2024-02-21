@@ -22,22 +22,22 @@
 #include <ps2.h>
 #include <ohwes.h>
 
-void ps2kbd_on(void)
-{
-    uint8_t ps2cfg;
+// void ps2kbd_on(void)
+// {
+//     uint8_t ps2cfg;
 
-    ps2_cmd(PS2_CMD_RDCFG);
-    ps2cfg = ps2_read();
-    ps2cfg |= PS2_CFG_P1INTON;
-    ps2_cmd(PS2_CMD_WRCFG);
-    ps2_write(ps2cfg);
-    ps2_cmd(PS2_CMD_P1ON);
-}
+//     ps2_cmd(PS2_CMD_RDCFG);
+//     ps2cfg = ps2_read();
+//     ps2cfg |= PS2_CFG_P1INTON;
+//     ps2_cmd(PS2_CMD_WRCFG);
+//     ps2_write(ps2cfg);
+//     ps2_cmd(PS2_CMD_P1ON);
+// }
 
 bool ps2kbd_test(void)
 {
-    ps2kbd_cmd(KBD_CMD_SELFTEST, NULL, 0);
-    return ps2_read() == KBD_RES_PASS;
+    ps2kbd_cmd(PS2KBD_CMD_SELFTEST, NULL, 0);
+    return ps2_read() == KBD_RESP_PASS;
 }
 
 int ps2kbd_cmd(uint8_t cmd, uint8_t *data, size_t n)
@@ -58,9 +58,9 @@ int ps2kbd_cmd(uint8_t cmd, uint8_t *data, size_t n)
 
     check_resp:
         switch (res = ps2_read()) {
-            case KBD_RES_ACK:
+            case KBD_RESP_ACK:
                 goto send_data;
-            case KBD_RES_RESEND:
+            case KBD_RESP_RESEND:
                 continue;
             default:
                 /* unexpected result */
