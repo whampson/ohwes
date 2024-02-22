@@ -73,6 +73,7 @@ void recv_keypress(void)
 
 void init_keyboard(void)
 {
+    // TODO: pick scancode set 2
     irq_register(IRQ_KEYBOARD, recv_keypress);
     pic_unmask(IRQ_KEYBOARD);
 }
