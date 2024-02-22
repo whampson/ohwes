@@ -93,13 +93,14 @@ void init_memory(const struct bootinfo *const info)
         }
     }
 
-    kprint("boot: %d kB free", kb_free);
-    if (kb_total) kprint(", %d KB total", kb_total);
-    if (kb_reserved) kprint(", %d KB reserved", kb_reserved);
-    if (kb_acpi) kprint(", %d kB reserved for ACPI", kb_acpi);
-    if (kb_bad) kprint(", %d kB deemed bad", kb_bad);
+    int kb_total_reserved = kb_reserved + kb_acpi;
+
+    kprint("boot: %dk free", kb_free);
+    if (kb_total) kprint(", %dk total", kb_total);
+    if (kb_total_reserved) kprint(", %dk reserved", kb_total_reserved);
+    if (kb_bad) kprint(", %dk bad", kb_bad);
     kprint("\n");
     if (kb_free < MIN_KB_REQUIRED) {
-        panic("need at least %d KB of RAM to operate!", MIN_KB_REQUIRED);
+        panic("we need at least %dk of RAM to operate!", MIN_KB_REQUIRED);
     }
 }
