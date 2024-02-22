@@ -40,7 +40,7 @@ extern void init_console(void);
 extern void init_cpu(const struct bootinfo * const info);
 extern void init_irq(void);
 extern void init_pic(void);
-extern void init_ps2(void);
+extern void init_ps2(const struct bootinfo * const info);
 extern void kbd_init(void);
 extern void init_memory(const struct bootinfo * const info);
 
@@ -49,7 +49,7 @@ void recv_keypress(void)
 {
     uint8_t scancode;
 
-    scancode = ps2_read();
+    scancode = ps2_read_nodelay();
 
     // idiotic testing code
     switch (scancode)
@@ -58,17 +58,17 @@ void recv_keypress(void)
             ps2_cmd(PS2_CMD_SYSRESET);  // reset
             break;
         case 59:    // f1
-            printf("\e3");  // blink off
+            kprint("\e3");  // blink off
             break;
         case 60:    // f2
-            printf("\e4");  // blink on
+            kprint("\e4");  // blink on
             break;
         case 88:    // f12
             __asm__ volatile ("int $69");   // crash
             break;
     }
 
-    printf(" scancode %d", scancode);
+    kprint("scancode %02x\n", scancode);
 }
 
 void init_keyboard(void)
@@ -99,23 +99,23 @@ static void print_info(const struct bootinfo *const info)
     // intptr_t kernel_end = info->kernel+info->kernel_size-1;
     // intptr_t stage2_end = info->stage2+info->stage2_size-1;
 
-    printf("Boot info found at %08X:\n", info);
-    printf("  %d %s, %d serial %s, %d parallel %s\n",
+    kprint("boot: boot info found at %08X\n", info);
+    kprint("boot: %d %s, %d serial %s, %d parallel %s\n",
         nfloppies, PLURAL2(nfloppies, "floppy", "floppies"),
         nserial, PLURAL(nserial, "port"),
         nparallel, PLURAL(nparallel, "port"));
-    printf("  %s ps/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
-    printf("  video mode is %02X\n", info->video_mode);
-    printf("  stage2\t%08X,%X\n", info->stage2, info->stage2_size);
-    printf("  kernel\t%08X,%X\n", info->kernel, info->kernel_size);
-    printf("  stack\t%08X\n", info->stack);
-    printf("  EBDA\t\t%08X\n", info->ebda);
+    kprint("boot: %s ps/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
+    kprint("boot: video mode is %02X\n", info->video_mode);
+    kprint("boot: stage2 %08X,%X\n", info->stage2, info->stage2_size);
+    kprint("boot: kernel %08X,%X\n", info->kernel, info->kernel_size);
+    kprint("boot: stack %08X\n", info->stack);
+    kprint("boot: EBDA %08X\n", info->ebda);
 }
 
 __noreturn void go_to_ring3(void);
 
 __fastcall
-void kmain(const struct bootinfo *const info)
+void kmain(const struct bootinfo *const bootinfo)
 {
     // --- Crude Memory Map ---
     // 0x00000-0x004FF: reserved for Real Mode IVT and BDA (do we still need this?)
@@ -132,23 +132,27 @@ void kmain(const struct bootinfo *const info)
     init_vga();
     init_console();
     // safe to print now
-    printf(OS_NAME " " OS_VERSION " '" OS_MONIKER "'\n");
-    printf("Build: " OS_BUILDDATE "\n");
 
 #if TEST_BUILD
-    printf("TEST BUILD\n");
-    printf("Testing libc...\n");
+    kprint("boot: TEST BUILD\n");
+    kprint("boot: testing libc...\n");
     test_libc();
 #endif
 
-    print_info(info);
+    struct bootinfo info;
+    memcpy(&info, bootinfo, sizeof(struct bootinfo));
+    print_info(&info);
 
-    init_cpu(info);
+    init_cpu(&info);
     init_irq();
     init_pic();
-    init_ps2();
+    init_ps2(&info);
     init_keyboard();
-    init_memory(info);
+    init_memory(&info);
+
+    kprint("\n" OS_NAME " " OS_VERSION " '" OS_MONIKER "'\n");
+    kprint("Build: " OS_BUILDDATE "\n");
+    kprint("\n");
 
     sti();
 
@@ -157,15 +161,9 @@ void kmain(const struct bootinfo *const info)
 
 int sys_exit(int status)
 {
-    printf("Ring 3 returned %d\n", status);
+    kprint("Ring 3 returned %d\n", status);
 
-    // char c;
-
-    // while (true) {
-    //     while (kbd_read(&c, 1) == 0) { }
-    // }
-
-    halt(); // TODO: switch to next task
+    idle();
     return 0;
 }
 
@@ -175,7 +173,7 @@ void _dopanic(const char *fmt, ...)
     va_list args;
     va_start(args, fmt);
 
-    printf("panic: ");
+    kprint("panic: ");
     vprintf(fmt, args);
 
     va_end(args);

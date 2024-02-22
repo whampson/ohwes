@@ -35,39 +35,39 @@ void init_memory(const struct bootinfo *const info)
     int kb_free_16M = 0;    // between 1M and 4G
 
     if (!info->mem_map) {
-        printf("bios-e820 memory map not available\n");
+        kprint("bios-e820: memory map not available\n");
         if (info->kb_high_e801h != 0) {
             kb_free_1M = info->kb_high_e801h;
             kb_free_16M = (info->kb_extended << 6);
         }
         else {
-            printf("bios-e801 memory map not available\n");
+            kprint("bios-e801: memory map not available\n");
             kb_free_1M = info->kb_high;
         }
         kb_free_low = info->kb_low;
         kb_free = kb_free_low + kb_free_1M + kb_free_16M;
     }
     else {
-        printf("ACPI memory map found at %08X\n", info->mem_map);
+        kprint("boot: ACPI memory map found at %08X\n", info->mem_map);
         const acpi_mmap_t *e = info->mem_map;
         while (e->type != 0) {
             uint32_t base = (uint32_t) e->base;
             uint32_t limit = (uint32_t) e->length - 1;
 
 #if SHOW_MEMMAP
-            printf("  %08lX-%08lX ", base, base+limit, e->attributes, e->type);
+            kprint("bios-e820: %08lX-%08lX ", base, base+limit, e->attributes, e->type);
             switch (e->type) {
-                case ACPI_MMAP_TYPE_USABLE: printf("free"); break;
-                case ACPI_MMAP_TYPE_RESERVED: printf("reserved"); break;
-                case ACPI_MMAP_TYPE_ACPI: printf("acpi"); break;
-                case ACPI_MMAP_TYPE_ACPI_NVS: printf("acpi non-volatile"); break;
-                case ACPI_MMAP_TYPE_BAD: printf("bad"); break;
-                default: printf("unknown (%d)", e->type); break;
+                case ACPI_MMAP_TYPE_USABLE: kprint("free"); break;
+                case ACPI_MMAP_TYPE_RESERVED: kprint("reserved"); break;
+                case ACPI_MMAP_TYPE_ACPI: kprint("acpi"); break;
+                case ACPI_MMAP_TYPE_ACPI_NVS: kprint("acpi non-volatile"); break;
+                case ACPI_MMAP_TYPE_BAD: kprint("bad"); break;
+                default: kprint("unknown (%d)", e->type); break;
             }
             if (e->attributes) {
-                printf(" (attributes = %X)", e->attributes);
+                kprint(" (attributes = %X)", e->attributes);
             }
-            printf("\n");
+            kprint("\n");
 #endif
 
             int kb = (e->length >> 10);
@@ -93,12 +93,12 @@ void init_memory(const struct bootinfo *const info)
         }
     }
 
-    printf("%d kB free", kb_free);
-    if (kb_total) printf(", %d KB total", kb_total);
-    if (kb_reserved) printf(", %d KB reserved", kb_reserved);
-    if (kb_acpi) printf(", %d kB reserved for ACPI", kb_acpi);
-    if (kb_bad) printf(", %d kB deemed bad", kb_bad);
-    printf("\n");
+    kprint("boot: %d kB free", kb_free);
+    if (kb_total) kprint(", %d KB total", kb_total);
+    if (kb_reserved) kprint(", %d KB reserved", kb_reserved);
+    if (kb_acpi) kprint(", %d kB reserved for ACPI", kb_acpi);
+    if (kb_bad) kprint(", %d kB deemed bad", kb_bad);
+    kprint("\n");
     if (kb_free < MIN_KB_REQUIRED) {
         panic("need at least %d KB of RAM to operate!", MIN_KB_REQUIRED);
     }

@@ -44,7 +44,9 @@
 #define SYS_EXIT            0       // syscall test
 
 extern int sys_exit(int status);
-extern void halt(void);             // see entry.S
+
+extern void halt(void);            // see entry.S
+extern void idle(void);            // see entry.S
 
 #define _countof(x)     (sizeof(x)/sizeof(x[0]))
 

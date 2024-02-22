@@ -53,11 +53,11 @@
 #define PS2_RESP_P2PASS          0x00    /* Port 2 Self-Test Pass */
 
 /* Controller Status Register Fields */
-#define PS2_STATUS_OUTPUT          (1<<0)  /* Output Buffer Status (1 = full) */
-#define PS2_STATUS_INPUT           (1<<1)  /* Input Buffer Status (1 = full) */
-#define PS2_STATUS_POST            (1<<2)  /* System Passed POST */
-#define PS2_STATUS_TIMEOUT         (1<<6)  /* Timeout Error */
-#define PS2_STATUS_PARITY          (1<<7)  /* Parity Error */
+#define PS2_STATUS_OPF          (1<<0)  /* Output Buffer Full (1 = controller output contains data for CPU to read) */
+#define PS2_STATUS_IPF          (1<<1)  /* Input Buffer Full (0 = controller input is empty and available for CPU to write) */
+#define PS2_STATUS_POST         (1<<2)  /* System Passed POST */
+#define PS2_STATUS_TIMEOUT      (1<<6)  /* Timeout Error */
+#define PS2_STATUS_PARITY       (1<<7)  /* Parity Error */
 
 /* Controller Configuration Register Fields */
 #define PS2_CFG_P1INTON         (1<<0)  /* Interrupt on First Device Port */
@@ -110,32 +110,26 @@
 void ps2_flush(void);
 
 /**
- * Reads the PS/2 Controller's Status Register.
+ * Reads a byte from the PS/2 Controller's Data Register.
+ * WARNING: this function will block until there is a byte available to read.
+ * Use ps2_canread() to check whether the controller is ready for reading.
  *
- * @return status register contents (use PS2_STATUS_* to check fields)
+ * @return data from the controller's output buffer
  */
-uint8_t ps2_status(void);
+uint8_t ps2_read(void);
+
+uint8_t ps2_read_nodelay(void);
+
 
 /**
- * Tests PS/2 Controller.
+ * Writes a byte to the PS/2 Controller's Data Register.
+ * WARNING: this function will block until the controller is ready to accept
+ * another byte. Use ps2_canwrite() to check whether the controller is ready for
+ * writing.
  *
- * @return true if the test passed, false if the test failed
+ * @param data the data to write to the controller's input buffer
  */
-bool ps2_test(void);
-
-/**
- * Tests Port 1 of the PS/2 Controller.
- *
- * @return true if the test passed, false if the test failed
- */
-bool ps2_testp1(void);
-
-/**
- * Tests Port 2 of the PS/2 Controller.
- *
- * @return true if the test passed, false if the test failed
- */
-bool ps2_testp2(void);
+void ps2_write(uint8_t data);
 
 /**
  * Issues a command to the PS/2 Controller.
@@ -147,30 +141,11 @@ bool ps2_testp2(void);
 void ps2_cmd(uint8_t cmd);
 
 /**
- * Reads a byte from the PS/2 Controller's Data Register.
- * WARNING: this function will block until there is a byte available to read.
- * Use ps2_canread() to check whether the controller is ready for reading.
- *
- * @return data from the controller's output buffer
- */
-uint8_t ps2_read(void);
-
-/**
  * Checks whether the PS/2 controller has byte available to read.
  *
  * @return true if the PS/2 controller's output buffer is full
  */
 bool ps2_canread(void);
-
-/**
- * Writes a byte to the PS/2 Controller's Data Register.
- * WARNING: this function will block until the controller is ready to accept
- * another byte. Use ps2_canwrite() to check whether the controller is ready for
- * writing.
- *
- * @param data the data to write to the controller's input buffer
- */
-void ps2_write(uint8_t data);
 
 /**
  * Checks whether the PS/2 controller is ready to accept another byte.

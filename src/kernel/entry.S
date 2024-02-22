@@ -36,6 +36,11 @@ halt:
         hlt
         jmp             halt
 
+
+.globl idle
+idle:
+        jmp             idle
+
 # ----------------------------------------------------------------------------
 
 .macro LOAD_SEGREG addr, reg
