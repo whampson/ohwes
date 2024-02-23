@@ -44,40 +44,176 @@ extern void init_ps2(const struct bootinfo * const info);
 extern void kbd_init(void);
 extern void init_memory(const struct bootinfo * const info);
 
+struct kb {
+    bool req_ack;
+    bool got_ack;
+    bool resend;
+    bool interrupt;
+};
+
+struct kb g_kb = {};
 
 void recv_keypress(void)
 {
     uint8_t scancode;
 
-    scancode = ps2_read_nodelay();
+    g_kb.interrupt = true;
+
+    scancode = inb(0x60);
+    switch (scancode) {
+        case 0xFA:
+            if (!g_kb.req_ack) {
+                kprint("kbd_interrupt: got unexpected ACK!\n");
+            }
+            else {
+                kprint("kbd_interrupt: got ACK\n");
+            }
+            g_kb.got_ack = true;
+            g_kb.req_ack = false;
+            return;
+
+        case 0xFE:
+            kprint("kbd_interrupt: got resend request\n");
+            g_kb.resend = true;
+            return;
+
+        default:
+            if (g_kb.req_ack) {
+                kprint("kbd_interrupt: expected ACK, got 0x%X\n", scancode);
+            }
+            break;
+    }
 
     // idiotic testing code
     switch (scancode)
     {
-        case 1:     // esc
+        case 0x76:  // esc
             ps2_cmd(PS2_CMD_SYSRESET);  // reset
             break;
-        case 59:    // f1
+        case 0x05:  // f1
             kprint("\e3");  // blink off
             break;
-        case 60:    // f2
+        case 0x06:  // f2
             kprint("\e4");  // blink on
             break;
-        case 88:    // f12
+        case 0x07:  // f12
             __asm__ volatile ("int $69");   // crash
             break;
     }
 
-    kprint("scancode %02x\n", scancode);
+    kprint("kbd_interrupt: scancode %02X\n", scancode);
+}
+
+#define SCANCODE_SET 2
+#define NUM_RETRIES 10000
+
+uint8_t kbd_read()
+{
+    uint8_t data;
+    uint32_t flags;
+    int count;
+
+    count = 0;
+    while (count++ < NUM_RETRIES) {
+        data = inb_delay(0x64);
+        if (data & (PS2_STATUS_TIMEOUT | PS2_STATUS_PARITY)) {
+            panic("ps2kbd: read failed with timeout or parity error");
+        }
+        if (data & (PS2_STATUS_OPF) ||
+            g_kb.got_ack || g_kb.resend || g_kb.interrupt) {
+            break;
+        }
+    }
+
+    cli_save(flags);
+
+    g_kb.got_ack = false;
+    g_kb.req_ack = false;
+    g_kb.resend = false;
+
+    if (count >= NUM_RETRIES) {
+        kprint("ps2kbd: timed out waiting for read\n");
+        data = 0xFF;
+        goto done;
+    }
+
+    data = inb_delay(0x60);
+    if (data == 0x00 || data == 0xFF) {
+        kprint("ps2kbd: returned error 0x%X\n", data);
+    }
+    kprint("ps2kbd: returned 0x%X\n", data);
+
+done:
+    restore_flags(flags);
+    return data;
+}
+
+bool kbd_write(uint8_t data)
+{
+    uint8_t status;
+    uint8_t resp;
+    uint32_t flags;
+    int count;
+
+    cli_save(flags);
+
+    // TODO: resend last command if requested?
+
+    count = 0;
+    while (count++ < NUM_RETRIES) {
+        status = inb_delay(0x64);
+        if (status & (PS2_STATUS_TIMEOUT | PS2_STATUS_PARITY)) {
+            panic("ps2kbd: write failed with timeout or parity error");
+        }
+        if (!(status & PS2_STATUS_IPF)) {
+            break;
+        }
+    }
+
+    if (count >= NUM_RETRIES) {
+        kprint("ps2kbd: timed out waiting for write");
+    }
+
+    // tODO: need a queue/ring buffer
+
+    kprint("ps2kbd: writing 0x%X...\n", data);
+
+    g_kb.interrupt = false;
+    g_kb.got_ack = false;
+    g_kb.req_ack = true;
+    g_kb.resend = false;
+
+    outb_delay(0x60, data);
+
+    restore_flags(flags);
+
+    resp = kbd_read();
+    return resp != 0x00 && resp != 0xFF;
 }
 
 void init_keyboard(void)
 {
-    // TODO: pick scancode set 2
+    uint8_t data;
+
+    kprint("ps2kbd: enabling IRQ...\n", SCANCODE_SET);
     irq_register(IRQ_KEYBOARD, recv_keypress);
     pic_unmask(IRQ_KEYBOARD);
-}
 
+    sti();  // temp for testing keyboard state machine with interrupts on
+
+    kbd_write(PS2KBD_CMD_SETLED);
+    kbd_write(PS2KBD_LED_NUMLK | PS2KBD_LED_CAPLK);
+
+    if (!kbd_write(PS2KBD_CMD_SCANCODE)) {
+        kprint("ps2kbd: error setting scancode, defaulting to scancode set 1\n");
+        data = 1;
+    }
+    else {
+        kbd_write(0);
+        data = kbd_read();
+    }
+    kprint("ps2kbd: using scancode set %d\n", data);
+}
 
 #define HASNO(cond)     ((cond)?"has":"no")
 #define YN(cond)        ((cond)?"yes":"no")

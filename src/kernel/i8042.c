@@ -121,12 +121,6 @@ void init_ps2(const struct bootinfo * const info)
     if (port2) {
         ps2_cmd(PS2_CMD_P2ON);
     }
-
-    // ps2_cmd(PS2_CMD_RDCFG);
-    // cfg = ps2_read();
-    // if (has_flag(cfg, PS2_CFG_P1CLKOFF)) {
-    //     panic("failed to enable port 1 on PS/2 controller (keyboard)");
-    // }
     ps2_flush();
 }
 

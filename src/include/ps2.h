@@ -55,7 +55,10 @@
 /* Controller Status Register Fields */
 #define PS2_STATUS_OPF          (1<<0)  /* Output Buffer Full (1 = controller output contains data for CPU to read) */
 #define PS2_STATUS_IPF          (1<<1)  /* Input Buffer Full (0 = controller input is empty and available for CPU to write) */
-#define PS2_STATUS_POST         (1<<2)  /* System Passed POST */
+#define PS2_STATUS_SYS          (1<<2)  /* System Passed POST */
+#define PS2_STATUS_A2           (1<<3)  /* Port Last Written To (0 = 0x60, 1 = 0x64)*/
+#define PS2_STATUS_INH          (1<<4)  /* Inhibit Keyboard */
+#define PS2_STATUS_MOBF         (1<<5)  /* Mouse Output Buffer Full */
 #define PS2_STATUS_TIMEOUT      (1<<6)  /* Timeout Error */
 #define PS2_STATUS_PARITY       (1<<7)  /* Parity Error */
 

@@ -39,7 +39,7 @@ enum kb_mode
     KB_COOKED       /* Translate keycodes into ASCII character sequences. */
 };
 
-ssize_t kbd_read(char *buf, size_t n);
+// ssize_t kbd_read(char *buf, size_t n);
 
 
 /* TODO: make these into ioctls */
