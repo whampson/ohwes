@@ -35,6 +35,8 @@
 void pic_eoi(uint8_t irq_num);
 void pic_mask(uint8_t irq_num);
 void pic_unmask(uint8_t irq_num);
+
 uint16_t pic_getmask(void);
+void pic_setmask(uint16_t mask);
 
 #endif /* __PIC_H */

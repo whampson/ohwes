@@ -51,13 +51,15 @@ static void wait_for_write(void)
 
 void init_ps2(const struct bootinfo * const info)
 {
+    uint32_t flags;
     uint8_t cfg, resp;
     bool port2;
+
+    cli_save(flags);
 
     //
     // disable ports and flush output buffer
     //
-    kprint("ps2: flushing...\n");
     ps2_cmd(PS2_CMD_P1OFF);
     ps2_cmd(PS2_CMD_P2OFF);
     ps2_flush();
@@ -65,26 +67,23 @@ void init_ps2(const struct bootinfo * const info)
     //
     // test for the existence of port 2
     //
-    kprint("ps2: checking for second port...\n");
     ps2_cmd(PS2_CMD_P2ON);
     ps2_cmd(PS2_CMD_RDCFG);
     cfg = ps2_read();
     port2 = !has_flag(cfg, PS2_CFG_P2CLKOFF) && info->hwflags.has_ps2mouse;
     if (!port2) {
-        kprint("ps2: no mouse port on controller\n");
+        kprint("ps2ctl: no mouse port detected on PS/2 controller\n");
     }
 
     //
     // run self tests
     //
-    kprint("ps2: testing controller...\n");
     ps2_cmd(PS2_CMD_TEST);
     resp = ps2_read();
     if (resp != PS2_RESP_PASS) {
         panic("PS/2 controller self-test failed!");
     }
 
-    kprint("ps2: testing port 1...\n");
     ps2_cmd(PS2_CMD_P1TEST);
     resp = ps2_read();
     if (resp != PS2_RESP_PASS && resp != PS2_RESP_P1PASS) {
@@ -92,7 +91,6 @@ void init_ps2(const struct bootinfo * const info)
     }
 
     if (port2) {
-        kprint("ps2: testing port 2...\n");
         ps2_cmd(PS2_CMD_P2TEST);
         resp = ps2_read();
         if (resp != PS2_RESP_PASS && resp != PS2_RESP_P2PASS) {
@@ -104,24 +102,24 @@ void init_ps2(const struct bootinfo * const info)
     //
     // enable PS/2 device interrupts and disable scancode translation
     //
-    kprint("ps2: configuring controller...\n");
     cfg |= PS2_CFG_P1INTON;
     if (port2) {
         cfg |= PS2_CFG_P2INTON;
     }
     cfg &= ~PS2_CFG_XLATON;
-    ps2_cmd(PS2_CMD_WRCFG);
+        ps2_cmd(PS2_CMD_WRCFG);
     ps2_write(cfg);
 
     //
     // enable PS/2 ports
     //
-    kprint("ps2: enabling devices...\n");
     ps2_cmd(PS2_CMD_P1ON);
     if (port2) {
         ps2_cmd(PS2_CMD_P2ON);
     }
     ps2_flush();
+
+    restore_flags(flags);
 }
 
 void ps2_flush(void)
@@ -131,9 +129,9 @@ void ps2_flush(void)
     } while (ps2_canread());
 }
 
-uint8_t ps2_read_nodelay(void)
+uint8_t ps2_status(void)
 {
-    return inb(PS2_PORT_DATA);
+    return inb_delay(PS2_PORT_STATUS);
 }
 
 uint8_t ps2_read(void)
@@ -158,11 +156,11 @@ void ps2_cmd(uint8_t cmd)
 bool ps2_canread(void)
 {
     // device output buffer must be full
-    return has_flag(inb_delay(PS2_PORT_STATUS), PS2_STATUS_OPF);
+    return has_flag(ps2_status(), PS2_STATUS_OPF);
 }
 
 bool ps2_canwrite(void)
 {
     // device input buffer must be empty
-    return !has_flag(inb_delay(PS2_PORT_STATUS), PS2_STATUS_IPF);
+    return !has_flag(ps2_status(), PS2_STATUS_IPF);
 }

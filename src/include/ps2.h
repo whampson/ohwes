@@ -83,16 +83,18 @@
 /* Keyboard Commands */
 #define PS2KBD_CMD_SETLED          0xED    /* Set ScrLk, CapsLk, and NumLk LEDs */
 #define PS2KBD_CMD_SCANCODE        0xF0    /* Set Scancode Mapping */
+#define PS2KBD_CMD_IDENT           0xF2    /* Identify Keyboard */
+#define PS2KBD_CMD_TYPEMATIC       0xF3    /* Set Typematic Rate */
 #define PS2KBD_CMD_SCANON          0xF4    /* Enable scanning */
 #define PS2KBD_CMD_SCANOFF         0xF5    /* Disable scanning */
-#define PS2KBD_CMD_DEFAULTS        0xF6    /* Set keyboard defaults */
-#define PS2KBD_CMD_ALL_TR          0xF7    /* Set all keys to typematic/autorepeat only (scancode 3) */
-#define PS2KBD_CMD_ALL_MB          0xF8    /* Set all keys to make/break only (scancode 3) */
-#define PS2KBD_CMD_ALL_M           0xF9    /* Set all keys to make only (scancode 3) */
-#define PS2KBD_CMD_ALL_MBTR        0xFA    /* Set all keys to make/break/typematic/autorepeat (scancode 3) */
-#define PS2KBD_CMD_KEY_TR          0xFB    /* Set specific key to typematic/autorepeat only (scancode 3) */
-#define PS2KBD_CMD_KEY_MB          0xFC    /* Set specific key to make/break only (scancode 3) */
-#define PS2KBD_CMD_KEY_M           0xFD    /* Set specific key to make only (scancode 3) */
+// #define PS2KBD_CMD_DEFAULTS        0xF6    /* Set keyboard defaults */
+// #define PS2KBD_CMD_ALL_TR          0xF7    /* Set all keys to typematic/autorepeat only (scancode 3) */
+// #define PS2KBD_CMD_ALL_MB          0xF8    /* Set all keys to make/break only (scancode 3) */
+// #define PS2KBD_CMD_ALL_M           0xF9    /* Set all keys to make only (scancode 3) */
+// #define PS2KBD_CMD_ALL_MBTR        0xFA    /* Set all keys to make/break/typematic/autorepeat (scancode 3) */
+// #define PS2KBD_CMD_KEY_TR          0xFB    /* Set specific key to typematic/autorepeat only (scancode 3) */
+// #define PS2KBD_CMD_KEY_MB          0xFC    /* Set specific key to make/break only (scancode 3) */
+// #define PS2KBD_CMD_KEY_M           0xFD    /* Set specific key to make only (scancode 3) */
 #define PS2KBD_CMD_SELFTEST        0xFF    /* Run self-test */
 
 /* Keyboard LED masks */
@@ -112,6 +114,8 @@
  */
 void ps2_flush(void);
 
+uint8_t ps2_status(void);
+
 /**
  * Reads a byte from the PS/2 Controller's Data Register.
  * WARNING: this function will block until there is a byte available to read.
@@ -120,9 +124,6 @@ void ps2_flush(void);
  * @return data from the controller's output buffer
  */
 uint8_t ps2_read(void);
-
-uint8_t ps2_read_nodelay(void);
-
 
 /**
  * Writes a byte to the PS/2 Controller's Data Register.
@@ -157,27 +158,7 @@ bool ps2_canread(void);
  */
 bool ps2_canwrite(void);
 
-/**
- * Allows the controller to receive interrupts from the PS/2 keyboard device.
- */
-void ps2kbd_on(void);
-
-/**
- * Tests the keyboard device.
- *
- * @return true if the test passed, false if the test failed
- */
-bool ps2kbd_test(void);
-
-/**
- * Issues a command to the keyboard device.
- *
- * @param cmd the command to issue (one of PS2KBD_CMD_*)
- * @param data the command data, if required
- * @param n the number of bytes in 'data' to transmit
- * @return 0 on success, nonzero value if the command didn't complete as
- *         expected (keyboard response byte), -1 if the command timed out
- */
-int ps2kbd_cmd(uint8_t cmd, uint8_t *data, size_t n);
+uint8_t kb_read(void);          // get next byte from input buffer or keyboard's data port
+bool kb_sendcmd(uint8_t cmd);       // write a command to the keyboard and wait for a response
 
 #endif /* __PS2_H */

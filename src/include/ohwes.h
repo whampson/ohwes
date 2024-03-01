@@ -105,5 +105,9 @@ do {                                \
     (void) c;                       \
 })
 
+#define HASNO(cond)     ((cond)?"has":"no")
+#define YN(cond)        ((cond)?"yes":"no")
+#define PLURAL(n,a)     (((n)==1)?a:a "s")
+#define PLURAL2(n,a,b)  (((n)==1)?a:b)
 
 #endif // __OHWES_H

@@ -96,7 +96,6 @@ void pic_mask(uint8_t irq_num)
 
 #ifdef PARANOID
     uint8_t ocw1_readback = pic_read_data(pic_num);
-    (void) ocw1_readback;
     assert(ocw1 == ocw1_readback);
 #endif
 
@@ -117,7 +116,6 @@ void pic_unmask(uint8_t irq_num)
 
 #ifdef PARANOID
     uint8_t ocw1_readback = pic_read_data(pic_num);
-    (void) ocw1_readback;
     assert(ocw1 == ocw1_readback);
 #endif
 
@@ -126,10 +124,40 @@ void pic_unmask(uint8_t irq_num)
 
 uint16_t pic_getmask(void)
 {
+    uint32_t flags;
+    cli_save(flags);
+
     uint8_t ocw1_m = pic_read_data(MASTER_PIC);
     uint8_t ocw1_s = pic_read_data(SLAVE_PIC);
 
-    return (ocw1_s << 8) | ocw1_m;
+    uint16_t mask = (ocw1_s << 8) | ocw1_m;
+
+    restore_flags(flags);
+    return mask;
+}
+
+void pic_setmask(uint16_t mask)
+{
+    uint32_t flags;
+    cli_save(flags);
+
+    uint8_t mask_m = mask & 0xFF;
+    uint8_t mask_s = (mask >> 8) & 0xFF;
+
+    pic_write_data(MASTER_PIC, mask_m);
+    pic_write_data(SLAVE_PIC, mask_s);
+
+#ifdef PARANOID
+    uint8_t readback;
+
+    readback = pic_read_data(MASTER_PIC);
+    assert(mask_m == readback);
+
+    readback = pic_read_data(SLAVE_PIC);
+    assert(mask_s == readback);
+#endif
+
+    restore_flags(flags);
 }
 
 static void pic_write_cmd(int pic, uint8_t cmd)

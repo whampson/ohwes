@@ -50,6 +50,11 @@ uint16_t irq_getmask(void)
     return pic_getmask();
 }
 
+void irq_setmask(uint16_t mask)
+{
+    pic_setmask(mask);
+}
+
 bool irq_register(int irq_num, irq_handler func)
 {
     if (!valid_irq(irq_num)) {

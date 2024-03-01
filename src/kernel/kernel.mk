@@ -12,6 +12,7 @@ SOURCES := \
     main.c \
     memory.c \
     pic.c \
+    ps2kbd.c \
     queue.c \
     ring3.c \
     vga.c \

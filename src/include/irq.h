@@ -31,7 +31,9 @@ typedef void (*irq_handler)(void);
 
 void irq_mask(int irq_num);
 void irq_unmask(int irq_num);
+
 uint16_t irq_getmask(void);
+void irq_setmask(uint16_t mask);
 
 bool irq_register(int irq_num, irq_handler func);
 void irq_unregister(int irq_num);
