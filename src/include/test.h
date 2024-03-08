@@ -65,8 +65,6 @@ do {                                                                            
     }                                                                           \
 } while (0)
 
-void test_libc(void);
-
 #endif // TEST_BUILD
 
 #endif // __TEST_H

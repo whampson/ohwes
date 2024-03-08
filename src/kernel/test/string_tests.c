@@ -1,9 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "test_libc.h"
-
-#ifdef TEST_BUILD
+#include "tests.h"
 
 void memcmp_demo(const char* lhs, const char* rhs, size_t sz)
 {
@@ -254,5 +252,3 @@ void test_strings(void)
     test_strcmp();
     test_strlen();
 }
-
-#endif

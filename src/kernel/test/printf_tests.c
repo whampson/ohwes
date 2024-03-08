@@ -5,9 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <ohwes.h>
-#include "test_libc.h"
-
-#ifdef TEST_BUILD
+#include "tests.h"
 
 void testprint(const char *msg)
 {
@@ -460,5 +458,3 @@ void test_printf(void)
     #undef _TEST_CHECK
     #undef _TEST_FN
 }
-
-#endif // TEST_BUILD
