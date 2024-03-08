@@ -29,33 +29,13 @@
 
 #define NUM_RETRIES 100000
 
-static void wait_for_read(void)
-{
-    for (int i = 0; i < NUM_RETRIES; i++) {
-        if (ps2_canread()) {
-            return;
-        }
-    }
-    panic("timed out waiting for PS/2 controller read! (%d tries)", NUM_RETRIES);
-}
-
-static void wait_for_write(void)
-{
-    for (int i = 0; i < NUM_RETRIES; i++) {
-        if (ps2_canwrite()) {
-            return;
-        }
-    }
-    panic("timed out waiting for PS/2 controller write! (%d tries)", NUM_RETRIES);
-}
+static void wait_for_read(void);
+static void wait_for_write(void);
 
 void init_ps2(const struct bootinfo * const info)
 {
-    uint32_t flags;
     uint8_t cfg, resp;
     bool port2;
-
-    cli_save(flags);
 
     //
     // disable ports and flush output buffer
@@ -72,7 +52,7 @@ void init_ps2(const struct bootinfo * const info)
     cfg = ps2_read();
     port2 = !has_flag(cfg, PS2_CFG_P2CLKOFF) && info->hwflags.has_ps2mouse;
     if (!port2) {
-        kprint("ps2ctl: no mouse port detected on PS/2 controller\n");
+        kprint("ps2ctl: mouse not detected\n");
     }
 
     //
@@ -106,8 +86,8 @@ void init_ps2(const struct bootinfo * const info)
     if (port2) {
         cfg |= PS2_CFG_P2INTON;
     }
-    cfg &= ~PS2_CFG_XLATON;
-        ps2_cmd(PS2_CMD_WRCFG);
+    cfg &= ~PS2_CFG_TRANSLATE;
+    ps2_cmd(PS2_CMD_WRCFG);
     ps2_write(cfg);
 
     //
@@ -118,20 +98,18 @@ void init_ps2(const struct bootinfo * const info)
         ps2_cmd(PS2_CMD_P2ON);
     }
     ps2_flush();
-
-    restore_flags(flags);
 }
 
-void ps2_flush(void)
+bool ps2_canread(void)
 {
-    do {
-        inb_delay(PS2_PORT_DATA);
-    } while (ps2_canread());
+    // device output buffer must be full
+    return has_flag(ps2_status(), PS2_STATUS_OPF);
 }
 
-uint8_t ps2_status(void)
+bool ps2_canwrite(void)
 {
-    return inb_delay(PS2_PORT_STATUS);
+    // device input buffer must be empty
+    return !has_flag(ps2_status(), PS2_STATUS_IPF);
 }
 
 uint8_t ps2_read(void)
@@ -146,21 +124,40 @@ void ps2_write(uint8_t data)
     outb_delay(PS2_PORT_DATA, data);
 }
 
+void ps2_flush(void)
+{
+    do {
+        inb_delay(PS2_PORT_DATA);
+    } while (ps2_canread());
+}
+
+uint8_t ps2_status(void)
+{
+    return inb_delay(PS2_PORT_STATUS);
+}
+
 void ps2_cmd(uint8_t cmd)
 {
     wait_for_write();
-    // TODO: iodelay(xxx) ?
     outb_delay(PS2_PORT_CMD, cmd);
 }
 
-bool ps2_canread(void)
+static void wait_for_read(void)
 {
-    // device output buffer must be full
-    return has_flag(ps2_status(), PS2_STATUS_OPF);
+    for (int i = 0; i < NUM_RETRIES; i++) {
+        if (ps2_canread()) {
+            return;
+        }
+    }
+    panic("timed out waiting for PS/2 controller read! (%d tries)", NUM_RETRIES);
 }
 
-bool ps2_canwrite(void)
+static void wait_for_write(void)
 {
-    // device input buffer must be empty
-    return !has_flag(ps2_status(), PS2_STATUS_IPF);
+    for (int i = 0; i < NUM_RETRIES; i++) {
+        if (ps2_canwrite()) {
+            return;
+        }
+    }
+    panic("timed out waiting for PS/2 controller write! (%d tries)", NUM_RETRIES);
 }

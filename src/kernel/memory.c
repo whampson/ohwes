@@ -48,7 +48,6 @@ void init_memory(const struct bootinfo *const info)
         kb_free = kb_free_low + kb_free_1M + kb_free_16M;
     }
     else {
-        kprint("boot: ACPI memory map found at %08X\n", info->mem_map);
         const acpi_mmap_t *e = info->mem_map;
         while (e->type != 0) {
             uint32_t base = (uint32_t) e->base;
@@ -59,8 +58,8 @@ void init_memory(const struct bootinfo *const info)
             switch (e->type) {
                 case ACPI_MMAP_TYPE_USABLE: kprint("free"); break;
                 case ACPI_MMAP_TYPE_RESERVED: kprint("reserved"); break;
-                case ACPI_MMAP_TYPE_ACPI: kprint("acpi"); break;
-                case ACPI_MMAP_TYPE_ACPI_NVS: kprint("acpi non-volatile"); break;
+                case ACPI_MMAP_TYPE_ACPI: kprint("reserved ACPI"); break;
+                case ACPI_MMAP_TYPE_ACPI_NVS: kprint("reserved ACPI non-volatile"); break;
                 case ACPI_MMAP_TYPE_BAD: kprint("bad"); break;
                 default: kprint("unknown (%d)", e->type); break;
             }

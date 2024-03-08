@@ -24,10 +24,8 @@
 #ifndef __ASSERT_H
 #define __ASSERT_H
 
-#ifndef __PANIC_DEFINED
 extern __noreturn void _dopanic(const char *, ...);
 #define panic(...)                  _dopanic(__VA_ARGS__)
-#endif
 
 #ifdef DEBUG
 #define assert(x) \

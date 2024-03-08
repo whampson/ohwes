@@ -19,17 +19,19 @@
  * =============================================================================
  */
 
-#include <assert.h>
+#include <ohwes.h>
 #include <console.h>
 #include <ctype.h>
-#include <string.h>
+#include <irq.h>
+#include <ps2.h>
 #include <vga.h>
-#include <x86.h>
 
 #define NUM_CONSOLES    1
 
-static struct console consoles[NUM_CONSOLES] = { 0 };
+static struct console consoles[NUM_CONSOLES] = { };
 static int active_cons = 0;
+
+static char _input_buffers[NUM_CONSOLES][INPUT_BUFFER_SIZE];
 
 //
 // This is totally something I yoinked from Linux. It allows for n consoles and
@@ -40,7 +42,8 @@ static int active_cons = 0;
 #define m_initialized   (consoles[active_cons].initialized)
 #define m_cols          (consoles[active_cons].cols)
 #define m_rows          (consoles[active_cons].rows)
-#define m_framebuf      ((struct vga_cell *) consoles[active_cons].framebuf)
+#define m_framebuf      (consoles[active_cons].framebuf)
+#define m_inputq        (&consoles[active_cons].inputq)
 #define m_tabstop       (consoles[active_cons].tabstop)
 #define m_csiparam      (consoles[active_cons].csiparam)
 #define m_paramidx      (consoles[active_cons].paramidx)
@@ -74,7 +77,6 @@ static void tab(void);
 static void scroll(int n);
 static void erase(int mode);
 static void erase_ln(int mode);
-static void set_vga_attr(struct vga_attr *a);
 static void cursor_up(int n);
 static void cursor_down(int n);
 static void cursor_left(int n);
@@ -85,50 +87,30 @@ static void read_cursor(void);
 static void write_cursor(void);
 static void pos2xy(int pos, int *x, int *y);
 static int  xy2pos(int x, int y);
+static void set_vga_char(int pos, char c);
+static void set_vga_attr(int pos, const struct char_attr *attr);
+static void _writestr(char *str);
+static void _dowrite(char c);
+static void drain_kb(void);
 
-static void _direct_write(char *str)
-{
-    while (*str != '\0') {
-        console_write(*str++);
-    }
-}
 
 void init_console(void)
 {
+    zeromem(_input_buffers, sizeof(_input_buffers));
+    zeromem(consoles, sizeof(consoles));
+
     for (int i = 0; i < NUM_CONSOLES; i++) {
         defaults(&consoles[i]);
+        q_init(&consoles[i].inputq, _input_buffers[i], INPUT_BUFFER_SIZE);
     }
+
+    irq_register(IRQ_TIMER, drain_kb);
 
     active_cons = 0;
     read_cursor();
     save_state();
-    _direct_write("\r\n");
+    _writestr("\r\n");
     m_initialized = true;
-}
-
-void console_reset(void)
-{
-    reset();
-}
-
-void console_save(void)
-{
-    save_state();
-}
-
-void console_restore(void)
-{
-    restore_state();
-}
-
-void console_save_cursor(void)
-{
-    cursor_save();
-}
-
-void console_restore_cursor(void)
-{
-    cursor_restore();
 }
 
 static void defaults(struct console *cons)
@@ -159,7 +141,36 @@ static void defaults(struct console *cons)
     }
 }
 
+char console_read(void)
+{
+    char c;
+    uint32_t flags;
+    cli_save(flags);
+
+    c = 0;
+    if (!q_empty(m_inputq)) {
+        c = q_get(m_inputq);    // grab from input queue
+    }
+
+    restore_flags(flags);
+    return c;
+}
+
+static void drain_kb(void)
+{
+    uint8_t sc;
+
+    while ((sc = kb_read()) != '\0') {
+        q_put(m_inputq, sc);    // put keyboard data into input queue
+    }
+}
+
 void console_write(char c)
+{
+    _dowrite(c);
+}
+
+static void _dowrite(char c)
 {
     uint32_t flags;
     cli_save(flags);
@@ -239,10 +250,13 @@ void console_write(char c)
 
 update:
     if (update_char) {
-        m_framebuf[pos].ch = c;
+        set_vga_char(pos, c);
     }
     if (update_attr) {
-        set_vga_attr(&m_framebuf[pos].attr);
+        if (m_attr.bright && m_attr.faint) {
+            m_attr.bright = false;
+        }
+        set_vga_attr(pos, &m_attr);
     }
     if (need_crlf) {
         cr(); lf();
@@ -521,7 +535,7 @@ static void csi_m(char p)
 static void beep(void)
 {
     // TODO: beep!!
-    _direct_write("beep!");
+    _writestr("beep!");
 }
 
 static void save_state(void)
@@ -594,8 +608,8 @@ static void scroll(int n)
     int n_blank;
     int n_bytes;
     bool reverse;
-    struct vga_cell cell;
     void *src;
+    void *src_end;
     void *dst;
     int i;
 
@@ -614,71 +628,71 @@ static void scroll(int n)
     n_cells = (m_rows * m_cols) - n_blank;
     n_bytes = n_cells * sizeof(struct vga_cell);
 
-    src = (reverse) ? m_framebuf : &(m_framebuf[n_blank]);
-    dst = (reverse) ? &(m_framebuf[n_blank]) : m_framebuf;
+    src_end = &((struct vga_cell *) m_framebuf)[n_blank];
+    src = (reverse) ? m_framebuf : src_end;
+    dst = (reverse) ? src_end : m_framebuf;
     memmove(dst, src, n_bytes);
 
-    cell.ch = BLANK;
-    set_vga_attr(&cell.attr);
     for (i = 0; i < n_blank; i++) {
-        m_framebuf[(reverse)? i: n_cells+i] = cell;
+        int pos = (reverse) ? i : n_cells + i;
+        set_vga_char(pos, BLANK);
+        set_vga_attr(pos, &m_attr);
     }
 }
 
 static void erase(int mode)
 {
-    struct vga_cell *start = NULL;
-    int count = 0;
+    int start;
+    int count;
     int pos = xy2pos(m_cursor.x, m_cursor.y);
     int area = m_rows * m_cols;
 
     switch (mode) {
         case ERASE_DOWN:    // erase screen from cursor down
-            start = &m_framebuf[pos];
+            start = pos;
             count = area - pos;
             break;
         case ERASE_UP:      // erase screen from cursor up
-            start = m_framebuf;
+            start = 0;
             count = pos + 1;
             break;
         case ERASE_ALL:     // erase entire screen
         default:
-            start = m_framebuf;
+            start = 0;
             count = area;
             break;
     }
 
     for (int i = 0; i < count; i++) {
-        start[i].ch = BLANK;
-        set_vga_attr(&start[i].attr);
+        set_vga_char(start + i, BLANK);
+        set_vga_attr(start + i, &m_attr);
     }
 }
 
 static void erase_ln(int mode)
 {
-    struct vga_cell *start = NULL;
-    int count = 0;
+    int start;
+    int count;
     int pos = xy2pos(m_cursor.x, m_cursor.y);
-    int area = m_cols;
 
     switch (mode) {
         case ERASE_DOWN:    // erase line from cursor down
-            start = &m_framebuf[pos];
-            count = area - (pos % m_cols);
+            start = pos;
+            count = m_cols - (pos % m_cols);
             break;
         case ERASE_UP:      // erase line from cursor up
-            start = &m_framebuf[xy2pos(0, m_cursor.y)];
+            start = xy2pos(0, m_cursor.y);
             count = (pos % m_cols) + 1;
             break;
         case ERASE_ALL:     // erase entire line
         default:
-            start = &m_framebuf[xy2pos(0, m_cursor.y)];
-            count = area;
+            start = xy2pos(0, m_cursor.y);
+            count = m_cols;
     }
 
     for (int i = 0; i < count; i++) {
-        start[i].ch = BLANK;
-        set_vga_attr(&start[i].attr);
+        set_vga_char(start + i, BLANK);
+        set_vga_attr(start + i, &m_attr);
     }
 }
 
@@ -749,38 +763,48 @@ static inline int xy2pos(int x, int y)
     return y * m_cols + x;
 }
 
-static void set_vga_attr(struct vga_attr *a)
+static void set_vga_char(int pos, char c)
 {
-    #define swap(a,b)           \
-    do {                        \
-        (a) ^= (b);             \
-        (b) ^= (a);             \
-        (a) ^= (b);             \
-    } while(0)
+    struct vga_cell *cell;
+    cell = (struct vga_cell *) m_framebuf;
 
-    a->bg = m_attr.bg;
-    a->fg = m_attr.fg;
+    cell[pos].ch = c;
+}
 
-    if (m_attr.bright) {
-        a->bright = 1;
+static void set_vga_attr(int pos, const struct char_attr *attr)
+{
+    struct vga_attr *vga_attr;
+    vga_attr = &((struct vga_cell *) m_framebuf)[pos].attr;
+
+    vga_attr->bg = attr->bg;
+    vga_attr->fg = attr->fg;
+
+    if (attr->bright) {
+        vga_attr->bright = 1;
     }
-    if (m_attr.faint) {
-        a->color_fg = VGA_BLACK;  // simulate faintness with dark gray
-        a->bright = 1;
-        m_attr.bright = false;
+    if (attr->faint) {
+        vga_attr->color_fg = VGA_BLACK;  // simulate faintness with dark gray
+        vga_attr->bright = 1;
     }
-    if (m_attr.underline) {
-        a->color_fg = VGA_CYAN;   // simulate underline with cyan
-        a->bright = m_attr.bright;
+    if (attr->underline) {
+        vga_attr->color_fg = VGA_CYAN;   // simulate underline with cyan
+        vga_attr->bright = attr->bright;
     }
-    if (m_attr.italic) {
-        a->color_fg = VGA_GREEN;  // simulate italics with green
-        a->bright = m_attr.bright;
+    if (attr->italic) {
+        vga_attr->color_fg = VGA_GREEN;  // simulate italics with green
+        vga_attr->bright = attr->bright;
     }
-    if (m_attr.blink) {
-        a->blink = 1;
+    if (attr->blink) {
+        vga_attr->blink = 1;
     }
-    if (m_attr.invert) {
-        swap(a->color_bg, a->color_fg);
+    if (attr->invert) {
+        swap(vga_attr->color_bg, vga_attr->color_fg);
+    }
+}
+
+static void _writestr(char *str)
+{
+    while (*str != '\0') {
+        _dowrite(*str++);
     }
 }

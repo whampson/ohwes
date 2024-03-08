@@ -22,47 +22,49 @@
 #ifndef __OHWES_H
 #define __OHWES_H
 
+#include <assert.h>
 #include <stdio.h>
+#include <string.h>
 #include <interrupt.h>
 #include <x86.h>
 
-#define OS_NAME             "OH-WES"
-#define OS_VERSION          "0.1"
-#define OS_MONIKER          "Ronnie Raven"
-#define OS_BUILDDATE        __DATE__ " " __TIME__
+#define OS_NAME                     "OH-WES"
+#define OS_VERSION                  "0.1"
+#define OS_MONIKER                  "Ronnie Raven"
+#define OS_BUILDDATE                __DATE__ " " __TIME__
 
-#define MIN_KB_REQUIRED     639     // let's see how long this lasts!
-#define SHOW_MEMMAP         1
+#define MIN_KB_REQUIRED             639     // let's see how long this lasts!
+#define SHOW_MEMMAP                 1
 
-#define KERNEL_CS           0x10
-#define KERNEL_DS           0x18
-#define KERNEL_SS           KERNEL_DS
-#define USER_CS             0x23
-#define USER_DS             0x2B
-#define USER_SS             USER_DS
+#define KERNEL_CS                   0x10
+#define KERNEL_DS                   0x18
+#define KERNEL_SS                   KERNEL_DS
+#define USER_CS                     0x23
+#define USER_DS                     0x2B
+#define USER_SS                     USER_DS
 
-#define SYS_EXIT            0       // syscall test
-
+#define SYS_EXIT                    0
 extern int sys_exit(int status);
 
-extern void halt(void);            // see entry.S
-extern void idle(void);            // see entry.S
+extern void halt(void);             // see entry.S
+extern void idle(void);             // see entry.S
 
-#define _countof(x)     (sizeof(x)/sizeof(x[0]))
-
-#define has_flag(x,f)   (((x)&(f))==(f))
-
-#ifndef __PANIC_DEFINED
-extern __noreturn void _dopanic(const char *, ...);
-#define panic(...) _dopanic(__VA_ARGS__)
-#endif
-
-#define kprint(...) printf(__VA_ARGS__)
+#define countof(x)                  (sizeof(x)/sizeof(x[0]))
+#define has_flag(x,f)               (((x)&(f))==(f))
+#define zeromem(p,n)                memset(p, 0, n)
+#define kprint(...)                 printf(__VA_ARGS__)
 
 #define die()                       \
 do {                                \
     for (;;);                       \
 } while (0)
+
+#define swap(a,b)                   \
+do {                                \
+    (a) ^= (b);                     \
+    (b) ^= (a);                     \
+    (a) ^= (b);                     \
+} while(0)
 
 #define _syscall0(func)             \
 do {                                \
@@ -105,9 +107,9 @@ do {                                \
     (void) c;                       \
 })
 
-#define HASNO(cond)     ((cond)?"has":"no")
-#define YN(cond)        ((cond)?"yes":"no")
-#define PLURAL(n,a)     (((n)==1)?a:a "s")
-#define PLURAL2(n,a,b)  (((n)==1)?a:b)
+#define HASNO(cond)                 ((cond)?"has":"no")
+#define YN(cond)                    ((cond)?"yes":"no")
+#define PLURAL(n,a)                 (((n)==1)?a:a "s")
+#define PLURAL2(n,a,b)              (((n)==1)?a:b)
 
 #endif // __OHWES_H

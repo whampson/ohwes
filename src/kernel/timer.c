@@ -1,5 +1,5 @@
 /* =============================================================================
- * Copyright (C) 2020-2024 Wes Hampson. All Rights Reserved.
+ * Copyright (C) 2023-2024 Wes Hampson. All Rights Reserved.
  *
  * This file is part of the OH-WES Operating System.
  * OH-WES is free software; you may redistribute it and/or modify it under the
@@ -13,54 +13,25 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/ring3.c
- *      Created: January 26, 2024
+ *         File: kernel/timer.c
+ *      Created: March 6, 2024
  *       Author: Wes Hampson
- *
- * Ring 3 antics.
  * =============================================================================
  */
 
 #include <ohwes.h>
+#include <ps2.h>
+#include <irq.h>
 
-int main(void)
+static void timer_interrupt(void);
+
+void init_timer(void)
 {
-    printf("\e[5;33mHello, world!\e[m\n");
-    return 8675309;
+    irq_register(IRQ_TIMER, timer_interrupt);
+    irq_unmask(IRQ_TIMER);
 }
 
-__noreturn
-void ring3_main(void)
+static void timer_interrupt(void)
 {
-    int status = main();
-    store_eax(status);
-
-    _syscall1(SYS_EXIT, status);
-    die();
+    // kprint("!");
 }
-
-__noreturn
-void go_to_ring3(void)
-{
-    struct eflags eflags;
-    cli_save(eflags);
-
-    eflags.intf = 1;        // enable interrupts
-    eflags.iopl = USER_PL;  // printf requires outb
-
-    uint32_t *const ebp = (uint32_t * const) 0xC000;    // user stack
-    uint32_t *esp = ebp;
-
-    struct iregs regs = {};
-    regs.cs = USER_CS;
-    regs.ds = USER_DS;
-    regs.es = USER_DS;
-    regs.ss = USER_SS;
-    regs.ebp = (uint32_t) ebp;
-    regs.esp = (uint32_t) esp;
-    regs.eip = (uint32_t) ring3_main;
-    regs.eflags = eflags._value;
-    switch_context(&regs);
-    die();
-}
-

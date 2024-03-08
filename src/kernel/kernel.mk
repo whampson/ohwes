@@ -12,16 +12,17 @@ SOURCES := \
     main.c \
     memory.c \
     pic.c \
-    ps2kbd.c \
+    ps2kb.c \
     queue.c \
-    ring3.c \
+    timer.c \
     vga.c \
 
 ifeq "${TEST_BUILD}" "1"
   SOURCES += \
-    test/test_libc.c \
+    test/tests.c \
     test/printf_tests.c \
-    test/string_tests.c
+    test/string_tests.c \
+    test/queue_tests.c
 endif
 
 TGT_CFLAGS  := -Wno-unused-function

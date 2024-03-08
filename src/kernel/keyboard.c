@@ -75,9 +75,9 @@ static void kbd_putqs(const char *s);
 //     if (!ps2_testp1()) panic("ps2ctl: port 1 self-test failed!");
 //     if (!ps2_testp2()) panic("ps2ctl: port 1 self-test failed!");
 
-//     if (!ps2kbd_test()) panic("ps2kbd: self-test failed!");
+//     if (!PS2KB_test()) panic("ps2kbd: self-test failed!");
 //     scancode_set1();        // TODO: breaks on PCjs 386; ps2_read gets stuck
-//     ps2kbd_on();
+//     PS2KB_on();
 
 //     irq_register(IRQ_KEYBOARD, kbd_interrupt);
 //     irq_unmask(IRQ_KEYBOARD);
@@ -172,10 +172,10 @@ static void scancode_set1(void)
     uint8_t data;
 
     data = 1;
-    ps2kbd_cmd(PS2KBD_CMD_SCANCODE, &data, 1);
+    PS2KB_cmd(PS2KB_CMD_SCANCODE, &data, 1);
 
     data = 0;  /* sanity check */
-    ps2kbd_cmd(PS2KBD_CMD_SCANCODE, &data, 1);
+    PS2KB_cmd(PS2KB_CMD_SCANCODE, &data, 1);
     if (ps2_read() != 1) {
         panic("ps2kbd: failed to switch to scancode set 1!");
     }
@@ -269,7 +269,7 @@ readsc:
         keydown(vk & 0x7F);
         if (num_ack == 0) {
             led = (m_caps << 2) | (m_num << 1) | (m_scroll << 0);
-            ps2_write(PS2KBD_CMD_SETLED);
+            ps2_write(PS2KB_CMD_SETLED);
             ps2_write(led);
             num_ack = 2;
         }

@@ -1,76 +1,76 @@
-#include <stdbool.h>
-#include <string.h>
+/* =============================================================================
+ * Copyright (C) 2020-2024 Wes Hampson. All Rights Reserved.
+ *
+ * This file is part of the OH-WES Operating System.
+ * OH-WES is free software; you may redistribute it and/or modify it under the
+ * terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ * -----------------------------------------------------------------------------
+ *         File: kernel/queue.c
+ *      Created: March 6, 2024
+ *       Author: Wes Hampson
+ *
+ * =============================================================================
+ */
+
+#include <ohwes.h>
+#include <assert.h>
 #include <queue.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
 
-// TODO: TEST TEST TEST!
-// TODO: move to own lib.. libnb? Niobium Kernel NbOS
-
-struct _queue
+void q_init(queue_t *q, char *buf, size_t len)
 {
-    char *buf;
-    size_t buflen;
-    size_t head;
-    size_t tail;
-    size_t count;
-    bool empty;
-    bool full;
-};
-
-void queue_init(queue_t *q, char *buf, size_t len)
-{
-    memset(q, 0, sizeof(queue_t));
-    q->buf = buf;
-    q->buflen = len;
-    q->empty = true;
+    memset(q, 0, sizeof(struct _queue));
+    q->ring = buf;
+    q->len = len;
 }
 
-char queue_get(queue_t *q)
+bool q_empty(const queue_t *q)
 {
-    char c;
-    if (q == NULL || q->empty) {
-        return 0;
+    return q->count == 0;
+}
+
+bool q_full(const queue_t *q)
+{
+    return q->count == q->len;
+}
+
+char q_get(queue_t *q)
+{
+    assert(!q_empty(q));
+    if (q_empty(q)) {
+        panic("attempt to get from an empty queue!");
     }
 
-    c = q->buf[q->tail++];
-    q->full = false;
+    char c = q->ring[q->rptr++];
+    if (q->rptr >= q->len) {
+        q->rptr = 0;
+    }
+
     q->count--;
-
-    if (q->tail >= q->buflen) {
-        q->tail = 0;
-    }
-
-    if (q->tail == q->head) {
-        q->empty = true;
-    }
-
     return c;
 }
 
-void queue_put(queue_t *q, char c)
+void q_put(queue_t *q, char c)
 {
-    if (q == NULL || q->full) {
-        return;
+    assert(!q_full(q));
+    if (q_full(q)) {
+        panic("attempt to put into a full queue!");
     }
 
-    q->buf[q->head++] = c;
-    q->empty = false;
+    q->ring[q->wptr++] = c;
+    if (q->wptr >= q->len) {
+        q->wptr = 0;
+    }
+
     q->count++;
-
-    if (q->head >= q->buflen) {
-        q->head = 0;
-    }
-
-    if (q->head == q->tail) {
-        q->full = true;
-    }
-}
-
-bool queue_empty(queue_t *q)
-{
-    return q->empty;
-}
-
-bool queue_full(queue_t *q)
-{
-    return q->full;
 }

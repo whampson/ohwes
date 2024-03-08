@@ -28,11 +28,13 @@
 
 #define valid_irq(n)    ((n) >= 0 && (n) < NUM_IRQ)
 
-static irq_handler handler_map[NUM_IRQ] = { };
+#define MAX_HANDLERS    8
+
+static irq_handler handler_map[NUM_IRQ][MAX_HANDLERS] = { };
 
 void init_irq(void)
 {
-    memset(handler_map, 0, sizeof(handler_map));
+    zeromem(handler_map, sizeof(handler_map));
 }
 
 void irq_mask(int irq_num)
@@ -55,42 +57,64 @@ void irq_setmask(uint16_t mask)
     pic_setmask(mask);
 }
 
-bool irq_register(int irq_num, irq_handler func)
+void irq_register(int irq_num, irq_handler func)
 {
-    if (!valid_irq(irq_num)) {
-        return false;
-    }
-    if (handler_map[irq_num] != NULL) {
-        panic("irq %d handler already registered at %08X", irq_num, handler_map[irq_num]);
+    assert(valid_irq(irq_num));
+
+    bool registered = false;
+    for (int i = 0; i < MAX_HANDLERS; i++) {
+        if (handler_map[irq_num][i] == NULL) {
+            handler_map[irq_num][i] = func;
+            registered = true;
+            break;
+        }
     }
 
-    handler_map[irq_num] = func;
-    return true;
+    if (!registered) {
+        panic("maximum number of handlers already registered for IRQ %d", irq_num);
+    }
 }
 
-void irq_unregister(int irq_num)
+void irq_unregister(int irq_num, irq_handler func)
 {
-    if (!valid_irq(irq_num)) {
-        return;
+    assert(valid_irq(irq_num));
+
+    bool unregistered = false;
+    for (int i = 0; i < MAX_HANDLERS; i++) {
+        if (handler_map[irq_num][i] == func) {
+            handler_map[irq_num][i] = NULL;
+            unregistered = true;
+            break;
+        }
     }
 
-    handler_map[irq_num] = NULL;
+    if (!unregistered) {
+        panic("handler %08X not registered for IRQ %d", func, irq_num);
+    }
 }
 
 __fastcall
 void recv_irq(struct iregs *regs)
 {
-    int irq_num = ~regs->vec_num;
+    int irq_num;
+    irq_handler handler;
+    bool handled = false;
 
+    irq_num = ~regs->vec_num;
     if (!valid_irq(irq_num)) {
         panic("unknown device IRQ number: %d", irq_num);
     }
 
-    irq_handler handler = handler_map[irq_num];
-    if (handler != NULL) {
-        handler();
+    handled = false;
+    for (int i = 0; i < MAX_HANDLERS; i++) {
+        handler = handler_map[irq_num][i];
+        if (handler != NULL) {
+            handler();
+            handled = true;
+        }
     }
-    else {
+
+    if (!handled) {
         panic("unhandled IRQ %d", irq_num);
     }
 

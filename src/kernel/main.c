@@ -19,12 +19,9 @@
  * =============================================================================
  */
 
-#include <stdarg.h>
-#include <stdio.h>
-#include <string.h>
-
 #include <ohwes.h>
 #include <boot.h>
+#include <console.h>
 #include <cpu.h>
 #include <interrupt.h>
 #include <io.h>
@@ -37,14 +34,109 @@
 
 extern void init_vga(void);
 extern void init_console(void);
-extern void init_cpu(const struct bootinfo * const info);
+extern void init_cpu(const struct bootinfo *info);
+extern void init_memory(const struct bootinfo *info);
 extern void init_pic(void);
 extern void init_irq(void);
-extern void init_ps2(const struct bootinfo * const info);
+extern void init_ps2(const struct bootinfo *info);
 extern void init_kb(void);
-extern void init_memory(const struct bootinfo * const info);
+extern void init_timer(void);
 
-static void print_info(const struct bootinfo *const info)
+#ifdef TEST_BUILD
+extern void testmain(void);
+#endif
+
+static void print_info(const struct bootinfo *info);
+void __noreturn go_to_ring3(void);
+
+struct bootinfo g_BootInfo;
+
+void __fastcall kmain(const struct bootinfo *info)
+{
+    // --- Crude Memory Map upon entry ---
+    // 0x00000-0x004FF: reserved for Real Mode IVT and BDA (do we still need this?)
+    // 0x00500-0x007FF: ACPI memory map table
+    // 0x00800-0x00FFF: CPU data area (GDT/IDT/LDT/TSS/etc.)
+    // 0x02400-0x0????: (<= 0xDC00 bytes of free space)
+    // 0x07C00-0x07DFF: stage 1 boot loader (potentially free; contains BPB)
+    // 0x07E00-0x0????: stage 2 boot loader (potentially free; contains bootinfo)
+    // 0x0????-0x0FFFF: kernel stack (grows towards 0)
+    // 0x10000-(EBDA ): kernel and system
+
+    cli();
+
+    zeromem(&g_BootInfo, sizeof(struct bootinfo));
+    memcpy(&g_BootInfo, info, sizeof(struct bootinfo));
+
+    init_cpu(&g_BootInfo);
+    init_pic();
+    init_irq();
+    init_vga();
+    init_console();
+
+    // safe to print now
+    kprint("\n" OS_NAME " " OS_VERSION " '" OS_MONIKER "'\n");
+    kprint("Build: " OS_BUILDDATE "\n");
+    kprint("\n");
+
+    print_info(&g_BootInfo);
+
+#if TEST_BUILD
+    kprint("boot: TEST BUILD\n");
+    kprint("boot: running tests...\n");
+    testmain();
+#endif
+
+    init_memory(&g_BootInfo);
+    init_ps2(&g_BootInfo);
+    init_kb();
+    init_timer();
+
+    // safe to enable interrupts now
+    sti();
+
+    go_to_ring3();  // "returns" to sys_exit via system call
+}
+
+int main(void)      // ring 3, "usermode"
+{
+    printf("\e[5;33mHello, world!\e[m\n");
+    return 8675309;
+}
+
+int sys_exit(int status)
+{
+    kprint("ring 3 returned %d\n", status);
+
+    uint8_t sc;
+    while (true) {
+        while ((sc = console_read()) != 0) {
+            // idiotic testing code
+            kprint("%c", sc);
+            switch (sc)
+            {
+                case 0x44:  // f10
+                    ps2_cmd(PS2_CMD_SYSRESET);  // reset
+                    break;
+                case 0x3B:  // f1
+                    kprint("\e3");  // blink off
+                    break;
+                case 0x3C:  // f2
+                    kprint("\e4");  // blink on
+                    break;
+                // case 0xD8:  // f12
+                //     gpfault();      // crash
+                //     break;
+            }
+        }
+    }
+
+
+    idle();
+    return 0;   // returns to nowhere... or anywhere...
+}
+
+static void print_info(const struct bootinfo *info)
 {
     int nfloppies = info->hwflags.has_diskette_drive;
     if (nfloppies) {
@@ -70,98 +162,40 @@ static void print_info(const struct bootinfo *const info)
     kprint("boot: kernel %08X,%X\n", info->kernel, info->kernel_size);
     kprint("boot: stack %08X\n", info->stack);
     kprint("boot: EBDA %08X\n", info->ebda);
-}
-
-__noreturn void go_to_ring3(void);
-
-__fastcall
-void kmain(const struct bootinfo *const bootinfo)
-{
-    // --- Crude Memory Map ---
-    // 0x00000-0x004FF: reserved for Real Mode IVT and BDA (do we still need this?)
-    // 0x00500-0x007FF: ACPI memory map table
-    // 0x00800-0x00FFF: CPU data area (GDT/IDT/LDT/TSS/etc.)
-    // 0x02400-0x0????: (<= 0xDC00 bytes of free space)
-    // 0x07C00-0x07DFF: stage 1 boot loader (potentially free; contains BPB)
-    // 0x07E00-0x0????: stage 2 boot loader (potentially free; contains bootinfo)
-    // 0x0????-0x0FFFF: kernel stack (grows towards 0)
-    // 0x10000-(EBDA ): kernel and system
-
-    cli();
-
-    init_vga();
-    init_console();
-    // safe to print now
-
-    kprint("\n" OS_NAME " " OS_VERSION " '" OS_MONIKER "'\n");
-    kprint("Build: " OS_BUILDDATE "\n");
-    kprint("\n");
-
-#if TEST_BUILD
-    kprint("boot: TEST BUILD\n");
-    kprint("boot: testing libc...\n");
-    test_libc();
-#endif
-
-    struct bootinfo info;
-    memcpy(&info, bootinfo, sizeof(struct bootinfo));
-    print_info(&info);
-
-    init_cpu(&info);
-    init_pic();
-    init_irq();
-    // safe to enable interrupts now
-
-    sti();
-
-    init_ps2(&info);
-    init_kb();
-    init_memory(&info);
-
-    go_to_ring3(); // "returns" to sys_exit via system call
-}
-
-int sys_exit(int status)
-{
-    kprint("ring 3 returned %d\n", status);
-
-    kprint("draining input buffer...\n");
-    while (true) {
-        uint8_t sc;
-        while ((sc = kb_read())) {
-            // kprint("got %02X\n", sc);
-            // idiotic testing code
-            switch (sc)
-            {
-                case 0x44:  // f10
-                    ps2_cmd(PS2_CMD_SYSRESET);  // reset
-                    break;
-                case 0x3B:  // f1
-                    kprint("\e3");  // blink off
-                    break;
-                case 0x3C:  // f2
-                    kprint("\e4");  // blink on
-                    break;
-                // case 0xD8:  // f12
-                //     __asm__ volatile ("int $69");   // crash
-                //     break;
-            }
-        }
-    }
-
-    idle();
-    return 0;
+    kprint("boot: ACPI memory map %08X\n", info->mem_map);
 }
 
 __noreturn
-void _dopanic(const char *fmt, ...)
+void ring3_main(void)
 {
-    va_list args;
-    va_start(args, fmt);
+    int status = main();
+    store_eax(status);
 
-    kprint("panic: ");
-    vprintf(fmt, args);
+    _syscall1(SYS_EXIT, status);
+    die();
+}
 
-    va_end(args);
+__noreturn
+void go_to_ring3(void)
+{
+    struct eflags eflags;
+    cli_save(eflags);
+
+    eflags.intf = 1;        // enable interrupts
+    eflags.iopl = USER_PL;  // printf requires outb
+
+    uint32_t *const ebp = (uint32_t * const) 0xC000;    // user stack
+    uint32_t *esp = ebp;
+
+    struct iregs regs = {};
+    regs.cs = USER_CS;
+    regs.ds = USER_DS;
+    regs.es = USER_DS;
+    regs.ss = USER_SS;
+    regs.ebp = (uint32_t) ebp;
+    regs.esp = (uint32_t) esp;
+    regs.eip = (uint32_t) ring3_main;
+    regs.eflags = eflags._value;
+    switch_context(&regs);
     die();
 }

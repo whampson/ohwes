@@ -23,6 +23,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <queue.h>
 
 #define VGA_COLS            80
 #define VGA_ROWS            25
@@ -36,11 +37,14 @@
 #define MAX_TABSTOPS        VGA_COLS
 #define TABSTOP_WIDTH       8
 
+#define INPUT_BUFFER_SIZE   256
+
 struct console
 {
     bool initialized;               // console initalized?
     int cols, rows;                 // screen dimensions
     void *framebuf;                 // frame buffer
+    queue_t inputq;                 // input queue
     char tabstop[MAX_TABSTOPS];     // tab stops
     char csiparam[MAX_CSIPARAMS];   // control sequence parameters
     int paramidx;                   // control sequence parameter index
@@ -89,12 +93,8 @@ enum console_color {
     CONSOLE_WHITE
 };
 
-void console_write(char c);
-void console_reset(void);
-void console_save(void);
-void console_restore(void);
-void console_save_cursor(void);
-void console_restore_cursor(void);
+char console_read(void);            // reads character from input buffer
+void console_write(char c);         // writes character to output buffer ()
 
 /**
  * ASCII Control Characters
