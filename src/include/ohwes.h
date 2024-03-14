@@ -49,10 +49,16 @@ extern int sys_exit(int status);
 extern void halt(void);             // see entry.S
 extern void idle(void);             // see entry.S
 
+void timer_sleep(int millis);           // see timer.c
+void pcspk_beep(int freq, int millis);  // see timer.c
+
 #define countof(x)                  (sizeof(x)/sizeof(x[0]))
 #define has_flag(x,f)               (((x)&(f))==(f))
 #define zeromem(p,n)                memset(p, 0, n)
 #define kprint(...)                 printf(__VA_ARGS__)
+#define div_round(n,d)              (((n)<0)==((d)<0)?(((n)+(d)/2)/(d)):(((n)-(d)/2)/(d)))
+#define beep(f,ms)                  pcspk_beep(f, ms)
+#define sleep(ms)                   timer_sleep(ms)
 
 #define die()                       \
 do {                                \
