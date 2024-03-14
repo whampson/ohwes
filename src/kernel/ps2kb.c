@@ -33,7 +33,7 @@
 #include <string.h>
 
 #define SCANCODE_SET    1
-#define TYPEMATIC_BYTE  0x22    // auto-repeat rate and delay
+#define TYPEMATIC_BYTE  0x22    // repeat rate = 24cps, delay = 500ms
 #define TIMEOUT         25000   // register poll count before giving up
 #define NUM_RETRIES     3       // command resends before giving up
 #define KB_BUFFER_SIZE  32      // interrupt input buffer size
@@ -100,7 +100,7 @@ void init_kb(void)
     irq_register(IRQ_KEYBOARD, kb_interrupt);
     irq_unmask(IRQ_KEYBOARD);
 
-    kprint("ps2kb: 0x%X 0x%X\n",
+    kprint("ps2kb: 0x%hhX 0x%hhX\n",
         g_kb.ident[0], g_kb.ident[1]);
     kprint("ps2kb: leds = 0x%X, typematic = %s, typematic_byte = 0x%X\n",
         g_kb.leds, YN(g_kb.typematic), g_kb.typematic_byte);
