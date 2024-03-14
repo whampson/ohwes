@@ -454,15 +454,25 @@ _EnableA20_Keyboard:
         ret
 
 KbOut_Wait:
+        movw    $1000, %cx
+_KbOut_Wait_Loop:
         inb     $0x64, %al      # (from controller perspective)
         testb   $0x02, %al      # is input buffer full?
-        jnz     KbOut_Wait      #   yes: continue checking data arrives
+        jz      _KbOut_Wait_Done #  yes: continue checking data arrives
+        decw    %cx
+        jnz     _KbOut_Wait_Loop
+_KbOut_Wait_Done:
         ret
 
 KbIn_Wait:
+        movw    $1000, %cx
+_KbIn_Wait_Loop:
         inb     $0x64, %al      # (from controller perspective)
         testb   $0x01, %al      # is output buffer full?
-        jz      KbIn_Wait       #   yes: continue checking 'til empty (consumed)
+        jnz     _KbIn_Wait_Done #   yes: continue checking 'til empty (consumed)
+        decw    %cx
+        jnz     _KbIn_Wait_Loop
+_KbIn_Wait_Done:
         ret
 
 ##
