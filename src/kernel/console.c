@@ -28,6 +28,9 @@
 
 #define NUM_CONSOLES    1
 
+#define BEEP_FREQUENCY  750     // Hz
+#define BEEP_DURATION   50      // ms
+
 static struct console consoles[NUM_CONSOLES] = { };
 static int active_cons = 0;
 
@@ -65,7 +68,6 @@ static void defaults(struct console *cons);
 static void save_state(void);
 static void restore_state(void);
 static void reset(void);
-static void beep(void);
 static void esc(char c);
 static void csi(char c);
 static void csi_m(char p);
@@ -206,7 +208,7 @@ static void _dowrite(char c)
     // control characters
     switch (c) {
         case '\a':      // ^G - BEL - beep!
-            beep();
+            beep(BEEP_FREQUENCY, BEEP_DURATION);
             break;
         case '\b':      // ^H - BS - backspace
             if (m_cursor.x > 0) pos--;
@@ -530,12 +532,6 @@ static void csi_m(char p)
             }
             break;
     }
-}
-
-static void beep(void)
-{
-    // TODO: beep!!
-    _writestr("beep!");
 }
 
 static void save_state(void)
