@@ -161,8 +161,8 @@ static void print_info(const struct bootinfo *info)
     kprint("boot: stage2 %08X,%X\n", info->stage2, info->stage2_size);
     kprint("boot: kernel %08X,%X\n", info->kernel, info->kernel_size);
     kprint("boot: stack %08X\n", info->stack);
-    kprint("boot: EBDA %08X\n", info->ebda);
-    kprint("boot: ACPI memory map %08X\n", info->mem_map);
+    if (info->ebda) kprint("boot: EBDA %08X\n", info->ebda);
+    if (info->mem_map) kprint("boot: ACPI memory map %08X\n", info->mem_map);
 }
 
 __noreturn
