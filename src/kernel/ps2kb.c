@@ -39,7 +39,7 @@
 #define KB_BUFFER_SIZE  32      // interrupt input buffer size
 
 struct kb {
-    char ident[2];              // identifier word
+    unsigned char ident[2];     // identifier word
     int leds;                   // LED state
     bool typematic;             // supports auto-repeat
     int typematic_byte;         // auto-repeat config
@@ -73,11 +73,25 @@ static void kb_wrport(uint8_t data);
 
 void init_kb(void)
 {
+    uint8_t ps2cfg;
+    uint32_t flags;
+    cli_save(flags);
+
     zeromem(&g_kb, sizeof(struct kb));
     q_init(&g_kb.inputq, g_kb._input_buffer, KB_BUFFER_SIZE);
 
-    // turn off the keyboard PS/2 port (will not receive key presses)
+    // disable keyboard
+    ps2_flush();
     ps2_cmd(PS2_CMD_P1OFF);
+    kb_sendcmd(PS2KB_CMD_SCANOFF);
+    ps2_flush();
+
+    // disable scancode translation
+    ps2_cmd(PS2_CMD_RDCFG);
+    ps2cfg = ps2_read();
+    ps2cfg &= ~PS2_CFG_TRANSLATE;
+    ps2_cmd(PS2_CMD_WRCFG);
+    ps2_write(ps2cfg);
 
     // initialize keyboard
     kb_selftest();
@@ -88,24 +102,34 @@ void init_kb(void)
     // detect supported scancode sets
     g_kb.sc3_support = kb_scset(3);
     g_kb.sc2_support = kb_scset(2);
+
+    // select our desired scancode set
     if (!kb_scset(SCANCODE_SET)) {
-        kprint("ps2kb: guessing scancode set 1...\n");
+        // if we couldn't pick a set (command may be unsupported),
+        // turn translation back on so we are guaranteed to be using set 1
+        ps2cfg |= PS2_CFG_TRANSLATE;
+        ps2_cmd(PS2_CMD_WRCFG);
+        ps2_write(ps2cfg);
         g_kb.scancode_set = 1;
     }
 
-    // re-enable keyboard PS/2 port
+    // re-enable keyboard
     ps2_cmd(PS2_CMD_P1ON);
+    kb_sendcmd(PS2KB_CMD_SCANON);
+    ps2_flush();
 
     // register ISR and unmask IRQ1 on the PIC
     irq_register(IRQ_KEYBOARD, kb_interrupt);
     irq_unmask(IRQ_KEYBOARD);
 
-    kprint("ps2kb: 0x%hhX 0x%hhX\n",
-        g_kb.ident[0], g_kb.ident[1]);
-    kprint("ps2kb: leds = 0x%X, typematic = %s, typematic_byte = 0x%X\n",
-        g_kb.leds, YN(g_kb.typematic), g_kb.typematic_byte);
+    kprint("ps2kb: ident = 0x%X 0x%X, translation = %s\n",
+        g_kb.ident[0], g_kb.ident[1], ONOFF(ps2cfg & PS2_CFG_TRANSLATE));
     kprint("ps2kb: scancode_set = %d, sc2_support = %s, sc3_support = %s\n",
         g_kb.scancode_set,  YN(g_kb.sc2_support), YN(g_kb.sc3_support));
+    kprint("ps2kb: leds = 0x%X, typematic = %s, typematic_byte = 0x%X\n",
+        g_kb.leds, YN(g_kb.typematic), g_kb.typematic_byte);
+
+    restore_flags(flags);
 }
 
 char kb_read(void)
@@ -154,22 +178,13 @@ static void kb_interrupt(void)
             break;
     }
 
-    // TODO: translate scancodes into virtual key codes
-    //  uint16_t keycode;
-    //   [7:0] ascii
-    //  [11:8]
-    //    [12] ctrl
-    //    [13] shift
-    //    [14] alt
-    //    [15] meta
-
     // put the scancode in the queue
     if (q_full(&g_kb.inputq)) {
         panic("kbint: keyboard buffer full!!\n");
     }
     q_put(&g_kb.inputq, sc);
 
-    // turn the keyboard back on
+    // re-enable keyboaed interrupts from controller
     ps2_cmd(PS2_CMD_P1ON);
 }
 
@@ -246,18 +261,18 @@ static bool kb_scset(uint8_t set)
     assert(set > 0 && set <= 3);
     RIF_FALSE(kb_sendcmd(PS2KB_CMD_SCANCODE));
 
-    kb_wrport(set); // write desired set
-    kb_rdport();    // ack
+    kb_wrport(set);                 // write desired set
+    kb_rdport();                    // ack
 
     // readback
     kb_sendcmd(PS2KB_CMD_SCANCODE);
-    kb_wrport(0);   // request current set
-    kb_rdport();    // ack
+    kb_wrport(0);                   // request current set
+    kb_rdport();                    // ack
     data = kb_rdport();
-    kb_rdport();    // may send additional ack
+    kb_rdport();                    // may send additional ack
 
     if (data == set) {
-        g_kb.scancode_set = set;
+        g_kb.scancode_set = set;    // keep track of the current scancode set
         return true;
     }
 

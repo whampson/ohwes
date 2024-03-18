@@ -13,8 +13,8 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
  * DEALINGS IN THE SOFTWARE.                                                  *
  *============================================================================*
- *    File: drivers/ps2/i8042.c                                               *
- * Created: December 24, 2020                                                 *
+ *    File: kernel/i8042.c                                                    *
+ * Created: February 21, 2024                                                 *
  *  Author: Wes Hampson                                                       *
  *============================================================================*/
 
@@ -80,13 +80,12 @@ void init_ps2(const struct bootinfo * const info)
     }
 
     //
-    // enable PS/2 device interrupts and disable scancode translation
+    // enable PS/2 device interrupts
     //
     cfg |= PS2_CFG_P1INTON;
     if (port2) {
         cfg |= PS2_CFG_P2INTON;
     }
-    cfg &= ~PS2_CFG_TRANSLATE;
     ps2_cmd(PS2_CMD_WRCFG);
     ps2_write(cfg);
 
