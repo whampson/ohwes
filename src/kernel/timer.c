@@ -54,10 +54,10 @@ struct pit_state {
     uint64_t sys_timer;
     uint64_t ticks;
     uint32_t pcspk_ticks;
-    uint32_t sleep_ticks;   // temp!!
+    uint32_t sleep_ticks;
     int quantum_ms;
 };
-volatile struct pit_state g_pit = {};
+static struct pit_state g_pit = {};
 
 static uint16_t calculate_divisor(int freq);
 static void timer_interrupt(void);
@@ -86,7 +86,6 @@ void init_timer(void)
     irq_unmask(IRQ_TIMER);
 }
 
-
 static uint16_t calculate_divisor(int freq)
 {
     int div = div_round(PIT_REFCLK, freq);
@@ -108,7 +107,7 @@ void timer_sleep(int millis)
     g_pit.sleep_ticks = div_round(millis, g_pit.quantum_ms);
 
     sti();
-    while (g_pit.sleep_ticks) { /* spin */ }
+    while (g_pit.sleep_ticks) { }
     cli();
 
     restore_flags(flags);
@@ -149,9 +148,7 @@ void pcspk_beep(int freq, int millis)
     outb(PIT_PORT_CHAN2, (div >> 8) & 0xFF);
 
     g_pit.pcspk_ticks = div_round(millis, g_pit.quantum_ms);
-    // kprint("pcspk: beeping at %dHz for %dms (%d ticks, div=%d)\n", freq, millis, g_pit.pcspk_ticks, div);
-    pcspk_on();
-    // turned off in interrupt handler
+    pcspk_on(); // turned off in interrupt handler
 
     restore_flags(flags);
 }
