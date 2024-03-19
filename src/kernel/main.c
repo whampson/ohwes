@@ -26,7 +26,6 @@
 #include <interrupt.h>
 #include <io.h>
 #include <irq.h>
-#include <keyboard.h>
 #include <pic.h>
 #include <ps2.h>
 #include <test.h>
@@ -108,28 +107,28 @@ int sys_exit(int status)
 {
     kprint("ring 3 returned %d\n", status);
 
-    uint8_t sc;
-    while (true) {
-        while ((sc = console_read()) != 0) {
-            // idiotic testing code
-            kprint("%c", sc);
-            switch (sc)
-            {
-                case 0x44:  // f10
-                    ps2_cmd(PS2_CMD_SYSRESET);  // reset
-                    break;
-                case 0x3B:  // f1
-                    kprint("\e3");  // blink off
-                    break;
-                case 0x3C:  // f2
-                    kprint("\e4");  // blink on
-                    break;
-                // case 0xD8:  // f12
-                //     gpfault();      // crash
-                //     break;
-            }
-        }
-    }
+    // uint8_t sc;
+    // while (true) {
+    //     while ((sc = console_read()) != 0) {
+    //         // idiotic testing code
+    //         kprint("%c", sc);
+    //         switch (sc)
+    //         {
+    //             case 0x44:  // f10
+    //                 ps2_cmd(PS2_CMD_SYSRESET);  // reset
+    //                 break;
+    //             case 0x3B:  // f1
+    //                 kprint("\e3");  // blink off
+    //                 break;
+    //             case 0x3C:  // f2
+    //                 kprint("\e4");  // blink on
+    //                 break;
+    //             // case 0xD8:  // f12
+    //             //     gpfault();      // crash
+    //             //     break;
+    //         }
+    //     }
+    // }
 
 
     idle();
