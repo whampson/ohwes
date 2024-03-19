@@ -163,7 +163,9 @@ static void drain_kb(void)
     uint8_t sc;
 
     while ((sc = kb_read()) != '\0') {
-        q_put(m_inputq, sc);    // put keyboard data into input queue
+        if (!q_full(m_inputq)) {
+            q_put(m_inputq, sc);    // put keyboard data into input queue
+        }
     }
 }
 
