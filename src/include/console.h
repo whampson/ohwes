@@ -93,7 +93,7 @@ enum console_color {
     CONSOLE_WHITE
 };
 
-char console_read(void);            // reads character from input buffer
+int console_read(void);            // reads character from input buffer
 void console_write(char c);         // writes character to output buffer ()
 
 /**

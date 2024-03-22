@@ -22,6 +22,7 @@
 #include <ohwes.h>
 #include <boot.h>
 #include <console.h>
+#include <ctype.h>
 #include <cpu.h>
 #include <interrupt.h>
 #include <io.h>
@@ -46,7 +47,8 @@ extern void testmain(void);
 #endif
 
 static void print_info(const struct bootinfo *info);
-void __noreturn go_to_ring3(void);
+__noreturn void go_to_ring3(void (*entry));
+__noreturn void ring3_entry(void);
 
 struct bootinfo g_BootInfo;
 
@@ -94,45 +96,69 @@ void __fastcall kmain(const struct bootinfo *info)
     // safe to enable interrupts now
     sti();
 
-    go_to_ring3();  // "returns" to sys_exit via system call
+    // jump to ring 3
+    go_to_ring3(ring3_entry);
 }
 
 int main(void)      // ring 3, "usermode"
 {
     printf("\e[5;33mHello, world!\e[m\n");
+    // sleep(5000);        // broken on qemu (and maybe others?)
+    // printf("i'm awake now\n");
+
+    int c;
+    while (true) {
+        while ((c = console_read()) != -1) {
+            if (iscntrl(c)) {
+                kprint("^%c", 0x40 ^ c);
+            }
+            kprint("%c", c);
+        }
+    }
+
     return 8675309;
 }
 
-int sys_exit(int status)
+__noreturn
+void go_to_ring3(void (*entry))     // ring0 "kernel mode"
+{
+    struct eflags eflags;
+    cli_save(eflags);
+
+    eflags.intf = 1;        // enable interrupts
+    eflags.iopl = USER_PL;  // TEMP TEMP: printf requires outb
+
+    uint32_t *const ebp = (uint32_t * const) 0xC000;    // user stack
+    uint32_t *esp = ebp;
+
+    struct iregs regs = {};
+    regs.cs = USER_CS;
+    regs.ds = USER_DS;
+    regs.es = USER_DS;
+    regs.ss = USER_SS;
+    regs.ebp = (uint32_t) ebp;
+    regs.esp = (uint32_t) esp;
+    regs.eip = (uint32_t) entry;
+    regs.eflags = eflags._value;
+    switch_context(&regs);
+    die();
+}
+
+__noreturn
+void ring3_entry(void)               // ring3 "user mode"
+{
+    int status = main();
+    store_eax(status);
+
+    _syscall1(SYS_EXIT, status);
+    die();
+}
+
+int sys_exit(int status)            // ring0 "kernel mode"
 {
     kprint("ring 3 returned %d\n", status);
 
-    // uint8_t sc;
-    // while (true) {
-    //     while ((sc = console_read()) != 0) {
-    //         // idiotic testing code
-    //         kprint("%c", sc);
-    //         switch (sc)
-    //         {
-    //             case 0x44:  // f10
-    //                 ps2_cmd(PS2_CMD_SYSRESET);  // reset
-    //                 break;
-    //             case 0x3B:  // f1
-    //                 kprint("\e3");  // blink off
-    //                 break;
-    //             case 0x3C:  // f2
-    //                 kprint("\e4");  // blink on
-    //                 break;
-    //             // case 0xD8:  // f12
-    //             //     gpfault();      // crash
-    //             //     break;
-    //         }
-    //     }
-    // }
-
-
-    idle();
-    return 0;   // returns to nowhere... or anywhere...
+    die();       // enter idle loop, reap task, switch tasks, etc
 }
 
 static void print_info(const struct bootinfo *info)
@@ -162,39 +188,4 @@ static void print_info(const struct bootinfo *info)
     kprint("boot: stack %08X\n", info->stack);
     if (info->ebda) kprint("boot: EBDA %08X\n", info->ebda);
     if (info->mem_map) kprint("boot: ACPI memory map %08X\n", info->mem_map);
-}
-
-__noreturn
-void ring3_main(void)
-{
-    int status = main();
-    store_eax(status);
-
-    _syscall1(SYS_EXIT, status);
-    die();
-}
-
-__noreturn
-void go_to_ring3(void)
-{
-    struct eflags eflags;
-    cli_save(eflags);
-
-    eflags.intf = 1;        // enable interrupts
-    eflags.iopl = USER_PL;  // printf requires outb
-
-    uint32_t *const ebp = (uint32_t * const) 0xC000;    // user stack
-    uint32_t *esp = ebp;
-
-    struct iregs regs = {};
-    regs.cs = USER_CS;
-    regs.ds = USER_DS;
-    regs.es = USER_DS;
-    regs.ss = USER_SS;
-    regs.ebp = (uint32_t) ebp;
-    regs.esp = (uint32_t) esp;
-    regs.eip = (uint32_t) ring3_main;
-    regs.eflags = eflags._value;
-    switch_context(&regs);
-    die();
 }

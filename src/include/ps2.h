@@ -113,6 +113,6 @@ void ps2_cmd(uint8_t cmd);
 //  [6:5] delay                 (00 = 250ms, 11 = 1000ms)
 //    [7] must be zero
 
-char kb_read(void);
+int kb_read(void);
 
 #endif // __PS2_H

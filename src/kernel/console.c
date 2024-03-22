@@ -143,15 +143,15 @@ static void defaults(struct console *cons)
     }
 }
 
-char console_read(void)
+int console_read(void)
 {
-    char c;
+    int c;
     uint32_t flags;
     cli_save(flags);
 
-    c = 0;
+    c = -1;
     if (!q_empty(m_inputq)) {
-        c = q_get(m_inputq);    // grab from input queue
+        c = q_get(m_inputq);
     }
 
     restore_flags(flags);
@@ -160,11 +160,15 @@ char console_read(void)
 
 static void drain_kb(void)
 {
-    uint8_t sc;
+    int c;
 
-    while ((sc = kb_read()) != '\0') {
+    while ((c = kb_read()) != -1) {
         if (!q_full(m_inputq)) {
-            q_put(m_inputq, sc);    // put keyboard data into input queue
+            q_put(m_inputq, (char) c);
+        }
+        else {
+            kprint("console: input buffer full!\n");
+            beep(1000, 50);
         }
     }
 }

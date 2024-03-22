@@ -22,6 +22,16 @@
 #ifndef __INPUT_H
 #define __INPUT_H
 
+#include <stdint.h>
+
+struct key_event
+{
+    uint16_t keycode;
+    uint16_t scancode;
+    bool release;
+    char c;
+};
+
 //
 // Virtual Key Code Definitions
 //

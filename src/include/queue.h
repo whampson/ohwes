@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-struct _queue {
+struct queue {
     char *ring;
     uint32_t rptr;
     uint32_t wptr;
@@ -12,7 +12,7 @@ struct _queue {
     size_t count;
 };
 
-typedef struct _queue queue_t;
+typedef struct queue queue_t;
 
 void q_init(queue_t *q, char *buf, size_t len);
 

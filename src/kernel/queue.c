@@ -29,7 +29,7 @@
 
 void q_init(queue_t *q, char *buf, size_t len)
 {
-    memset(q, 0, sizeof(struct _queue));
+    memset(q, 0, sizeof(struct queue));
     q->ring = buf;
     q->len = len;
 }
