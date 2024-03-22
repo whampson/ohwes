@@ -25,6 +25,7 @@
 #include <ohwes.h>
 #include <console.h>
 #include <interrupt.h>
+#include <irq.h>
 #include <x86.h>
 #include <cpu.h>
 
@@ -122,6 +123,10 @@ void print_flags(uint32_t eflags)
 __fastcall __noreturn
 void crash(struct iregs *regs)
 {
+    irq_setmask(0xFFFF);
+    irq_unmask(IRQ_KEYBOARD);   // leave only keyboard interrupt
+    sti();                      // allow CTRL+ALT+DEL
+
     uint16_t _cs; store_cs(_cs);
     struct segsel *curr_cs = (struct segsel *) &_cs;
     struct segsel *fault_cs = (struct segsel *) &regs->cs;

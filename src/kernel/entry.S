@@ -67,6 +67,7 @@ idle:
 # bp -->                 (bp loaded by cpu from tss->esp0)
 ##
 interrupt:
+        cli
         subl            $SIZEOF_IREGS_CTX, %esp
         movl            %ebx, IREGS_EBX(%esp)
         movl            %ecx, IREGS_ECX(%esp)

@@ -188,19 +188,16 @@ static void init_idt(const struct bootinfo * const info)
         i = idx - IVT_DEVICEIRQ;
 
         if (idx >= IVT_EXCEPTION && e < NUM_EXCEPTION) {
-            // interrupt gate for exceptions;
-            // probably a good idea to handle exceptions with no interruptions
+            // interrupt gate for exceptions
             make_intr_gate(desc, SEGSEL_KERNEL_CODE, KERNEL_PL, excepts[e]);
         }
         else if (idx >= IVT_DEVICEIRQ && i < NUM_IRQ) {
-            // interrupt gate for device IRQs;
-            // we don't want other devices interrupting handler!
+            // interrupt gate for device IRQs
             make_intr_gate(desc, SEGSEL_KERNEL_CODE, KERNEL_PL, irqs[i]);
         }
         else if (idx == IVT_SYSCALL) {
-            // user-mode accessible trap gate for system calls;
-            // devices can interrupt system call
-            make_trap_gate(desc, SEGSEL_KERNEL_CODE, USER_PL, _thunk_syscall);
+            // user-mode accessible trap gate for system calls
+            make_intr_gate(desc, SEGSEL_KERNEL_CODE, USER_PL, _thunk_syscall);
         }
         // else, keep the vector NULL! will generate a double-fault exception
     }

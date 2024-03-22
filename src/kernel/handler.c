@@ -36,6 +36,7 @@ void recv_interrupt(struct iregs *regs)
         regs->vec_num < IVT_EXCEPTION + NUM_EXCEPTION)
     {
         exception(regs);
+        return;
     }
 
     panic("got unexpected interrupt %d at %#08X!", regs->eax, regs->eip);
@@ -48,6 +49,8 @@ int recv_syscall(struct iregs *regs)
 
     uint32_t func = regs->eax;
     int status = -1;
+
+    sti();  // we want syscalls to be interruptable
 
     switch (func) {
         case SYS_EXIT:
