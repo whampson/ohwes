@@ -24,17 +24,18 @@ DISKIMG := ${TARGET_DIR}/ohwes.img
 SUBMAKEFILES := \
     src/ohwes.mk \
 
+MAKEFLAGS := --no-print-directory
+
 .PHONY: all ohwes tools
 .PHONY: img floppy format-floppy
 .PHONY: run run-bochs debug debug-boot
-.PHONY: nuke
+.PHONY: clean nuke
 
 all:
-
 ohwes: all
 
 tools:
-	@${MAKE} -C tools
+	@${MAKE} -C src/tools
 
 img: tools ohwes
 	@mkdir -p $(dir ${DISKIMG})
@@ -52,7 +53,6 @@ floppy: ohwes
 	cp ${KERNSYS} /a/
 
 format-floppy:
-# TODO: this is Windows/MINGW only!
 	mkdosfs -s 1 -S 512 /dev/fd0
 
 run: img
@@ -66,6 +66,9 @@ debug: img
 
 debug-boot: img
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG} debug-boot
+
+clean:
+	${RM} ${DISKIMG}
 
 nuke:
 	${RM} -r ${TARGET_DIR} ${BUILD_DIR}

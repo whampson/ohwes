@@ -47,7 +47,7 @@ else
 fi
 
 # Add native-built tools to PATH
-TOOLS_PATH=$PROJ_ROOT/tools/bin
+TOOLS_PATH=$PROJ_ROOT/bin/tools
 PATH=$PATH:$TOOLS_PATH
 
 # Print executable paths for sanity
