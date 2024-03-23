@@ -32,6 +32,18 @@ struct key_event
     char c;
 };
 
+// TODO:
+// bool key_iskp(int key);
+// bool key_iskpnum(int key);
+// bool key_isctrl(int key);
+// // etc.
+
+#define isctrl(k)       (((k) == KEY_LCTRL || (k) == KEY_RCTRL))
+#define isshift(k)      (((k) == KEY_LSHIFT || (k) == KEY_RSHIFT))
+#define isalt(k)        (((k) == KEY_LALT || (k) == KEY_RALT))
+#define ismeta(k)       (((k) == KEY_LWIN || (k) == KEY_RWIN))
+#define iskpnum(k)      ((k) >= KEY_KP0 && (k) <= KEY_KP9)
+
 //
 // Virtual Key Code Definitions
 //
@@ -130,7 +142,7 @@ struct key_event
 #define KEY_KPMINUS         97
 #define KEY_KPDOT           98
 #define KEY_KPSLASH         99
-#define KEY_KPENTER         100
+#define KEY_KP0             100
 #define KEY_KP1             101
 #define KEY_KP2             102
 #define KEY_KP3             103
@@ -140,7 +152,7 @@ struct key_event
 #define KEY_KP7             107
 #define KEY_KP8             108
 #define KEY_KP9             109
-#define KEY_KP0             110
+#define KEY_KPENTER         110
 #define KEY_PRTSC           111
 #define KEY_INSERT          112
 #define KEY_DELETE          113
@@ -152,5 +164,9 @@ struct key_event
 #define KEY_DOWN            119
 #define KEY_RIGHT           120
 #define KEY_UP              121
+
+static_assert(KEY_KP0 < KEY_KP9, "KEY_KP0 < KEY_KP9");
+static_assert(KEY_A == 'A', "KEY_A == 'A'");
+// etc.
 
 #endif /* __INPUT_H */

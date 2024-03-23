@@ -27,8 +27,6 @@
 #include <io.h>
 #include <ohwes.h>
 
-#define NUM_RETRIES 100000
-
 static void wait_for_read(void);
 static void wait_for_write(void);
 
@@ -143,20 +141,20 @@ void ps2_cmd(uint8_t cmd)
 
 static void wait_for_read(void)
 {
-    for (int i = 0; i < NUM_RETRIES; i++) {
+    for (int i = 0; i < PS2_IO_TIMEOUT; i++) {
         if (ps2_canread()) {
             return;
         }
     }
-    panic("timed out waiting for PS/2 controller read! (%d tries)", NUM_RETRIES);
+    panic("timed out waiting for PS/2 controller read! (%d tries)", PS2_IO_TIMEOUT);
 }
 
 static void wait_for_write(void)
 {
-    for (int i = 0; i < NUM_RETRIES; i++) {
+    for (int i = 0; i < PS2_IO_TIMEOUT; i++) {
         if (ps2_canwrite()) {
             return;
         }
     }
-    panic("timed out waiting for PS/2 controller write! (%d tries)", NUM_RETRIES);
+    panic("timed out waiting for PS/2 controller write! (%d tries)", PS2_IO_TIMEOUT);
 }

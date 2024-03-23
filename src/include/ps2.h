@@ -88,6 +88,7 @@ void ps2_flush(void);
 uint8_t ps2_status(void);
 void ps2_cmd(uint8_t cmd);
 
+#define PS2_IO_TIMEOUT          25000   // register poll count before giving up
 
 // Keyboard Commands
 #define PS2KB_CMD_SETLED        0xED    // Set Caps Lock, Num Lock, and Scroll Lock LEDs

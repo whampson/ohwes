@@ -65,6 +65,13 @@ do {                                \
     for (;;);                       \
 } while (0)
 
+#define reboot()                    \
+do {                                \
+    *((uint16_t *) 0x0472) = 0x1234;\
+    ps2_cmd(PS2_CMD_SYSRESET);      \
+    die();                          \
+} while (0)
+
 #define swap(a,b)                   \
 do {                                \
     (a) ^= (b);                     \

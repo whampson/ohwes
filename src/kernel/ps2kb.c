@@ -38,8 +38,8 @@
 
 #define SCANCODE_SET    1       // using scancode set 1
 #define TYPEMATIC_BYTE  0x22    // repeat rate = 24cps, delay = 500ms
-#define TIMEOUT         25000   // register poll count before giving up
 #define NUM_RETRIES     3       // command resends before giving up
+#define WARN_INTERVAL   10      // warn every N times a stray packet shows up
 #define KB_BUFFER_SIZE  32      // interrupt input buffer size
 
 #define PRINT_EVENTS    0
@@ -59,13 +59,15 @@ struct kb {
     bool e1;
 
     // keyboard state
-    bool ctrl;
-    bool alt;
-    bool shift;
-    bool meta;
+    int ctrl;
+    int alt;
+    int shift;
+    int meta;
     bool numlk;
     bool capslk;
     bool scrlk;
+    int altcode;
+    bool has_altcode;
 
     // character input buffer
     struct queue inputq;
@@ -80,16 +82,18 @@ struct kb {
     int resend_count;
     int error_count;
 };
-struct kb g_kb = {};
 
-const char g_keymap[128];
-const char g_keymap_shift[128];
-const char * g_keymap_extended[128];
-const uint8_t g_scanmap1[128];
-const uint8_t g_scanmap1_e0[128];
+static struct kb _kb = {};
+static /*volatile*/ struct kb *g_kb = &_kb;
+
+static const char g_keymap[256];
+static const char g_keymap_shift[128];
+// static const char * g_keymap_extended[128];
+static const uint8_t g_scanmap1[128];
+static const uint8_t g_scanmap1_e0[128];
 
 #if PRINT_EVENTS
-const char * g_keynames[122];
+staic const char * g_keynames[122];
 #endif
 
 static void update_leds(void);
@@ -114,9 +118,9 @@ void init_kb(void)
     uint32_t flags;
     cli_save(flags);
 
-    zeromem(&g_kb, sizeof(struct kb));
-    q_init(&g_kb.inputq, g_kb.ibuf, KB_BUFFER_SIZE);
-    g_kb.numlk = 1;
+    zeromem(g_kb, sizeof(struct kb));
+    q_init(&g_kb->inputq, g_kb->ibuf, KB_BUFFER_SIZE);
+    g_kb->numlk = 1;
 
     // disable keyboard
     ps2_flush();
@@ -138,8 +142,8 @@ void init_kb(void)
     kb_typematic(TYPEMATIC_BYTE);
 
     // detect supported scancode sets
-    g_kb.sc3_support = kb_scset(3);
-    g_kb.sc2_support = kb_scset(2);
+    g_kb->sc3_support = kb_scset(3);
+    g_kb->sc2_support = kb_scset(2);
 
     // select our desired scancode set
     if (!kb_scset(SCANCODE_SET)) {
@@ -148,7 +152,7 @@ void init_kb(void)
         ps2cfg |= PS2_CFG_TRANSLATE;
         ps2_cmd(PS2_CMD_WRCFG);
         ps2_write(ps2cfg);
-        g_kb.scancode_set = 1;
+        g_kb->scancode_set = 1;
     }
 
     // re-enable keyboard
@@ -161,11 +165,11 @@ void init_kb(void)
     irq_unmask(IRQ_KEYBOARD);
 
     kprint("ps2kb: ident = 0x%X 0x%X, translation = %s\n",
-        g_kb.ident[0], g_kb.ident[1], ONOFF(ps2cfg & PS2_CFG_TRANSLATE));
+        g_kb->ident[0], g_kb->ident[1], ONOFF(ps2cfg & PS2_CFG_TRANSLATE));
     kprint("ps2kb: scancode_set = %d, sc2_support = %s, sc3_support = %s\n",
-        g_kb.scancode_set,  YN(g_kb.sc2_support), YN(g_kb.sc3_support));
+        g_kb->scancode_set,  YN(g_kb->sc2_support), YN(g_kb->sc3_support));
     kprint("ps2kb: leds = 0x%X, typematic = %s, typematic_byte = 0x%X\n",
-        g_kb.leds, YN(g_kb.typematic), g_kb.typematic_byte);
+        g_kb->leds, YN(g_kb->typematic), g_kb->typematic_byte);
 
     restore_flags(flags);
 }
@@ -179,45 +183,77 @@ int kb_read(void)
 
     // grab a character from the queue
     c = -1;
-    if (!q_empty(&g_kb.inputq)) {
-        c = q_get(&g_kb.inputq);
+    if (!q_empty(&g_kb->inputq)) {
+        c = q_get(&g_kb->inputq);
     }
 
     restore_flags(flags);
     return c;
 }
 
+void kb_putq(char c)
+{
+    if (q_full(&g_kb->inputq)) {
+        kprint("ps2kb: buffer full!\n");
+        beep(750, 50);
+        return;
+    }
+
+    q_put(&g_kb->inputq, c);
+}
+
 static void update_leds(void)
 {
     // update toggle key LEDs
     int leds = 0;
-    if (g_kb.capslk) {
+    if (g_kb->capslk) {
         leds |= PS2KB_LED_CAPLK;
     }
-    if (g_kb.numlk) {
+    if (g_kb->numlk) {
         leds |= PS2KB_LED_NUMLK;
     }
-    if (g_kb.scrlk) {
+    if (g_kb->scrlk) {
         leds |= PS2KB_LED_SCRLK;
     }
 
-    if (g_kb.leds != leds) {
+    if (g_kb->leds != leds) {
         kb_setleds(leds);
     }
 }
 
 static void kb_interrupt(void)
 {
+    uint8_t status;
     uint16_t sc;
     uint16_t key;
     bool release;
-    char c;
+    unsigned char c;
+    char *s;
 
     struct key_event evt;
     zeromem(&evt, sizeof(struct key_event));
 
+    volatile struct kb *kb;
+    kb = &_kb;
+
+    c = '\0';
+    s = NULL;
+
+    //
+    // Scan Code to Key Code Mapping
+    // ----------------------------------------------------------------
+
     // prevent keyboard from sending more interrupts
     ps2_cmd(PS2_CMD_P1OFF);
+
+    // check keyboard status
+    status = ps2_status();
+    if (status & PS2_STATUS_TIMEOUT) {
+        kprint("ps2kb: timeout error\n");
+    }
+    if (status & PS2_STATUS_PARITY) {
+        kprint("ps2kb: parity error\n");
+    }
 
     // grab the scancode
     sc = inb_delay(0x60);
@@ -225,35 +261,43 @@ static void kb_interrupt(void)
     // check for some unexpected scancodes
     switch (sc) {
         case 0xFA:
-            // kprint("kbint: inb 0x%X (ack)\n", sc);
-            g_kb.ack_count++;
+            g_kb->ack_count++;
+            if ((g_kb->ack_count % WARN_INTERVAL) == 0) {
+                kprint("ps2kb: seen %d stray acks\n", g_kb->ack_count);
+            }
             goto done;
-        case 0xFC: __fallthrough;
-        case 0xFD:
-            kprint("kbint: inb 0x%X (self-test failed)\n", sc);
-            g_kb.error_count++;
-            goto done;
+
         case 0xFE:
-            kprint("kbint: inb 0x%X (resend)\n", sc);
-            g_kb.resend_count++;
+            g_kb->resend_count++;
+            if ((g_kb->resend_count % WARN_INTERVAL) == 0) {
+                kprint("ps2kb: seen %d stray resend requests\n", g_kb->resend_count);
+            }
             goto done;
-        case 0xFF:  __fallthrough;
-        case 0x00:
-            kprint("kbint: inb 0x%X (error)\n", sc);
-            g_kb.error_count++;
+
+        case 0xFC: __fallthrough;   // self-test failed
+        case 0xFD: __fallthrough;   // self-test failed
+        case 0xFF: __fallthrough;   // error
+        case 0x00:                  // error
+            g_kb->error_count++;
+            if (g_kb->error_count == 1) {
+                kprint("ps2kb: got error 0x%X\n", g_kb->error_count);
+            }
+            if ((g_kb->error_count % WARN_INTERVAL) == 0) {
+                kprint("ps2kb: seen %d errors\n", g_kb->error_count);
+            }
             goto done;
     }
 
     // the following translation is for scancode set 1 only
-    assert(g_kb.scancode_set == 1);
+    assert(g_kb->scancode_set == 1);
 
     // did we get an escape code?
     if (sc == 0xE0) {
-        g_kb.e0 = true;
+        g_kb->e0 = true;
         goto done;
     }
     if (sc == 0xE1) {
-        g_kb.e1 = true;
+        g_kb->e1 = true;
         goto done;
     }
 
@@ -264,28 +308,32 @@ static void kb_interrupt(void)
     }
 
     // translate the scancode to a virtual key
-    key = (g_kb.e0) ? g_scanmap1_e0[sc] : g_scanmap1[sc];
+    key = (g_kb->e0) ? g_scanmap1_e0[sc] : g_scanmap1[sc];
 
-    // additional E0 handling
-    if (g_kb.e0) {
-        assert(!g_kb.e1);
+    // end E0 escape sequence (should only be one byte)
+    if (g_kb->e0) {
+        assert(!g_kb->e1);
         sc |= 0xE000;
-        g_kb.e0 = false;
+        g_kb->e0 = false;
     }
 
-    // special handling for the PAUSE key
-    // because they share a final scancode byte for some reason
-    if (g_kb.e1) {
-        assert(!g_kb.e0);
+    // special handling for the PAUSE key, because PAUSE and NUMLK share
+    // a final scancode byte for some reason; also this is the only E1 key
+    if (g_kb->e1) {
+        assert(!g_kb->e0);
         if (key == KEY_NUMLK) {
             key = KEY_PAUSE;
             sc |= 0xE100;
-            g_kb.e1 = false;
+            g_kb->e1 = false;
         }
     }
 
+    //
+    // Key Code Handling
+    // ----------------------------------------------------------------
+
     // numlock handling
-    if (!g_kb.numlk) {
+    if (!g_kb->numlk) {
         switch (key) {
             case KEY_KP0: key = KEY_INSERT; break;
             case KEY_KP1: key = KEY_END; break;
@@ -300,68 +348,127 @@ static void kb_interrupt(void)
         }
     }
 
-    // update toggle keys
+    // update toggle keys and LEDs
     if (!release && key == KEY_CAPSLK) {
-        g_kb.capslk ^= true;
+        g_kb->capslk ^= true;
     }
     if (!release && key == KEY_NUMLK) {
-        g_kb.numlk ^= true;
+        g_kb->numlk ^= true;
     }
     if (!release && key == KEY_SCRLK) {
-        g_kb.scrlk ^= true;
+        g_kb->scrlk ^= true;
     }
     update_leds();
 
-    // update modifier keys
-    if (key == KEY_LCTRL || key == KEY_RCTRL) {
-        g_kb.ctrl = !release;
-    }
-    if (key == KEY_LSHIFT || key == KEY_RSHIFT) {
-        g_kb.shift = !release;
-    }
-    if (key == KEY_LALT || key == KEY_RALT) {
-        g_kb.alt = !release;
-    }
-    if (key == KEY_LWIN || key == KEY_RWIN) {
-        g_kb.meta = !release;
+    // update modifier key state
+    #define handle_modifier(key,mod,l,r)        \
+    ({                                          \
+        int _mask = 0;                          \
+        if ((key) == (l)) { _mask |= 1 << 0; }  \
+        if ((key) == (r)) { _mask |= 1 << 1; }  \
+        if (_mask && !release) {                \
+            g_kb->mod |= _mask;                 \
+        }                                       \
+        else if (_mask && release) {            \
+            g_kb->mod &= ~_mask;                \
+        }                                       \
+    })
+    handle_modifier(key, ctrl, KEY_LCTRL, KEY_RCTRL);
+    handle_modifier(key, shift, KEY_LSHIFT, KEY_RSHIFT);
+    handle_modifier(key, alt, KEY_LALT, KEY_RALT);
+    handle_modifier(key, meta, KEY_LWIN, KEY_RWIN);
+
+    // submit alt code
+    if (isalt(key) && release) {
+        if (g_kb->has_altcode) {
+            kb_putq(g_kb->altcode);
+            g_kb->has_altcode = false;
+            g_kb->altcode = 0;
+            goto record_key_event;
+        }
     }
 
     // handle special keystrokes
-    if (g_kb.ctrl && g_kb.alt) {
-        switch (key) {
-            case KEY_DELETE:
-            case KEY_KPDOT:
-                /*  https://stanislavs.org/helppc/bios_data_area.html
-
-                    1234h  Bypass memory tests & CRT initialization
-                    4321h  Preserve memory
-                    5678h  System suspend
-                    9ABCh  Manufacturer test
-                    ABCDh  Convertible POST loop
-                    ????h  many other values are used during POST
-                */
-                *((uint16_t *) 0x0472) = 0x1234;
-                ps2_cmd(PS2_CMD_SYSRESET);
-                break;
-        }
+    switch (key) {
+        // case KEY_BREAK:
+        //     reboot();
+        case KEY_DELETE:
+        case KEY_KPDOT:
+            if (g_kb->ctrl && g_kb->alt) {
+                reboot();
+            }
+            break;
     }
     // TODO: ALT+<N> = switch terminal
     // TODO: CTRL+SCRLK = print kernel output buffer
+    // TOOD: SYSRQ = something cool (debug menu?)
 
-    // break events don't generate characters
-    c = '\0';
+    // handle character code entry (<ALT>+<NUMPAD> if NumLk on)
+    if (g_kb->alt && !release && iskpnum(key)) {
+        kb->has_altcode = true;
+        kb->altcode *= 10;
+        kb->altcode += (key - KEY_KP0);
+        goto record_key_event;
+    }
+
+    // end if it's a break event since they don't generate characters
     if (release) {
         goto record_key_event;
     }
 
+    //
+    // Keystroke to Character Sequence Mapping
+    // ----------------------------------------------------------------
+
     // map key to character
-    c = (g_kb.shift) ? g_keymap_shift[key] : g_keymap[key];
+    c = (g_kb->shift && key >= 0x20 && key <= 0x60)
+        ? g_keymap_shift[key & 0x7F]
+        : g_keymap[key & 0xFF];
     if (c == '\0') {
         goto record_key_event;
     }
 
+    // handle non-character keys
+    if (c == 0xE0 || (key == KEY_KP5 && !g_kb->numlk)) {
+        c = '\0';
+        switch (key) {
+            // xterm sequences
+            case KEY_UP:    s = "\e[A"; break;
+            case KEY_DOWN:  s = "\e[B"; break;
+            case KEY_RIGHT: s = "\e[C"; break;
+            case KEY_LEFT:  s = "\e[D"; break;
+            case KEY_KP5:   s = "\e[G"; break;  // maybe, conflicts with console
+            case KEY_PRTSC: s = "\e[P"; break;  // maybe
+            // VT sequences
+            case KEY_HOME:  s = "\e[1~"; break;
+            case KEY_INSERT:s = "\e[2~"; break;
+            case KEY_DELETE:s = "\e[3~"; break;
+            case KEY_END:   s = "\e[4~"; break;
+            case KEY_PGUP:  s = "\e[5~"; break;
+            case KEY_PGDOWN:s = "\e[6~"; break;
+            case KEY_F1:    s = "\e[11~"; break;
+            case KEY_F2:    s = "\e[12~"; break;
+            case KEY_F3:    s = "\e[13~"; break;
+            case KEY_F4:    s = "\e[14~"; break;
+            case KEY_F5:    s = "\e[15~"; break;
+            case KEY_F6:    s = "\e[17~"; break;
+            case KEY_F7:    s = "\e[18~"; break;
+            case KEY_F8:    s = "\e[19~"; break;
+            case KEY_F9:    s = "\e[20~"; break;
+            case KEY_F10:   s = "\e[21~"; break;
+            case KEY_F11:   s = "\e[23~"; break;
+            case KEY_F12:   s = "\e[24~"; break;
+            // TODO: sysrq? pause? break?
+            default:        s = "\0"; break;
+        }
+        while (*s != '\0') {
+            kb_putq(*s++);
+        }
+        goto record_key_event;
+    }
+
     // handle control characters
-    if (g_kb.ctrl) {
+    if (g_kb->ctrl) {
         switch (key) {
             case KEY_2: c = '@'; break;
             case KEY_7: c = '^'; break;
@@ -374,14 +481,13 @@ static void kb_interrupt(void)
         if (key >= KEY_A && key <= KEY_Z) {
             c = toupper(c);
         }
-
         if ((c >= '@' && c <= '_') || c == '?') {
             c ^= 0x40;
         }
     }
 
     // handle caps lock
-    if (g_kb.capslk) {
+    if (g_kb->capslk && !g_kb->alt) {
         if (isupper(c)) {
             c = tolower(c);
         }
@@ -390,16 +496,13 @@ static void kb_interrupt(void)
         }
     }
 
-    // TODO: character sequences for non-character keys (e.g. arrows)
+    // handle alt
+    if (g_kb->alt) {
+        kb_putq('\e');
+    }
 
     // put the character in the queue
-    if (!q_full(&g_kb.inputq)) {
-        q_put(&g_kb.inputq, c);
-    }
-    else {
-        // buffer full! beep for effect ;)
-        beep(750, 50);
-    }
+    kb_putq(c);
 
 record_key_event:
     evt.keycode = key;
@@ -472,7 +575,7 @@ static bool kb_ident(void)
     RIF_FALSE(kb_sendcmd(PS2KB_CMD_IDENT));
 
     for (int i = 0; i < 2; i++) {
-        g_kb.ident[i] = kb_rdport();
+        g_kb->ident[i] = kb_rdport();
     }
 
     return true;
@@ -482,8 +585,8 @@ static bool kb_setleds(uint8_t leds)
 {
     RIF_FALSE(kb_sendcmd(PS2KB_CMD_SETLED));
 
-    g_kb.leds = leds;
-    kb_wrport(g_kb.leds);
+    g_kb->leds = leds;
+    kb_wrport(g_kb->leds);
     kb_rdport();                    // ack
 
     return true;
@@ -507,7 +610,7 @@ static bool kb_scset(uint8_t set)
     kb_rdport();                    // may send additional ack
 
     if (data == set) {
-        g_kb.scancode_set = set;    // keep track of the current scancode set
+        g_kb->scancode_set = set;    // keep track of the current scancode set
         return true;
     }
 
@@ -523,8 +626,8 @@ static bool kb_typematic(uint8_t typ)
     kb_wrport(typ);
     kb_rdport();                    // ack
 
-    g_kb.typematic = true;
-    g_kb.typematic_byte = typ;
+    g_kb->typematic = true;
+    g_kb->typematic_byte = typ;
 
     return true;
 }
@@ -549,16 +652,18 @@ bool kb_sendcmd(uint8_t cmd)
             ack = true;
             break;
         }
-    } while (resp == 0xFE && retries);
+        if (resp != 0) {
+            kprint("ps2kb: cmd 0x%X returned 0x%X, trying again...\n",
+                cmd, resp, retries);
+        }
+    } while (resp != 0 && retries);
 
     if (!retries) {
-        kprint("ps2kb: cmd 0x%X timed out after %d retries!\n", cmd, NUM_RETRIES);
+        kprint("ps2kb: cmd 0x%X timed out after %d retries!\n",
+            cmd, NUM_RETRIES);
     }
     else if (resp == 0) {
-        kprint("ps2kb: cmd 0x%X did not respond\n", cmd);
-    }
-    else if (!ack) {
-        kprint("ps2kb: cmd 0x%X returned 0x%X\n", cmd, resp);
+        kprint("ps2kb: cmd 0x%X not supported\n", cmd);
     }
 
     restore_flags(flags);
@@ -576,7 +681,7 @@ uint8_t kb_rdport(void)
 
     // poll until write available
     count = 0;
-    while (count++ < TIMEOUT) {
+    while (count++ < PS2_IO_TIMEOUT) {
         status = ps2_status();
         if (status & PS2_STATUS_OPF) {
             break;
@@ -590,15 +695,19 @@ uint8_t kb_rdport(void)
         kprint("ps2kb: parity error\n");
     }
 
-    if (count >= TIMEOUT) {
+    if (count >= PS2_IO_TIMEOUT) {
         return 0;
     }
 
     data = inb_delay(0x60);
     switch (data) {
-        case 0xFF: __fallthrough;
-        case 0x00:
+        case 0xFF:
             kprint("ps2kb: kb_rdport: inb 0x%X\n", data);
+            g_kb->error_count++;
+             __fallthrough;
+        case 0x00:
+            // going to consider 0 ok here...
+            // some keyboards return 00 00 when identifying
             break;
     }
 
@@ -616,7 +725,7 @@ void kb_wrport(uint8_t data)
 
     // poll until write available
     count = 0;
-    while (count++ < TIMEOUT) {
+    while (count++ < PS2_IO_TIMEOUT) {
         status = ps2_status();
         if (!(status & PS2_STATUS_IPF)) {
             break;
@@ -630,7 +739,7 @@ void kb_wrport(uint8_t data)
         kprint("ps2kb: parity error\n");
     }
 
-    if (count >= TIMEOUT) {
+    if (count >= PS2_IO_TIMEOUT) {
         panic("ps2kb: timed out waiting for write\n");
     }
     else {
@@ -641,67 +750,47 @@ void kb_wrport(uint8_t data)
     restore_flags(flags);
 }
 
-const char g_keymap[128] =
+static const char g_keymap[256] =
 {
-/*00-07*/  0,0,0,0,0,0,0,0,
-/*08-0F*/  '\b','\t','\r',0,0,0,0,0,
-/*10-17*/  0,0,0,0,0,0,0,0,
-/*18-1F*/  0,0,0,'\e',0,0,0,0,
-/*20-27*/  ' ',0,0,0,0,0,0,'\'',
-/*28-2F*/  0,0,'*','+',',','-','.','/',
-/*30-37*/  '0','1','2','3','4','5','6','7',
-/*38-3F*/  '8','9',0,';',0,'=',0,0,
-/*40-47*/  0,'a','b','c','d','e','f','g',
-/*48-4F*/  'h','i','j','k','l','m','n','o',
-/*50-57*/  'p','q','r','s','t','u','v','w',
-/*58-5F*/  'x','y','z','[','\\',']',0,0,
-/*60-67*/  '`','-','.','/','\r','1','2',
-/*68-6F*/  '3','4','5','6','7','8','9','0',
-/*70-77*/  0,0,0,0,0,0,0,0,
-/*78-7F*/  0,0,0,0,0,0,0,0,
+/*00-0F*/  0,0,0,0,0,0,0,0,'\b','\t','\r',0xE0,0xE0,0xE0,0xE0,0xE0,
+/*10-1F*/  0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0,0,0,0,'\e',0,0,0,0,
+/*20-2F*/  ' ',0,0,0,0,0,0,'\'',0,0,'*','+',',','-','.','/',
+/*30-3F*/  '0','1','2','3','4','5','6','7','8','9',0,';',0,'=',0,0,
+/*40-4F*/  0,'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o',
+/*50-5F*/  'p','q','r','s','t','u','v','w','x','y','z','[','\\',']',0,0,
+/*60-6F*/  '`','-','.','/','0','1','2','3','4','5','6','7','8','9','\r',0xE0,
+/*70-7F*/  0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0,0,0,0,0,
+/*80-8F*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+/*90-9F*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+/*A0-AF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+/*B0-BF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+/*C0-CF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+/*D0-DF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+/*E0-EF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+/*F0-FF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 };
 
-const char g_keymap_shift[128] =
+static const char g_keymap_shift[128] =
 {
-/*00-07*/  0,0,0,0,0,0,0,0,
-/*08-0F*/  '\b','\t','\r',0,0,0,0,0,
-/*10-17*/  0,0,0,0,0,0,0,0,
-/*18-1F*/  0,0,0,'\e',0,0,0,0,
-/*20-27*/  0,0,0,0,0,0,0,'"',
-/*28-2F*/  0,0,'*','+','<','_','>','?',
-/*30-37*/  ')','!','@','#','$','%','^','&',
-/*38-3F*/  '*','(',0,':',0,'+',0,0,
-/*40-47*/  0,'A','B','C','D','E','F','G',
-/*48-4F*/  'H','I','J','K','L','M','N','O',
-/*50-57*/  'P','Q','R','S','T','U','V','W',
-/*58-5F*/  'X','Y','Z','{','|','}',0,0,
-/*60-67*/  '~','-','.','/','\r','1','2',
-/*68-6F*/  '3','4','5','6','7','8','9','0',
-/*70-77*/  0,0,0,0,0,0,0,0,
-/*78-7F*/  0,0,0,0,0,0,0,0,
+/*00-0F*/  0,0,0,0,0,0,0,0,'\b','\t','\r',0,0,0,0,0,
+/*10-1F*/  0,0,0,0,0,0,0,0,0,0,0,'\e',0,0,0,0,
+/*20-2F*/  ' ',0,0,0,0,0,0,'"',0,0,'*','+','<','_','>','?',
+/*30-3F*/  ')','!','@','#','$','%','^','&','*','(',0,':',0,'+',0,0,
+/*40-4F*/  0,'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
+/*50-5F*/  'P','Q','R','S','T','U','V','W','X','Y','Z','{','|','}',0,0,
+/*60-6F*/  '~','-','.','/','0','1','2','3','4','5','6','7','8','9','\r',0,
+/*70-7F*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+// /*80-8F*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+// /*90-9F*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+// /*A0-AF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+// /*B0-BF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+// /*C0-CF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+// /*D0-DF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+// /*E0-EF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+// /*F0-FF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 };
 
-const char * g_keymap_extended[128] =
-{
-/*00-07*/  0,0,0,0,0,0,0,0,
-/*08-0F*/  0,0,0,0,0,0,0,0,
-/*10-17*/  0,0,0,0,0,0,0,0,
-/*18-1F*/  0,0,0,0,0,0,0,0,
-/*20-27*/  0,0,0,0,0,0,0,0,
-/*28-2F*/  0,0,0,0,0,0,0,0,
-/*30-37*/  0,0,0,0,0,0,0,0,
-/*38-3F*/  0,0,0,0,0,0,0,0,
-/*40-47*/  0,0,0,0,0,0,0,0,
-/*48-4F*/  0,0,0,0,0,0,0,0,
-/*50-57*/  0,0,0,0,0,0,0,0,
-/*58-5F*/  0,0,0,0,0,0,0,0,
-/*60-67*/  0,0,0,0,0,0,0,0,
-/*68-6F*/  0,0,0,0,0,0,0,0,
-/*70-77*/  0,0,0,0,0,0,0,0,
-/*78-7F*/  0,0,0,0,0,0,0,0,
-};
-
-const uint8_t g_scanmap1[128] =
+static const uint8_t g_scanmap1[128] =
 {
 /*00-07*/  0,KEY_ESCAPE,KEY_1,KEY_2,KEY_3,KEY_4,KEY_5,KEY_6,
 /*08-0F*/  KEY_7,KEY_8,KEY_9,KEY_0,KEY_MINUS,KEY_EQUAL,KEY_BACKSPACE,KEY_TAB,
@@ -713,15 +802,15 @@ const uint8_t g_scanmap1[128] =
 /*38-3F*/  KEY_LALT,KEY_SPACE,KEY_CAPSLK,KEY_F1,KEY_F2,KEY_F3,KEY_F4,KEY_F5,
 /*40-47*/  KEY_F6,KEY_F7,KEY_F8,KEY_F9,KEY_F10,KEY_NUMLK,KEY_SCRLK,KEY_KP7,
 /*48-4F*/  KEY_KP8,KEY_KP9,KEY_KPMINUS,KEY_KP4,KEY_KP5,KEY_KP6,KEY_KPPLUS,KEY_KP1,
-/*50-57*/  KEY_KP2,KEY_KP3,KEY_KP0,KEY_KPDOT,KEY_SYSRQ,0,0,KEY_F11, // 0x55 = undefined, 0x56 = INT1
+/*50-57*/  KEY_KP2,KEY_KP3,KEY_KP0,KEY_KPDOT,KEY_SYSRQ,0,0,KEY_F11,
 /*58-5F*/  KEY_F12,0,0,0,0,0,0,0,
-/*60-67*/  0,0,0,0,0,0,0,0, // undefined
-/*68-6F*/  0,0,0,0,0,0,0,0, // undefined
-/*70-77*/  0,0,0,0,0,0,0,0, // international
+/*60-67*/  0,0,0,0,0,0,0,0,
+/*68-6F*/  0,0,0,0,0,0,0,0,
+/*70-77*/  0,0,0,0,0,0,0,0,
 /*78-7F*/  0,0,0,0,0,0,0,0,
 };
 
-const uint8_t g_scanmap1_e0[128] =
+static const uint8_t g_scanmap1_e0[128] =
 {
 /*00-07*/  0,0,0,0,0,0,0,0,
 /*08-0F*/  0,0,0,0,0,0,0,0,
@@ -742,7 +831,7 @@ const uint8_t g_scanmap1_e0[128] =
 };
 
 #if PRINT_EVENTS
-const char * g_keynames[122] =
+static const char * g_keynames[122] =
 {
     "",
     "KEY_LCTRL",
@@ -845,6 +934,7 @@ const char * g_keynames[122] =
     "KEY_KPDOT",
     "KEY_KPSLASH",
     "KEY_KPENTER",
+    "KEY_KP0",
     "KEY_KP1",
     "KEY_KP2",
     "KEY_KP3",
@@ -854,7 +944,6 @@ const char * g_keynames[122] =
     "KEY_KP7",
     "KEY_KP8",
     "KEY_KP9",
-    "KEY_KP0",
     "KEY_PRTSC",
     "KEY_INSERT",
     "KEY_DELETE",

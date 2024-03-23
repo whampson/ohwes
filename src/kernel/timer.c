@@ -57,23 +57,30 @@ struct pit_state {
     uint32_t sleep_ticks;
     int quantum_ms;
 };
-static struct pit_state g_pit = {};
+
+static struct pit_state _pit = {};
+struct pit_state * get_pit(void)
+{
+    return &_pit;
+}
 
 static uint16_t calculate_divisor(int freq);
 static void timer_interrupt(void);
+static void pcspk_on(void);
+static void pcspk_off(void);
 
 void init_timer(void)
 {
     uint8_t mode;
     uint16_t div;
     int freq;
+    struct pit_state *pit;
 
-    g_pit.ticks = 0;
-    g_pit.sys_timer = 0;
-    g_pit.quantum_ms = QUANTUM_MS;
-    g_pit.pcspk_ticks = 0;
+    pit = get_pit();
+    zeromem(pit, sizeof(struct pit_state));
+    pit->quantum_ms = QUANTUM_MS;
 
-    freq = div_round(1000, g_pit.quantum_ms);
+    freq = div_round(1000, pit->quantum_ms);
     div = calculate_divisor(freq);
 
     mode = PIT_CFG_CHANNEL_0 | PIT_CFG_MODE_RATEGEN | PIT_CFG_ACCESS_LOHI;
@@ -102,13 +109,39 @@ static uint16_t calculate_divisor(int freq)
 void timer_sleep(int millis)
 {
     uint32_t flags;
+    volatile struct pit_state *pit;
+
     cli_save(flags);
 
-    g_pit.sleep_ticks = div_round(millis, g_pit.quantum_ms);
+    pit = get_pit();
+    pit->sleep_ticks = div_round(millis, pit->quantum_ms);
+    // kprint("timer: sleeping for %dms (%d ticks)\n", millis, pit.sleep_ticks);
 
     sti();
-    while (g_pit.sleep_ticks) { }
+    while (pit->sleep_ticks) { }
     cli();
+
+    restore_flags(flags);
+}
+
+void pcspk_beep(int freq, int millis)
+{
+    uint32_t flags;
+    uint8_t mode;
+    uint16_t div;
+
+    cli_save(flags);
+
+    div = calculate_divisor(freq);
+    mode = PIT_CFG_CHANNEL_2 | PIT_CFG_MODE_SQUAREWAVE | PIT_CFG_ACCESS_LOHI;
+    assert(mode == 0xB6);
+
+    outb(PIT_PORT_CFG, mode);
+    outb(PIT_PORT_CHAN2, div & 0xFF);
+    outb(PIT_PORT_CHAN2, (div >> 8) & 0xFF);
+
+    get_pit()->pcspk_ticks = div_round(millis, get_pit()->quantum_ms);
+    pcspk_on(); // turned off in interrupt handler
 
     restore_flags(flags);
 }
@@ -131,40 +164,21 @@ static void pcspk_off(void)
     outb(0x61, data);
 }
 
-void pcspk_beep(int freq, int millis)
-{
-    uint32_t flags;
-    uint8_t mode;
-    uint16_t div;
-
-    cli_save(flags);
-
-    div = calculate_divisor(freq);
-    mode = PIT_CFG_CHANNEL_2 | PIT_CFG_MODE_SQUAREWAVE | PIT_CFG_ACCESS_LOHI;
-    assert(mode == 0xB6);
-
-    outb(PIT_PORT_CFG, mode);
-    outb(PIT_PORT_CHAN2, div & 0xFF);
-    outb(PIT_PORT_CHAN2, (div >> 8) & 0xFF);
-
-    g_pit.pcspk_ticks = div_round(millis, g_pit.quantum_ms);
-    pcspk_on(); // turned off in interrupt handler
-
-    restore_flags(flags);
-}
-
 static void timer_interrupt(void)
 {
-    g_pit.ticks++;
+    volatile struct pit_state *pit;
 
-    if (g_pit.pcspk_ticks) {
-        g_pit.pcspk_ticks--;
-        if (!g_pit.pcspk_ticks) {
+    pit = get_pit();
+    pit->ticks++;
+
+    if (pit->pcspk_ticks) {
+        pit->pcspk_ticks--;
+        if (!pit->pcspk_ticks) {
             pcspk_off();
         }
     }
 
-    if (g_pit.sleep_ticks) {
-        g_pit.sleep_ticks--;
+    if (pit->sleep_ticks) {
+        pit->sleep_ticks--;
     }
 }

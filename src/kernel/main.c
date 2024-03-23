@@ -102,9 +102,10 @@ void __fastcall kmain(const struct bootinfo *info)
 
 int main(void)      // ring 3, "usermode"
 {
-    printf("\e[5;33mHello, world!\e[m\n");
-    // sleep(5000);        // broken on qemu (and maybe others?)
-    // printf("i'm awake now\n");
+    printf("\e4\e[5;33mHello, world!\e[m\n");
+    beep(1000, 100);
+    sleep(100);
+    beep(1250, 100);
 
     int c;
     while (true) {
@@ -112,7 +113,9 @@ int main(void)      // ring 3, "usermode"
             if (iscntrl(c)) {
                 kprint("^%c", 0x40 ^ c);
             }
-            kprint("%c", c);
+            else {
+                kprint("%c", c);
+            }
         }
     }
 
