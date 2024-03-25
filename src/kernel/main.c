@@ -31,6 +31,7 @@
 #include <ps2.h>
 #include <test.h>
 #include <x86.h>
+#include <syscall.h>
 
 extern void init_vga(void);
 extern void init_console(void);
@@ -41,9 +42,11 @@ extern void init_irq(void);
 extern void init_ps2(const struct bootinfo *info);
 extern void init_kb(void);
 extern void init_timer(void);
+extern void init_task(void);
+extern void init_sys(void);
 
 #ifdef TEST_BUILD
-extern void testmain(void);
+extern void tmain(void);
 #endif
 
 static void print_info(const struct bootinfo *info);
@@ -51,6 +54,8 @@ __noreturn void go_to_ring3(void (*entry));
 __noreturn void ring3_entry(void);
 
 struct bootinfo g_BootInfo;
+
+int console_write(const char *buf, size_t count);
 
 void __fastcall kmain(const struct bootinfo *info)
 {
@@ -85,83 +90,15 @@ void __fastcall kmain(const struct bootinfo *info)
 #if TEST_BUILD
     kprint("boot: TEST BUILD\n");
     kprint("boot: running tests...\n");
-    testmain();
+    tmain();
 #endif
 
     init_memory(&g_BootInfo);
     init_ps2(&g_BootInfo);
     init_kb();
     init_timer();
-
-    // safe to enable interrupts now
-    sti();
-
-    // jump to ring 3
-    go_to_ring3(ring3_entry);
-}
-
-int main(void)      // ring 3, "usermode"
-{
-    printf("\e4\e[5;33mHello, world!\e[m\n");
-    beep(1000, 100);
-    sleep(100);
-    beep(1250, 100);
-
-    int c;
-    while (true) {
-        while ((c = console_read()) != -1) {
-            if (iscntrl(c)) {
-                kprint("^%c", 0x40 ^ c);
-            }
-            else {
-                kprint("%c", c);
-            }
-        }
-    }
-
-    return 8675309;
-}
-
-__noreturn
-void go_to_ring3(void (*entry))     // ring0 "kernel mode"
-{
-    struct eflags eflags;
-    cli_save(eflags);
-
-    eflags.intf = 1;        // enable interrupts
-    eflags.iopl = USER_PL;  // TEMP TEMP: printf requires outb
-
-    uint32_t *const ebp = (uint32_t * const) 0xC000;    // user stack
-    uint32_t *esp = ebp;
-
-    struct iregs regs = {};
-    regs.cs = USER_CS;
-    regs.ds = USER_DS;
-    regs.es = USER_DS;
-    regs.ss = USER_SS;
-    regs.ebp = (uint32_t) ebp;
-    regs.esp = (uint32_t) esp;
-    regs.eip = (uint32_t) entry;
-    regs.eflags = eflags._value;
-    switch_context(&regs);
-    die();
-}
-
-__noreturn
-void ring3_entry(void)               // ring3 "user mode"
-{
-    int status = main();
-    store_eax(status);
-
-    _syscall1(SYS_EXIT, status);
-    die();
-}
-
-int sys_exit(int status)            // ring0 "kernel mode"
-{
-    kprint("ring 3 returned %d\n", status);
-
-    die();       // enter idle loop, reap task, switch tasks, etc
+    init_task();
+    init_sys();     // jumps to ring 3
 }
 
 static void print_info(const struct bootinfo *info)

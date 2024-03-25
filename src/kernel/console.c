@@ -22,6 +22,7 @@
 #include <ohwes.h>
 #include <console.h>
 #include <ctype.h>
+#include <errno.h>
 #include <irq.h>
 #include <ps2.h>
 #include <vga.h>
@@ -143,19 +144,38 @@ static void defaults(struct console *cons)
     }
 }
 
-int console_read(void)
+int console_read(char *buf, size_t count)
 {
-    int c;
+    if (!buf) {
+        return -EINVAL;
+    }
+
     uint32_t flags;
     cli_save(flags);
 
-    c = -1;
-    if (!q_empty(m_inputq)) {
-        c = q_get(m_inputq);
+    // TODO: blocking vs nonblocking
+
+    int nread = 0;
+    while (count-- && !q_empty(m_inputq)) {
+        *buf++ = q_get(m_inputq);
+        nread++;
     }
 
     restore_flags(flags);
-    return c;
+    return nread;
+}
+
+int console_write(const char *buf, size_t count)
+{
+    if (!buf) {
+        return -EINVAL;
+    }
+
+    for (int i = 0; i < count; i++) {
+        _dowrite(buf[i]);
+    }
+
+    return count;
 }
 
 static void drain_kb(void)
@@ -171,11 +191,6 @@ static void drain_kb(void)
             beep(1000, 50);
         }
     }
-}
-
-void console_write(char c)
-{
-    _dowrite(c);
 }
 
 static void _dowrite(char c)

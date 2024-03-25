@@ -4,7 +4,7 @@
             "name": "OH-WES [Win32]",
             "includePath": [
                 "${workspaceFolder}/src/include/*",
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/src/**"
             ],
             "defines": [
                 "DEBUG",
@@ -34,7 +34,7 @@
             "name": "OH-WES [macOS]",
             "includePath": [
                 "${workspaceFolder}/src/include/*",
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/src/**"
             ],
             "defines": [
                 "DEBUG",

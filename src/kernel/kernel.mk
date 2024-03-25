@@ -1,19 +1,23 @@
 TARGET := kernel/kernel.elf
 TARGETSYS := sys/ohwes.sys
 
+# entry.S MUST be first so the entrypoint is at a known location
 SOURCES := \
     entry.S \
     console.c \
     cpu.c \
     crash.c \
     handler.c \
-    irq.c \
     i8042.c \
+    init.c \
+    irq.c \
     main.c \
     memory.c \
     pic.c \
     ps2kb.c \
     queue.c \
+    syscall.c \
+    task.c \
     timer.c \
     vga.c \
 

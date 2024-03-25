@@ -13,34 +13,20 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: lib/libc/stdio.c
- *      Created: January 4, 2024
+ *         File: include/errno.h
+ *      Created: March 24, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#include <stdio.h>
-#include <fs.h>
-#include <syscall.h>
+#ifndef __ERRNO_H
+#define __ERRNO_H
 
-void stdout_fn(char c)
-{
-    write(stdout_fd, &c, 1);
-}
+extern int _errno;
+#define errno _errno
 
-int putchar(int c)
-{
-    // TODO: write to stdout, return EOF on error
-    stdout_fn(c);
-    return c;
-}
+#define ENOSYS      1   // System Call Not Valid
+#define EINVAL      2   // Invalid Argument
+#define EBADF       3   // Bad File Descriptor
 
-int puts(const char *str)
-{
-    // TODO: write to stdout, return EOF on error
-    while (*str) {
-        stdout_fn(*str++);
-    }
-    stdout_fn('\n');
-    return 1;
-}
+#endif // __ERRNO_H

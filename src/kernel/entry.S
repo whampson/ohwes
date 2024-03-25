@@ -67,7 +67,6 @@ idle:
 # bp -->                 (bp loaded by cpu from tss->esp0)
 ##
 interrupt:
-        cli
         subl            $SIZEOF_IREGS_CTX, %esp
         movl            %ebx, IREGS_EBX(%esp)
         movl            %ecx, IREGS_ECX(%esp)
@@ -104,9 +103,6 @@ syscall_trampoline:
         pushl           $end_syscall
         jmp             recv_syscall
 
-temp_eax:
-        .long           0
-
 .globl switch_context   # fastcall void switch_context(struct iregs *)
 switch_context:
         movl            %ecx, %esp
@@ -120,12 +116,12 @@ end_syscall:
         movl            IREGS_EDX(%esp), %edx
         movl            IREGS_ECX(%esp), %ecx
         movl            IREGS_EBX(%esp), %ebx
-        movl            %eax, temp_eax
+        movl            %eax, IREGS_ERR_CODE(%esp) # reuse error code to temporarily store eax
         LOAD_SEGREG     IREGS_DS(%esp), %ds
         LOAD_SEGREG     IREGS_ES(%esp), %es
         LOAD_SEGREG     IREGS_FS(%esp), %fs
         LOAD_SEGREG     IREGS_GS(%esp), %gs
-        movl            temp_eax, %eax
+        movl            IREGS_ERR_CODE(%esp), %eax
         addl            $IREGS_EIP, %esp
         iret
 

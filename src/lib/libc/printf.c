@@ -23,7 +23,10 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <string.h>
-#include <console.h>
+
+#include <ohwes.h>
+#include <syscall.h>
+#include <fs.h>
 
 // inspired by XNU's printf impl:
 // https://opensource.apple.com/source/xnu/xnu-201/osfmk/kern/printf.c.auto.html
@@ -32,6 +35,19 @@
 // https://en.cppreference.com/w/c/io/fprintf
 
 #define NUM_BUFSIZ 64
+
+int console_write(const char *buf, size_t count);
+
+void _dowrite(char c)
+{
+    if (getpl() == KERNEL_PL) {
+        console_write(&c, 1);
+    }
+    else {
+        // TODO: send in chunks to minimize syscalls
+        write(stdout_fd, &c, 1);
+    }
+}
 
 int _doprintf(const char *format, va_list *args, void (*putc)(char))
 {
@@ -441,10 +457,11 @@ static void _snprintf_putc(char c)
 */
 int printf(const char *format, ...)
 {
+    int nwritten;
     va_list args;
 
     va_start(args, format);
-    int nwritten = _doprintf(format, &args, console_write);
+    nwritten = _doprintf(format, &args, _dowrite);
     va_end(args);
 
     return nwritten;
@@ -452,7 +469,7 @@ int printf(const char *format, ...)
 
 int vprintf(const char *format, va_list args)
 {
-    return _doprintf(format, &args, console_write);
+    return _doprintf(format, &args, _dowrite);
 }
 
 /**

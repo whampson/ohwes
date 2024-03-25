@@ -28,102 +28,68 @@
 #include <interrupt.h>
 #include <x86.h>
 
-#define OS_NAME                     "OH-WES"
-#define OS_VERSION                  "0.1"
-#define OS_MONIKER                  "Ronnie Raven"
-#define OS_BUILDDATE                __DATE__ " " __TIME__
+#define OS_NAME                         "OH-WES"
+#define OS_VERSION                      "0.1"
+#define OS_MONIKER                      "Ronnie Raven"
+#define OS_BUILDDATE                    __DATE__ " " __TIME__
 
-#define MIN_KB_REQUIRED             639     // let's see how long this lasts!
-#define SHOW_MEMMAP                 1
+#define MIN_KB_REQUIRED                 639     // let's see how long this lasts!
+#define SHOW_MEMMAP                     1
 
-#define KERNEL_CS                   0x10
-#define KERNEL_DS                   0x18
-#define KERNEL_SS                   KERNEL_DS
-#define USER_CS                     0x23
-#define USER_DS                     0x2B
-#define USER_SS                     USER_DS
+#define KERNEL_CS                       0x10
+#define KERNEL_DS                       0x18
+#define KERNEL_SS                       KERNEL_DS
+#define USER_CS                         0x23
+#define USER_DS                         0x2B
+#define USER_SS                         USER_DS
 
-#define SYS_EXIT                    0
-extern int sys_exit(int status);
+extern void halt(void);                 // see entry.S
+extern void idle(void);                 // see entry.S
 
-extern void halt(void);             // see entry.S
-extern void idle(void);             // see entry.S
+extern void init(void);                 // see init.c
 
 void timer_sleep(int millis);           // see timer.c
 void pcspk_beep(int freq, int millis);  // see timer.c
 
-#define countof(x)                  (sizeof(x)/sizeof(x[0]))
-#define has_flag(x,f)               (((x)&(f))==(f))
-#define zeromem(p,n)                memset(p, 0, n)
-#define kprint(...)                 printf(__VA_ARGS__)
-#define div_round(n,d)              (((n)<0)==((d)<0)?(((n)+(d)/2)/(d)):(((n)-(d)/2)/(d)))
-#define beep(f,ms)                  pcspk_beep(f, ms)
-#define sleep(ms)                   timer_sleep(ms)
+#define beep(f,ms)                      pcspk_beep(f, ms)   // beep at frequency for millis (nonblocking)
+#define sleep(ms)                       timer_sleep(ms)     // spin for millis (blocking)
 
-#define die()                       \
-do {                                \
-    for (;;);                       \
+#define die()                           for (;;)            // spin forever, satisfies noreturn
+
+#define zeromem(p,n)                    memset(p, 0, n)
+#define kprint(...)                     printf(__VA_ARGS__)
+
+#define has_flag(x,f)                   (((x)&(f))==(f))
+#define countof(x)                      (sizeof(x)/sizeof(x[0]))
+#define div_round(n,d)                  (((n)<0)==((d)<0)?(((n)+(d)/2)/(d)):(((n)-(d)/2)/(d)))
+
+#define reboot()                        \
+do {                                    \
+    *((uint16_t *) 0x0472) = 0x1234;    \
+    ps2_cmd(PS2_CMD_SYSRESET);          \
+    die();                              \
 } while (0)
 
-#define reboot()                    \
-do {                                \
-    *((uint16_t *) 0x0472) = 0x1234;\
-    ps2_cmd(PS2_CMD_SYSRESET);      \
-    die();                          \
-} while (0)
-
-#define swap(a,b)                   \
-do {                                \
-    (a) ^= (b);                     \
-    (b) ^= (a);                     \
-    (a) ^= (b);                     \
+#define swap(a,b)                       \
+do {                                    \
+    (a) ^= (b);                         \
+    (b) ^= (a);                         \
+    (a) ^= (b);                         \
 } while(0)
 
-#define _syscall0(func)             \
-do {                                \
-    __asm__ volatile (              \
-        "int %0"                    \
-        :                           \
-        : "i"(INT_SYSCALL),         \
-          "a"(func)                 \
-    );                              \
-} while (0)
-
-#define _syscall1(func,arg0)        \
-do {                                \
-    __asm__ volatile (              \
-        "int %0"                    \
-        :                           \
-        : "i"(IVT_SYSCALL),         \
-          "a"(func),                \
-          "b"(arg0)                 \
-    );                              \
-} while (0)
-
-#define getpl()                     \
-({                                  \
-    struct segsel cs;               \
-    store_cs(cs);                   \
-    cs.rpl;                         \
+#define getpl()                         \
+({                                      \
+    struct segsel cs;                   \
+    store_cs(cs);                       \
+    cs.rpl;                             \
 })
 
-#define gpfault()                   \
-({                                  \
-    __asm__ volatile ("int $69");   \
-})
-
-#define divzero()                   \
-({                                  \
-    volatile int a = 1;             \
-    volatile int b = 0;             \
-    volatile int c = a / b;         \
-    (void) c;                       \
-})
-
-#define HASNO(cond)                 ((cond)?"has":"no")
-#define YN(cond)                    ((cond)?"yes":"no")
-#define ONOFF(cond)                 ((cond)?"on":"off")
-#define PLURAL(n,a)                 (((n)==1)?a:a "s")
-#define PLURAL2(n,a,b)              (((n)==1)?a:b)
+#define STRINGIFY(x)                    # x
+#define CONCAT(a,b)                     a ## b
+#define HASNO(cond)                     ((cond)?"has":"no")
+#define YN(cond)                        ((cond)?"yes":"no")
+#define ONOFF(cond)                     ((cond)?"on":"off")
+#define PLURAL(n,a)                     (((n)==1)?a:a "s")
+#define PLURAL2(n,a,b)                  (((n)==1)?a:b)
 
 #endif // __OHWES_H

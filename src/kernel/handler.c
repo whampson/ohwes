@@ -24,41 +24,15 @@
 __fastcall __noreturn void crash(struct iregs *regs);
 
 __fastcall
-void exception(struct iregs *regs)
-{
-    crash(regs);
-}
-
-__fastcall
 void recv_interrupt(struct iregs *regs)
 {
     if (regs->vec_num >= IVT_EXCEPTION &&
         regs->vec_num < IVT_EXCEPTION + NUM_EXCEPTION)
     {
-        exception(regs);
+        crash(regs);
         return;
     }
 
-    panic("got unexpected interrupt %d at %#08X!", regs->eax, regs->eip);
-}
-
-__fastcall
-int recv_syscall(struct iregs *regs)
-{
-    assert(regs->vec_num == IVT_SYSCALL);
-
-    uint32_t func = regs->eax;
-    int status = -1;
-
-    sti();  // we want syscalls to be interruptable
-
-    switch (func) {
-        case SYS_EXIT:
-            status = sys_exit(regs->ebx);
-            break;
-        default:
-            panic("unexpected syscall %d at %08X\n", func, regs->eip);
-    }
-
-    return status;
+    panic("got unexpected interrupt %d at %#02X:%#08X!",
+        regs->eax, regs->cs, regs->eip);
 }

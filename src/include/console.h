@@ -1,22 +1,23 @@
-/*============================================================================*
+/* =============================================================================
  * Copyright (C) 2020-2024 Wes Hampson. All Rights Reserved.
- *                                                                            *
- * This file is part of the OHWES Operating System.                           *
- * OHWES is free software; you may redistribute it and/or modify it under the *
- * terms of the license agreement provided with this software.                *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- *============================================================================*
- *    File: include/ohwes/console.h                                           *
- * Created: December 14, 2020                                                 *
- *  Author: Wes Hampson                                                       *
- *============================================================================*/
+ *
+ * This file is part of the OH-WES Operating System.
+ * OH-WES is free software; you may redistribute it and/or modify it under the
+ * terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ * -----------------------------------------------------------------------------
+ *         File: include/console.h
+ *      Created: October 10, 2023
+ *       Author: Wes Hampson
+ * =============================================================================
+ */
 
 #ifndef __CONSOLE_H
 #define __CONSOLE_H
@@ -92,9 +93,6 @@ enum console_color {
     CONSOLE_CYAN,
     CONSOLE_WHITE
 };
-
-int console_read(void);            // reads character from input buffer
-void console_write(char c);         // writes character to output buffer ()
 
 /**
  * ASCII Control Characters

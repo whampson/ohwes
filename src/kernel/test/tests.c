@@ -4,7 +4,7 @@ extern void test_printf(void);
 extern void test_strings(void);
 extern void test_queue(void);
 
-void testmain(void)
+void tmain(void)
 {
     test_printf();
     test_strings();

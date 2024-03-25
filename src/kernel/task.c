@@ -13,34 +13,40 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: lib/libc/stdio.c
- *      Created: January 4, 2024
+ *         File: kernel/task.c
+ *      Created: March 25, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#include <stdio.h>
-#include <fs.h>
-#include <syscall.h>
+#include <task.h>
 
-void stdout_fn(char c)
-{
-    write(stdout_fd, &c, 1);
-}
+int console_read(char *buf, size_t count);
+int console_write(const char *buf, size_t count);
 
-int putchar(int c)
-{
-    // TODO: write to stdout, return EOF on error
-    stdout_fn(c);
-    return c;
-}
+static struct task task_list[MAX_TASKS];
 
-int puts(const char *str)
+// TODO: put these somewhere else...
+static struct file t0_files[MAX_OPEN_FILES];
+static struct file_ops t0_fops[MAX_OPEN_FILES];
+
+void init_task(void)
 {
-    // TODO: write to stdout, return EOF on error
-    while (*str) {
-        stdout_fn(*str++);
-    }
-    stdout_fn('\n');
-    return 1;
+    struct task *t0;
+    zeromem(task_list, sizeof(task_list));
+
+    t0 = &task_list[0];
+
+    t0->pid = 0;
+    t0->errno = 0;
+
+    t0->fds[stdin_fd] = &t0_files[stdin_fd];
+    t0->fds[stdin_fd]->fops = &t0_fops[stdin_fd];
+    t0->fds[stdin_fd]->fops->read = console_read;
+
+    t0->fds[stdout_fd] = &t0_files[stdout_fd];
+    t0->fds[stdout_fd]->fops = &t0_fops[stdout_fd];
+    t0->fds[stdout_fd]->fops->write = console_write;
+
+    g_currtask = t0;
 }

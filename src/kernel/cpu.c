@@ -197,7 +197,7 @@ static void init_idt(const struct bootinfo * const info)
         }
         else if (idx == IVT_SYSCALL) {
             // user-mode accessible trap gate for system calls
-            make_intr_gate(desc, SEGSEL_KERNEL_CODE, USER_PL, _thunk_syscall);
+            make_trap_gate(desc, SEGSEL_KERNEL_CODE, USER_PL, _thunk_syscall);
         }
         // else, keep the vector NULL! will generate a double-fault exception
     }

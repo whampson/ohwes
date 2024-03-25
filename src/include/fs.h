@@ -13,34 +13,29 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: lib/libc/stdio.c
- *      Created: January 4, 2024
+ *         File: include/fs.h
+ *      Created: March 25, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#include <stdio.h>
-#include <fs.h>
-#include <syscall.h>
+#ifndef __FS_H
+#define __FS_H
 
-void stdout_fn(char c)
-{
-    write(stdout_fd, &c, 1);
-}
+#include <stddef.h>
+#include <stdint.h>
 
-int putchar(int c)
-{
-    // TODO: write to stdout, return EOF on error
-    stdout_fn(c);
-    return c;
-}
+#define stdin_fd                        0
+#define stdout_fd                       1
 
-int puts(const char *str)
-{
-    // TODO: write to stdout, return EOF on error
-    while (*str) {
-        stdout_fn(*str++);
-    }
-    stdout_fn('\n');
-    return 1;
-}
+struct file_ops {
+    int (*read)(char *, size_t);
+    int (*write)(const char *, size_t);
+    int (*ioctl)(int, uint32_t);
+};
+
+struct file {
+    struct file_ops *fops;      // TODO: where does this buffer live?
+};
+
+#endif // __FS_H

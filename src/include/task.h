@@ -13,34 +13,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: lib/libc/stdio.c
- *      Created: January 4, 2024
+ *         File: include/task.h
+ *      Created: March 25, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#include <stdio.h>
+#ifndef __TASK_H
+#define __TASK_H
+
 #include <fs.h>
-#include <syscall.h>
+#include <ohwes.h>
 
-void stdout_fn(char c)
-{
-    write(stdout_fd, &c, 1);
-}
+#define MAX_OPEN_FILES              8
+#define MAX_TASKS                   64
 
-int putchar(int c)
-{
-    // TODO: write to stdout, return EOF on error
-    stdout_fn(c);
-    return c;
-}
+struct task {
+    int pid;
+    int errno;
+    struct file *fds[MAX_OPEN_FILES];
+};
 
-int puts(const char *str)
-{
-    // TODO: write to stdout, return EOF on error
-    while (*str) {
-        stdout_fn(*str++);
-    }
-    stdout_fn('\n');
-    return 1;
-}
+struct task *g_currtask;
+
+#endif // __TASK_H

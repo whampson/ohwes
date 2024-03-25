@@ -13,34 +13,26 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: lib/libc/stdio.c
- *      Created: January 4, 2024
+ *         File: include/debug.h
+ *      Created: March 24, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#include <stdio.h>
-#include <fs.h>
-#include <syscall.h>
+#ifndef __DEBUG_H
+#define __DEBUG_H
 
-void stdout_fn(char c)
-{
-    write(stdout_fd, &c, 1);
-}
+#define gpfault()                       \
+({                                      \
+    __asm__ volatile ("int $69");       \
+})
 
-int putchar(int c)
-{
-    // TODO: write to stdout, return EOF on error
-    stdout_fn(c);
-    return c;
-}
+#define divzero()                       \
+({                                      \
+    volatile int a = 1;                 \
+    volatile int b = 0;                 \
+    volatile int c = a / b;             \
+    (void) c;                           \
+})
 
-int puts(const char *str)
-{
-    // TODO: write to stdout, return EOF on error
-    while (*str) {
-        stdout_fn(*str++);
-    }
-    stdout_fn('\n');
-    return 1;
-}
+#endif // __DEBUG_H
