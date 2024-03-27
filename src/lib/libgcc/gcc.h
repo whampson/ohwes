@@ -37,13 +37,6 @@
 #define __fastcall      __attribute__((fastcall))
 
 /**
- * 'syscall' calling convention.
- * Ensures function arguments are always passed on the stack. Caller is
- * responsible for cleaning up the stack.
- */
-#define __syscall       __attribute__((regparm(0)))
-
-/**
  * Case statement fall-through hint.
  */
 #define __fallthrough   __attribute__((fallthrough))

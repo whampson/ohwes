@@ -35,4 +35,9 @@
     (void) c;                           \
 })
 
+#define dbgbrk()                        \
+({                                      \
+    __asm__ volatile ("int $3");        \
+})
+
 #endif // __DEBUG_H

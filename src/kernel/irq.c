@@ -26,11 +26,11 @@
 #include <ohwes.h>
 #include <pic.h>
 
-#define valid_irq(n)    ((n) >= 0 && (n) < NUM_IRQ)
+#define valid_irq(n)    ((n) >= 0 && (n) < NUM_IRQS)
 
 #define MAX_HANDLERS    8
 
-static irq_handler handler_map[NUM_IRQ][MAX_HANDLERS] = { };
+static irq_handler handler_map[NUM_IRQS][MAX_HANDLERS] = { };
 
 void init_irq(void)
 {
@@ -93,8 +93,7 @@ void irq_unregister(int irq_num, irq_handler func)
     }
 }
 
-__fastcall
-void recv_irq(struct iregs *regs)
+void __fastcall handle_irq(struct iregs *regs)
 {
     int irq_num;
     irq_handler handler;

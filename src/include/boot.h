@@ -125,7 +125,7 @@ enum acpi_mmap_type {
 /**
  * System information collected during boot and passed onto the kernel.
  */
-struct bootinfo {
+struct boot_info {
     //
     // !!! KEEP OFFSETS IN-LINE WITH src/boot/stage2.h !!!
     //

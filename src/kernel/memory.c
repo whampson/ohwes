@@ -22,7 +22,7 @@
 #include <boot.h>
 #include <ohwes.h>
 
-void init_memory(const struct bootinfo *const info)
+void init_memory(const struct boot_info *const info)
 {
     int kb_total = 0;
     int kb_free = 0;
@@ -92,11 +92,8 @@ void init_memory(const struct bootinfo *const info)
         }
     }
 
-    int kb_total_reserved = kb_reserved + kb_acpi;
-
     kprint("boot: %dk free", kb_free);
     if (kb_total) kprint(", %dk total", kb_total);
-    if (kb_total_reserved) kprint(", %dk reserved", kb_total_reserved);
     if (kb_bad) kprint(", %dk bad", kb_bad);
     kprint("\n");
     if (kb_free < MIN_KB_REQUIRED) {

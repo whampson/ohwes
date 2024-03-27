@@ -21,7 +21,7 @@
 #define IRQ_COPOCESSOR      13      // Coprocessor Interrupt
 #define IRQ_ATA1            14      // ATA Channel #1
 #define IRQ_ATA2            15      // ATA Channel #2
-#define NUM_IRQ             16
+#define NUM_IRQS            16
 
 #ifndef __ASSEMBLER__
 

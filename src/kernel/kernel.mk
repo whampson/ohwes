@@ -7,7 +7,6 @@ SOURCES := \
     console.c \
     cpu.c \
     crash.c \
-    handler.c \
     i8042.c \
     init.c \
     irq.c \

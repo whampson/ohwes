@@ -57,7 +57,6 @@ static_assert(GDT_BASE + GDT_LIMIT < LDT_BASE, "GDT overlaps LDT!");
 static_assert(LDT_BASE + LDT_LIMIT < TSS_BASE, "LDT overlaps TSS!");
 static_assert(TSS_BASE + TSS_LIMIT <= PAGE_2, "TSS overlaps into next page!");
 
-
 //
 // GDT Segment Selectors
 //
@@ -106,12 +105,12 @@ struct x86_desc * get_seg_desc(uint16_t segsel)
     return get_desc(GDT_BASE, segsel);
 }
 
-static void init_gdt(const struct bootinfo * const info);
-static void init_idt(const struct bootinfo * const info);
-static void init_ldt(const struct bootinfo * const info);
-static void init_tss(const struct bootinfo * const info);
+static void init_gdt(const struct boot_info * const info);
+static void init_idt(const struct boot_info * const info);
+static void init_ldt(const struct boot_info * const info);
+static void init_tss(const struct boot_info * const info);
 
-void init_cpu(const struct bootinfo * const info)
+void init_cpu(const struct boot_info * const info)
 {
     init_gdt(info);
     init_idt(info);
@@ -119,7 +118,7 @@ void init_cpu(const struct bootinfo * const info)
     init_tss(info);
 }
 
-static void init_gdt(const struct bootinfo * const info)
+static void init_gdt(const struct boot_info * const info)
 {
     //
     // Global Descriptor Table (GDT) Initialization
@@ -155,9 +154,9 @@ static void init_gdt(const struct bootinfo * const info)
     load_ss(SEGSEL_KERNEL_DATA);
 }
 
-static void init_idt(const struct bootinfo * const info)
+static void init_idt(const struct boot_info * const info)
 {
-    static const idt_thunk excepts[NUM_EXCEPTION] =
+    static const idt_thunk excepts[NUM_EXCEPTIONS] =
     {
         _thunk_except00h, _thunk_except01h, _thunk_except02h, _thunk_except03h,
         _thunk_except04h, _thunk_except05h, _thunk_except06h, _thunk_except07h,
@@ -169,7 +168,7 @@ static void init_idt(const struct bootinfo * const info)
         _thunk_except1Ch, _thunk_except1Ch, _thunk_except1Eh, _thunk_except1Fh
     };
 
-    static const idt_thunk irqs[NUM_IRQ] =
+    static const idt_thunk irqs[NUM_IRQS] =
     {
         _thunk_irq00h, _thunk_irq01h, _thunk_irq02h, _thunk_irq03h,
         _thunk_irq04h, _thunk_irq05h, _thunk_irq06h, _thunk_irq07h,
@@ -187,11 +186,11 @@ static void init_idt(const struct bootinfo * const info)
         e = idx - IVT_EXCEPTION;
         i = idx - IVT_DEVICEIRQ;
 
-        if (idx >= IVT_EXCEPTION && e < NUM_EXCEPTION) {
+        if (idx >= IVT_EXCEPTION && e < NUM_EXCEPTIONS) {
             // interrupt gate for exceptions
             make_intr_gate(desc, SEGSEL_KERNEL_CODE, KERNEL_PL, excepts[e]);
         }
-        else if (idx >= IVT_DEVICEIRQ && i < NUM_IRQ) {
+        else if (idx >= IVT_DEVICEIRQ && i < NUM_IRQS) {
             // interrupt gate for device IRQs
             make_intr_gate(desc, SEGSEL_KERNEL_CODE, KERNEL_PL, irqs[i]);
         }
@@ -207,7 +206,7 @@ static void init_idt(const struct bootinfo * const info)
     lidt(idt_desc);
 }
 
-static void init_ldt(const struct bootinfo * const info)
+static void init_ldt(const struct boot_info * const info)
 {
     //
     // LDT loaded but not used
@@ -224,7 +223,7 @@ static void init_ldt(const struct bootinfo * const info)
     lldt(SEGSEL_LDT);
 }
 
-static void init_tss(const struct bootinfo * const info)
+static void init_tss(const struct boot_info * const info)
 {
     //
     // TSS used minimally; only when an interrupt occurs that changes CPU to

@@ -26,11 +26,7 @@ int console_write(const char *buf, size_t count);
 
 static struct task task_list[MAX_TASKS];
 
-// TODO: put these somewhere else...
-static struct file t0_files[MAX_OPEN_FILES];
-static struct file_ops t0_fops[MAX_OPEN_FILES];
-
-void init_task(void)
+void init_tasks(void)
 {
     struct task *t0;
     zeromem(task_list, sizeof(task_list));
@@ -40,13 +36,13 @@ void init_task(void)
     t0->pid = 0;
     t0->errno = 0;
 
-    t0->fds[stdin_fd] = &t0_files[stdin_fd];
-    t0->fds[stdin_fd]->fops = &t0_fops[stdin_fd];
-    t0->fds[stdin_fd]->fops->read = console_read;
+    t0->open_files[stdin_fd] = &t0->_files[stdin_fd];
+    t0->open_files[stdin_fd]->fops = &t0->_fops[stdin_fd];
+    t0->open_files[stdin_fd]->fops->read = console_read;
 
-    t0->fds[stdout_fd] = &t0_files[stdout_fd];
-    t0->fds[stdout_fd]->fops = &t0_fops[stdout_fd];
-    t0->fds[stdout_fd]->fops->write = console_write;
+    t0->open_files[stdout_fd] = &t0->_files[stdout_fd];
+    t0->open_files[stdout_fd]->fops = &t0->_fops[stdout_fd];
+    t0->open_files[stdout_fd]->fops->write = console_write;
 
-    g_currtask = t0;
+    g_task = t0;
 }

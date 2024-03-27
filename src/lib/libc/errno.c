@@ -1,3 +1,4 @@
+
 /* =============================================================================
  * Copyright (C) 2020-2024 Wes Hampson. All Rights Reserved.
  *
@@ -13,26 +14,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/interrupt.c
- *      Created: January 15, 2024
+ *         File: lib/libc/errno.c
+ *      Created: March 26, 2024
  *       Author: Wes Hampson
+ *
  * =============================================================================
  */
 
-#include <ohwes.h>
+#include <errno.h>
 
-__fastcall __noreturn void crash(struct iregs *regs);
-
-__fastcall
-void recv_interrupt(struct iregs *regs)
-{
-    if (regs->vec_num >= IVT_EXCEPTION &&
-        regs->vec_num < IVT_EXCEPTION + NUM_EXCEPTION)
-    {
-        crash(regs);
-        return;
-    }
-
-    panic("got unexpected interrupt %d at %#02X:%#08X!",
-        regs->eax, regs->cs, regs->eip);
-}
+int _errno; // TODO: this needs to point to errno in the current task structure

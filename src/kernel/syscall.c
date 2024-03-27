@@ -25,46 +25,32 @@
 #include <fs.h>
 #include <task.h>
 #include <syscall.h>
+#include <debug.h>
 
-// syscall kernel-mode entrypoints
-extern int sys_exit();
-extern int sys_read();
-extern int sys_write();
-extern int sys_open();
-extern int sys_close();
-extern int sys_ioctl();
-
-typedef int (*fn_ptr)();
-
-static const fn_ptr syscall_table[] =
-{
-    sys_exit, sys_read, sys_write, sys_open, sys_close, sys_ioctl,
-};
-static_assert(countof(syscall_table) == NUM_SYSCALLS, "syscall_table size");
-
+// indicate user pointer
+#define _USER_
 
 int sys_exit(int status)
 {
     assert(getpl() == KERNEL_PL);
 
-    kprint("init: returned %d\n", status);
-    idle(); // TODO: switch task, handle signals, etc.
-
-    return 0;   // does not actually return
+    kprint("\ninit: returned %d\n", status);
+    idle();     // TODO: switch task, handle signals, etc.
+    return 0;   // does not return
 }
 
-int sys_read(int fd, char *buf, size_t count)
+int sys_read(int fd, _USER_ char *buf, size_t count)
 {
     struct file *f;
 
-    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_currtask->fds[fd])) {
+    assert(getpl() == KERNEL_PL);
+
+    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_task->open_files[fd])) {
         return -EBADF;
     }
-
     if (!f->fops || !f->fops->read) {
-        return -EINVAL; // TODO: more appropriate return value here?
+        return -ENOSYS;
     }
-
     if (count == 0) {
         return 0;
     }
@@ -73,18 +59,18 @@ int sys_read(int fd, char *buf, size_t count)
     return f->fops->read(buf, count);
 }
 
-int sys_write(int fd, const char *buf, size_t count)
+int sys_write(int fd, const _USER_ char *buf, size_t count)
 {
     struct file *f;
 
-    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_currtask->fds[fd])) {
+    assert(getpl() == KERNEL_PL);
+
+    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_task->open_files[fd])) {
         return -EBADF;
     }
-
     if (!f->fops || !f->fops->write) {
-        return -EINVAL; // TODO: more appropriate return value here?
+        return -ENOSYS;
     }
-
     if (count == 0) {
         return 0;
     }
@@ -95,27 +81,24 @@ int sys_write(int fd, const char *buf, size_t count)
 
 int sys_open(const char *name, int flags)
 {
+    assert(getpl() == KERNEL_PL);
+
+    kprint("sys: open(%s, %d)\n", name, flags);
     return -ENOSYS;
 }
 
 int sys_close(int fd)
 {
+    assert(getpl() == KERNEL_PL);
+
+    kprint("sys: close(%d)\n", fd);
     return -ENOSYS;
 }
 
-int sys_ioctl(int fd, int cmd, unsigned long arg)
+int sys_ioctl(int fd, unsigned int cmd, unsigned long arg)
 {
+    assert(getpl() == KERNEL_PL);
+
+    kprint("sys: ioctl(%d, %u, %lu)\n", fd, cmd, arg);
     return -ENOSYS;
-}
-
-__fastcall
-int recv_syscall(struct iregs *regs)
-{
-    assert(regs->vec_num == IVT_SYSCALL);
-
-    if (regs->eax >= NUM_SYSCALLS)
-    {
-        return -ENOSYS;
-    }
-    return syscall_table[regs->eax](regs->ebx, regs->ecx, regs->edx, regs->esi, regs->edi);
 }

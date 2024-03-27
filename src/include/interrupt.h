@@ -52,7 +52,7 @@
 #define EXCEPTION_XM        0x13    // SIMD Floating-Point Exception
 #define EXCEPTION_VE        0x14    // Virtualization Exception
 #define EXCEPTION_CP        0x15    // Control Protection Exception
-#define NUM_EXCEPTION       32
+#define NUM_EXCEPTIONS      32
 
 /**
  * Interrupt register frame offsets.
@@ -99,30 +99,29 @@ enum pl {
 struct iregs
 {
 // program context regs
-    uint32_t ebx;       // pushed by common handler
-    uint32_t ecx;       // pushed by common handler
-    uint32_t edx;       // pushed by common handler
-    uint32_t esi;       // pushed by common handler
-    uint32_t edi;       // pushed by common handler
-    uint32_t ebp;       // pushed by common handler
-    uint32_t eax;       // pushed by common handler, not restored for syscall
-    uint16_t ds;        // pushed by common handler
-    uint16_t es;        // pushed by common handler
-    uint16_t fs;        // pushed by common handler
-    uint16_t gs;        // pushed by common handler
+    uint32_t ebx;
+    uint32_t ecx;
+    uint32_t edx;
+    uint32_t esi;
+    uint32_t edi;
+    uint32_t ebp;
+    uint32_t eax;       // syscall return value; not restored for syscalls
+    uint16_t ds;
+    uint16_t es;
+    uint16_t fs;
+    uint16_t gs;
 
 // interrupt info
-    uint32_t vec_num;   // pushed by thunk
-    uint32_t err_code;  // pushed by cpu or thunk
+    uint32_t vec_num;
+    uint32_t err_code;
 
-// cpu control regs (system context, iret regs)
-    uint32_t eip;       // pushed by cpu
-    uint32_t cs;        // pushed by cpu
-    uint32_t eflags;    // pushed by cpu
-    uint32_t esp;       // pushed by cpu, only present when privilege level changes
-    uint32_t ss;        // pushed by cpu, only present when privilege level changes
+// cpu control regs (system context; iret regs)
+    uint32_t eip;
+    uint32_t cs;        // bottom two bits contain previous privilege level
+    uint32_t eflags;
+    uint32_t esp;       // only present upon privilege level change
+    uint32_t ss;        // only present upon privilege level change
 } __align(4);
-
 static_assert(offsetof(struct iregs, ebx) == IREGS_EBX, "offsetof(struct iregs, ebx) == IREGS_EBX");
 static_assert(offsetof(struct iregs, ecx) == IREGS_ECX, "offsetof(struct iregs, ecx) == IREGS_ECX");
 static_assert(offsetof(struct iregs, edx) == IREGS_EDX, "offsetof(struct iregs, edx) == IREGS_EDX");
@@ -142,10 +141,6 @@ static_assert(offsetof(struct iregs, eflags) == IREGS_EFLAGS, "offsetof(struct i
 static_assert(offsetof(struct iregs, esp) == IREGS_ESP, "offsetof(struct iregs, esp) == IREGS_ESP");
 static_assert(offsetof(struct iregs, ss) == IREGS_SS, "offsetof(struct iregs, ss) == IREGS_SS");
 static_assert(sizeof(struct iregs) == SIZEOF_IREGS, "sizeof(struct iregs) == SIZEOF_IREGS");
-
-__fastcall void recv_interrupt(struct iregs *regs);
-__fastcall void recv_irq(struct iregs *regs);
-__fastcall int recv_syscall(struct iregs *regs);
 
 __fastcall void switch_context(struct iregs *regs);
 

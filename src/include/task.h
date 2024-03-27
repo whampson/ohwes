@@ -31,9 +31,13 @@
 struct task {
     int pid;
     int errno;
-    struct file *fds[MAX_OPEN_FILES];
+    struct file *open_files[MAX_OPEN_FILES];
+
+    // TODO: put these somewhere else...?
+    struct file _files[MAX_OPEN_FILES];
+    struct file_ops _fops[MAX_OPEN_FILES];
 };
 
-struct task *g_currtask;
+struct task *g_task;
 
 #endif // __TASK_H

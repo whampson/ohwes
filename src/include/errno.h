@@ -22,11 +22,14 @@
 #ifndef __ERRNO_H
 #define __ERRNO_H
 
-extern int _errno;
-#define errno _errno
-
 #define ENOSYS      1   // System Call Not Valid
 #define EINVAL      2   // Invalid Argument
 #define EBADF       3   // Bad File Descriptor
+
+#ifndef __ASSEMBLER__
+extern int _errno;
+#define errno _errno
+#endif
+
 
 #endif // __ERRNO_H

@@ -33,31 +33,28 @@
 #include <x86.h>
 #include <syscall.h>
 
+#define INIT_STACK          0xC000
+
 extern void init_vga(void);
 extern void init_console(void);
-extern void init_cpu(const struct bootinfo *info);
-extern void init_memory(const struct bootinfo *info);
+extern void init_cpu(const struct boot_info *info);
+extern void init_memory(const struct boot_info *info);
 extern void init_pic(void);
 extern void init_irq(void);
-extern void init_ps2(const struct bootinfo *info);
+extern void init_ps2(const struct boot_info *info);
 extern void init_kb(void);
 extern void init_timer(void);
-extern void init_task(void);
-extern void init_sys(void);
-
+extern void init_tasks(void);
 #ifdef TEST_BUILD
 extern void tmain(void);
 #endif
 
-static void print_info(const struct bootinfo *info);
-__noreturn void go_to_ring3(void (*entry));
-__noreturn void ring3_entry(void);
+static void enter_ring3(void (*entry), uint32_t stack);
+static void print_info(const struct boot_info *info);
 
-struct bootinfo g_BootInfo;
+struct boot_info g_boot;
 
-int console_write(const char *buf, size_t count);
-
-void __fastcall kmain(const struct bootinfo *info)
+__fastcall void kmain(const struct boot_info *info)
 {
     // --- Crude Memory Map upon entry ---
     // 0x00000-0x004FF: reserved for Real Mode IVT and BDA (do we still need this?)
@@ -65,16 +62,16 @@ void __fastcall kmain(const struct bootinfo *info)
     // 0x00800-0x00FFF: CPU data area (GDT/IDT/LDT/TSS/etc.)
     // 0x02400-0x0????: (<= 0xDC00 bytes of free space)
     // 0x07C00-0x07DFF: stage 1 boot loader (potentially free; contains BPB)
-    // 0x07E00-0x0????: stage 2 boot loader (potentially free; contains bootinfo)
+    // 0x07E00-0x0????: stage 2 boot loader (potentially free; contains boot_info)
     // 0x0????-0x0FFFF: kernel stack (grows towards 0)
     // 0x10000-(EBDA ): kernel and system
 
     cli();
 
-    zeromem(&g_BootInfo, sizeof(struct bootinfo));
-    memcpy(&g_BootInfo, info, sizeof(struct bootinfo));
+    zeromem(&g_boot, sizeof(struct boot_info));
+    memcpy(&g_boot, info, sizeof(struct boot_info));
 
-    init_cpu(&g_BootInfo);
+    init_cpu(&g_boot);
     init_pic();
     init_irq();
     init_vga();
@@ -85,7 +82,7 @@ void __fastcall kmain(const struct bootinfo *info)
     kprint("Build: " OS_BUILDDATE "\n");
     kprint("\n");
 
-    print_info(&g_BootInfo);
+    print_info(&g_boot);
 
 #if TEST_BUILD
     kprint("boot: TEST BUILD\n");
@@ -93,15 +90,41 @@ void __fastcall kmain(const struct bootinfo *info)
     tmain();
 #endif
 
-    init_memory(&g_BootInfo);
-    init_ps2(&g_BootInfo);
+    init_memory(&g_boot);
+    init_ps2(&g_boot);
     init_kb();
     init_timer();
-    init_task();
-    init_sys();     // jumps to ring 3
+    init_tasks();
+
+    enter_ring3(init, INIT_STACK);
 }
 
-static void print_info(const struct bootinfo *info)
+static void enter_ring3(void (*entry), uint32_t stack)
+{
+    assert(getpl() == KERNEL_PL);
+
+    // tweak flags
+    struct eflags eflags;
+    cli_save(eflags);
+    eflags.intf = 1;        // enable interrupts
+
+    // ring 3 initial register context
+    struct iregs regs = {};
+    regs.cs = USER_CS;
+    regs.ss = USER_SS;
+    regs.ds = USER_DS;
+    regs.es = USER_DS;
+    regs.ebp = stack;
+    regs.esp = stack;
+    regs.eip = (uint32_t) entry;
+    regs.eflags = eflags._value;
+
+    // drop to ring 3
+    switch_context(&regs);
+    die();
+}
+
+static void print_info(const struct boot_info *info)
 {
     int nfloppies = info->hwflags.has_diskette_drive;
     if (nfloppies) {

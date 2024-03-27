@@ -25,11 +25,6 @@
 #include <stddef.h>
 #include <interrupt.h>
 
-// user-callable kernel routines
-extern void exit(int status);
-extern int read(int fd, char *buf, size_t len);
-extern int write(int fd, const char *buf, size_t len);
-
 // syscall numbers
 #define _sys_exit                       0
 #define _sys_read                       1
@@ -39,15 +34,22 @@ extern int write(int fd, const char *buf, size_t len);
 #define _sys_ioctl                      5
 #define NUM_SYSCALLS                    6
 
-#define _syscall_epilogue               \
-({                                      \
-    if (_retval < 0) {                  \
-        errno = -_retval;               \
-        return -1;                      \
-    }                                   \
+#ifndef __ASSEMBLER__
+
+// user-callable kernel routines
+extern void exit(int status);
+extern int read(int fd, char *buf, size_t len);
+extern int write(int fd, const char *buf, size_t len);
+
+#define SYSCALL_FN_EPILOGUE                                                     \
+({                                                                              \
+    if (_retval < 0) {                                                          \
+        errno = -_retval;                                                       \
+        return -1;                                                              \
+    }                                                                           \
 })
 
-#define _syscall1(type,name,atype,a)                                            \
+#define SYSCALL_FN1(type,name,atype,a)                                          \
 type name(atype a)                                                              \
 {                                                                               \
     int _retval;                                                                \
@@ -56,11 +58,11 @@ type name(atype a)                                                              
         : "=a"(_retval)                                                         \
         : "a"(_sys_##name), "b"(a)                                              \
     );                                                                          \
-    _syscall_epilogue;                                                          \
+    SYSCALL_FN_EPILOGUE;                                                        \
     return _retval;                                                             \
 }
 
-#define _syscall1_void(name,atype,a)                                            \
+#define SYSCALL_FN1_VOID(name,atype,a)                                          \
 void name(atype a)                                                              \
 {                                                                               \
     __asm__ volatile (                                                          \
@@ -70,7 +72,20 @@ void name(atype a)                                                              
     );                                                                          \
 }
 
-#define _syscall3(type,name,atype,a,btype,b,ctype,c)                            \
+#define SYSCALL_FN2(type,name,atype,a,btype,b)                                  \
+type name(atype a, btype b)                                                     \
+{                                                                               \
+    int _retval;                                                                \
+    __asm__ volatile (                                                          \
+        "int $0x80"                                                             \
+        : "=a"(_retval)                                                         \
+        : "a"(_sys_##name), "b"(a), "c"(b)                                      \
+    );                                                                          \
+    SYSCALL_FN_EPILOGUE;                                                        \
+    return _retval;                                                             \
+}
+
+#define SYSCALL_FN3(type,name,atype,a,btype,b,ctype,c)                          \
 type name(atype a, btype b, ctype c)                                            \
 {                                                                               \
     int _retval;                                                                \
@@ -79,10 +94,10 @@ type name(atype a, btype b, ctype c)                                            
         : "=a"(_retval)                                                         \
         : "a"(_sys_##name), "b"(a), "c"(b), "d"(c)                              \
     );                                                                          \
-    _syscall_epilogue;                                                          \
+    SYSCALL_FN_EPILOGUE;                                                        \
     return _retval;                                                             \
 }
 
+#endif // __ASSEMBLER__
 
-
-#endif //__SYSCALL_H
+#endif // __SYSCALL_H

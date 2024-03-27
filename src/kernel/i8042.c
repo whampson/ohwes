@@ -30,7 +30,7 @@
 static void wait_for_read(void);
 static void wait_for_write(void);
 
-void init_ps2(const struct bootinfo * const info)
+void init_ps2(const struct boot_info * const info)
 {
     uint8_t cfg, resp;
     bool port2;

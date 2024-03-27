@@ -26,6 +26,8 @@
 #ifndef __STDDEF_H
 #define __STDDEF_H
 
+#ifndef __ASSEMBLER__
+
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
 typedef __typeof__(sizeof(int)) size_t;
@@ -44,4 +46,6 @@ typedef long long max_align_t;
 
 // typedef short wchar_t;
 
-#endif /* __STDDEF_H */
+#endif // __ASSEMBLER
+
+#endif // __STDDEF_H

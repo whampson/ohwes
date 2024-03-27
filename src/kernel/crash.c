@@ -68,7 +68,7 @@ const char * ExceptionNames[] =
     /*0x1E*/ "EXCEPTION_1E",
     /*0x1F*/ "EXCEPTION_1F",
 };
-static_assert(countof(ExceptionNames) == NUM_EXCEPTION, "Bad ExceptionNames length");
+static_assert(countof(ExceptionNames) == NUM_EXCEPTIONS, "Bad ExceptionNames length");
 
 void center_text(const char *str, ...)
 {
@@ -184,7 +184,7 @@ void crash(struct iregs *regs)
 }
 
 __noreturn
-void _dopanic(const char *fmt, ...)
+void kpanic(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);

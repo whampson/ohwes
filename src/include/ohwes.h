@@ -43,9 +43,7 @@
 #define USER_DS                         0x2B
 #define USER_SS                         USER_DS
 
-extern void halt(void);                 // see entry.S
 extern void idle(void);                 // see entry.S
-
 extern void init(void);                 // see init.c
 
 void timer_sleep(int millis);           // see timer.c
@@ -54,7 +52,7 @@ void pcspk_beep(int freq, int millis);  // see timer.c
 #define beep(f,ms)                      pcspk_beep(f, ms)   // beep at frequency for millis (nonblocking)
 #define sleep(ms)                       timer_sleep(ms)     // spin for millis (blocking)
 
-#define die()                           for (;;)            // spin forever, satisfies noreturn
+#define die()                           for (;;)            // spin forever, satisfies __noreturn
 
 #define zeromem(p,n)                    memset(p, 0, n)
 #define kprint(...)                     printf(__VA_ARGS__)

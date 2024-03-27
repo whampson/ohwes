@@ -18,55 +18,95 @@
 #       Author: Wes Hampson
 # =============================================================================
 
-#include <interrupt.h>
-#include <irq.h>
-
 .text
 .code32
 
-# ----------------------------------------------------------------------------
+#include <interrupt.h>
+#include <irq.h>
+#include <errno.h>
+#include <syscall.h>
+
+.macro LOAD_SEGREG addr, reg
+        movw            \addr, %ax
+        movw            %ax, \reg
+.endm
+.macro STORE_SEGREG reg, addr
+        movw            \reg, %ax
+        movw            %ax, \addr
+.endm
 
 .globl kentry
 kentry:
         cli
         call            kmain
 
-.globl halt
-halt:
-        hlt
-        jmp             halt
-
-
 .globl idle
 idle:
         jmp             idle
 
-# ----------------------------------------------------------------------------
-
-.macro LOAD_SEGREG addr, reg
-        movw            \addr, %ax
-        movw            %ax, \reg
-.endm
-
-.macro STORE_SEGREG reg, addr
-        movw            \reg, %ax
-        movw            %ax, \addr
-.endm
-
 ##
-# Common interrupt entry point.
+# Common Interrupt Handler
 #
-# Upon entry, stack contents are as follows:
-# sp --> vec_num         pushed by thunk
-#        err_code        pushed by cpu or thunk
-#        eip             pushed by cpu
-#        cs              pushed by cpu
-#        eflags          pushed by cpu
-#        esp             pushed by cpu, only present when interrupt switches privilege levels
-#        ss              pushed by cpu, only present when interrupt switches privilege levels
-# bp -->                 (bp loaded by cpu from tss->esp0)
+# The goal of the common interrupt handler is to push the interrupted process'
+# registers onto the stack in a known order, then pass that structure onto the
+# interrupt handler as an iregs structure. The iregs structure contains the CPU
+# state of the interrupted task and will be restored when the interrupt handler
+# returns via end_interrupt.
+#
+#
+# Registers are pushed onto the stack as follows:
+# sp -> ebx        pushed by recv_interrupt
+#       ecx        pushed by recv_interrupt
+#       edx        pushed by recv_interrupt
+#       esi        pushed by recv_interrupt
+#       edi        pushed by recv_interrupt
+#       ebp        pushed by recv_interrupt
+#       eax        pushed by recv_interrupt
+#       ds         pushed by recv_interrupt
+#       es         pushed by recv_interrupt
+#       fs         pushed by recv_interrupt
+#       gs         pushed by recv_interrupt
+#       vec_num    pushed by thunk, interrupt vector number
+#       err_code   pushed by cpu or thunk depending on exception
+#       eip        pushed by cpu
+#       cs         pushed by cpu
+#       eflags     pushed by cpu
+#       esp        pushed by cpu, only present upon privilege level change
+#       ss         pushed by cpu, only present upon privilege level change
+# bp ->            (bp loaded by cpu from tss->esp0 upon privilege level change)
+#
+# After the registers are stored, the type of interrupt is determined using the
+# vector number: Generic Interrupt, Device IRQ, or System Call. We then jump to
+# the corresponding 'trampoline' function, which pushes the appropriate return
+# address onto the stack then jumps to the aggregate handler function for that
+# interrupt type. When the aggregate handelr returns, the registers restored and
+# execution returns to the interrupted process.
+#
+#
+# A Generic Interrupt is any interrupt that is not a System Call or Device IRQ.
+# These are typically Intel Exceptions, which occupy vectors 0-31. Anything else
+# should be considered unexpected and should probably raise an alarm.
+#
+# A Device IRQ is an interrupt request from a peripheral device connected to the
+# CPU via the PIC. The interrupt vector number for a Device IRQ is the ones'
+# compliment of the device's IRQ number. As such, the device that raised the
+# interrupt can be identified by taking the bitwise NOT of the vector number.
+# Device IRQs are expected to be acknowledged in the hardware with an EOI
+# (End of Interrupt) message upon completion of the handler, which shall be
+# handled by the aggregate handler.
+#
+# A System Call is a software call into the kernel in order to perform some
+# operation that requires privileged execution, such as reading/writing data
+# to a device or allocating memory. System Calls always use the vector number
+# 0x80. The system function requested is specified via EAX, while the
+# parameters to the function are passed via EBX, ECX, EDX, ESI, and EDI (in
+# that order with respect to a C-style function signature). The return value is
+# passed via EAX. A negative return value is an error code. The two's compliment
+# of the error code is corresponds to one of the codes defined in errno.h.
+# Standard Library system call wrappers are expected to set the 'errno' value to
+# the two's complimented error code.
 ##
-interrupt:
+recv_interrupt:
         subl            $SIZEOF_IREGS_CTX, %esp
         movl            %ebx, IREGS_EBX(%esp)
         movl            %ecx, IREGS_ECX(%esp)
@@ -79,7 +119,7 @@ interrupt:
         STORE_SEGREG    %es, IREGS_ES(%esp)
         STORE_SEGREG    %fs, IREGS_FS(%esp)
         STORE_SEGREG    %gs, IREGS_GS(%esp)
-        movl            %esp, %ecx              # fastcall param (struct iregs *)
+        movl            %esp, %ecx      # fastcall
         movl            IREGS_VEC_NUM(%esp), %eax
         test            %eax, %eax
         js              irq_trampoline
@@ -87,25 +127,33 @@ interrupt:
         je              syscall_trampoline
         jmp             interrupt_trampoline
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # noncontiguous execution
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 interrupt_trampoline:
         pushl           $end_interrupt
-        jmp             recv_interrupt
+        cmpl            $NUM_EXCEPTIONS, %eax
+        jb              crash           # see crash.c, TODO: handle some exceptions
+        jmp             kpanic          # unexpected exception, panic!
 
 irq_trampoline:
         pushl           $end_irq
-        jmp             recv_irq
+        jmp             handle_irq      # see irq.c
 
 syscall_trampoline:
         pushl           $end_syscall
-        jmp             recv_syscall
+        movl            IREGS_EAX(%ecx), %eax
+        cmpl            $NUM_SYSCALLS, %eax
+        ja              _nosys
+        jmp             *syscall_table(, %eax, 4)
+_nosys:
+        movl            $-ENOSYS, %eax
+        ret
 
-.globl switch_context   # fastcall void switch_context(struct iregs *)
+syscall_table:
+        .long           sys_exit, sys_read, sys_write, sys_open, sys_close
+        .long           sys_ioctl
+
+.globl switch_context
 switch_context:
-        movl            %ecx, %esp
+        movl            %ecx, %esp      # fastcall
 end_interrupt:
 end_irq:
         movl            IREGS_EAX(%esp), %eax
@@ -116,14 +164,15 @@ end_syscall:
         movl            IREGS_EDX(%esp), %edx
         movl            IREGS_ECX(%esp), %ecx
         movl            IREGS_EBX(%esp), %ebx
-        movl            %eax, IREGS_ERR_CODE(%esp) # reuse error code to temporarily store eax
-        LOAD_SEGREG     IREGS_DS(%esp), %ds
-        LOAD_SEGREG     IREGS_ES(%esp), %es
-        LOAD_SEGREG     IREGS_FS(%esp), %fs
+        movl            %eax, IREGS_ERR_CODE(%esp) # reuse error code to
+        LOAD_SEGREG     IREGS_DS(%esp), %ds        #  temporarily store eax,
+        LOAD_SEGREG     IREGS_ES(%esp), %es        #  used by these macros to
+        LOAD_SEGREG     IREGS_FS(%esp), %fs        #  restore segment registers
         LOAD_SEGREG     IREGS_GS(%esp), %gs
         movl            IREGS_ERR_CODE(%esp), %eax
         addl            $IREGS_EIP, %esp
         iret
+
 
 # ----------------------------------------------------------------------------
 # Below are the thunk routines for all valid entries in the IDT.
@@ -149,7 +198,7 @@ end_syscall:
 thunk_name:                                                                     \
         pushl   $0;                                                             \
         pushl   $vec_num;                                                       \
-        jmp     interrupt
+        jmp     recv_interrupt
 
 ##
 # Interrupt thunk w/ error code already pushed by processor
@@ -159,7 +208,7 @@ thunk_name:                                                                     
 .globl thunk_name;                                                              \
 thunk_name:                                                                     \
         pushl   $vec_num;                                                       \
-        jmp     interrupt
+        jmp     recv_interrupt
 
 ##
 # Device IRQ thunk.
@@ -169,7 +218,7 @@ thunk_name:                                                                     
 thunk_name:                                                                     \
         pushl   $0;                                                             \
         pushl   $~vec_num;                                                      \
-        jmp     interrupt
+        jmp     recv_interrupt
 
 
 # exception types:
