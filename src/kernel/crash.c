@@ -33,6 +33,8 @@
 #define CRASH_BANNER    " OH-WES "
 #define CRASH_WIDTH     80
 
+int console_read(char *buf, size_t count);
+
 const char * ExceptionNames[] =
 {
     /*0x00*/ "DIVIDE_ERROR",
@@ -91,17 +93,20 @@ void center_text(const char *str, ...)
 void print_segsel(int segsel)
 {
     struct segsel *ss = (struct segsel *) &segsel;
-    struct x86_desc *desc = get_seg_desc(segsel);
-    printf("%04X(%04X|%d|%d) %08X,%X", segsel,
-        ss->index, ss->ti, ss->rpl,
-        desc->seg.basehi << 24 | desc->seg.baselo,
-        desc->seg.limithi << 16 | desc->seg.limitlo);
+    // struct x86_desc *desc = get_seg_desc(segsel);
+    printf("%04X(%04X|%d|%d)",
+        segsel, ss->index, ss->ti, ss->rpl);
+    // printf(" %08X,%X",
+    //     desc->seg.basehi << 24 | desc->seg.baselo,
+    //     desc->seg.limithi << 16 | desc->seg.limitlo);
 }
 
 void print_flags(uint32_t eflags)
 {
     struct eflags *flags = (struct eflags *) &eflags;
-    printf("EFL=%08X IOPL=%d", eflags, flags->iopl);
+    printf(" EFL=%08X", eflags);
+    // printf(" IOPL=%d", flags->iopl);
+    printf(" [");
     if (flags->id)   printf(" ID");
     if (flags->vip)  printf(" VIP");
     if (flags->vif)  printf(" VIF");
@@ -118,14 +123,25 @@ void print_flags(uint32_t eflags)
     if (flags->af)   printf(" AF");
     if (flags->pf)   printf(" PF");
     if (flags->cf)   printf(" CF");
+    printf(" ]");
 }
 
-__fastcall __noreturn
+void print_banner(void)
+{
+    printf("\e[47;3%dm", CRASH_COLOR);                  // set banner color
+    center_text(CRASH_BANNER);
+    printf("\e[37;4%dm", CRASH_COLOR);                  // clear banner color
+}
+
+__fastcall
 void crash(struct iregs *regs)
 {
+    char c;
+
     irq_setmask(0xFFFF);
-    irq_unmask(IRQ_KEYBOARD);   // leave only keyboard interrupt
-    sti();                      // allow CTRL+ALT+DEL
+    irq_unmask(IRQ_KEYBOARD);   // leave only keyboard
+    irq_unmask(IRQ_TIMER);      // and timer interrupt
+    sti();
 
     uint16_t _cs; store_cs(_cs);
     struct segsel *curr_cs = (struct segsel *) &_cs;
@@ -140,47 +156,82 @@ void crash(struct iregs *regs)
     }
 
     printf("\e[0;0H\e[37;4%dm\e[2J\e5", CRASH_COLOR);   // cursor top left, set color, clear screen, hide cursor
-    printf("\n\n\n\n");
-    printf("\e[47;3%dm", CRASH_COLOR);                  // set banner color
-    center_text(CRASH_BANNER);
-    printf("\e[37;4%dm", CRASH_COLOR);                  // clear banner color
-    printf("\n\n");
+    if (regs->vec_num > NUM_EXCEPTIONS) {
+        printf("\e[8;0H");
+        print_banner();
+        printf("\n\n\n");
+        center_text("An unexpected interrupt 0x%02X has occurred.", regs->vec_num);
+        center_text("\n\n");
+        center_text("Press any key to continue...");
+        while (console_read(&c, 1) != 0) { }    // flush
+        while (console_read(&c, 1) == 0) { }    // and wait
+        printf("\e[0;0H\e[37;40m\e[2J\e5");
+        return;
+    }
+
+    printf("\e[3;0H");
+    print_banner();
+    printf("\n\n\n");
     center_text("A fatal exception %02X has occurred at %04X:%08X.",
         regs->vec_num, regs->cs, regs->eip);
+    printf("\n");
+    center_text("Press Ctrl+Alt+Del to restart your system.");
     printf("\n\n");
     center_text("%s", ExceptionNames[regs->vec_num]);
-    printf("\n\n\n");
 
-    printf("\nEAX=%08X EBX=%08X\nECX=%08X EDX=%08X",
+    printf("\e[12;0H");
+    print_flags(regs->eflags);
+    printf("\n EAX=%08X EBX=%08X\n ECX=%08X EDX=%08X",
         regs->eax, regs->ebx, regs->ecx, regs->edx);
-    printf("\nEDI=%08X ESI=%08X\nEBP=%08X %s=%08X",
+    printf("\n EDI=%08X ESI=%08X\n EBP=%08X %s=%08X",
         regs->edi, regs->esi, regs->ebp,
         (pl_change) ? "ESP" : "EIP",
         (pl_change) ? regs->esp : regs->eip);
     if (pl_change) {
-        printf("\nEIP=%08X", regs->eip);
+        printf("\n EIP=%08X", regs->eip);
         printf(" ERR=%08X", regs->err_code);
-        printf("\n");
-        print_flags(regs->eflags);
     }
     else {
         printf("\n");
-        print_flags(regs->eflags);
         if (regs->err_code) {
-            printf("\nERR=%08X", regs->err_code);
+            printf("\n ERR=%08X", regs->err_code);
         }
     }
     printf("\n");
-    printf("\nCS="); print_segsel(regs->cs);
-    printf("\nDS="); print_segsel(regs->ds);
-    printf("\nES="); print_segsel(regs->es);
-    printf("\nFS="); print_segsel(regs->fs);
-    printf("\nGS="); print_segsel(regs->gs);
+    printf("\n CS="); print_segsel(regs->cs);
+    printf("\n DS="); print_segsel(regs->ds);
+    printf("\n ES="); print_segsel(regs->es);
+    printf("\n FS="); print_segsel(regs->fs);
+    printf("\n GS="); print_segsel(regs->gs);
     if (pl_change) {
-        printf("\nSS="); print_segsel(regs->ss & 0xFFFF);
+        printf("\n SS="); print_segsel(regs->ss & 0xFFFF);
     }
 
-    die();
+    if (pl_change) {
+        const int stack_num_lines = 11;
+        const int stack_width_dwords = 4;
+        const int stack_left_col = VGA_COLS - (9 + (stack_width_dwords * 9));
+
+        uint32_t *esp = (uint32_t *) regs->esp;
+        for (int l = 0; l < stack_num_lines + 1; l++) {
+            // if ((uint32_t) esp >= regs->ebp) {
+            //     break;
+            // }
+            printf("\e[%d;%dH", VGA_ROWS - stack_num_lines + l - 1, stack_left_col);
+            printf("%08X:", esp);
+            for (int w = 0; w < stack_width_dwords; w++, esp++) {
+                // if ((uint32_t) esp >= regs->ebp) {
+                //     break;
+                // }
+                printf(" %08X", *esp);
+            }
+        }
+    }
+
+    for (;;) {
+        console_read(&c, 1);
+    }
+    // die();
 }
 
 __noreturn

@@ -33,7 +33,7 @@
 #include <x86.h>
 #include <syscall.h>
 
-#define INIT_STACK          0xC000
+#define INIT_STACK          0xA000
 
 extern void init_vga(void);
 extern void init_console(void);

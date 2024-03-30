@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <fs.h>
 #include <debug.h>
+#include <io.h>
 
 SYSCALL_FN1_VOID(exit, int, status)
 SYSCALL_FN3(int, read, int, fd, char*, buf, size_t, count)
@@ -69,6 +70,7 @@ void init(void)
     char c;
     int count;
     while (true) {
+        c = 0;
         count = read(stdin_fd, &c, 1);
         if (count) {
             assert(count == 1);
@@ -79,8 +81,17 @@ void init(void)
                 printf("%c", c);
             }
         }
+        if (c == 2) {
+            __asm__ volatile ("int $69");
+        }
         if (c == 3) {   // CTRL+C
             exit(1);
+        }
+        if (c == 4) {
+            __asm__ volatile ("lidt 0");
+        }
+        if (c == 5) {
+            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
         }
     }
 }

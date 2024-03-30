@@ -379,13 +379,11 @@ static void kb_interrupt(void)
     handle_modifier(key, meta, KEY_LWIN, KEY_RWIN);
 
     // submit alt code
-    if (isalt(key) && release) {
-        if (g_kb->has_altcode) {
-            kb_putq(g_kb->altcode);
-            g_kb->has_altcode = false;
-            g_kb->altcode = 0;
-            goto record_key_event;
-        }
+    if (isalt(key) && release && g_kb->has_altcode) {
+        kb_putq(g_kb->altcode);
+        g_kb->has_altcode = false;
+        g_kb->altcode = 0;
+        goto record_key_event;
     }
 
     // handle special keystrokes

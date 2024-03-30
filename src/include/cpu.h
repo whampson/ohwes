@@ -73,3 +73,4 @@ extern __fastcall void _thunk_irq0Dh(void);
 extern __fastcall void _thunk_irq0Eh(void);
 extern __fastcall void _thunk_irq0Fh(void);
 extern __fastcall void _thunk_syscall(void);
+extern __fastcall void _thunk_test(void);
