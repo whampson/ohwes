@@ -400,7 +400,7 @@ static void kb_interrupt(void)
     // TODO: CTRL+SCRLK = print kernel output buffer
     // TOOD: SYSRQ = something cool (debug menu?)
 
-#if DEBUG
+#ifdef DEBUG
     if (g_kb->ctrl && g_kb->alt) {
         if (isfnkey(key)) {
             g_test_crash_kernel = key - KEY_F1 + 1;

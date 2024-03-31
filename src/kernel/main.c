@@ -32,6 +32,7 @@
 #include <test.h>
 #include <x86.h>
 #include <syscall.h>
+#include <debug.h>
 
 #define INIT_STACK          0x7C00
 
@@ -44,6 +45,7 @@ extern void init_irq(void);
 extern void init_ps2(const struct boot_info *info);
 extern void init_kb(void);
 extern void init_timer(void);
+extern void init_rtc(void);
 extern void init_tasks(void);
 #ifdef TEST_BUILD
 extern void tmain(void);
@@ -51,6 +53,11 @@ extern void tmain(void);
 
 static void enter_ring3(void (*entry), uint32_t stack);
 static void print_info(const struct boot_info *info);
+
+#ifdef DEBUG
+int g_test_crash_kernel;
+static void debug_interrupt(void);
+#endif
 
 struct boot_info g_boot;
 
@@ -81,7 +88,6 @@ __fastcall void kmain(const struct boot_info *info)
     kprint("\n" OS_NAME " " OS_VERSION " '" OS_MONIKER "'\n");
     kprint("Build: " OS_BUILDDATE "\n");
     kprint("\n");
-
     print_info(&g_boot);
 
 #if TEST_BUILD
@@ -94,7 +100,13 @@ __fastcall void kmain(const struct boot_info *info)
     init_ps2(&g_boot);
     init_kb();
     init_timer();
+    init_rtc();
     init_tasks();
+
+#ifdef DEBUG
+    g_test_crash_kernel = 0;
+    irq_register(IRQ_RTC, debug_interrupt);
+#endif
 
     enter_ring3(init, INIT_STACK);
 }
@@ -152,3 +164,29 @@ static void print_info(const struct boot_info *info)
     if (info->ebda) kprint("boot: EBDA %08X\n", info->ebda);
     if (info->mem_map) kprint("boot: ACPI memory map %08X\n", info->mem_map);
 }
+
+#ifdef DEBUG
+static void debug_interrupt(void)
+{
+    switch (g_test_crash_kernel) {
+        case 1:
+            divzero();
+            break;
+        case 2:
+            __asm__ volatile ("int $2");                    // NMI
+            break;
+        case 3:
+            dbgbrk();
+            break;
+        case 4:
+            assert(true == false);
+            break;
+        case 5:
+            testint();
+            break;
+        case 6:
+            panic("you fucked up!!");
+            break;
+    }
+}
+#endif

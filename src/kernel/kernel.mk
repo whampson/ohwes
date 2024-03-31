@@ -15,6 +15,7 @@ SOURCES := \
     pic.c \
     ps2kb.c \
     queue.c \
+    rtc.c \
     syscall.c \
     task.c \
     timer.c \

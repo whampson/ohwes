@@ -25,7 +25,6 @@
 #include <fs.h>
 #include <task.h>
 #include <syscall.h>
-#include <debug.h>
 
 // indicate user pointer
 #define _USER_

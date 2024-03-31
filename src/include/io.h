@@ -22,6 +22,8 @@
 #ifndef __IO_H
 #define __IO_H
 
+#include <stdint.h>
+
 /**
  * Write to this port to add a small delay to any I/O transaction.
  *
@@ -31,52 +33,70 @@
 */
 #define IO_DELAY_PORT           0x80
 
-#define inb(port)               \
-({                              \
-    uint8_t _x;                 \
-    __asm__ volatile (          \
-        "inb    %w1, %b0"       \
-        : "=a"(_x)              \
-        : "d"(port)             \
-    );                          \
-    _x;                         \
+#define SYSCNTL_PORT_A          0x92    // read when NMI occurs
+#define SYSCNTL_PORT_B          0x61    // read when NMI occurs
+
+#define CMOS_INDEX_PORT         0x70
+#define CMOS_DATA_PORT          0x71
+
+#define inb(port)                                                           \
+({                                                                          \
+    uint8_t _x;                                                             \
+    __asm__ volatile (                                                      \
+        "inb    %w1, %b0"                                                   \
+        : "=a"(_x)                                                          \
+        : "d"(port)                                                         \
+    );                                                                      \
+    _x;                                                                     \
 })
 
-#define inb_delay(port)         \
-({                              \
-    uint8_t _x;                 \
-    __asm__ volatile (          \
-        "                       \n\
-        inb     %2              \n\
-        inb     %w1, %b0        \n\
-        "                       \
-        : "=a"(_x)              \
-        : "d"(port),            \
-          "i"(IO_DELAY_PORT)    \
-    );                          \
-    _x;                         \
+#define inb_delay(port)                                                     \
+({                                                                          \
+    uint8_t _x;                                                             \
+    __asm__ volatile (                                                      \
+        "                                                                   \n\
+        inb     %2                                                          \n\
+        inb     %w1, %b0                                                    \n\
+        "                                                                   \
+        : "=a"(_x)                                                          \
+        : "d"(port),                                                        \
+          "i"(IO_DELAY_PORT)                                                \
+    );                                                                      \
+    _x;                                                                     \
 })
 
-#define outb(port, data)        \
-do {                            \
-    __asm__ volatile (          \
-        "outb   %b0, %w1"       \
-        :                       \
-        : "a"(data), "d"(port)  \
-    );                          \
+#define outb(port, data)                                                    \
+do {                                                                        \
+    __asm__ volatile (                                                      \
+        "outb   %b0, %w1"                                                   \
+        :                                                                   \
+        : "a"(data), "d"(port)                                              \
+    );                                                                      \
 } while (0)
 
-#define outb_delay(port,data)   \
-do {                            \
-    __asm__ volatile (          \
-        "                       \n\
-        outb    %b0, %w1        \n\
-        inb     %2              \n\
-        "                       \
-        :                       \
-        : "a"(data), "d"(port), \
-          "i"(IO_DELAY_PORT)    \
-    );                          \
+#define outb_delay(port,data)                                               \
+do {                                                                        \
+    __asm__ volatile (                                                      \
+        "                                                                   \n\
+        outb    %b0, %w1                                                    \n\
+        inb     %2                                                          \n\
+        "                                                                   \
+        :                                                                   \
+        : "a"(data), "d"(port),                                             \
+          "i"(IO_DELAY_PORT)                                                \
+    );                                                                      \
+} while (0)
+
+#define nmi_disable()                                                       \
+do {                                                                        \
+    outb_delay(CMOS_INDEX_PORT, inb_delay(CMOS_INDEX_PORT) | 0x80);         \
+    inb_delay(CMOS_DATA_PORT);                                              \
+} while (0)
+
+#define nmi_enable()                                                        \
+do {                                                                        \
+    outb_delay(CMOS_INDEX_PORT, inb_delay(CMOS_INDEX_PORT) & 0x7F);         \
+    inb_delay(CMOS_DATA_PORT);                                              \
 } while (0)
 
 #endif /* __IO_H */
