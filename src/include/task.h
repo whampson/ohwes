@@ -38,6 +38,6 @@ struct task {
     struct file_ops _fops[MAX_OPEN_FILES];
 };
 
-struct task *g_task;
+extern struct task *g_task;
 
 #endif // __TASK_H

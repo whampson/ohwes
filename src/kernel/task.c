@@ -25,6 +25,7 @@ int console_read(char *buf, size_t count);
 int console_write(const char *buf, size_t count);
 
 static struct task task_list[MAX_TASKS];
+struct task *g_task;
 
 void init_tasks(void)
 {

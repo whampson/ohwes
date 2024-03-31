@@ -35,7 +35,7 @@ LINKLIBS := \
     lib/libc.a \
     lib/libgcc.a \
 
-$(call add-linklibs,${LINKLIBS})
+$(eval $(call add-linklibs,${LINKLIBS}))
 # TODO: do this automatically when LINKLIBS set?
 TGT_POSTMAKE := $(call make-sys,${TARGETSYS})
 # TODO: do this automatically when TARGETSYS is set?
