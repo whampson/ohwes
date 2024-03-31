@@ -45,12 +45,13 @@ idle:
         jmp             idle
 
 ##
+# recv_interrupt:
 # Common Interrupt Handler
 #
-# The Common Interrupt Handler pushes the interrupted process' registers onto
-# the stack effectively saving the CPU state of the process. Registers are
-# pushed in a known order known as an 'iregs' structure. A pointer to that
-# structure then is passed onto the interrupt handler.
+# The Common Interrupt Handler saves the interrupted process' state then
+# passes control off to the appropriate interrupt handler. Process state is
+# stored on the stack in an 'iregs' structre. A pointer to the iregs structure
+# is then passed onto the interrupt handler.
 #
 # Registers are pushed onto the stack as follows:
 # sp -> ebx        pushed by recv_interrupt, syscall param 0
@@ -81,8 +82,9 @@ idle:
 # A Generic Interrupt is any interrupt that is not a System Call or Device IRQ.
 # These are typically Intel Exceptions, which occupy vectors 0-31. Anything else
 # should be considered unexpected and should probably raise an alarm. The iregs
-# pointer is passed to the interrupt handler via ECX. As such all interrupt
-# handlers with C linkage should be declared with the __fastcall decorator:
+# pointer is passed to the interrupt handler via ECX. As such all generic
+# interrupt/exception handlers with C linkage should be declared with the
+# __fastcall decorator:
 #       void __fastcall handler(struct iregs *regs);
 #
 # A Device IRQ is an interrupt request from a peripheral device connected to the
@@ -91,25 +93,26 @@ idle:
 # interrupt can be identified by taking the bitwise NOT of the vector number.
 # Device IRQs are expected to be acknowledged in the hardware with an EOI
 # (End of Interrupt) message upon completion of the handler, which shall be
-# handled by the aggregate handler.
+# sent by the IRQ handler.
 #
 # A System Call is a software call into the kernel in order to perform some
 # operation that requires privileged execution, such as reading/writing data
 # to a device or allocating memory. System Calls always use the vector number
-# 0x80. The system function requested is specified via EAX, while the
-# parameters to the function are passed via EBX, ECX, EDX, ESI, and EDI (in
-# that order with respect to a C-style function signature), for up to five
+# 0x80. The requested system call number is specified via EAX, while the
+# parameters to the call are passed via EBX, ECX, EDX, ESI, and EDI (in that
+# order with respect to a C-style function signature), for up to five
 # 32-bit parameters. The return value is a 32-bit integer passed via EAX.
 # A negative return value is an error code. The two's compliment of the error
 # code is corresponds to one of the codes defined in errno.h. Standard Library
 # system call wrappers are expected to set the 'errno' value to the two's
-# complimented error code.
-# System Calls are declared on the kernel-side as follows:
+# complimented error code. System Calls are declared on the kernel-side as
+# follows:
 #       int sys_getpid(void);
 #       int sys_read(int fd, char *buf, unsigned int count);
+#       etc.
 ##
 recv_interrupt:
-        subl            $SIZEOF_IREGS_CTX, %esp
+        subl            $SIZEOF_IREGS_CTX_REGS, %esp
         movl            %ebx, IREGS_EBX(%esp)
         movl            %ecx, IREGS_ECX(%esp)
         movl            %edx, IREGS_EDX(%esp)
@@ -174,12 +177,12 @@ end_syscall:
         movl            IREGS_EDX(%esp), %edx
         movl            IREGS_ECX(%esp), %ecx
         movl            IREGS_EBX(%esp), %ebx
-        movl            %eax, IREGS_ERR_CODE(%esp) # reuse error code to
+        movl            %eax, IREGS_ERR_CODE(%esp) # reuse error code slot to
         LOAD_SEGREG     IREGS_DS(%esp), %ds        #  temporarily store eax,
         LOAD_SEGREG     IREGS_ES(%esp), %es        #  used by these macros to
         LOAD_SEGREG     IREGS_FS(%esp), %fs        #  restore segment registers
         LOAD_SEGREG     IREGS_GS(%esp), %gs
-        movl            IREGS_ERR_CODE(%esp), %eax
+        movl            IREGS_ERR_CODE(%esp), %eax # restore eax
         addl            $IREGS_EIP, %esp
         iret
 

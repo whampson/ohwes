@@ -31,7 +31,7 @@
 #define isalt(k)                (((k) == KEY_LALT || (k) == KEY_RALT))
 #define ismeta(k)               (((k) == KEY_LWIN || (k) == KEY_RWIN))
 #define iskpnum(k)              ((k) >= KEY_KP0 && (k) <= KEY_KP9)
-
+#define isfnkey(k)              ((k) >= KEY_F1 && (k) <= KEY_F12)
 struct key_event
 {
     uint16_t keycode;

@@ -57,27 +57,28 @@
 /**
  * Interrupt register frame offsets.
  */
-#define IREGS_EBX           0x00
-#define IREGS_ECX           0x04
-#define IREGS_EDX           0x08
-#define IREGS_ESI           0x0C
-#define IREGS_EDI           0x10
-#define IREGS_EBP           0x14
-#define IREGS_EAX           0x18
-#define IREGS_DS            0x1C
-#define IREGS_ES            0x1E
-#define IREGS_FS            0x20
-#define IREGS_GS            0x22
-#define IREGS_VEC_NUM       0x24
-#define IREGS_ERR_CODE      0x28
-#define IREGS_EIP           0x2C
-#define IREGS_CS            0x30
-#define IREGS_EFLAGS        0x34
-#define IREGS_ESP           0x38
-#define IREGS_SS            0x3C
+#define IREGS_EBX                   0x00
+#define IREGS_ECX                   0x04
+#define IREGS_EDX                   0x08
+#define IREGS_ESI                   0x0C
+#define IREGS_EDI                   0x10
+#define IREGS_EBP                   0x14
+#define IREGS_EAX                   0x18
+#define IREGS_DS                    0x1C
+#define IREGS_ES                    0x1E
+#define IREGS_FS                    0x20
+#define IREGS_GS                    0x22
+#define IREGS_VEC_NUM               0x24
+#define IREGS_ERR_CODE              0x28
+#define IREGS_EIP                   0x2C
+#define IREGS_CS                    0x30
+#define IREGS_EFLAGS                0x34
+#define IREGS_ESP                   0x38
+#define IREGS_SS                    0x3C
 
-#define SIZEOF_IREGS_CTX    (IREGS_VEC_NUM-IREGS_EBX)
-#define SIZEOF_IREGS        0x40
+#define SIZEOF_IREGS_CTX_REGS       (IREGS_VEC_NUM-IREGS_EBX)
+#define SIZEOF_IREGS                0x40
+#define SIZEOF_IREGS_NO_PL_CHANGE   (SIZEOF_IREGS - 8)
 
 #ifndef __ASSEMBLER__
 #include <assert.h>
@@ -140,6 +141,8 @@ static_assert(offsetof(struct iregs, cs) == IREGS_CS, "offsetof(struct iregs, cs
 static_assert(offsetof(struct iregs, eflags) == IREGS_EFLAGS, "offsetof(struct iregs, eflags) == IREGS_EFLAGS");
 static_assert(offsetof(struct iregs, esp) == IREGS_ESP, "offsetof(struct iregs, esp) == IREGS_ESP");
 static_assert(offsetof(struct iregs, ss) == IREGS_SS, "offsetof(struct iregs, ss) == IREGS_SS");
+static_assert(offsetof(struct iregs, vec_num) == SIZEOF_IREGS_CTX_REGS, "offsetof(struct iregs, vec_num) == SIZEOF_IREGS_CTX_REGS");
+static_assert(offsetof(struct iregs, esp) == SIZEOF_IREGS_NO_PL_CHANGE, "offsetof(struct iregs, vec_num) == SIZEOF_IREGS_NO_PL_CHANGE");
 static_assert(sizeof(struct iregs) == SIZEOF_IREGS, "sizeof(struct iregs) == SIZEOF_IREGS");
 
 __fastcall void switch_context(struct iregs *regs);

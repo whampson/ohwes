@@ -25,6 +25,7 @@
 #include <ps2.h>
 #include <irq.h>
 #include <io.h>
+#include <debug.h>
 
 #define PIT_PORT_CHAN0              0x40
 #define PIT_PORT_CHAN1              0x41
@@ -69,12 +70,20 @@ static void timer_interrupt(void);
 static void pcspk_on(void);
 static void pcspk_off(void);
 
+#if DEBUG
+int g_test_crash_kernel;
+#endif
+
 void init_timer(void)
 {
     uint8_t mode;
     uint16_t div;
     int freq;
     struct pit_state *pit;
+
+#if DEBUG
+    g_test_crash_kernel = 0;
+#endif
 
     pit = get_pit();
     zeromem(pit, sizeof(struct pit_state));
@@ -181,4 +190,28 @@ static void timer_interrupt(void)
     if (pit->sleep_ticks) {
         pit->sleep_ticks--;
     }
+
+#if DEBUG
+    // TODO: move to RTC
+    switch (g_test_crash_kernel) {
+        case 1:
+            divzero();
+            break;
+        case 2:
+            __asm__ volatile ("int $2");                    // NMI
+            break;
+        case 3:
+            dbgbrk();
+            break;
+        case 4:
+            assert(true == false);
+            break;
+        case 5:
+            testint();
+            break;
+        case 6:
+            panic("you fucked up!!");
+            break;
+    }
+#endif
 }

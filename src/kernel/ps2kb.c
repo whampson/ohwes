@@ -35,6 +35,7 @@
 #include <ps2.h>
 #include <queue.h>
 #include <string.h>
+#include <debug.h>
 
 #define SCANCODE_SET    1       // using scancode set 1
 #define TYPEMATIC_BYTE  0x22    // repeat rate = 24cps, delay = 500ms
@@ -388,8 +389,6 @@ static void kb_interrupt(void)
 
     // handle special keystrokes
     switch (key) {
-        // case KEY_BREAK:
-        //     reboot();
         case KEY_DELETE:
         case KEY_KPDOT:
             if (g_kb->ctrl && g_kb->alt) {
@@ -400,6 +399,14 @@ static void kb_interrupt(void)
     // TODO: ALT+<N> = switch terminal
     // TODO: CTRL+SCRLK = print kernel output buffer
     // TOOD: SYSRQ = something cool (debug menu?)
+
+#if DEBUG
+    if (g_kb->ctrl && g_kb->alt) {
+        if (isfnkey(key)) {
+            g_test_crash_kernel = key - KEY_F1 + 1;
+        }
+    }
+#endif
 
     // handle character code entry (<ALT>+<NUMPAD> if NumLk on)
     if (g_kb->alt && !release && iskpnum(key)) {

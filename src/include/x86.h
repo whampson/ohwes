@@ -569,6 +569,11 @@ __asm__ volatile (          \
 #define store_esi(esi) __asm__ volatile ("" : "=S"(esi):)
 #define store_edi(edi) __asm__ volatile ("" : "=D"(edi):)
 
+#define store_cr0(cr0) __asm__ volatile ("movl %%cr0, %%eax" : "=a"(cr0):)
+#define store_cr2(cr2) __asm__ volatile ("movl %%cr2, %%eax" : "=a"(cr2):)
+#define store_cr3(cr3) __asm__ volatile ("movl %%cr3, %%eax" : "=a"(cr3):)
+#define store_cr4(cr4) __asm__ volatile ("movl %%cr4, %%eax" : "=a"(cr4):)
+
 /**
  * Clears the interrupt flag, disabling interrupts.
  */

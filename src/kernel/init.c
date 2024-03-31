@@ -69,29 +69,79 @@ void init(void)
 
     char c;
     int count;
+    int csinum = 0;
+    char csiterm = 0;
+    int state = 0;
+    enum {
+        S_NORM,
+        S_ESC,
+        S_CSI,
+    };
+
     while (true) {
         c = 0;
         count = read(stdin_fd, &c, 1);
-        if (count) {
-            assert(count == 1);
-            if (iscntrl(c)) {
-                printf("^%c", 0x40 ^ c);
-            }
-            else {
-                printf("%c", c);
+        if (count == 0) {
+            continue;   // TODO: blocking I/O
+        }
+
+        assert(count == 1);
+        if (iscntrl(c)) {
+            printf("^%c", 0x40 ^ c);
+        }
+        else {
+            printf("%c", c);
+        }
+
+        // kinda nuts...
+        switch (c) {
+            case '\e':
+                state = S_ESC;
+                break;
+            case '[':
+                if (state == S_ESC) {
+                    state = S_CSI;
+                    csinum = 0;
+                    csiterm = '\0';
+                }
+                break;
+            default:
+                if (state == S_CSI && !csiterm) {
+                    if (isdigit(c)) {
+                        csinum *= 10;
+                        csinum += (c - '0');
+                    }
+                    else {
+                        csiterm = c;
+                    }
+                }
+                else {
+                    state = S_NORM;
+                }
+        }
+
+        if (state == S_CSI && csiterm == '~') {
+            switch (csinum) {
+                case 11:        // F1
+                    divzero();
+                    break;
+                case 12:        // F2
+                    __asm__ volatile ("int $2");    // NMI
+                    break;
+                case 13:        // F3
+                    dbgbrk();
+                    break;
+                case 14:        // F4
+                    assert(true == false);
+                    break;
+                case 15:        // F5
+                    testint();
+                    break;
             }
         }
-        if (c == 2) {
-            __asm__ volatile ("int $69");
-        }
+
         if (c == 3) {   // CTRL+C
             exit(1);
-        }
-        if (c == 4) {
-            __asm__ volatile ("lidt 0");
-        }
-        if (c == 5) {
-            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
         }
     }
 }

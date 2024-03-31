@@ -22,22 +22,30 @@
 #ifndef __DEBUG_H
 #define __DEBUG_H
 
-#define gpfault()                       \
-({                                      \
-    __asm__ volatile ("int $69");       \
+#ifdef DEBUG
+
+extern int g_test_crash_kernel;
+
+#define gpfault()                                   \
+({                                                  \
+    __asm__ volatile ("lidt 0");                    \
 })
 
-#define divzero()                       \
-({                                      \
-    volatile int a = 1;                 \
-    volatile int b = 0;                 \
-    volatile int c = a / b;             \
-    (void) c;                           \
+#define divzero()                                   \
+({                                                  \
+    __asm__ volatile ("idiv %0" :: "a"(0), "b"(0)); \
 })
 
-#define dbgbrk()                        \
-({                                      \
-    __asm__ volatile ("int $3");        \
+#define dbgbrk()                                    \
+({                                                  \
+    __asm__ volatile ("int $3");                    \
 })
+
+#define testint()                                   \
+({                                                  \
+    __asm__ volatile ("int $69");                   \
+})
+
+#endif // DEBUG
 
 #endif // __DEBUG_H
