@@ -25,6 +25,22 @@
 #include <stdint.h>
 
 /**
+ * CMOS Index Register (R/W)
+ *
+ * Bits 6:0 control CMOS RAM index.
+ * Bit 7 is the Non-Maskable Interrupt disable bit.
+ */
+#define CMOS_INDEX_PORT         0x70
+
+/**
+ * CMOS Data Register (R/W)
+ *
+ *  Data read from or to be written to CMOS RAM.
+ */
+#define CMOS_DATA_PORT          0x71
+
+/**
+ * I/O Delay Port
  * Write to this port to add a small delay to any I/O transaction.
  *
  * This port is typically used by the BIOS to report POST codes during boot.
@@ -35,9 +51,6 @@
 
 #define SYSCNTL_PORT_A          0x92    // read when NMI occurs
 #define SYSCNTL_PORT_B          0x61    // read when NMI occurs
-
-#define CMOS_INDEX_PORT         0x70
-#define CMOS_DATA_PORT          0x71
 
 #define inb(port)                                                           \
 ({                                                                          \
@@ -87,16 +100,27 @@ do {                                                                        \
     );                                                                      \
 } while (0)
 
+#define cmos_read(addr)                                                     \
+({                                                                          \
+    outb_delay(CMOS_INDEX_PORT, addr);                                      \
+    inb(CMOS_DATA_PORT);                                                    \
+})
+
+#define cmos_write(addr,data)                                               \
+({                                                                          \
+    outb_delay(CMOS_INDEX_PORT, addr);                                      \
+    outb_delay(CMOS_DATA_PORT, data);                                       \
+})
+
 #define nmi_disable()                                                       \
 do {                                                                        \
-    outb_delay(CMOS_INDEX_PORT, inb_delay(CMOS_INDEX_PORT) | 0x80);         \
-    inb_delay(CMOS_DATA_PORT);                                              \
-} while (0)
+    cmos_write(CMOS_INDEX_PORT, cmos_read(CMOS_INDEX_PORT) | 0x80);         \
+} while(0)
 
 #define nmi_enable()                                                        \
 do {                                                                        \
-    outb_delay(CMOS_INDEX_PORT, inb_delay(CMOS_INDEX_PORT) & 0x7F);         \
-    inb_delay(CMOS_DATA_PORT);                                              \
-} while (0)
+    cmos_write(CMOS_INDEX_PORT, cmos_read(CMOS_INDEX_PORT) & 0x7F);         \
+} while(0)
+
 
 #endif /* __IO_H */
