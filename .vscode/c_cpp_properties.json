@@ -3,14 +3,14 @@
         {
             "name": "OH-WES [Win32]",
             "includePath": [
-                "${workspaceFolder}/src/include/*"
+                "${workspaceFolder}/include/*"
             ],
             "defines": [
                 "DEBUG",
                 "TEST_BUILD"
             ],
             "forcedInclude": [
-                "${workspaceFolder}/src/lib/libgcc/gcc.h"
+                "${workspaceFolder}/lib/libgcc/gcc.h"
             ],
             "compilerPath": "${workspaceFolder}/build/i686-elf-tools/bin/i686-elf-gcc",
             "cStandard": "c11",
@@ -32,14 +32,14 @@
         {
             "name": "OH-WES [macOS]",
             "includePath": [
-                "${workspaceFolder}/src/include/*"
+                "${workspaceFolder}/include/*"
             ],
             "defines": [
                 "DEBUG",
                 "TEST_BUILD"
             ],
             "forcedInclude": [
-                "${workspaceFolder}/src/lib/libgcc/gcc.h"
+                "${workspaceFolder}/lib/libgcc/gcc.h"
             ],
             "compilerPath": "/usr/local/bin/i686-elf-gcc",
             "cStandard": "c11",

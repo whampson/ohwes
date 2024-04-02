@@ -22,7 +22,7 @@ KERNSYS := ${TARGET_DIR}/sys/ohwes.sys
 DISKIMG := ${TARGET_DIR}/ohwes.img
 
 SUBMAKEFILES := \
-    src/ohwes.mk \
+    ohwes.mk \
 
 MAKEFLAGS := --no-print-directory
 
@@ -35,7 +35,7 @@ all:
 ohwes: all
 
 tools:
-	@${MAKE} -C src/tools
+	@${MAKE} -C tools
 
 img: tools ohwes
 	@mkdir -p $(dir ${DISKIMG})

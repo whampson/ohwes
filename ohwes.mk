@@ -1,5 +1,5 @@
 # includes
-INCDIRS    := src/include
+INCDIRS    := include
 
 # OS modules
 SUBMAKEFILES := \
@@ -20,7 +20,7 @@ OBJCOPY    := $(PREFIX)objcopy
 ARFLAGS    := -rcsv
 ASFLAGS    := -Wall -Werror
 CFLAGS     := -Wall -Werror -nostdinc -ffreestanding -std=c11
-CFLAGS     += -include src/lib/libgcc/gcc.h    # automatically include GCC stuff
+CFLAGS     += -include lib/libgcc/gcc.h    # automatically include GCC stuff
 LDFLAGS    := -nostdlib
 
 ifeq "${DEBUG}" "1"

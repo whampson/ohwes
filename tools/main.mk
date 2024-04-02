@@ -5,8 +5,8 @@
 DEBUG      := 1
 DEBUGFLAGS := -DDEBUG -g -Og
 
-TARGET_DIR := ../../bin/tools
-BUILD_DIR  := ../../obj/tools
+TARGET_DIR := ../bin/tools
+BUILD_DIR  := ../obj/tools
 
 SUBMAKEFILES := \
     fatfs/fatfs.mk \
