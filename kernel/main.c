@@ -173,7 +173,7 @@ static void debug_interrupt(void)
             divzero();
             break;
         case 2:
-            __asm__ volatile ("int $2");                    // NMI
+            __asm__ volatile ("int $2");    // NMI: TODO generate real NMI
             break;
         case 3:
             dbgbrk();

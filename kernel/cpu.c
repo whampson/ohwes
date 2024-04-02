@@ -33,7 +33,7 @@
 //
 // x86 Descriptor table and TSS geometry.
 //
-// IDT                                              // 0x800
+// IDT
 #define IDT_COUNT           256
 #define IDT_BASE            CPU_DATA_AREA
 #define IDT_LIMIT           (IDT_COUNT*DESC_SIZE-1)

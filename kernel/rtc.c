@@ -29,6 +29,7 @@
 #include <rtc.h>
 
 #define PARANOID
+#define PRINT_CLOCK 0
 
 //
 // RTC Register Ports
@@ -244,9 +245,11 @@ static void update_time(void)
         tmp.tm_year != tm_now.tm_year)
     {
         tm_now = tmp;
+#if PRINT_CLOCK
         kprint("\e[s\e[25;61H%02d/%02d/%04d %02d:%02d:%02d\e[u",
             tm_now.tm_mon+1, tm_now.tm_mday, tm_now.tm_year,
             tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
+#endif
     }
 
     // re-enable updates

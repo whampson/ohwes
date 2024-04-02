@@ -96,7 +96,16 @@
 #define DESCTYPE_CODE_XRC       0x0E    // Code, Execute/Read, Conforming
 #define DESCTYPE_CODE_XRCA      0x0F    // Code, Execute/Read, Conforming
 
-#ifndef __ASSEMBLER__
+#ifdef __ASSEMBLER__
+.macro LOAD_SEGREG addr, reg
+        movw            \addr, %ax
+        movw            %ax, \reg
+.endm
+.macro STORE_SEGREG reg, addr
+        movw            \reg, %ax
+        movw            %ax, \addr
+.endm
+#else
 // C-only defines from here on out!
 #include <assert.h>
 #include <stddef.h>

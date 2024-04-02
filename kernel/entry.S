@@ -25,15 +25,7 @@
 #include <irq.h>
 #include <errno.h>
 #include <syscall.h>
-
-.macro LOAD_SEGREG addr, reg
-        movw            \addr, %ax
-        movw            %ax, \reg
-.endm
-.macro STORE_SEGREG reg, addr
-        movw            \reg, %ax
-        movw            %ax, \addr
-.endm
+#include <x86.h>
 
 .globl kentry
 kentry:

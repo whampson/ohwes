@@ -1,22 +1,25 @@
-/*============================================================================*
- * Copyright (C) 2020-2021 Wes Hampson. All Rights Reserved.                  *
- *                                                                            *
- * This file is part of the OHWES Operating System.                           *
- * OHWES is free software; you may redistribute it and/or modify it under the *
- * terms of the license agreement provided with this software.                *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- *============================================================================*
- *    File: kernel/i8042.c                                                    *
- * Created: February 21, 2024                                                 *
- *  Author: Wes Hampson                                                       *
- *============================================================================*/
+/* =============================================================================
+ * Copyright (C) 2020-2024 Wes Hampson. All Rights Reserved.
+ *
+ * This file is part of the OH-WES Operating System.
+ * OH-WES is free software; you may redistribute it and/or modify it under the
+ * terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ * -----------------------------------------------------------------------------
+ *         File: kernel/i8042.c
+ *      Created: February 21, 2024
+ *       Author: Wes Hampson
+ *
+ * Intel 8042 PS/2 Controller driver.
+ * =============================================================================
+ */
 
 // https://stanislavs.org/helppc/8042.html
 // https://stanislavs.org/helppc/keyboard_commands.html

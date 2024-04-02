@@ -69,6 +69,8 @@ void init_memory(const struct boot_info *const info)
             kprint("\n");
 #endif
 
+            // TODO: kb count does not account for overlapping regions
+
             int kb = (e->length >> 10);
             kb_total += kb;
 
