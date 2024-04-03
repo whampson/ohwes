@@ -28,14 +28,17 @@
 #define stdin_fd                        0
 #define stdout_fd                       1
 
+struct file;
 struct file_ops {
-    int (*read)(char *, size_t);
-    int (*write)(const char *, size_t);
-    int (*ioctl)(int, uint32_t);
+    int (*read)(struct file *, char *, size_t);
+    int (*write)(struct file *, const char *, size_t);
+    int (*open)(struct file **, int);
+    int (*close)(struct file *);
+    int (*ioctl)(struct file *, unsigned int, void*);
 };
 
 struct file {
-    struct file_ops *fops;      // TODO: where does this buffer live?
+    struct file_ops *fops;
 };
 
 #endif // __FS_H

@@ -34,7 +34,7 @@
 #include <syscall.h>
 #include <debug.h>
 
-#define INIT_STACK          0x7C00
+#define INIT_STACK          0xC000
 
 extern void init_vga(void);
 extern void init_console(void);
@@ -108,6 +108,7 @@ __fastcall void kmain(const struct boot_info *info)
     irq_register(IRQ_RTC, debug_interrupt);
 #endif
 
+    kprint("boot: entering ring3...\n");
     enter_ring3(init, INIT_STACK);
 }
 

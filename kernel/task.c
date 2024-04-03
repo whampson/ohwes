@@ -21,8 +21,8 @@
 
 #include <task.h>
 
-int console_read(char *buf, size_t count);
-int console_write(const char *buf, size_t count);
+extern int console_read(struct file *file, char *buf, size_t count);
+extern int console_write(struct file *file, const char *buf, size_t count);
 
 static struct task task_list[MAX_TASKS];
 struct task *g_task;

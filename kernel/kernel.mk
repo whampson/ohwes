@@ -20,13 +20,16 @@ SOURCES := \
     task.c \
     timer.c \
     vga.c \
+    sys/open.c \
 
 ifeq "${TEST_BUILD}" "1"
   SOURCES += \
     test/tests.c \
     test/printf_tests.c \
     test/string_tests.c \
-    test/queue_tests.c
+    test/queue_tests.c \
+    test/syscall_tests.c \
+
 endif
 
 TGT_CFLAGS  := -Wno-unused-function

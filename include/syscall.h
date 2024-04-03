@@ -37,9 +37,12 @@
 #ifndef __ASSEMBLER__
 
 // user-callable kernel routines
-extern void exit(int status);
-extern int read(int fd, char *buf, size_t len);
-extern int write(int fd, const char *buf, size_t len);
+extern void exit(int);
+extern int read(int, char *, size_t);
+extern int write(int, const char *, size_t);
+extern int open(const char *, int);
+extern int close(int);
+extern int ioctl(int, unsigned int, void*);
 
 #define SYSCALL_FN_EPILOGUE                                                     \
 ({                                                                              \

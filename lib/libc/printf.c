@@ -36,12 +36,12 @@
 
 #define NUM_BUFSIZ 64
 
-int console_write(const char *buf, size_t count);
+extern int console_write(struct file *file, const char *buf, size_t count);
 
 void _dowrite(char c)
 {
-    if (getpl() == KERNEL_PL) {
-        console_write(&c, 1);
+    if (getpl() == KERNEL_PL) {     // TODO: different linkage if kernel mode
+        console_write(NULL, &c, 1);
     }
     else {
         // TODO: send in chunks to minimize syscalls

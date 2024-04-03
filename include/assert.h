@@ -27,14 +27,29 @@
 extern __noreturn void kpanic(const char *, ...);
 #define panic(...) kpanic(__VA_ARGS__)
 
+// TODO: need to separate kernel and user libs...
+#ifdef __USER_MODE__
+#include <stdio.h>
+#endif
+
 #ifdef DEBUG
+#ifdef __USER_MODE__
+#define assert(x) \
+do { \
+    if (!(x)) { \
+        printf("panic: %s:%d assertion failed: " #x "\n", __FILE__, __LINE__); \
+        for (;;); \
+    } \
+} while (0)
+#else
 #define assert(x) \
 do { \
     if (!(x)) { \
         panic("%s:%d assertion failed: " #x "\n", __FILE__, __LINE__); \
     } \
 } while (0)
-#else
+#endif // __USER_MODE__
+#else  // DEBUG
 #define assert(x) (void) 0
 #endif
 

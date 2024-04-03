@@ -26,6 +26,7 @@
 #include <irq.h>
 #include <ps2.h>
 #include <vga.h>
+#include <fs.h>
 
 #define NUM_CONSOLES    1
 
@@ -144,8 +145,10 @@ static void defaults(struct console *cons)
     }
 }
 
-int console_read(char *buf, size_t count)
+int console_read(struct file *file, char *buf, size_t count)
 {
+    (void) file;
+
     if (!buf) {
         return -EINVAL;
     }
@@ -165,8 +168,10 @@ int console_read(char *buf, size_t count)
     return nread;
 }
 
-int console_write(const char *buf, size_t count)
+int console_write(struct file *file, const char *buf, size_t count)
 {
+    (void) file;
+
     if (!buf) {
         return -EINVAL;
     }

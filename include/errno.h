@@ -25,6 +25,7 @@
 #define ENOSYS      1   // System Call Not Valid
 #define EINVAL      2   // Invalid Argument
 #define EBADF       3   // Bad File Descriptor
+#define ENOTTY      4   // Invalid IOCTL
 
 #ifndef __ASSEMBLER__
 extern int _errno;

@@ -32,6 +32,7 @@
 #include <irq.h>
 #include <x86.h>
 #include <cpu.h>
+#include <fs.h>
 
 #define CRASH_COLOR     CONSOLE_BLUE
 #define BANNER_COLOR    CONSOLE_BLUE
@@ -49,11 +50,11 @@ static void print_banner(const char *banner);
 static void crash_print(const char *fmt, ...);
 static void interrupt_crash(struct iregs *regs);
 
-extern int console_read(char *buf, size_t count);
-extern int console_write(char *buf, size_t count);
+extern int console_read(struct file *file, char *buf, size_t count);
+extern int console_write(struct file *file, const char *buf, size_t count);
 
-#define kbflush()   while (console_read(&c, 1) != 0) { }
-#define kbhit()     while (console_read(&c, 1) == 0) { }
+#define kbflush()   while (console_read(NULL, &c, 1) != 0) { }
+#define kbhit()     while (console_read(NULL, &c, 1) == 0) { }
 #define kbwait()    ({ kbflush(); kbhit(); })
 
 __fastcall
@@ -188,7 +189,7 @@ void crash(struct iregs *regs)
     for (;;) {
         // just drain keyboard buffer forever,
         // ctrl+alt+delete is handled by keyboard ISR
-        console_read(&c, 1);
+        console_read(NULL, &c, 1);
     }
 }
 
@@ -229,7 +230,7 @@ void kpanic(const char *fmt, ...)
     print_banner(" Kernel Panic ");
     crash_print("\e[37;4%dm", PANIC_COLOR);
     crash_print("\n\n");
-    center_text(buf);
+    crash_print(buf);
     die();
 }
 
@@ -299,7 +300,7 @@ static void crash_print(const char *fmt, ...)
     count = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    console_write(buf, count);
+    console_write(NULL, buf, count);
 }
 
 static const char *exception_names[NUM_EXCEPTIONS] =

@@ -211,7 +211,6 @@ void test_strcmp(void)
 {
     char *a;
     char *b;
-    const int count = 4;
 
     #define SETUP(x,y) \
     do {\
@@ -219,18 +218,59 @@ void test_strcmp(void)
         b = y; \
     } while (0)
 
-    SETUP("ABCD", "EFGH");
-    VERIFY_IS_TRUE(memcmp(a, b, 0) == 0);
-    VERIFY_IS_TRUE(memcmp(a, b, count) < 0);
-    SETUP("MNOP", "IJKL");
-    VERIFY_IS_TRUE(memcmp(a, b, count) > 0);
-    SETUP("QRST", "QRST");
-    VERIFY_IS_TRUE(memcmp(a, b, count) == 0);
-    SETUP("AAAA", "aaaa");
-    VERIFY_IS_TRUE(memcmp(a, b, count) < 0);
+    SETUP("", "");
+    VERIFY_IS_TRUE(strcmp(a, b) == 0);
+    SETUP("", "a");
+    VERIFY_IS_TRUE(strcmp(a, b) < 0);
+    SETUP("a", "");
+    VERIFY_IS_TRUE(strcmp(a, b) > 0);
+    SETUP("a", "a");
+    VERIFY_IS_TRUE(strcmp(a, b) == 0);
+    SETUP("a", "abc");
+    VERIFY_IS_TRUE(strcmp(a, b) < 0);
+    SETUP("abc", "a");
+    VERIFY_IS_TRUE(strcmp(a, b) > 0);
+    SETUP("abc", "abc");
+    VERIFY_IS_TRUE(strcmp(a, b) == 0);
 
     #undef SETUP
 }
+
+void test_strncmp(void)
+{
+    char *a;
+    char *b;
+
+    #define SETUP(x,y) \
+    do {\
+        a = x; \
+        b = y; \
+    } while (0)
+
+    SETUP("", "");
+    VERIFY_IS_TRUE(strncmp(a, b, 0) == 0);
+    SETUP("", "a");
+    VERIFY_IS_TRUE(strncmp(a, b, 1) < 0);       // TODO: verify behavior
+    SETUP("a", "");
+    VERIFY_IS_TRUE(strncmp(a, b, 1) > 0);
+    SETUP("a", "a");
+    VERIFY_IS_TRUE(strncmp(a, b, 1) == 0);
+    SETUP("a", "a");
+    VERIFY_IS_TRUE(strncmp(a, b, 2) == 0);
+    SETUP("abc", "abc");
+    VERIFY_IS_TRUE(strncmp(a, b, 1) == 0);
+    SETUP("abc", "ayz");
+    VERIFY_IS_TRUE(strncmp(a, b, 1) == 0);
+    SETUP("abc", "abc");
+    VERIFY_IS_TRUE(strncmp(a, b, 3) == 0);
+    SETUP("abc", "ayz");
+    VERIFY_IS_TRUE(strncmp(a, b, 3) < 0);
+    SETUP("abc", "ayz");
+    VERIFY_IS_TRUE(strncmp(a, b, 10) < 0);
+
+    #undef SETUP
+}
+
 
 void test_strlen(void)
 {
@@ -250,5 +290,6 @@ void test_strings(void)
     test_memmove();
     test_memcmp();
     test_strcmp();
+    test_strncmp();
     test_strlen();
 }

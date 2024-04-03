@@ -27,6 +27,7 @@
 #include <x86.h>
 #include <irq.h>
 #include <rtc.h>
+#include <fs.h>
 
 #define PARANOID
 #define PRINT_CLOCK 0
@@ -71,26 +72,6 @@
 //
 #define REG_D_VRT               0x80    // Valid RAM and Time (battery alive)
 
-//
-// Periodic Interrupt Rates
-//
-#define RTC_RATE_OFF            0
-#define RTC_RATE_2Hz            0xF
-#define RTC_RATE_4Hz            0xE
-#define RTC_RATE_8Hz            0xD
-#define RTC_RATE_16Hz           0xC
-#define RTC_RATE_32Hz           0xB
-#define RTC_RATE_64Hz           0xA
-#define RTC_RATE_128Hz          0x9
-#define RTC_RATE_256Hz          0x8
-#define RTC_RATE_512Hz          0x7
-#define RTC_RATE_1024Hz         0x6
-#define RTC_RATE_2048Hz         0x5
-#define RTC_RATE_4096Hz         0x4
-#define RTC_RATE_8192Hz         0x3
-
-#define rate2hz(r)              (32768 >> ((r) - 1))
-
 #define rd_a()                  cmos_read(RTC_PORT_REG_A)
 #define rd_b()                  cmos_read(RTC_PORT_REG_B)
 #define rd_c()                  cmos_read(RTC_PORT_REG_C)
@@ -105,6 +86,27 @@ static struct tm tm_now;
 
 static void rtc_interrupt(void);
 static void update_time(void);
+
+int rtc_open(struct file **file, int flags);
+int rtc_close(struct file *file);
+int rtc_ioctl(struct file *file, unsigned int cmd, void *arg);
+
+static int rtc_getrate(void);
+static int rtc_setrate(int rate);
+
+static struct file_ops rtc_fops =
+{
+    .read = NULL,
+    .write = NULL,
+    .open = rtc_open,
+    .close = rtc_close,
+    .ioctl = rtc_ioctl
+};
+
+static struct file rtc_file =
+{
+    .fops = &rtc_fops
+};
 
 void init_rtc(void)
 {
@@ -128,12 +130,12 @@ void init_rtc(void)
     //
     rate = RTC_RATE_8192Hz; // fastest rate, TODO: freq-divide per process
     data = rd_a();
-    kprint("rtc: initial rate = %d Hz\n", rate2hz(data & REG_A_RATE));
+    kprint("rtc: initial rate = %d Hz\n", rtc_rate2hz(data & REG_A_RATE));
     wr_a((data & ~REG_A_RATE) | rate);
 #ifdef PARANOID
     // readback
     data = rd_a();
-    kprint("rtc: current rate = %d Hz\n", rate2hz(data & REG_A_RATE));
+    kprint("rtc: current rate = %d Hz\n", rtc_rate2hz(data & REG_A_RATE));
 #endif
 
     //
@@ -267,6 +269,84 @@ int rtc_gettime(struct tm *tm)
 
     cli_save(flags);
     memcpy(tm, &tm_now, sizeof(struct tm));
+    restore_flags(flags);
+
+    return 0;
+}
+
+int rtc_open(struct file **file, int flags)
+{
+    kprint("rtc_open(0x%X,%d)\n", file, flags);
+    (void) flags;
+
+    *file = &rtc_file;
+    return 0;
+}
+
+int rtc_close(struct file *file)
+{
+    kprint("rtc_close(0x%X)\n", file);
+    return 0;
+}
+
+int rtc_ioctl(struct file *file, unsigned int cmd, void *arg)
+{
+    kprint("rtc_ioctl(0x%X,%d,0x%X)\n", file, cmd, arg);
+
+    uint32_t flags;
+    int rate;
+    int ret;
+
+    (void) file;
+
+    cli_save(flags);
+
+    switch (cmd) {
+        case IOCTL_RTC_GETRATE:
+            ret = rtc_getrate();
+            break;
+
+        case IOCTL_RTC_SETRATE:
+            rate = *((int *) arg);    // TODO: VALIDATE USER BUFFER
+            ret = rtc_setrate(rate);
+            kprint("rtc: rate set to %d (%d Hz)\n", rate, rtc_rate2hz(rate));
+            break;
+
+        default:
+            ret = -ENOTTY;
+            break;
+
+    }
+
+    restore_flags(flags);
+    return ret;
+}
+
+static int rtc_getrate(void)
+{
+    uint32_t flags;
+    uint8_t rate;
+
+    cli_save(flags);
+    rate = rd_a() & REG_A_RATE;
+    restore_flags(flags);
+
+    return rate;
+}
+
+static int rtc_setrate(int rate)
+{
+    uint32_t flags;
+    uint8_t data;
+
+    if (rate > RTC_RATE_2Hz || rate < RTC_RATE_8192Hz) {
+        return -EINVAL;
+    }
+
+    cli_save(flags);
+    data = rd_a() & ~REG_A_RATE;
+    data |= (rate & REG_A_RATE);
+    wr_a(data);
     restore_flags(flags);
 
     return 0;

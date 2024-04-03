@@ -8,5 +8,6 @@ void testmain(void);
 void test_libc(void);
 void test_printf(void);
 void test_strings(void);
+void test_syscalls(void);
 
 #endif // __TESTS_H

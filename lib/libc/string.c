@@ -108,3 +108,20 @@ int strcmp(const char *lhs, const char *rhs)
 
     return *lhs - *rhs;
 }
+
+int strncmp(const char *lhs, const char *rhs, size_t count)
+{
+    if (count == 0) {
+        return 0;
+    }
+
+    int diff = 0;
+    for (int i = 0; i < count; i++, lhs++, rhs++) {
+        diff = (*lhs - *rhs);
+        if (diff != 0 || !(*lhs) || !(*rhs)) {
+            break;
+        }
+    }
+
+    return diff;
+}

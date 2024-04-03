@@ -26,6 +26,11 @@
 #include <task.h>
 #include <syscall.h>
 
+// !!!!!!!
+// TODO: All of these need to safely access the current task struct, to prevent
+// corruption in the event of a task switch.
+// !!!!!!!
+
 // indicate user pointer
 #define _USER_
 
@@ -55,7 +60,7 @@ int sys_read(int fd, _USER_ char *buf, size_t count)
     }
 
     // TODO: verify user-space buffer address range
-    return f->fops->read(buf, count);
+    return f->fops->read(f, buf, count);
 }
 
 int sys_write(int fd, const _USER_ char *buf, size_t count)
@@ -75,29 +80,54 @@ int sys_write(int fd, const _USER_ char *buf, size_t count)
     }
 
     // TODO: verify user-space buffer address range
-    return f->fops->write(buf, count);
+    return f->fops->write(f, buf, count);
 }
 
-int sys_open(const char *name, int flags)
-{
-    assert(getpl() == KERNEL_PL);
+// int sys_open(const char *name, int flags)
+// {
+//     assert(getpl() == KERNEL_PL);
 
-    kprint("sys: open(%s, %d)\n", name, flags);
-    return -ENOSYS;
-}
+//     kprint("sys: open(%s, %d)\n", name, flags);
+//     return -ENOSYS;
+// }
 
 int sys_close(int fd)
 {
-    assert(getpl() == KERNEL_PL);
+    struct file *f;
+    int ret;
 
+    assert(getpl() == KERNEL_PL);
     kprint("sys: close(%d)\n", fd);
-    return -ENOSYS;
+
+    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_task->open_files[fd])) {
+        return -EBADF;
+    }
+    if (!f->fops) {
+        return -ENOSYS;
+    }
+
+    ret = 0;
+    if (f->fops->close) {
+        ret = f->fops->close(f);
+    }
+    // TODO: if ret < 0, do we return and NOT close out the fd?
+
+    g_task->open_files[fd] = NULL;
+    return ret;
 }
 
-int sys_ioctl(int fd, unsigned int cmd, unsigned long arg)
+int sys_ioctl(int fd, unsigned int cmd, void *arg)
 {
+    struct file *f;
     assert(getpl() == KERNEL_PL);
+    kprint("sys: ioctl(%d, %u, 0x%X)\n", fd, cmd, arg);
 
-    kprint("sys: ioctl(%d, %u, %lu)\n", fd, cmd, arg);
-    return -ENOSYS;
+    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_task->open_files[fd])) {
+        return -EBADF;
+    }
+    if (!f->fops || !f->fops->ioctl) {
+        return -ENOSYS;
+    }
+
+    return f->fops->ioctl(f, cmd, arg);
 }
