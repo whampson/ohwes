@@ -67,14 +67,16 @@ void init(void)
     int fd = open("/dev/rtc", 0);
     assert(fd > 0);
     int rate = ioctl(fd, IOCTL_RTC_GETRATE, NULL);
-    printf("rtc freq = %d\n", rtc_rate2hz(rate));
     assert(rate == RTC_RATE_8192Hz);
 
     rate = RTC_RATE_2Hz;
     int ret = ioctl(fd, IOCTL_RTC_SETRATE, &rate);
     assert(ret == 0);
-    rate = ioctl(fd, IOCTL_RTC_GETRATE, NULL);
-    printf("rtc freq = %d\n", rtc_rate2hz(rate));
+    rate = ioctl(fd, IOCTL_RTC_GETRATE, NULL);  // TODO: output thru arg
+    assert(rate == RTC_RATE_2Hz);
+    rate = RTC_RATE_8192Hz;
+    ret = ioctl(fd, IOCTL_RTC_SETRATE, &rate);
+    assert(ret == 0);
     ret = close(fd);
     assert(ret == 0);
 
@@ -132,13 +134,16 @@ void init(void)
         }
 
         if (state == S_CSI && csiterm == '~') {
+            //
+            // usermode crashes
+            //
             switch (csinum) {
                 case 11:        // F1
                     divzero();
                     break;
-                case 12:        // F2
-                    __asm__ volatile ("int $2");    // NMI
-                    break;
+                // case 12:        // F2
+                //     __asm__ volatile ("int $2");    // NMI
+                //     break;
                 case 13:        // F3
                     dbgbrk();
                     break;
@@ -148,6 +153,12 @@ void init(void)
                 case 15:        // F5
                     testint();
                     break;
+                case 17:        // F6
+                    panic("you fucked up in userland!!");   // should not be accessible from userland...
+                    break;
+                // case 18:        // F7
+                //     __asm__ volatile ("int $0x2D");
+                //     break;
             }
         }
 

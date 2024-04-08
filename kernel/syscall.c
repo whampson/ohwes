@@ -34,16 +34,17 @@
 // indicate user pointer
 #define _USER_
 
-int sys_exit(int status)
+int __syscall __noreturn sys_exit(int status)
 {
     assert(getpl() == KERNEL_PL);
 
-    kprint("\ninit: returned %d\n", status);
+    kprint("\nexit: returned %d\n", status);
     idle();     // TODO: switch task, handle signals, etc.
-    return 0;   // does not return
+
+    die();
 }
 
-int sys_read(int fd, _USER_ char *buf, size_t count)
+int __syscall sys_read(int fd, _USER_ char *buf, size_t count)
 {
     struct file *f;
 
@@ -63,7 +64,7 @@ int sys_read(int fd, _USER_ char *buf, size_t count)
     return f->fops->read(f, buf, count);
 }
 
-int sys_write(int fd, const _USER_ char *buf, size_t count)
+int __syscall sys_write(int fd, const _USER_ char *buf, size_t count)
 {
     struct file *f;
 
@@ -83,21 +84,12 @@ int sys_write(int fd, const _USER_ char *buf, size_t count)
     return f->fops->write(f, buf, count);
 }
 
-// int sys_open(const char *name, int flags)
-// {
-//     assert(getpl() == KERNEL_PL);
-
-//     kprint("sys: open(%s, %d)\n", name, flags);
-//     return -ENOSYS;
-// }
-
-int sys_close(int fd)
+int __syscall sys_close(int fd)
 {
     struct file *f;
     int ret;
 
     assert(getpl() == KERNEL_PL);
-    kprint("sys: close(%d)\n", fd);
 
     if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_task->open_files[fd])) {
         return -EBADF;
@@ -116,11 +108,10 @@ int sys_close(int fd)
     return ret;
 }
 
-int sys_ioctl(int fd, unsigned int cmd, void *arg)
+int __syscall sys_ioctl(int fd, unsigned int cmd, void *arg)
 {
     struct file *f;
     assert(getpl() == KERNEL_PL);
-    kprint("sys: ioctl(%d, %u, 0x%X)\n", fd, cmd, arg);
 
     if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_task->open_files[fd])) {
         return -EBADF;

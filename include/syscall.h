@@ -36,6 +36,8 @@
 
 #ifndef __ASSEMBLER__
 
+#define __syscall __attribute__((regparm(0)))
+
 // user-callable kernel routines
 extern void exit(int);
 extern int read(int, char *, size_t);

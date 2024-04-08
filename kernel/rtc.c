@@ -129,13 +129,10 @@ void init_rtc(void)
     // set rate
     //
     rate = RTC_RATE_8192Hz; // fastest rate, TODO: freq-divide per process
-    data = rd_a();
-    kprint("rtc: initial rate = %d Hz\n", rtc_rate2hz(data & REG_A_RATE));
-    wr_a((data & ~REG_A_RATE) | rate);
+    rtc_setrate(rate);
 #ifdef PARANOID
-    // readback
-    data = rd_a();
-    kprint("rtc: current rate = %d Hz\n", rtc_rate2hz(data & REG_A_RATE));
+    rate = rtc_getrate();
+    assert(rate == RTC_RATE_8192Hz);
 #endif
 
     //
@@ -276,7 +273,6 @@ int rtc_gettime(struct tm *tm)
 
 int rtc_open(struct file **file, int flags)
 {
-    kprint("rtc_open(0x%X,%d)\n", file, flags);
     (void) flags;
 
     *file = &rtc_file;
@@ -285,14 +281,11 @@ int rtc_open(struct file **file, int flags)
 
 int rtc_close(struct file *file)
 {
-    kprint("rtc_close(0x%X)\n", file);
     return 0;
 }
 
 int rtc_ioctl(struct file *file, unsigned int cmd, void *arg)
 {
-    kprint("rtc_ioctl(0x%X,%d,0x%X)\n", file, cmd, arg);
-
     uint32_t flags;
     int rate;
     int ret;
@@ -309,7 +302,6 @@ int rtc_ioctl(struct file *file, unsigned int cmd, void *arg)
         case IOCTL_RTC_SETRATE:
             rate = *((int *) arg);    // TODO: VALIDATE USER BUFFER
             ret = rtc_setrate(rate);
-            kprint("rtc: rate set to %d (%d Hz)\n", rate, rtc_rate2hz(rate));
             break;
 
         default:
@@ -348,6 +340,8 @@ static int rtc_setrate(int rate)
     data |= (rate & REG_A_RATE);
     wr_a(data);
     restore_flags(flags);
+
+    kprint("rtc: frequency is now %dHz\n", rtc_rate2hz(rate));
 
     return 0;
 }

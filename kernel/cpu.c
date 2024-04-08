@@ -57,22 +57,6 @@ static_assert(GDT_BASE + GDT_LIMIT < LDT_BASE, "GDT overlaps LDT!");
 static_assert(LDT_BASE + LDT_LIMIT < TSS_BASE, "LDT overlaps TSS!");
 static_assert(TSS_BASE + TSS_LIMIT <= PAGE_2, "TSS overlaps into next page!");
 
-//
-// GDT Segment Selectors
-//
-#define SEGSEL_NULL         (0x0)
-#define SEGSEL_LDT          (0x08|KERNEL_PL)
-#define SEGSEL_KERNEL_CODE  (0x10|KERNEL_PL)
-#define SEGSEL_KERNEL_DATA  (0x18|KERNEL_PL)
-#define SEGSEL_USER_CODE    (0x20|USER_PL)
-#define SEGSEL_USER_DATA    (0x28|USER_PL)
-#define SEGSEL_TSS          (0x30|KERNEL_PL)
-
-static_assert(KERNEL_CS == SEGSEL_KERNEL_CODE, "KERNEL_CS invalid!");
-static_assert(KERNEL_DS == SEGSEL_KERNEL_DATA, "KERNEL_DS invalid!");
-static_assert(USER_CS == SEGSEL_USER_CODE, "USER_CS invalid!");
-static_assert(USER_DS == SEGSEL_USER_DATA, "USER_DS invalid!");
-
 /**
  * Gets a Segment Descriptor from a descriptor table.
  *
@@ -131,10 +115,10 @@ static void init_gdt(const struct boot_info * const info)
     memset((void *) GDT_BASE, 0, GDT_SIZE);
 
     // Open up all of memory (0-4G) for use by kernel and user
-    struct x86_desc *kernel_cs = get_desc(GDT_BASE, SEGSEL_KERNEL_CODE);
-    struct x86_desc *kernel_ds = get_desc(GDT_BASE, SEGSEL_KERNEL_DATA);
-    struct x86_desc *user_cs = get_desc(GDT_BASE, SEGSEL_USER_CODE);
-    struct x86_desc *user_ds = get_desc(GDT_BASE, SEGSEL_USER_DATA);
+    struct x86_desc *kernel_cs = get_desc(GDT_BASE, KERNEL_CS);
+    struct x86_desc *kernel_ds = get_desc(GDT_BASE, KERNEL_DS);
+    struct x86_desc *user_cs = get_desc(GDT_BASE, USER_CS);
+    struct x86_desc *user_ds = get_desc(GDT_BASE, USER_DS);
 
     make_seg_desc(kernel_cs, KERNEL_PL, 0x0, LIMIT_MAX, DESCTYPE_CODE_XR);  // KERNEL_CS -> DPL0, Execute/Read
     make_seg_desc(kernel_ds, KERNEL_PL, 0x0, LIMIT_MAX, DESCTYPE_DATA_RW);  // KERNEL_DS -> DPL0, Read/Write
@@ -146,16 +130,19 @@ static void init_gdt(const struct boot_info * const info)
     lgdt(gdt_desc);
 
     // Reload segment registers with new segment selectors
-    load_cs(SEGSEL_KERNEL_CODE);
-    load_ds(SEGSEL_KERNEL_DATA);
-    load_es(SEGSEL_KERNEL_DATA);
+    load_cs(KERNEL_CS);
+    load_ds(KERNEL_DS);
+    load_es(KERNEL_DS);
     load_fs(SEGSEL_NULL);
     load_gs(SEGSEL_NULL);
-    load_ss(SEGSEL_KERNEL_DATA);
+    load_ss(KERNEL_DS);
 }
 
 static void init_idt(const struct boot_info * const info)
 {
+    int count;
+    struct x86_desc *desc;
+
     static const idt_thunk excepts[NUM_EXCEPTIONS] =
     {
         _thunk_except00h, _thunk_except01h, _thunk_except02h, _thunk_except03h,
@@ -180,28 +167,23 @@ static void init_idt(const struct boot_info * const info)
     memset((void *) IDT_BASE, 0, IDT_SIZE);
 
     // Fill IDT
-    int count = IDT_SIZE / sizeof(struct x86_desc);
-    for (int idx = 0, e = 0, i = 0; idx < count; idx++) {
-        struct x86_desc *desc = ((struct x86_desc *) IDT_BASE) + idx;
-        e = idx - IVT_EXCEPTION;
-        i = idx - IVT_DEVICEIRQ;
+    count = IDT_SIZE / sizeof(struct x86_desc);
+    assert(count == 256);
 
-        if (idx >= IVT_EXCEPTION && e < NUM_EXCEPTIONS) {
-            // interrupt gate for exceptions
-            make_intr_gate(desc, SEGSEL_KERNEL_CODE, KERNEL_PL, excepts[e]);
+    for (int vec = 0, n = 0; vec < count; vec++) {
+        desc = ((struct x86_desc *) IDT_BASE) + vec;
+        if (vec >= VEC_INTEL && vec < VEC_INTEL + NUM_EXCEPTIONS) {
+            n = vec - VEC_INTEL;
+            make_trap_gate(desc, KERNEL_CS, KERNEL_PL, excepts[n]);
         }
-        else if (idx >= IVT_DEVICEIRQ && i < NUM_IRQS) {
-            // interrupt gate for device IRQs
-            make_intr_gate(desc, SEGSEL_KERNEL_CODE, KERNEL_PL, irqs[i]);
+        else if (vec >= VEC_DEVICEIRQ && vec < VEC_DEVICEIRQ + NUM_IRQS) {
+            n = vec - VEC_DEVICEIRQ;
+            make_intr_gate(desc, KERNEL_CS, KERNEL_PL, irqs[n]);
         }
-        else if (idx == IVT_SYSCALL) {
-            // user-mode accessible trap gate for system calls
-            make_trap_gate(desc, SEGSEL_KERNEL_CODE, USER_PL, _thunk_syscall);
+        else if (vec == VEC_SYSCALL) {
+            make_trap_gate(desc, KERNEL_CS, USER_PL, _thunk_syscall);
         }
-        else if (idx == 69) {
-            make_trap_gate(desc, SEGSEL_KERNEL_CODE, USER_PL, _thunk_test);
-        }
-        // else, keep the vector NULL! will generate a double-fault exception
+        // else, keep vector NULL; this will generate a double-fault exception
     }
 
     // Load the IDTR
@@ -240,8 +222,8 @@ static void init_tss(const struct boot_info * const info)
     // Fill TSS with LDT segment selector, kernel stack pointer,
     // and kernel stack segment selector
     tss->ldt_segsel = SEGSEL_LDT;
-    tss->esp0 = (uint32_t) info->stack;         // TODO: make this WELL-DEFINED!!
-    tss->ss0 = SEGSEL_KERNEL_DATA;
+    tss->esp0 = KERNEL_STACK;   // TODO: select frame based on current task
+    tss->ss0 = KERNEL_DS;
 
     // Add TSS entry to GDT
     void *pTssDesc = get_desc(GDT_BASE, SEGSEL_TSS);

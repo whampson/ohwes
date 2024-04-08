@@ -26,10 +26,13 @@
 #include <errno.h>
 #include <syscall.h>
 #include <x86.h>
+#include <ohwes.h>
 
 .globl kentry
 kentry:
         cli
+        movl            $KERNEL_STACK, %ebp
+        movl            %ebp, %esp
         call            kmain
 
 .globl idle
@@ -104,6 +107,7 @@ idle:
 #       etc.
 ##
 recv_interrupt:
+        cli
         subl            $SIZEOF_IREGS_CTX_REGS, %esp
         movl            %ebx, IREGS_EBX(%esp)
         movl            %ecx, IREGS_ECX(%esp)
@@ -120,15 +124,15 @@ recv_interrupt:
         movl            IREGS_VEC_NUM(%esp), %eax
         test            %eax, %eax
         js              irq_trampoline
-        cmpl            $IVT_SYSCALL, %eax
+        cmpl            $VEC_SYSCALL, %eax
         je              syscall_trampoline
-        jmp             interrupt_trampoline
+        jmp             exception_trampoline
 
-interrupt_trampoline:
-        pushl           $end_interrupt
+exception_trampoline:
+        pushl           $end_exception
         cmpl            $NUM_EXCEPTIONS, %eax
         ja              _noint
-        jmp             *exception_table(, %eax, 4)
+        // jmp             *exception_table(, %eax, 4)
 _noint:
         jmp             crash          # unexpected interrupt!
 
@@ -137,10 +141,11 @@ irq_trampoline:
         jmp             handle_irq      # see irq.c
 
 syscall_trampoline:
-        pushl           $end_syscall
         movl            IREGS_EAX(%ecx), %eax
         cmpl            $NUM_SYSCALLS, %eax
         ja              _nosys
+        sti
+        pushl           $end_syscall
         jmp             *syscall_table(, %eax, 4)
 _nosys:
         movl            $-ENOSYS, %eax
@@ -158,11 +163,14 @@ exception_table:
 
 .globl switch_context
 switch_context:
+        cli
         movl            %ecx, %esp      # fastcall
-end_interrupt:
+end_exception:
 end_irq:
+        cli
         movl            IREGS_EAX(%esp), %eax
 end_syscall:
+        cli
         movl            IREGS_EBP(%esp), %ebp
         movl            IREGS_EDI(%esp), %edi
         movl            IREGS_ESI(%esp), %esi
@@ -196,9 +204,9 @@ end_syscall:
 # ----------------------------------------------------------------------------
 
 ##
-# Generic interrupt thunk.
+# Generic exception thunk.
 ##
-#define INTERRUPT_THUNK(thunk_name, vec_num)                                    \
+#define EXCEPTION_THUNK(thunk_name, vec_num)                                    \
 .globl thunk_name;                                                              \
 thunk_name:                                                                     \
         pushl   $0;                                                             \
@@ -206,10 +214,10 @@ thunk_name:                                                                     
         jmp     recv_interrupt
 
 ##
-# Interrupt thunk w/ error code already pushed by processor
-# (for certain Exceptions).
+# Exception thunk w/ error code already pushed by processor (for certain Intel
+# exceptions).
 ##
-#define INTERRUPT_THUNK_ERRCODE(thunk_name, vec_num)                            \
+#define EXCEPTION_THUNK_ERRCODE(thunk_name, vec_num)                            \
 .globl thunk_name;                                                              \
 thunk_name:                                                                     \
         pushl   $vec_num;                                                       \
@@ -218,11 +226,11 @@ thunk_name:                                                                     
 ##
 # Device IRQ thunk.
 ##
-#define IRQ_THUNK(thunk_name, vec_num)                                          \
+#define IRQ_THUNK(thunk_name, irq_num)                                          \
 .globl thunk_name;                                                              \
 thunk_name:                                                                     \
         pushl   $0;                                                             \
-        pushl   $~vec_num;                                                      \
+        pushl   $~irq_num;                                                      \
         jmp     recv_interrupt
 
 
@@ -232,38 +240,38 @@ thunk_name:                                                                     
 #     abort - severe error, interrupted program cannot be resumed
 
 # 0-31                  processor exceptions               classification
-INTERRUPT_THUNK         (_thunk_except00h, EXCEPTION_DE)    # fault
-INTERRUPT_THUNK         (_thunk_except01h, EXCEPTION_DB)    # fault/trap
-INTERRUPT_THUNK         (_thunk_except02h, EXCEPTION_NMI)   # n/a
-INTERRUPT_THUNK         (_thunk_except03h, EXCEPTION_BP)    # trap
-INTERRUPT_THUNK         (_thunk_except04h, EXCEPTION_OF)    # trap
-INTERRUPT_THUNK         (_thunk_except05h, EXCEPTION_BR)    # fault
-INTERRUPT_THUNK         (_thunk_except06h, EXCEPTION_UD)    # fault
-INTERRUPT_THUNK         (_thunk_except07h, EXCEPTION_NM)    # fault
-INTERRUPT_THUNK_ERRCODE (_thunk_except08h, EXCEPTION_DF)    # abort; error code is 0
-INTERRUPT_THUNK         (_thunk_except09h, 9)               # fault (not used, was Coprocessor Segment Overrun)
-INTERRUPT_THUNK_ERRCODE (_thunk_except0Ah, EXCEPTION_TS)    # fault
-INTERRUPT_THUNK_ERRCODE (_thunk_except0Bh, EXCEPTION_NP)    # fault
-INTERRUPT_THUNK_ERRCODE (_thunk_except0Ch, EXCEPTION_SS)    # fault
-INTERRUPT_THUNK_ERRCODE (_thunk_except0Dh, EXCEPTION_GP)    # fault
-INTERRUPT_THUNK_ERRCODE (_thunk_except0Eh, EXCEPTION_PF)    # fault
-INTERRUPT_THUNK         (_thunk_except0Fh, 15)              # (Intel reserved)
-INTERRUPT_THUNK         (_thunk_except10h, EXCEPTION_MF)    # fault
-INTERRUPT_THUNK_ERRCODE (_thunk_except11h, EXCEPTION_AC)    # fault, error code is 0
-INTERRUPT_THUNK         (_thunk_except12h, EXCEPTION_MC)    # abort
-INTERRUPT_THUNK         (_thunk_except13h, EXCEPTION_XM)    # fault
-INTERRUPT_THUNK         (_thunk_except14h, EXCEPTION_VE)    # fault
-INTERRUPT_THUNK_ERRCODE (_thunk_except15h, EXCEPTION_CP)    # fault
-INTERRUPT_THUNK         (_thunk_except16h, 22)              # (Intel reserved)
-INTERRUPT_THUNK         (_thunk_except17h, 23)              # (Intel reserved)
-INTERRUPT_THUNK         (_thunk_except18h, 24)              # (Intel reserved)
-INTERRUPT_THUNK         (_thunk_except19h, 25)              # (Intel reserved)
-INTERRUPT_THUNK         (_thunk_except1Ah, 26)              # (Intel reserved)
-INTERRUPT_THUNK         (_thunk_except1Bh, 27)              # (Intel reserved)
-INTERRUPT_THUNK         (_thunk_except1Ch, 28)              # (Intel reserved)
-INTERRUPT_THUNK         (_thunk_except1Dh, 29)              # (Intel reserved)
-INTERRUPT_THUNK         (_thunk_except1Eh, 30)              # (Intel reserved)
-INTERRUPT_THUNK         (_thunk_except1Fh, 31)              # (Intel reserved)
+EXCEPTION_THUNK         (_thunk_except00h, EXCEPTION_DE)    # fault
+EXCEPTION_THUNK         (_thunk_except01h, EXCEPTION_DB)    # fault/trap
+EXCEPTION_THUNK         (_thunk_except02h, EXCEPTION_NMI)   # n/a
+EXCEPTION_THUNK         (_thunk_except03h, EXCEPTION_BP)    # trap
+EXCEPTION_THUNK         (_thunk_except04h, EXCEPTION_OF)    # trap
+EXCEPTION_THUNK         (_thunk_except05h, EXCEPTION_BR)    # fault
+EXCEPTION_THUNK         (_thunk_except06h, EXCEPTION_UD)    # fault
+EXCEPTION_THUNK         (_thunk_except07h, EXCEPTION_NM)    # fault
+EXCEPTION_THUNK_ERRCODE (_thunk_except08h, EXCEPTION_DF)    # abort; error code is 0
+EXCEPTION_THUNK         (_thunk_except09h, 9)               # fault (not used, was Coprocessor Segment Overrun)
+EXCEPTION_THUNK_ERRCODE (_thunk_except0Ah, EXCEPTION_TS)    # fault
+EXCEPTION_THUNK_ERRCODE (_thunk_except0Bh, EXCEPTION_NP)    # fault
+EXCEPTION_THUNK_ERRCODE (_thunk_except0Ch, EXCEPTION_SS)    # fault
+EXCEPTION_THUNK_ERRCODE (_thunk_except0Dh, EXCEPTION_GP)    # fault
+EXCEPTION_THUNK_ERRCODE (_thunk_except0Eh, EXCEPTION_PF)    # fault
+EXCEPTION_THUNK         (_thunk_except0Fh, 15)              # (Intel reserved)
+EXCEPTION_THUNK         (_thunk_except10h, EXCEPTION_MF)    # fault
+EXCEPTION_THUNK_ERRCODE (_thunk_except11h, EXCEPTION_AC)    # fault, error code is 0
+EXCEPTION_THUNK         (_thunk_except12h, EXCEPTION_MC)    # abort
+EXCEPTION_THUNK         (_thunk_except13h, EXCEPTION_XM)    # fault
+EXCEPTION_THUNK         (_thunk_except14h, EXCEPTION_VE)    # fault
+EXCEPTION_THUNK_ERRCODE (_thunk_except15h, EXCEPTION_CP)    # fault
+EXCEPTION_THUNK         (_thunk_except16h, 22)              # (Intel reserved)
+EXCEPTION_THUNK         (_thunk_except17h, 23)              # (Intel reserved)
+EXCEPTION_THUNK         (_thunk_except18h, 24)              # (Intel reserved)
+EXCEPTION_THUNK         (_thunk_except19h, 25)              # (Intel reserved)
+EXCEPTION_THUNK         (_thunk_except1Ah, 26)              # (Intel reserved)
+EXCEPTION_THUNK         (_thunk_except1Bh, 27)              # (Intel reserved)
+EXCEPTION_THUNK         (_thunk_except1Ch, 28)              # (Intel reserved)
+EXCEPTION_THUNK         (_thunk_except1Dh, 29)              # (Intel reserved)
+EXCEPTION_THUNK         (_thunk_except1Eh, 30)              # (Intel reserved)
+EXCEPTION_THUNK         (_thunk_except1Fh, 31)              # (Intel reserved)
 
 # 32-47                 device IRQs
 IRQ_THUNK               (_thunk_irq00h, IRQ_TIMER)
@@ -284,9 +292,8 @@ IRQ_THUNK               (_thunk_irq0Eh, IRQ_ATA1)
 IRQ_THUNK               (_thunk_irq0Fh, IRQ_ATA2)
 
 # 48-79                 reserved
-INTERRUPT_THUNK         (_thunk_test, 69)
 
 # 80                    system call
-INTERRUPT_THUNK         (_thunk_syscall, IVT_SYSCALL)
+EXCEPTION_THUNK         (_thunk_syscall, VEC_SYSCALL)
 
 # 81-255                reserved

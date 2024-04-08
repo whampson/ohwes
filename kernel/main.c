@@ -1,23 +1,23 @@
 /* =============================================================================
- * Copyright (C) 2020-2024 Wes Hampson. All Rights Reserved.
- *
- * This file is part of the OH-WES Operating System.
- * OH-WES is free software; you may redistribute it and/or modify it under the
- * terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- * -----------------------------------------------------------------------------
- *         File: kernel/main.c
- *      Created: January 22, 2024
- *       Author: Wes Hampson
- * =============================================================================
- */
+* Copyright (C) 2020-2024 Wes Hampson. All Rights Reserved.
+*
+* This file is part of the OH-WES Operating System.
+* OH-WES is free software; you may redistribute it and/or modify it under the
+* terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+* -----------------------------------------------------------------------------
+*         File: kernel/main.c
+*      Created: January 22, 2024
+*       Author: Wes Hampson
+* =============================================================================
+*/
 
 #include <ohwes.h>
 #include <boot.h>
@@ -174,7 +174,7 @@ static void debug_interrupt(void)
             divzero();
             break;
         case 2:
-            __asm__ volatile ("int $2");    // NMI: TODO generate real NMI
+            softnmi();
             break;
         case 3:
             dbgbrk();
@@ -188,6 +188,11 @@ static void debug_interrupt(void)
         case 6:
             panic("you fucked up!!");
             break;
+        case 7:
+            __asm__ volatile ("int $0x2D");
+            break;
     }
+
+    g_test_crash_kernel = 0;
 }
 #endif

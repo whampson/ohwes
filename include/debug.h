@@ -36,6 +36,11 @@ extern int g_test_crash_kernel;
     __asm__ volatile ("idiv %0" :: "a"(0), "b"(0)); \
 })
 
+#define softnmi()                                   \
+({                                                  \
+    __asm__ volatile ("int $2");                    \
+})
+
 #define dbgbrk()                                    \
 ({                                                  \
     __asm__ volatile ("int $3");                    \

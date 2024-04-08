@@ -53,7 +53,7 @@ struct char_dev cdevs[] =
 
 struct file _rtc;   // TODO: MOVE!!
 
-int sys_open(const char *name, int flags)
+int __syscall sys_open(const char *name, int flags)
 {
     uint32_t cli_flags;
     int devid;
@@ -62,7 +62,6 @@ int sys_open(const char *name, int flags)
     open_fn open;
 
     assert(getpl() == KERNEL_PL);
-    kprint("sys: open(%s, %d)\n", name, flags);
     cli_save(cli_flags); // prevent task switch
 
     // TODO: user-mode buffer validation!!

@@ -96,7 +96,26 @@
 #define DESCTYPE_CODE_XRC       0x0E    // Code, Execute/Read, Conforming
 #define DESCTYPE_CODE_XRCA      0x0F    // Code, Execute/Read, Conforming
 
+#define EFLAGS_CF           (1 << 0)
+#define EFLAGS_PF           (1 << 2)
+#define EFLAGS_AF           (1 << 4)
+#define EFLAGS_ZF           (1 << 6)
+#define EFLAGS_SF           (1 << 7)
+#define EFLAGS_TF           (1 << 8)
+#define EFLAGS_IF           (1 << 9)
+#define EFLAGS_DF           (1 << 10)
+#define EFLAGS_OF           (1 << 11)
+#define EFLAGS_IOPL         (3 << 12)
+#define EFLAGS_NT           (1 << 14)
+#define EFLAGS_RF           (1 << 16)
+#define EFLAGS_VM           (1 << 17)
+#define EFLAGS_AC           (1 << 18)
+#define EFLAGS_VIF          (1 << 19)
+#define EFLAGS_VIP          (1 << 20)
+#define EFLAGS_ID           (1 << 21)
+
 #ifdef __ASSEMBLER__
+// Assembler-only defines
 .macro LOAD_SEGREG addr, reg
         movw            \addr, %ax
         movw            %ax, \reg
@@ -106,11 +125,30 @@
         movw            %ax, \addr
 .endm
 #else
-// C-only defines from here on out!
+// C-only defines
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+
+#define flags_cf(e)         ((e) & EFLAGS_CF)
+#define flags_pf(e)         ((e) & EFLAGS_PF)
+#define flags_af(e)         ((e) & EFLAGS_AF)
+#define flags_zf(e)         ((e) & EFLAGS_ZF)
+#define flags_sf(e)         ((e) & EFLAGS_SF)
+#define flags_tf(e)         ((e) & EFLAGS_TF)
+#define flags_if(e)         ((e) & EFLAGS_IF)
+#define flags_df(e)         ((e) & EFLAGS_DF)
+#define flags_of(e)         ((e) & EFLAGS_OF)
+#define flags_iopl(e)       (((e) & EFLAGS_IOPL) >> 12)
+#define flags_nt(e)         ((e) & EFLAGS_NT)
+#define flags_rf(e)         ((e) & EFLAGS_RF)
+#define flags_vm(e)         ((e) & EFLAGS_VM)
+#define flags_ac(e)         ((e) & EFLAGS_AC)
+#define flags_vif(e)        ((e) & EFLAGS_VIF)
+#define flags_vip(e)        ((e) & EFLAGS_VIP)
+#define flags_id(e)         ((e) & EFLAGS_ID)
+
 
 /**
  * EFLAGS Register
@@ -586,23 +624,23 @@ __asm__ volatile (          \
 /**
  * Clears the interrupt flag, disabling interrupts.
  */
-#define cli()               \
-__asm__ volatile (          \
-    "cli"                   \
-    :                       \
-    :                       \
-    : "cc"                  \
+#define cli()                                                               \
+__asm__ volatile (                                                          \
+    "cli"                                                                   \
+    :                                                                       \
+    :                                                                       \
+    : "cc"                                                                  \
 )
 
 /**
  * Sets the interrupt flag, enabling interrupts.
  */
-#define sti()               \
-__asm__ volatile (          \
-    "sti"                   \
-    :                       \
-    :                       \
-    : "cc"                  \
+#define sti()                                                               \
+__asm__ volatile (                                                          \
+    "sti"                                                                   \
+    :                                                                       \
+    :                                                                       \
+    : "cc"                                                                  \
 )
 
 /**
@@ -612,16 +650,16 @@ __asm__ volatile (          \
  *                note this NOT a pointer, due to the way GCC inline assembly
  *                handles parameters
  */
-#define cli_save(flags)     \
-__asm__ volatile (          \
-    "                       \n\
-    pushfl                  \n\
-    popl %0                 \n\
-    cli                     \n\
-    "                       \
-    : "=r"(flags)           \
-    :                       \
-    : "cc"                  \
+#define cli_save(flags)                                                     \
+__asm__ volatile (                                                          \
+    "                                                                       \n\
+    pushfl                                                                  \n\
+    popl %0                                                                 \n\
+    cli                                                                     \n\
+    "                                                                       \
+    : "=r"(flags)                                                           \
+    :                                                                       \
+    : "cc"                                                                  \
 )
 
 /**
@@ -629,16 +667,28 @@ __asm__ volatile (          \
  *
  * @param flags - a 32-bit number containing the EFLAGS to be set
  */
-#define restore_flags(flags)\
-__asm__ volatile (          \
-    "                       \n\
-    push %0                 \n\
-    popfl                   \n\
-    "                       \
-    :                       \
-    : "r"(flags)            \
-    : "cc"                  \
+#define restore_flags(flags)                                                \
+__asm__ volatile (                                                          \
+    "                                                                       \n\
+    push %0                                                                 \n\
+    popfl                                                                   \n\
+    "                                                                       \
+    :                                                                       \
+    : "r"(flags)                                                            \
+    : "cc"                                                                  \
 )
+
+#define has_cpuid()                                                         \
+({                                                                          \
+    uint32_t __flags, __x;                                                  \
+    cli_save(__flags);                                                      \
+    __flags |= EFLAGS_ID;                                                   \
+    restore_flags(__flags);                                                 \
+    cli_save(__flags);                                                      \
+    __x = flags_id(__flags);                                                \
+    __x;                                                                    \
+})
+
 
 #endif /* __ASSEMBLER__ */
 

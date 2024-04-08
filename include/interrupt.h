@@ -25,9 +25,9 @@
 /**
  * Important interrupt vector table numbers.
  */
-#define IVT_EXCEPTION       0x00    // Base interrupt vector for exceptions.
-#define IVT_DEVICEIRQ       0x20    // Base interurpt vector for device IRQs.
-#define IVT_SYSCALL         0x80    // Interrupt vector for syscalls.
+#define VEC_INTEL           0x00    // Base interrupt vector for Intel exceptions.
+#define VEC_DEVICEIRQ       0x20    // Base interurpt vector for device IRQs.
+#define VEC_SYSCALL         0x80    // Interrupt vector for syscalls.
 
 /**
  * Intel exception vector numbers.
@@ -113,7 +113,7 @@ struct iregs
     uint16_t gs;
 
 // interrupt info
-    uint32_t vec_num;
+    int32_t vec_num;
     uint32_t err_code;
 
 // cpu control regs (system context; iret regs)

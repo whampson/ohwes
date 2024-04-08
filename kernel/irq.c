@@ -26,6 +26,8 @@
 #include <ohwes.h>
 #include <pic.h>
 
+extern __fastcall void crash(struct iregs *regs);
+
 #define valid_irq(n)    ((n) >= 0 && (n) < NUM_IRQS)
 
 #define MAX_HANDLERS    8
@@ -114,7 +116,7 @@ void __fastcall handle_irq(struct iregs *regs)
     }
 
     if (!handled) {
-        panic("unhandled IRQ %d", irq_num);
+        crash(regs);
     }
 
     pic_eoi(irq_num);

@@ -22,6 +22,23 @@
 #ifndef __OHWES_H
 #define __OHWES_H
 
+#define MIN_KB_REQUIRED                 639     // let's see how long this lasts!
+#define SHOW_MEMMAP                     1
+
+#define KERNEL_STACK                    0x7C00
+
+#define KERNEL_CS                       (0x10|KERNEL_PL)
+#define KERNEL_DS                       (0x18|KERNEL_PL)
+#define KERNEL_SS                       KERNEL_DS
+#define USER_CS                         (0x20|USER_PL)
+#define USER_DS                         (0x28|USER_PL)
+#define USER_SS                         USER_DS
+#define SEGSEL_NULL                     (0x0)
+#define SEGSEL_LDT                      (0x08|KERNEL_PL)
+#define SEGSEL_TSS                      (0x30|KERNEL_PL)
+
+#ifndef __ASSEMBLER__
+
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -32,16 +49,6 @@
 #define OS_VERSION                      "0.1"
 #define OS_MONIKER                      "Ronnie Raven"
 #define OS_BUILDDATE                    __DATE__ " " __TIME__
-
-#define MIN_KB_REQUIRED                 639     // let's see how long this lasts!
-#define SHOW_MEMMAP                     1
-
-#define KERNEL_CS                       0x10
-#define KERNEL_DS                       0x18
-#define KERNEL_SS                       KERNEL_DS
-#define USER_CS                         0x23
-#define USER_DS                         0x2B
-#define USER_SS                         USER_DS
 
 extern void idle(void);                 // see entry.S
 extern void init(void);                 // see init.c
@@ -89,5 +96,7 @@ do {                                    \
 #define ONOFF(cond)                     ((cond)?"on":"off")
 #define PLURAL(n,a)                     (((n)==1)?a:a "s")
 #define PLURAL2(n,a,b)                  (((n)==1)?a:b)
+
+#endif // __ASSEMBLER__
 
 #endif // __OHWES_H
