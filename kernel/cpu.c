@@ -133,9 +133,9 @@ static void init_gdt(const struct boot_info * const info)
     load_cs(KERNEL_CS);
     load_ds(KERNEL_DS);
     load_es(KERNEL_DS);
-    load_fs(SEGSEL_NULL);
-    load_gs(SEGSEL_NULL);
     load_ss(KERNEL_DS);
+    load_fs(0);
+    load_gs(0);
 }
 
 static void init_idt(const struct boot_info * const info)
@@ -201,11 +201,11 @@ static void init_ldt(const struct boot_info * const info)
     memset((void *) LDT_BASE, 0, IDT_SIZE);
 
     // Create LDT entry in GDT using predefined LDT segment selector.
-    void *ldt_desc = get_desc(GDT_BASE, SEGSEL_LDT);
+    void *ldt_desc = get_desc(GDT_BASE, _GDT_LOCALDESC);
     make_ldt_desc(ldt_desc, KERNEL_PL, LDT_BASE, LDT_LIMIT);
 
     // Load LDTR
-    lldt(SEGSEL_LDT);
+    lldt(_GDT_LOCALDESC);
 }
 
 static void init_tss(const struct boot_info * const info)
@@ -213,6 +213,7 @@ static void init_tss(const struct boot_info * const info)
     //
     // TSS used minimally; only when an interrupt occurs that changes CPU to
     // privilege level 0 (kernel mode) in order to locate the kernel stack.
+    // We don't keep one for every process like Intel wants us to.
     //
 
     // Zero TSS
@@ -221,14 +222,14 @@ static void init_tss(const struct boot_info * const info)
 
     // Fill TSS with LDT segment selector, kernel stack pointer,
     // and kernel stack segment selector
-    tss->ldt_segsel = SEGSEL_LDT;
-    tss->esp0 = KERNEL_STACK;   // TODO: select frame based on current task
+    tss->ldt_segsel = _GDT_LOCALDESC;
+    tss->esp0 = KERNEL_STACK;   // TODO: don't forget to modify this when task switching!
     tss->ss0 = KERNEL_DS;
 
     // Add TSS entry to GDT
-    void *pTssDesc = get_desc(GDT_BASE, SEGSEL_TSS);
+    void *pTssDesc = get_desc(GDT_BASE, _GDT_TASKSTATE);
     make_tss_desc(pTssDesc, KERNEL_PL, TSS_BASE, TSS_LIMIT);
 
     // Load Task Register
-    ltr(SEGSEL_TSS);
+    ltr(_GDT_TASKSTATE);
 }

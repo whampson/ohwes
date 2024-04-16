@@ -128,11 +128,18 @@ int __syscall sys_ioctl(int fd, unsigned int num, void *arg)
     size = (num & _IOCTL_SIZEMASK) >> _IOCTL_SIZESHIFT;
     dir = (num & _IOCTL_DIRMASK) >> _IOCTL_DIRSHIFT;
 
+#if PRINT_IOCTL
     kprint("ioctl: 0x%08X (seq=%d,code=%d,size=%d%s)\n",
         num, seq, code, size,
         ((dir & _IOCTL_READ) && (dir & _IOCTL_WRITE)) ? ",dir=rw," : // yeesh...
             (dir & _IOCTL_READ) ? ",dir=r" :
                 (dir & _IOCTL_WRITE) ? ",dir=w" : "");
+#else
+    (void) seq;
+    (void) code;
+    (void) size;
+    (void) dir;
+#endif
 
     // bad IOCTL number, size must be nonzero if direction bits set!
     if (dir && size == 0) {

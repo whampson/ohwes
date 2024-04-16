@@ -273,7 +273,7 @@ static int set_rate(unsigned char rate)
     restore_flags(flags);
 
 #if CHATTY
-    kprint("rtc: periodic interrupt frequency is now %dHz\n", rate_to_hz(rate));
+    kprint("rtc: periodic interrupt frequency is now %dHz\n", rate2hz(rate));
 #endif
 
     return 0;
@@ -540,12 +540,12 @@ int rtc_ioctl(struct file *file, unsigned int num, void *arg)
 
     ret = 0;
     switch (num) {
-        case RTC_AIE_DISABLE: clear_mode(REG_B_AIE); break;
-        case RTC_AIE_ENABLE: set_mode(REG_B_AIE); break;
-        case RTC_PIE_DISABLE: clear_mode(REG_B_PIE); break;
-        case RTC_PIE_ENABLE: set_mode(REG_B_PIE); break;
-        case RTC_UIE_DISABLE: clear_mode(REG_B_UIE); break;
-        case RTC_UIE_ENABLE: set_mode(REG_B_UIE); break;
+        case RTC_ALARM_DISABLE: clear_mode(REG_B_AIE); break;
+        case RTC_ALARM_ENABLE: set_mode(REG_B_AIE); break;
+        case RTC_IRQP_DISABLE: clear_mode(REG_B_PIE); break;
+        case RTC_IRQP_ENABLE: set_mode(REG_B_PIE); break;
+        case RTC_UPDATE_DISABLE: clear_mode(REG_B_UIE); break;
+        case RTC_UPDATE_ENABLE: set_mode(REG_B_UIE); break;
 
         case RTC_IRQP_GET:
             rate = get_rate();

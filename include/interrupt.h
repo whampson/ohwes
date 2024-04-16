@@ -26,7 +26,7 @@
  * Important interrupt vector table numbers.
  */
 #define VEC_INTEL           0x00    // Base interrupt vector for Intel exceptions.
-#define VEC_DEVICEIRQ       0x20    // Base interurpt vector for device IRQs.
+#define VEC_DEVICEIRQ       0x20    // Base interrupt vector for device IRQs.
 #define VEC_SYSCALL         0x80    // Interrupt vector for syscalls.
 
 /**
@@ -145,7 +145,7 @@ static_assert(offsetof(struct iregs, vec_num) == SIZEOF_IREGS_CTX_REGS, "offseto
 static_assert(offsetof(struct iregs, esp) == SIZEOF_IREGS_NO_PL_CHANGE, "offsetof(struct iregs, vec_num) == SIZEOF_IREGS_NO_PL_CHANGE");
 static_assert(sizeof(struct iregs) == SIZEOF_IREGS, "sizeof(struct iregs) == SIZEOF_IREGS");
 
-__fastcall void switch_context(struct iregs *regs);
+__fastcall void switch_context(struct iregs *regs);     // see entry.S
 
 typedef void (__fastcall *idt_thunk)(void);
 

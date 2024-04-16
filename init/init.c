@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/init.c
+ *         File: init/init.c
  *      Created: March 24, 2024
  *       Author: Wes Hampson
  * =============================================================================
@@ -36,18 +36,19 @@ void init(void)
 
     // TODO: eventually this should load a program called 'init'
     // that forks itself and spawns the shell program
-    // (it we're following the Unix model)
+    // (if we're following the Unix model)
 
     printf("\e4\e[5;33mHello, world!\e[m\n");
 
 #if TEST_BUILD
-    printf("boot: running ring3 tests...\n");
+    printf("running user mode tests...\n");
     tmain_ring3();
 #endif
 
     // beep(1000, 100);
     // sleep(100);
     // beep(1250, 100); // requires kernel for cli
+    // TODO: make a test beep program!
 
     rtc_test();
 
@@ -62,11 +63,12 @@ void init(void)
         S_CSI,
     };
 
+    // nasty forever-input loop code follows, tread lightly
     while (true) {
         c = 0;
         count = read(stdin_fd, &c, 1);
         if (count == 0) {
-            continue;   // TODO: blocking I/O
+            continue;   // TODO: blocking I/O for console
         }
 
         assert(count == 1);
@@ -77,7 +79,7 @@ void init(void)
             printf("%c", c);
         }
 
-        // kinda nuts...
+        // escape sequence decoding...
         switch (c) {
             case '\e':
                 state = S_ESC;
