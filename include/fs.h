@@ -38,6 +38,7 @@ struct file_ops {
 };
 
 struct file {
+    int ioctl_code;
     struct file_ops *fops;
 };
 

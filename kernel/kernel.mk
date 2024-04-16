@@ -8,7 +8,6 @@ SOURCES := \
     cpu.c \
     crash.c \
     i8042.c \
-    init.c \
     irq.c \
     main.c \
     memory.c \
@@ -38,6 +37,8 @@ TGT_LDFLAGS := -Ttext 0x10000 -e kentry
 LINKLIBS := \
     lib/libc.a \
     lib/libgcc.a \
+    lib/init.a \
+    # TODO: make init.a into executable
 
 $(eval $(call add-linklibs,${LINKLIBS}))
 # TODO: do this automatically when LINKLIBS set?

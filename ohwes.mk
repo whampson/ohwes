@@ -7,6 +7,7 @@ SUBMAKEFILES := \
     lib/libgcc/libgcc.mk \
     boot/x86_boot.mk \
     kernel/kernel.mk \
+    init/init.mk \
 
 # use cross-compiler toolchain
 PREFIX     := i686-elf-

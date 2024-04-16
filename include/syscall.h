@@ -40,8 +40,8 @@
 
 // user-callable kernel routines
 extern void exit(int);
-extern int read(int, char *, size_t);
-extern int write(int, const char *, size_t);
+extern int read(int, void *, size_t);
+extern int write(int, const void *, size_t);
 extern int open(const char *, int);
 extern int close(int);
 extern int ioctl(int, unsigned int, void*);

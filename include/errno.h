@@ -26,6 +26,7 @@
 #define EINVAL      2   // Invalid Argument
 #define EBADF       3   // Bad File Descriptor
 #define ENOTTY      4   // Invalid IOCTL
+#define EBADRQC     5   // Bad Request Code
 
 #ifndef __ASSEMBLER__
 extern int _errno;

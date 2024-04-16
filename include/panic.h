@@ -13,25 +13,24 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/time.h
- *      Created: March 31, 2024
+ *         File: include/panic.h
+ *      Created: April 10, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __TIME_H
-#define __TIME_H
+#ifdef __USER_MODE__
 
-struct tm {
-    int tm_sec;     // seconds after the minute - [0, 60] (allows leapsecond)
-    int tm_min;     // minutes after the hour - [0, 59]
-    int tm_hour;    // hours since midnight - [0, 23]
-    int tm_mday;    // day of the month - [1, 31]
-    int tm_mon;     // months since January - [0, 11]
-    int tm_year;    // years since 1900
-    int tm_wday;    // days since Sunday - [0, 6]
-    int tm_yday;    // days since January 1 - [0, 365]
-    int tm_isdst;   // DST flag: >0 = DST in effect, 0 = no DST, <0 = no data
-};
+#include <errno.h>
+#include <stdio.h>
+#include <syscall.h>
 
-#endif // __TIME_H
+#define panic(...) ({ printf("panic: " __VA_ARGS__); exit(errno); })
+
+#else // __KERNEL_MODE__
+
+extern __noreturn void kpanic(const char *, ...);
+#define panic(...) kpanic(__VA_ARGS__)
+
+#endif
+

@@ -23,6 +23,7 @@
 #include <console.h>
 #include <errno.h>
 #include <fs.h>
+#include <ioctl.h>
 #include <task.h>
 #include <syscall.h>
 
@@ -30,9 +31,6 @@
 // TODO: All of these need to safely access the current task struct, to prevent
 // corruption in the event of a task switch.
 // !!!!!!!
-
-// indicate user pointer
-#define _USER_
 
 int __syscall __noreturn sys_exit(int status)
 {
@@ -44,7 +42,7 @@ int __syscall __noreturn sys_exit(int status)
     die();
 }
 
-int __syscall sys_read(int fd, _USER_ char *buf, size_t count)
+int __syscall sys_read(int fd, void *buf, size_t count)
 {
     struct file *f;
 
@@ -64,7 +62,7 @@ int __syscall sys_read(int fd, _USER_ char *buf, size_t count)
     return f->fops->read(f, buf, count);
 }
 
-int __syscall sys_write(int fd, const _USER_ char *buf, size_t count)
+int __syscall sys_write(int fd, const void *buf, size_t count)
 {
     struct file *f;
 
@@ -108,9 +106,14 @@ int __syscall sys_close(int fd)
     return ret;
 }
 
-int __syscall sys_ioctl(int fd, unsigned int cmd, void *arg)
+int __syscall sys_ioctl(int fd, unsigned int num, void *arg)
 {
+    uint32_t seq;
+    uint32_t code;
+    uint32_t size;
+    uint32_t dir;
     struct file *f;
+
     assert(getpl() == KERNEL_PL);
 
     if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_task->open_files[fd])) {
@@ -120,5 +123,30 @@ int __syscall sys_ioctl(int fd, unsigned int cmd, void *arg)
         return -ENOSYS;
     }
 
-    return f->fops->ioctl(f, cmd, arg);
+    seq = (num & _IOCTL_SEQMASK) >> _IOCTL_SEQSHIFT;
+    code = (num & _IOCTL_CODEMASK) >> _IOCTL_CODESHIFT;
+    size = (num & _IOCTL_SIZEMASK) >> _IOCTL_SIZESHIFT;
+    dir = (num & _IOCTL_DIRMASK) >> _IOCTL_DIRSHIFT;
+
+    kprint("ioctl: 0x%08X (seq=%d,code=%d,size=%d%s)\n",
+        num, seq, code, size,
+        ((dir & _IOCTL_READ) && (dir & _IOCTL_WRITE)) ? ",dir=rw," : // yeesh...
+            (dir & _IOCTL_READ) ? ",dir=r" :
+                (dir & _IOCTL_WRITE) ? ",dir=w" : "");
+
+    // bad IOCTL number, size must be nonzero if direction bits set!
+    if (dir && size == 0) {
+        return -EBADRQC;
+    }
+
+    // ensure buffer is not null if I/O direction bits set
+    if (dir && arg == NULL) {
+        return -EINVAL;
+    }
+
+    // TODO: validate size encoded in num
+    // TODO: validate buffer address and range
+    // TODO: validate device number
+
+    return f->fops->ioctl(f, num, arg);
 }

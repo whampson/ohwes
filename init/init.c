@@ -19,29 +19,16 @@
  * =============================================================================
  */
 
-#define __USER_MODE__ 1
-
 #include <ohwes.h>
-#include <ctype.h>
-#include <console.h>
-#include <syscall.h>
-#include <errno.h>
 #include <fs.h>
-#include <debug.h>
-#include <io.h>
-#include <rtc.h>
+#include <ctype.h>
+#include <syscall.h>
 
 #if TEST_BUILD
 void tmain_ring3(void);
 #endif
 
-// syscall user-mode function definitions, TODO: move these elsewhere
-SYSCALL_FN1_VOID(exit, int, status)
-SYSCALL_FN3(int, read, int, fd, char*, buf, size_t, count)
-SYSCALL_FN3(int, write, int, fd, const char *, buf, size_t, count)
-SYSCALL_FN2(int, open, const char*, name, int, flags)
-SYSCALL_FN1(int, close, int, fd)
-SYSCALL_FN3(int, ioctl, int, fd, unsigned int, cmd, void *, arg)
+extern void rtc_test(void);     // TODO: make exe
 
 void init(void)
 {
@@ -62,26 +49,10 @@ void init(void)
     // sleep(100);
     // beep(1250, 100); // requires kernel for cli
 
-
-    errno = 0;
-    int fd = open("/dev/rtc", 0);
-    assert(fd > 0);
-    int rate = ioctl(fd, IOCTL_RTC_GETRATE, NULL);
-    assert(rate == RTC_RATE_8192Hz);
-
-    rate = RTC_RATE_2Hz;
-    int ret = ioctl(fd, IOCTL_RTC_SETRATE, &rate);
-    assert(ret == 0);
-    rate = ioctl(fd, IOCTL_RTC_GETRATE, NULL);  // TODO: output thru arg
-    assert(rate == RTC_RATE_2Hz);
-    rate = RTC_RATE_8192Hz;
-    ret = ioctl(fd, IOCTL_RTC_SETRATE, &rate);
-    assert(ret == 0);
-    ret = close(fd);
-    assert(ret == 0);
+    rtc_test();
 
     char c;
-    int count;
+    int count = 0;
     int csinum = 0;
     char csiterm = 0;
     int state = 0;
@@ -154,7 +125,7 @@ void init(void)
                     testint();
                     break;
                 case 17:        // F6
-                    panic("you fucked up in userland!!");   // should not be accessible from userland...
+                    panic("you fucked up in userland!!");
                     break;
                 // case 18:        // F7
                 //     __asm__ volatile ("int $0x2D");

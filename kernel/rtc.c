@@ -29,31 +29,30 @@
 #include <rtc.h>
 #include <fs.h>
 
-#define PARANOID
-#define PRINT_CLOCK 0
+#define CHATTY                  0
 
 //
 // RTC Register Ports
 //
-#define RTC_PORT_REG_A          0xA     // RTC Register A
-#define RTC_PORT_REG_B          0xB     // RTC Register B
-#define RTC_PORT_REG_C          0xC     // RTC Register C
-#define RTC_PORT_REG_D          0xD     // RTC Register D
+#define PORT_REG_A              0xA     // RTC Register A
+#define PORT_REG_B              0xB     // RTC Register B
+#define PORT_REG_C              0xC     // RTC Register C
+#define PORT_REG_D              0xD     // RTC Register D
 
 //
 // Register A: Oscillator Mode
 //
 #define REG_A_RATE              0x0F    // Periodic Interrupt Rate
-#define REB_A_DV                0x70    // Oscillator Mode
+#define REB_A_DV                0x70    // Oscillator Mode (010b = enable)
 #define REG_A_UIP               0x80    // Update In Progress
 
 //
 // Register B: Clock and Interrupt Mode
 //
-#define REG_B_DSE               0x01    // Daylight Savings Enable
+#define REG_B_DSE               0x01    // Daylight Saving Enable
 #define REG_B_24H               0x02    // 24-hour Mode: 1 = 24h, 0 = 12h
 #define REG_B_DM                0x04    // Data Mode: 1 = binary, 0 = BCD
-#define REB_B_SQWE              0x08    // Square Wave Enable
+#define REG_B_SQWE              0x08    // Square Wave Enable
 #define REG_B_UIE               0x10    // Update Ended Interrupt Enable
 #define REG_B_AIE               0x20    // Alarm Interrupt Enable
 #define REG_B_PIE               0x40    // Periodic Interrupt Enable
@@ -72,31 +71,67 @@
 //
 #define REG_D_VRT               0x80    // Valid RAM and Time (battery alive)
 
-#define rd_a()                  cmos_read(RTC_PORT_REG_A)
-#define rd_b()                  cmos_read(RTC_PORT_REG_B)
-#define rd_c()                  cmos_read(RTC_PORT_REG_C)
-#define rd_d()                  cmos_read(RTC_PORT_REG_D)
+//
+// Time Registers
+//
+#define REG_SECONDS             0x00    // [0-59]
+#define REG_SECONDS_ALARM       0x01    // [0-59]
+#define REG_MINUTES             0x02    // [0-59]
+#define REG_MINUTES_ALARM       0x03    // [0-59]
+#define REG_HOURS               0x04    // [0-23], [1-12] (12h mode)
+#define REG_HOURS_ALARM         0x05    // [0-23], [1-12] (12h mode)
+#define REG_DAYOFWEEK           0x06    // [1-7], unreliable apparently...
+#define REG_DATEOFMONTH         0x07    // [1-31]
+#define REG_MONTH               0x08    // [1-12]
+#define REG_YEAR                0x09    // [0-99]
 
-#define wr_a(data)              cmos_write(RTC_PORT_REG_A, data)
-#define wr_b(data)              cmos_write(RTC_PORT_REG_B, data)
-#define wr_c(data)              cmos_write(RTC_PORT_REG_C, data)
-#define wr_d(data)              cmos_write(RTC_PORT_REG_D, data)
+#define PM_FLAG                 0x80    // PM bit, lives in the hours register (12h mode only)
 
-static struct tm tm_now;
+#define rd_a()                  cmos_read(PORT_REG_A)           // Read A register
+#define rd_b()                  cmos_read(PORT_REG_B)           // Read B register
+#define rd_c()                  cmos_read(PORT_REG_C)           // Read C register
+#define rd_d()                  cmos_read(PORT_REG_D)           // Read D register
 
-static void rtc_interrupt(void);
-static void update_time(void);
+#define wr_a(data)              cmos_write(PORT_REG_A, data)    // Write A register
+#define wr_b(data)              cmos_write(PORT_REG_B, data)    // Write B register
+#define wr_c(data)              cmos_write(PORT_REG_C, data)    // Write C register
+#define wr_d(data)              cmos_write(PORT_REG_D, data)    // Write D register
+
+#define bcd2bin(n)              ((((n)>>4)*10)+((n)&0x0F))  // bin = ((bcd / 16) * 10) + (bcd % 16)
+#define bin2bcd(n)              ((((n)/10)<<4)+((n)%10))    // bcd = ((bin / 10) * 16) + (bin % 10)
 
 int rtc_open(struct file **file, int flags);
 int rtc_close(struct file *file);
-int rtc_ioctl(struct file *file, unsigned int cmd, void *arg);
+int rtc_read(struct file *file, char *buf, size_t count);
+int rtc_ioctl(struct file *file, unsigned int num, void *arg);
 
-static int rtc_getrate(void);
-static int rtc_setrate(int rate);
+static void rtc_interrupt(void);
+
+static void set_mode(int mask);
+static void clear_mode(int mask);
+
+static unsigned char get_rate(void);
+static int set_rate(unsigned char rate);
+
+static void get_time(struct rtc_time *time, bool alarm);
+static int set_time(struct rtc_time *time, bool alarm);
+
+struct rtc {
+    uint32_t ticks;
+    uint32_t a_ticks;
+    uint32_t p_ticks;
+    uint32_t u_ticks;
+};
+static struct rtc _rtc; // TODO: make per-process
+
+volatile struct rtc * get_rtc(void)
+{
+    return &_rtc;
+}
 
 static struct file_ops rtc_fops =
 {
-    .read = NULL,
+    .read = rtc_read,
     .write = NULL,
     .open = rtc_open,
     .close = rtc_close,
@@ -105,13 +140,13 @@ static struct file_ops rtc_fops =
 
 static struct file rtc_file =
 {
-    .fops = &rtc_fops
+    .fops = &rtc_fops,
+    .ioctl_code = _IOC_RTC
 };
 
 void init_rtc(void)
 {
     uint8_t data;
-    uint8_t rate;
     uint32_t flags;
 
     //
@@ -121,50 +156,14 @@ void init_rtc(void)
     nmi_disable();
 
     //
+    // zero RTC structure
+    //
+    zeromem(&_rtc, sizeof(struct rtc));
+
+    //
     // flush RTC
     //
     (void) rd_c();
-
-    //
-    // set rate
-    //
-    rate = RTC_RATE_8192Hz; // fastest rate, TODO: freq-divide per process
-    rtc_setrate(rate);
-#ifdef PARANOID
-    rate = rtc_getrate();
-    assert(rate == RTC_RATE_8192Hz);
-#endif
-
-    //
-    // configure mode
-    //
-    data = rd_b();
-    data |= REG_B_PIE;  // enable periodic interrupts
-    data |= REG_B_24H;  // 24-hour time (not 12-hour)
-    data |= REG_B_DM;   // binary (not BCD)
-    data |= REG_B_UIE;  // enable 'update ended' interrupts
-    data &= ~REG_B_AIE; // disable alarm interrupts
-    data &= ~REG_B_DSE; // disable 'daylight saving enable'
-    wr_b(data);
-#ifdef PARANOID
-    // readback
-    data = rd_b();
-    if (!(data & REG_B_PIE)) {
-        panic("rtc: failed to enable periodic interrupts");
-    }
-    if (!(data & REG_B_24H)) {
-        panic("rtc: failed to enable 24h mode");
-    }
-    if (!(data & REG_B_DM)) {
-        panic("rtc: failed to enable binary data mode");
-    }
-    if (data & REG_B_AIE) {
-        panic("rtc: failed to disable alarm interrupts");
-    }
-    if (data & REG_B_DSE) {
-        panic("rtc: failed to disable Daylight Saving mode");
-    }
-#endif
 
     //
     // sanity checks
@@ -175,10 +174,21 @@ void init_rtc(void)
     }
 
     //
-    // get the current time of day
+    // enable oscillator
     //
-    zeromem(&tm_now, sizeof(struct tm));
-    update_time();
+    data = rd_a();
+    data |= 0x20;   // bit pattern '010' in "DV" bits
+    wr_a(data);
+
+    //
+    // configure mode
+    //
+    data = rd_b();
+    data &= ~REG_B_UIE; // disable 'update ended' interrupts
+    data &= ~REG_B_AIE; // disable alarm interrupts
+    data &= ~REG_B_PIE; // disable periodic interrupts
+    data &= ~REG_B_DSE; // disable 'daylight saving enable'
+    wr_b(data);
 
     //
     // register IRQ handler
@@ -195,79 +205,282 @@ void init_rtc(void)
 
 static void rtc_interrupt(void)
 {
-    uint8_t reg_b;
     uint8_t reg_c;
 
     reg_c = rd_c();
-    reg_b = rd_b();
-    (void) reg_b;
-    (void) reg_c;
+    get_rtc()->ticks++;
 
-    // might as well update the time...
+    if (reg_c & REG_C_AF) {
+        get_rtc()->a_ticks++;
+    }
+    if (reg_c & REG_C_PF) {
+        get_rtc()->p_ticks++;
+    }
     if (reg_c & REG_C_UF) {
-        update_time();
+        get_rtc()->u_ticks++;
     }
 }
 
-static void update_time(void)
+static void set_mode(int mask)
 {
     uint8_t data;
-    struct tm tmp;
-
-    // disable RTC updates so we can safely read CMOS RAM
-    data = rd_b();
-    wr_b(data | REG_B_SET);
-
-    // grab the time bits
-    tmp.tm_sec = cmos_read(0x00);
-    tmp.tm_min = cmos_read(0x02);
-    tmp.tm_hour = cmos_read(0x04);
-    tmp.tm_mday = cmos_read(0x07);
-    tmp.tm_mon = cmos_read(0x08) - 1;
-    tmp.tm_year = cmos_read(0x09);
-    tmp.tm_wday = -1;   // unrelabie on RTC, apparently...
-    tmp.tm_yday = -1;   // not available from RTC
-    tmp.tm_isdst = -1;  // not available from RTC
-
-    if (tmp.tm_year < 90) {
-        tmp.tm_year += 2000;
-    }
-    else {
-        tmp.tm_year += 1900;
-    }
-
-    if (tmp.tm_sec != tm_now.tm_sec ||
-        tmp.tm_min != tm_now.tm_min ||
-        tmp.tm_hour != tm_now.tm_hour ||
-        tmp.tm_mday != tm_now.tm_mday ||
-        tmp.tm_mon != tm_now.tm_mon ||
-        tmp.tm_year != tm_now.tm_year)
-    {
-        tm_now = tmp;
-#if PRINT_CLOCK
-        kprint("\e[s\e[25;61H%02d/%02d/%04d %02d:%02d:%02d\e[u",
-            tm_now.tm_mon+1, tm_now.tm_mday, tm_now.tm_year,
-            tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
-#endif
-    }
-
-    // re-enable updates
-    data &= ~REG_B_SET;
-    wr_b(data);
-}
-
-int rtc_gettime(struct tm *tm)
-{
     uint32_t flags;
 
-    if (tm == NULL) {
+    cli_save(flags);
+    data = rd_b();
+    data |= mask;
+    wr_b(data);
+    restore_flags(flags);
+}
+
+static void clear_mode(int mask)
+{
+    uint8_t data;
+    uint32_t flags;
+
+    cli_save(flags);
+    data = rd_b();
+    data &= ~mask;
+    wr_b(data);
+    restore_flags(flags);
+}
+
+static unsigned char get_rate(void)
+{
+    uint32_t flags;
+    uint8_t rate;
+
+    cli_save(flags);
+    rate = rd_a() & REG_A_RATE;
+    restore_flags(flags);
+
+    return rate;
+}
+
+static int set_rate(unsigned char rate)
+{
+    uint32_t flags;
+    uint8_t data;
+
+    if (rate > RTC_RATE_2Hz || rate < RTC_RATE_8192Hz) {
         return -EINVAL;
     }
 
     cli_save(flags);
-    memcpy(tm, &tm_now, sizeof(struct tm));
+    data = rd_a() & ~REG_A_RATE;
+    data |= (rate & REG_A_RATE);
+    wr_a(data);
     restore_flags(flags);
 
+#if CHATTY
+    kprint("rtc: periodic interrupt frequency is now %dHz\n", rate_to_hz(rate));
+#endif
+
+    return 0;
+}
+
+static void get_time(struct rtc_time *time, bool alarm)
+{
+    uint32_t flags;
+    uint8_t regb;
+    bool pm;
+
+    cli_save(flags);
+
+    // zero time struct
+    zeromem(time, sizeof(struct rtc_time));
+
+    // spin until update-in-progress bit goes low
+    spin(rd_a() & REG_A_UIP);       // TODO: TIMEOUT!!!! don't deadlock the kernel ;)
+
+    // disable RTC updates so we can safely read CMOS RAM
+    regb = rd_b();
+    regb |= REG_B_SET;
+    wr_b(regb);
+
+    // read time bits
+    if (alarm) {
+        time->tm_sec = cmos_read(REG_SECONDS_ALARM);
+        time->tm_min = cmos_read(REG_MINUTES_ALARM);
+        time->tm_hour = cmos_read(REG_HOURS_ALARM);
+    }
+    else {
+        time->tm_sec = cmos_read(REG_SECONDS);
+        time->tm_min = cmos_read(REG_MINUTES);
+        time->tm_hour = cmos_read(REG_HOURS);
+        time->tm_mday = cmos_read(REG_DATEOFMONTH);
+        time->tm_mon = cmos_read(REG_MONTH);
+        time->tm_year = cmos_read(REG_YEAR);
+    }
+
+    // re-enable updates
+    regb &= ~REG_B_SET;
+    wr_b(regb);
+
+#if CHATTY
+    if (alarm) {
+        kprint("rtc: get_time: cmos alarm is %02d:%02d:%02d (hex: %02x:%02x:%02x)\n",
+            time->tm_hour, time->tm_min, time->tm_sec,
+            time->tm_hour, time->tm_min, time->tm_sec);
+    }
+    else {
+        kprint("rtc: get_time: cmos time is %02d/%02d/%02d %02d:%02d:%02d (hex: %02x/%02x/%02x %02x:%02x:%02x)\n",
+            time->tm_mon, time->tm_mday, time->tm_year,
+            time->tm_hour, time->tm_min, time->tm_sec,
+            time->tm_mon, time->tm_mday, time->tm_year,
+            time->tm_hour, time->tm_min, time->tm_sec);
+    }
+#endif
+
+    // RTC using 12h time?
+    // if so, convert to 24h; PM is indicated in bit 7 of the hour;
+    // do this before BCD conversion
+    pm = false;
+    if (!(regb & REG_B_24H)) {
+#if CHATTY
+        kprint("rtc: get_time: time is in 12h format\n");
+#endif
+        if ((time->tm_hour & PM_FLAG)) {
+            time->tm_hour &= ~PM_FLAG;
+            pm = true;
+        }
+    }
+
+    // RTC time formatted in BCD?
+    // some hardware doesn't seem to honor this bit if we manually set it,
+    // so just read it as-is and convert to binary if necessary
+    if (!(regb & REG_B_DM)) {
+#if CHATTY
+        kprint("rtc: get_time: time is in BCD\n");
+#endif
+        time->tm_sec = bcd2bin(time->tm_sec);
+        time->tm_min = bcd2bin(time->tm_min);
+        time->tm_hour = bcd2bin(time->tm_hour);
+        time->tm_mday = bcd2bin(time->tm_mday);
+        time->tm_mon = bcd2bin(time->tm_mon);
+        time->tm_year = bcd2bin(time->tm_year);
+    }
+
+    // if RTC is using using 12h time, convert to 24h
+    if (!(regb & REG_B_24H)) {
+        if (pm && time->tm_hour < 12) {
+            time->tm_hour += 12;    // PM: [1-12] -> [12-23]
+        }
+        else if (!pm && time->tm_hour == 12) {
+            time->tm_hour = 0;      // AM: [1-12] -> [0-11]
+        }
+    }
+
+    // account for Y2K
+    if (time->tm_year < 90) {
+        time->tm_year += 100;
+    }
+
+    // convert the month
+    time->tm_mon -= 1;
+
+    restore_flags(flags);
+}
+
+static int set_time(struct rtc_time *time, bool alarm)
+{
+    bool pm;
+    uint32_t flags;
+    uint8_t regb;
+
+    if (time->tm_sec < 0 || time->tm_sec > 59 ||
+        time->tm_min < 0 || time->tm_min > 59 ||
+        time->tm_hour < 0 || time->tm_hour > 23 ||
+        (!alarm && (time->tm_mday < 1 || time->tm_mday > 31)) ||
+        (!alarm && (time->tm_mon < 0 || time->tm_mon > 11)) ||
+        (!alarm && (time->tm_year < 90 || time->tm_year > 189)))
+    {
+        return -EINVAL;
+    }
+
+    cli_save(flags);
+
+    // read B register to get RTC state
+    regb = rd_b();
+
+    // adjust time for RTC ranges
+    time->tm_mon += 1;
+    if (time->tm_year < 90) {
+        time->tm_year += 100;
+    }
+
+    // RTC using 12h time?
+    // if so, convert time to 12h and keep track of PM bit
+    pm = false;
+    if (!(regb & REG_B_24H)) {
+        pm = (time->tm_hour >= 12);
+        if (time->tm_hour > 12) {
+            time->tm_hour -= 12;        // [13-23] -> [1-12] PM
+        }
+        else if (time->tm_hour == 0) {
+            time->tm_hour = 12;         // [12] -> [12] PM
+        }                               // [0-11] -> [1-12] AM
+    }
+
+    // RTC using BCD?
+    // if so, convert to BCD
+    if (!(regb & REG_B_DM)) {
+        time->tm_year = bin2bcd(time->tm_year);
+        time->tm_mon = bin2bcd(time->tm_mon);
+        time->tm_mday = bin2bcd(time->tm_mday);
+        time->tm_hour = bin2bcd(time->tm_hour);
+        time->tm_min = bin2bcd(time->tm_min);
+        time->tm_sec = bin2bcd(time->tm_sec);
+    }
+
+    // set the PM flag after BCD conversion
+    if (pm) {
+        time->tm_hour |= PM_FLAG;
+    }
+
+    // spin until update-in-progress bit goes low
+    spin(rd_a() & REG_A_UIP);   // TODO: TIMEOUT!!!
+
+    // disable RTC updates so we can safely write CMOS RAM
+    regb = rd_b();
+    regb |= REG_B_SET;
+    wr_b(regb);
+
+    // write the time to CMOS RAM
+    if (alarm) {
+        cmos_write(REG_HOURS_ALARM, time->tm_hour);
+        cmos_write(REG_MINUTES_ALARM, time->tm_min);
+        cmos_write(REG_SECONDS_ALARM, time->tm_sec);
+    }
+    else {
+        cmos_write(REG_YEAR, time->tm_year);
+        cmos_write(REG_MONTH, time->tm_mon);
+        cmos_write(REG_DATEOFMONTH, time->tm_mday);
+        cmos_write(REG_HOURS, time->tm_hour);
+        cmos_write(REG_MINUTES, time->tm_min);
+        cmos_write(REG_SECONDS, time->tm_sec);
+    }
+
+#if CHATTY
+    if (alarm) {
+        kprint("rtc: set_time: cmos alarm set to %02d:%02d:%02d (hex: %02x:%02x:%02x)\n",
+            time->tm_hour, time->tm_min, time->tm_sec,
+            time->tm_hour, time->tm_min, time->tm_sec);
+    }
+    else {
+        kprint("rtc: set_time: cmos time set to %02d/%02d/%02d %02d:%02d:%02d (hex: %02x/%02x/%02x %02x:%02x:%02x)\n",
+            time->tm_mon, time->tm_mday, time->tm_year,
+            time->tm_hour, time->tm_min, time->tm_sec,
+            time->tm_mon, time->tm_mday, time->tm_year,
+            time->tm_hour, time->tm_min, time->tm_sec);
+    }
+#endif
+
+    // re-enable updates
+    regb &= ~REG_B_SET;
+    wr_b(regb);
+
+    restore_flags(flags);
     return 0;
 }
 
@@ -284,64 +497,78 @@ int rtc_close(struct file *file)
     return 0;
 }
 
-int rtc_ioctl(struct file *file, unsigned int cmd, void *arg)
+int rtc_read(struct file *file, char *buf, size_t count)
 {
     uint32_t flags;
-    int rate;
+    uint32_t tick;
+
+    if (count < sizeof(uint32_t)) {
+        return -EINVAL;
+    }
+
+    // TODO: encode interrupt type into returned value
+    // TODO: tick 'count/sizeof(uint32_t)' times?
+
+    // get current tick count
+    cli_save(flags);
+    tick = get_rtc()->ticks;
+    sti();
+
+    // spin until another tick happens
+    spin(tick == get_rtc()->ticks);
+    cli();
+
+    // capture new tick count
+    tick = get_rtc()->ticks;
+    memcpy(buf, &tick, sizeof(uint32_t));
+
+    restore_flags(flags);
+    return sizeof(uint32_t);
+}
+
+int rtc_ioctl(struct file *file, unsigned int num, void *arg)
+{
     int ret;
+    unsigned char rate;
+    struct rtc_time time;
 
     (void) file;
 
-    cli_save(flags);
+    ret = 0;
+    switch (num) {
+        case RTC_AIE_DISABLE: clear_mode(REG_B_AIE); break;
+        case RTC_AIE_ENABLE: set_mode(REG_B_AIE); break;
+        case RTC_PIE_DISABLE: clear_mode(REG_B_PIE); break;
+        case RTC_PIE_ENABLE: set_mode(REG_B_PIE); break;
+        case RTC_UIE_DISABLE: clear_mode(REG_B_UIE); break;
+        case RTC_UIE_ENABLE: set_mode(REG_B_UIE); break;
 
-    switch (cmd) {
-        case IOCTL_RTC_GETRATE:
-            ret = rtc_getrate();
+        case RTC_IRQP_GET:
+            rate = get_rate();
+            copy_to_user(arg, &rate, sizeof(unsigned char));
             break;
 
-        case IOCTL_RTC_SETRATE:
-            rate = *((int *) arg);    // TODO: VALIDATE USER BUFFER
-            ret = rtc_setrate(rate);
+        case RTC_IRQP_SET:
+            copy_from_user(&rate, arg, sizeof(unsigned char));
+            ret = set_rate(rate);
+            break;
+
+        case RTC_TIME_GET: __fallthrough;
+        case RTC_ALARM_GET:
+            get_time(&time, num == RTC_ALARM_GET);
+            copy_to_user(arg, &time, sizeof(struct rtc_time));
+            break;
+
+        case RTC_TIME_SET: __fallthrough;
+        case RTC_ALARM_SET:
+            copy_from_user(&time, arg, sizeof(struct rtc_time));
+            ret = set_time(&time, num == RTC_ALARM_SET);
             break;
 
         default:
             ret = -ENOTTY;
             break;
-
     }
 
-    restore_flags(flags);
     return ret;
-}
-
-static int rtc_getrate(void)
-{
-    uint32_t flags;
-    uint8_t rate;
-
-    cli_save(flags);
-    rate = rd_a() & REG_A_RATE;
-    restore_flags(flags);
-
-    return rate;
-}
-
-static int rtc_setrate(int rate)
-{
-    uint32_t flags;
-    uint8_t data;
-
-    if (rate > RTC_RATE_2Hz || rate < RTC_RATE_8192Hz) {
-        return -EINVAL;
-    }
-
-    cli_save(flags);
-    data = rd_a() & ~REG_A_RATE;
-    data |= (rate & REG_A_RATE);
-    wr_a(data);
-    restore_flags(flags);
-
-    kprint("rtc: frequency is now %dHz\n", rtc_rate2hz(rate));
-
-    return 0;
 }
