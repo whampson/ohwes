@@ -371,13 +371,15 @@ static void get_time(struct rtc_time *time, bool alarm)
         }
     }
 
-    // account for Y2K
+    // account for Y2K;
+    // if the year is >= 90, it's assumed to mean 19YY
+    // therefore 00-89 = 20XX
     if (time->tm_year < 90) {
-        time->tm_year += 100;
+        time->tm_year += 100;   // tm_year is years since 1900
     }
 
     // convert the month
-    time->tm_mon -= 1;
+    time->tm_mon -= 1;          // tm_mon is 0-11
 
     restore_flags(flags);
 }
@@ -404,9 +406,11 @@ static int set_time(struct rtc_time *time, bool alarm)
     regb = rd_b();
 
     // adjust time for RTC ranges
-    time->tm_mon += 1;
-    if (time->tm_year < 90) {
-        time->tm_year += 100;
+    time->tm_mon += 1;              // tm_mon is 0-11, RTC CMOS is 1-12
+
+    // handle Y2K
+    if (time->tm_year >= 100) {     // tm_year: years since 1900
+        time->tm_year -= 100;       // RTC CMOS: 0-89 = 20YY, 90-99 = 19YY
     }
 
     // RTC using 12h time?
