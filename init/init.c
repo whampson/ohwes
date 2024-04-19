@@ -34,10 +34,6 @@ void init(void)
 {
     assert(getpl() == USER_PL);
 
-    // TODO: eventually this should load a program called 'init'
-    // that forks itself and spawns the shell program
-    // (if we're following the Unix model)
-
     printf("\e4\e[5;33mHello, world!\e[m\n");
 
 #if TEST_BUILD
@@ -50,7 +46,7 @@ void init(void)
     // beep(1250, 100); // requires kernel for cli
     // TODO: make a test beep program!
 
-    rtc_test();
+    // rtc_test();
 
     char c;
     int count = 0;

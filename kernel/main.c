@@ -108,6 +108,10 @@ __fastcall void kmain(const struct boot_info *info)
     irq_register(IRQ_RTC, debug_interrupt);
 #endif
 
+    // TODO: eventually this should load a program called 'init'
+    // that forks itself and spawns the shell program
+    // (if we're following the Unix model)
+
     kprint("boot: entering ring3...\n");
     enter_ring3(init, INIT_STACK);
 }

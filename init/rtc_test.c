@@ -40,7 +40,7 @@
     __ret;                  \
 })
 
-#define WAIT_TIME           5   // sec
+#define WAIT_TIME           3   // sec
 
 static void add_seconds(struct rtc_time *time, int seconds)
 {
@@ -82,6 +82,7 @@ void rtc_test(void)
     int rate;
     int ret;
 
+    printf("rtc_test:\n");
     errno = 0;
 
     //
