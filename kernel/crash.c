@@ -178,7 +178,7 @@ void crash(struct iregs *regs)
         regs->vec_num, regs->cs, regs->eip);
     crash_print("\n\tmay be able to continue execution. Press any key to continue or");
     crash_print("\n\tpress Ctrl+Alt+Del to restart your computer.");
-    crash_print("\n\n");
+    crash_print("\n");
     crash_print("\n\t * Exception Name: " BRIGHT("%s"), exception_names[regs->vec_num]);
     if (regs->err_code && !pf) {
         crash_print("\n\t * Faulting Descriptor: " BRIGHT("%s(%02X)%s"),
@@ -187,9 +187,24 @@ void crash(struct iregs *regs)
             (regs->err_code & 0xFFFF) >> 3,
             (regs->err_code & 0x01) ? " (external)" : "");
     }
-    else if (regs->err_code && pf) {
-        // TODO: different error code decode for page fault
-        crash_print("<FILL ME IN>");
+    else if (pf) {
+        crash_print("\n\t * Details:");
+        crash_print("\n\t    - %s %s Access Violation",
+            regs->err_code & PF_US ? "User" : "Supervisor",
+            regs->err_code & PF_WR ? "Write" : "Read");
+        crash_print("\n\t    - Linear Address: %08X", cr2);
+        if (!(regs->err_code & PF_P)) {
+            crash_print("\n\t    - Page Not Present");
+        }
+        if (regs->err_code & PF_ID) {
+            crash_print("\n\t    - Instruction Fetch Page Fault");
+        }
+        if (regs->err_code & PF_RSVD) {
+            crash_print("\n\t    - Reserved Bit Violation");
+        }
+        if (regs->err_code & 0xFFFFFFE0) {
+            crash_print("\n\t    - NOTE: Additional Error Code Bits Set\n");
+        }
     }
 
     // dump control registers

@@ -96,6 +96,9 @@
 #define DESCTYPE_CODE_XRC       0x0E    // Code, Execute/Read, Conforming
 #define DESCTYPE_CODE_XRCA      0x0F    // Code, Execute/Read, Conforming
 
+/**
+ * EFLAGS register bits.
+ */
 #define EFLAGS_CF           (1 << 0)
 #define EFLAGS_PF           (1 << 2)
 #define EFLAGS_AF           (1 << 4)
@@ -114,6 +117,9 @@
 #define EFLAGS_VIP          (1 << 20)
 #define EFLAGS_ID           (1 << 21)
 
+/**
+ * CR0 register bits.
+ */
 #define CR0_PE              (1 << 0)    // Protection Enable
 #define CR0_MP              (1 << 1)    // Monitor Coprocessor
 #define CR0_EM              (1 << 2)    // x87 Emulation
@@ -126,8 +132,23 @@
 #define CR0_CD              (1 << 30)   // Cache Disable
 #define CR0_PG              (1 << 31)   // Paging
 
+/**
+ * CR3 register bits.
+ */
 #define CR3_PWT             (1 << 3)    // Page-Level Write-Through
 #define CR3_PCD             (1 << 4)    // Page-Level Cache Disable
+
+/**
+ * Page Fault error code bits.
+ */
+#define PF_P                (1 << 0)
+#define PF_WR               (1 << 1)
+#define PF_US               (1 << 2)
+#define PF_RSVD             (1 << 3)
+#define PF_ID               (1 << 4)
+#define PF_PK               (1 << 5)
+#define PF_SS               (1 << 6)
+#define PF_SGX              (1 << 15)
 
 #ifdef __ASSEMBLER__
 // Assembler-only defines

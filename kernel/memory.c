@@ -62,7 +62,6 @@ void init_memory(const struct boot_info *info)
     pgdir[0].ps = 0;    // point to a 4k page table
     pgdir[0].address = PAGE_TABLE >> PAGE_SHIFT;
 
-
     struct pte *pgtbl = (struct pte *) PAGE_TABLE;
     zeromem(pgtbl, PAGE_SIZE);
 
@@ -78,13 +77,13 @@ void init_memory(const struct boot_info *info)
 
     uint32_t cr3 = 0;
     cr3 |= PAGE_DIR;
-    // cr3 |= CR3_PCD;
-    // cr3 |= CR3_PWT;
+    // cr3 |= CR3_PCD;     // disable cache
+    // cr3 |= CR3_PWT;     // write-through (vs write-back)
     load_cr3(cr3);
 
     uint32_t cr0 = 0;
     store_cr0(cr0);
-    cr0 |= CR0_PG;
+    cr0 |= CR0_PG;  // enable paging
     load_cr0(cr0);
 }
 

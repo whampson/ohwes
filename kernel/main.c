@@ -196,8 +196,14 @@ static void debug_interrupt(void)
             __asm__ volatile ("int $0x2D");
             break;
         case 8: {
-            volatile uint32_t *badptr = NULL;
+            volatile uint32_t *badptr = (uint32_t *) 0xCA55E77E;
             *badptr = 0xBADC0DE;
+            break;
+        }
+        case 9: {
+            volatile uint32_t *badptr = NULL;
+            const int bad  = *badptr;
+            (void) bad;
             break;
         }
     }
