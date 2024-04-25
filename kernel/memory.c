@@ -22,7 +22,73 @@
 #include <boot.h>
 #include <ohwes.h>
 
-void init_memory(const struct boot_info *const info)
+/*
+ Physical Address Map:
+
+         |                            |
+         | Kernel Code                |
+         |                            |
+   10000 +----------------------------+ 64K
+         |                            |
+         | Kernel Stack / Free        |
+         |                            |
+    4000 +----------------------------+ 16K
+         | Kernel Page Table          |
+    3000 +----------------------------+ 12K
+         | System Page Directory      |
+    2000 +----------------------------+ 8K
+         | CPU Data Area              |
+    1000 +----------------------------+ 4K
+         | NULL Page                  |
+       0 +============================+ 0K
+*/
+
+
+#define PAGE_DIR    0x2000
+#define PAGE_TABLE  0x3000
+
+static void print_meminfo(const struct boot_info *info);
+
+void init_memory(const struct boot_info *info)
+{
+    print_meminfo(info);
+
+    struct pde *pgdir = (struct pde *) PAGE_DIR;
+    zeromem(pgdir, PAGE_SIZE);
+
+    pgdir[0].p = 1;     // present
+    pgdir[0].rw = 1;    // writable
+    pgdir[0].us = 1;    // user-accessible (for now)
+    pgdir[0].ps = 0;    // point to a 4k page table
+    pgdir[0].address = PAGE_TABLE >> PAGE_SHIFT;
+
+
+    struct pte *pgtbl = (struct pte *) PAGE_TABLE;
+    zeromem(pgtbl, PAGE_SIZE);
+
+    // open up 0x1000-0x100000, make everything else inaccessible for now
+    for (int i = 0; i < 1024; i++) {
+        if ((i > 0 && i < 0xA0) || (i >= 0xB8 && i <= 0xBF)) {
+            pgtbl[i].p = 1;     // present
+            pgtbl[i].rw = 1;    // writable
+            pgtbl[i].us = 1;    // user-accessible
+            pgtbl[i].address = i;
+        }
+    }
+
+    uint32_t cr3 = 0;
+    cr3 |= PAGE_DIR;
+    // cr3 |= CR3_PCD;
+    // cr3 |= CR3_PWT;
+    load_cr3(cr3);
+
+    uint32_t cr0 = 0;
+    store_cr0(cr0);
+    cr0 |= CR0_PG;
+    load_cr0(cr0);
+}
+
+static void print_meminfo(const struct boot_info *info)
 {
     int kb_total = 0;
     int kb_free = 0;

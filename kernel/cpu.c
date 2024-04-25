@@ -28,7 +28,6 @@
 #include <irq.h>
 
 #define CPU_DATA_AREA       0x1000
-#define PAGE_2              0x2000
 
 //
 // x86 Descriptor table and TSS geometry.
@@ -55,7 +54,7 @@
 static_assert(IDT_BASE + IDT_LIMIT < GDT_BASE, "IDT overlaps GDT!");
 static_assert(GDT_BASE + GDT_LIMIT < LDT_BASE, "GDT overlaps LDT!");
 static_assert(LDT_BASE + LDT_LIMIT < TSS_BASE, "LDT overlaps TSS!");
-static_assert(TSS_BASE + TSS_LIMIT <= PAGE_2, "TSS overlaps into next page!");
+static_assert(IDT_SIZE + GDT_SIZE + LDT_SIZE + TSS_SIZE <= PAGE_SIZE, "CPU data runs into next page!");
 
 /**
  * Gets a Segment Descriptor from a descriptor table.

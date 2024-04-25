@@ -92,6 +92,13 @@ void rtc_test(void)
     assert(fd > 0);
 
     //
+    // disable all interrupt types
+    //
+    CHECK(ioctl(fd, RTC_UPDATE_DISABLE, NULL));
+    CHECK(ioctl(fd, RTC_IRQP_DISABLE, NULL));
+    CHECK(ioctl(fd, RTC_ALARM_DISABLE, NULL));
+
+    //
     // enable update interrupts (1 per sec)
     //
     CHECK(ioctl(fd, RTC_UPDATE_ENABLE, NULL));

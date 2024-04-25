@@ -63,7 +63,7 @@ SwitchToProtectedMode:
         cli                             # make sure interrupts are off
         lgdtl   GdtReg                  # load the temp GDT
         movl    %cr0, %eax
-        orl     $1, %eax                # set ProtectionEnable bit
+        orl     $CR0_PE, %eax           # set ProtectionEnable bit
         movl    %eax, %cr0
         ljmpl   $BOOT_CS, $Entry32      # reload CS and jump to 32-bit code
 

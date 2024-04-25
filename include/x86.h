@@ -114,6 +114,21 @@
 #define EFLAGS_VIP          (1 << 20)
 #define EFLAGS_ID           (1 << 21)
 
+#define CR0_PE              (1 << 0)    // Protection Enable
+#define CR0_MP              (1 << 1)    // Monitor Coprocessor
+#define CR0_EM              (1 << 2)    // x87 Emulation
+#define CR0_TS              (1 << 3)    // Task Switched
+#define CR0_ET              (1 << 4)    // Extension Type
+#define CR0_NE              (1 << 5)    // Numeric Error
+#define CR0_WP              (1 << 16)   // Write Protect
+#define CR0_AM              (1 << 18)   // Alignment Mask
+#define CR0_NW              (1 << 29)   // Non Write-Through
+#define CR0_CD              (1 << 30)   // Cache Disable
+#define CR0_PG              (1 << 31)   // Paging
+
+#define CR3_PWT             (1 << 3)    // Page-Level Write-Through
+#define CR3_PCD             (1 << 4)    // Page-Level Cache Disable
+
 #ifdef __ASSEMBLER__
 // Assembler-only defines
 .macro LOAD_SEGREG addr, reg
@@ -616,6 +631,10 @@ __asm__ volatile (          \
 #define store_esi(esi) __asm__ volatile ("" : "=S"(esi):)
 #define store_edi(edi) __asm__ volatile ("" : "=D"(edi):)
 
+#define  load_cr0(cr0) __asm__ volatile ("movl %%eax, %%cr0" : : "a"(cr0))
+#define  load_cr2(cr2) __asm__ volatile ("movl %%eax, %%cr2" : : "a"(cr2))
+#define  load_cr3(cr3) __asm__ volatile ("movl %%eax, %%cr3" : : "a"(cr3))
+#define  load_cr4(cr4) __asm__ volatile ("movl %%eax, %%cr4" : : "a"(cr4))
 #define store_cr0(cr0) __asm__ volatile ("movl %%cr0, %%eax" : "=a"(cr0):)
 #define store_cr2(cr2) __asm__ volatile ("movl %%cr2, %%eax" : "=a"(cr2):)
 #define store_cr3(cr3) __asm__ volatile ("movl %%cr3, %%eax" : "=a"(cr3):)
@@ -678,6 +697,11 @@ __asm__ volatile (                                                          \
     : "cc"                                                                  \
 )
 
+/**
+ * Checks whether the current processor has the CPUID instruction.
+ *
+ * @return a nonzero value if the CPUID instruction is supported
+ */
 #define has_cpuid()                                                         \
 ({                                                                          \
     uint32_t __flags, __x;                                                  \
@@ -689,6 +713,48 @@ __asm__ volatile (                                                          \
     __x;                                                                    \
 })
 
+
+/**
+ * Page Directory Entry for 32-bit Paging
+ *
+ * Points to a 4M page or a 4K page table.
+ */
+struct pde
+{
+    uint32_t p      : 1;    // Present
+    uint32_t rw     : 1;    // Read/Write; 1 = writable
+    uint32_t us     : 1;    // User/Supervisor; 1 = user accessible
+    uint32_t pwt    : 1;    // Page-Level Write-Through
+    uint32_t pcd    : 1;    // Page-Level Cache Disable
+    uint32_t a      : 1;    // Accessed; software has accessed this page
+    uint32_t d      : 1;    // Dirty; software has written this page
+    uint32_t ps     : 1;    // Page Size; 0 = 4K page table, 1 = 4M page
+    uint32_t g      : 1;    // Global; pins page to TLB (requires CR4.PGE=1)
+    uint32_t        : 3;    // (reserved)
+    uint32_t address: 20;   // Address of 4M page or 4K page table
+};
+static_assert(sizeof(struct pde) == 4, "bad PDE size!");
+
+/**
+ * Page Table Entry for 32-bit Paging
+ *
+ * Points to a 4K page.
+ */
+struct pte
+{
+    uint32_t p      : 1;    // Present
+    uint32_t rw     : 1;    // Read/Write; 1 = writable
+    uint32_t us     : 1;    // User/Supervisor; 1 = user accessible
+    uint32_t pwt    : 1;    // Page-Level Write-Through
+    uint32_t pcd    : 1;    // Page-Level Cache Disable
+    uint32_t a      : 1;    // Accessed; software has accessed this page
+    uint32_t d      : 1;    // Dirty; software has written this page
+    uint32_t        : 1;    // (reserved, PAT)
+    uint32_t g      : 1;    // Global; pins page to TLB (requires CR4.PGE=1)
+    uint32_t        : 3;    // (reserved)
+    uint32_t address: 20;   // Address of 4K page
+};
+static_assert(sizeof(struct pte) == 4, "bad PTE size!");
 
 #endif /* __ASSEMBLER__ */
 

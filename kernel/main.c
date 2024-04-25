@@ -195,6 +195,11 @@ static void debug_interrupt(void)
         case 7:
             __asm__ volatile ("int $0x2D");
             break;
+        case 8: {
+            volatile uint32_t *badptr = NULL;
+            *badptr = 0xBADC0DE;
+            break;
+        }
     }
 
     g_test_crash_kernel = 0;
