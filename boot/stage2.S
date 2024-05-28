@@ -82,17 +82,21 @@ Entry32:
         movw    %ax, %fs
         movw    %ax, %gs
 
-EnterKernel:
+KernelParams:
         movl    $KERNEL_BASE, m_KernelBase      # store the kernel base
-        movl    m_KernelBase, %ebp              # set up a larger stack
-        movl    %ebp, m_StackBase
+        movl    m_pEbda, %eax                   # put stack underneath EBDA if
+        test    %eax, %eax                      #   EBDA address is known
+        jnz     SetupStack
+        movl    $KERNEL_STACK_DEFAULT, %eax     # otherwise use default address
+
+SetupStack:
+        movl    %eax, %ebp
+        movl    %ebp, m_StackBase               # store stack ptr in boot params
         movl    %ebp, %esp
+
+EnterKernel:
         movl    $g_BootParams, %ecx             # pass bootparams ptr to kernel
         ljmpl   $BOOT_CS, $KERNEL_ENTRY         # bye bye bootloader!
-
-Halt32:
-        hlt
-        jmp     Halt32
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~ End 32-bit Code Section ~~~~~~~~~~~~~~~~~~~~~~~~~

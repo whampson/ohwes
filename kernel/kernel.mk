@@ -32,7 +32,7 @@ ifeq "${TEST_BUILD}" "1"
 endif
 
 TGT_CFLAGS  := -Wno-unused-function
-TGT_LDFLAGS := -Ttext 0x10000 -e kentry
+TGT_LDFLAGS := -Ttext 0x20000 -e kentry
 
 LINKLIBS := \
     lib/libc.a \

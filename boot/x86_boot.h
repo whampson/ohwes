@@ -24,6 +24,7 @@
 #ifndef __X86_BOOT
 #define __X86_BOOT
 
+#include <config.h>
 #include <x86.h>
 
 /*----------------------------------------------------------------------------*
@@ -41,6 +42,8 @@
 // 0x10000-(EBDA ): kernel and system
 
 #define SEG2FLAT(seg,off)   (((seg)<<4)+(off))
+#define FLAT2SEG(flat)      (((flat)&0xF0000)>>4)
+#define FLAT2OFF(flat)      ((flat)&0xFFFF)
 
 #define MEMMAP_BASE         0x500   // max 32 entries
 #define ROOTDIR_BASE        0x800   // max 224 entries
@@ -51,11 +54,8 @@
 #define STACK_SEGMENT       0x0000
 #define STACK_OFFSET        0x7C00  // grows toward 0
 
-#define KERNEL_SEGMENT      0x1000  // kernel segment address
-#define KERNEL_OFFSET       0x0000  // kernel segment offset
-#define KERNEL_BASE         SEG2FLAT(KERNEL_SEGMENT,KERNEL_OFFSET)
-#define KERNEL_ENTRY        KERNEL_BASE
-
+#define KERNEL_SEGMENT      FLAT2SEG(KERNEL_BASE)  // kernel segment address
+#define KERNEL_OFFSET       FLAT2OFF(KERNEL_BASE)  // kernel segment offset
 
 /*----------------------------------------------------------------------------*
  * BIOS Data Area

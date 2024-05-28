@@ -30,7 +30,9 @@
 #define SHOW_MEMMAP                     1
 #define PRINT_IOCTL                     0
 
-#define KERNEL_STACK                    0x7C00
+#define KERNEL_BASE                     0x20000
+#define KERNEL_ENTRY                    KERNEL_BASE
+#define KERNEL_STACK_DEFAULT            0x9FC00
 
 // GDT
 #define _GDT_NULL                       0

@@ -35,8 +35,6 @@
 .globl kentry
 kentry:
         cli
-        movl            $KERNEL_STACK, %ebp
-        movl            %ebp, %esp
         call            kmain
 
 ##
