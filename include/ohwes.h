@@ -37,6 +37,9 @@
 #define PAGE_SHIFT                      12
 #define PAGE_SIZE                       (1 << PAGE_SHIFT)
 
+#define LARGE_PAGE_SHIFT                22
+#define LARGE_PAGE_SIZE                 (1 << LARGE_PAGE_SHIFT)
+
 #define OS_NAME                         "OH-WES"
 #define OS_VERSION                      "0.1"
 #define OS_MONIKER                      "Ronnie Raven"

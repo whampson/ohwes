@@ -222,7 +222,7 @@ static void init_tss(const struct boot_info * const info)
     // Fill TSS with LDT segment selector, kernel stack pointer,
     // and kernel stack segment selector
     tss->ldt_segsel = _GDT_LOCALDESC;
-    tss->esp0 = KERNEL_STACK;   // TODO: don't forget to modify this when task switching!
+    tss->esp0 = info->stack;   // TODO: don't forget to modify this when task switching!
     tss->ss0 = KERNEL_DS;
 
     // Add TSS entry to GDT
