@@ -79,12 +79,12 @@ void crash(struct iregs *regs)
     bool pf;
 
     // grab the control registers
-    store_cr0(cr0);
-    store_cr2(cr2);
-    store_cr3(cr3);
+    read_cr0(cr0);
+    read_cr2(cr2);
+    read_cr3(cr3);
 
     // get the current and faulting privilege levels
-    store_cs(_cs);
+    read_cs(_cs);
     curr_cs = (struct segsel *) &_cs;
     fault_cs = (struct segsel *) &regs->cs;
     curr_pl = curr_cs->rpl;

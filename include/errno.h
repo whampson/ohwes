@@ -22,11 +22,22 @@
 #ifndef __ERRNO_H
 #define __ERRNO_H
 
-#define ENOSYS      1   // System Call Not Valid
-#define EINVAL      2   // Invalid Argument
+//
+// Selected POSIX error numbers:
+//
+
+#define EINVAL      1   // Invalid Argument
+#define ENOSYS      2   // System Call Not Valid
 #define EBADF       3   // Bad File Descriptor
 #define ENOTTY      4   // Invalid IOCTL
 #define EBADRQC     5   // Bad Request Code
+
+
+// TOOD: consider this instead...
+// #define E_INVALID_ARGUMENT
+// #define E_INVALID_SYSTEM_CALL
+// #define E_INVALID_FUNCTION
+// #define E_ALREADY_IN_USE
 
 #ifndef __ASSEMBLER__
 extern int _errno;

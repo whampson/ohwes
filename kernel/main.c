@@ -51,6 +51,8 @@ extern void init_tasks(void);
 extern void tmain(void);
 #endif
 
+extern void init(void);     // usermode entry point
+
 static void enter_ring3(void (*entry), uint32_t stack);
 static void print_info(const struct boot_info *info);
 
@@ -74,17 +76,13 @@ __fastcall void kmain(const struct boot_info *info)
     // 0x10000-(EBDA ): kernel and system
 
     cli();
-
-    zeromem(&g_boot, sizeof(struct boot_info));
     memcpy(&g_boot, info, sizeof(struct boot_info));
 
-    init_cpu(&g_boot);
     init_pic();
     init_irq();
     init_vga();
-    init_console();
+    init_console();     // safe to print now
 
-    // safe to print now
     kprint("\n" OS_NAME " " OS_VERSION " '" OS_MONIKER "'\n");
     kprint("Build: " OS_BUILDDATE "\n");
     kprint("\n");
@@ -96,12 +94,15 @@ __fastcall void kmain(const struct boot_info *info)
     tmain();
 #endif
 
+    init_cpu(&g_boot);
     init_memory(&g_boot);
     init_ps2(&g_boot);
     init_kb();
     init_timer();
     init_rtc();
     init_tasks();
+
+    // pgfault();
 
 #ifdef DEBUG
     g_test_crash_kernel = 0;

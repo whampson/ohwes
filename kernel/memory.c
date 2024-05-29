@@ -23,6 +23,7 @@
 #include <boot.h>
 #include <ohwes.h>
 #include <errno.h>
+#include <paging.h>
 
 /*
  Physical Address Map:
@@ -64,18 +65,28 @@ FFFFFFFF +----------------------------+ 4G
          | (reservred for EBDA) //////|
          |////////////////////////////|
    9FC00 +----------------------------+ 639K (this address can vary by hardware)
+         |                            | -----------+
+         |                            |            |
+         |                            |            |
+         | Kernel Stack               |            +-- consider dynamically allocating process kernel stacks...
+         |                            |            |
+         |                            |            |
+         |                            |            |
+         +----------------------------+ (varies) --+
          |                            |
-         | Kernel Stack               |
-         |                            |
-(varies) +----------------------------+ (varies)
          |                            |
          |                            |
          | (free)                     |
          |                            |
          |                            |
-(varies) +----------------------------+ (varies)
+         |                            |
+         +----------------------------+ (varies)
+         |                            |
+         |                            |
          |                            |
          | Kernel Code                |
+         |                            |
+         |                            |
          |                            |
    20000 +----------------------------+ 128K
          |                            |
@@ -85,30 +96,30 @@ FFFFFFFF +----------------------------+ 4G
          |                            |
          | (free)                     |
          |                            |
-    C000 +----------------------------+ 52K
-         | Console 3 Input Buffer     |
-    B000 +----------------------------+ 48K
-         | Console 3 Frame Buffer     |
-    A000 +----------------------------+ 40K
-         | Console 2 Input Buffer     |
-    9000 +----------------------------+ 36K
-         | Console 2 Frame Buffer     |
-    8000 +----------------------------+ 32K
-         | Console 1 Input Buffer     |
-    7000 +----------------------------+ 28K
-         | Console 1 Frame Buffer     |
-    6000 +----------------------------+ 24K
-         | Console 0 Input Buffer     |
-    5000 +----------------------------+ 20K
-         | Console 0 Frame Buffer     |
-    4000 +----------------------------+ 16K
+    C000 +----------------------------+ 52K  ---+
+         | Console 3 Input Buffer     |         |
+    B000 +----------------------------+ 48K     |
+         | Console 3 Frame Buffer     |         |
+    A000 +----------------------------+ 40K     |
+         | Console 2 Input Buffer     |         |
+    9000 +----------------------------+ 36K     |
+         | Console 2 Frame Buffer     |         |
+    8000 +----------------------------+ 32K     + -- consider dynamically allocating these...
+         | Console 1 Input Buffer     |         |
+    7000 +----------------------------+ 28K     |
+         | Console 1 Frame Buffer     |         |
+    6000 +----------------------------+ 24K     |
+         | Console 0 Input Buffer     |         |
+    5000 +----------------------------+ 20K     |
+         | Console 0 Frame Buffer     |         |
+    4000 +----------------------------+ 16K ----+
          | Kernel Page Table (0-4M)   |
     3000 +----------------------------+ 12K
          | System Page Directory      |
     2000 +----------------------------+ 8K
          | IDT/GDT/LDT/TSS            |
     1000 +----------------------------+ 4K
-         | Real Mode IVT and BDA      |
+         | Zero Page                  |
        0 +============================+ 0K
 
 NOTES:
@@ -119,166 +130,21 @@ NOTES:
       For now, we are using the region from 0xB8000-0xBFFFF (CGA).
 */
 
-#define PAGE_DIR    0x2000
-#define PAGE_TABLE  0x3000
-
 static void print_meminfo(const struct boot_info *info);
-
-#define READ_ONLY   (1 << 0)
-#define USER_ACCESS (1 << 2)
-#define LARGE_PAGE  (1 << 31)
-
-struct page
-{
-    uint32_t p      : 1;    // Present; 0 = page is free
-    uint32_t rw     : 1;    // Read/Write; 1 = writable
-    uint32_t us     : 1;    // User/Supervisor; 1 = user accessible
-    uint32_t pwt    : 1;    // Page-Level Write-Through
-    uint32_t pcd    : 1;    // Page-Level Cache Disable
-    uint32_t a      : 1;    // Accessed; software has accessed this page
-    uint32_t d      : 1;    // Dirty; software has written this page
-    uint32_t ps     : 1;    // Page Size; 1 = 4M, 0 = 4K
-    uint32_t g      : 1;    // Global; pins page to TLB (requires CR4.PGE=1)
-    uint32_t        : 1;    // (available for use)
-    uint32_t large  : 1;    // Large page; this is a PDE (OH-WES specific)
-    uint32_t rsvd   : 1;    // Reserved; page is inallocable (OH-WES specific)
-    uint32_t address: 20;   // Address of page (4K-aligned)
-};
-
-// PDE vs PTE determination:
-//   PDEs will always have the 'large' bit set. To determine if the PDE points
-//   to a large page or a 4K page table, check whether the PS bit is set. Note
-//   that for 4K pages, the PS bit is repurposed as the PAT bit, which should
-//   be left zero (for now).
-
-#define align(x, n)     (((x) + (n) - 1) & ~((n) - 1))
-#define aligned(x,n)    ((x) == align(x,n))
-
-int map_page(uint32_t vaddr, uint32_t paddr, int flags)
-{
-    struct page *pgdir;
-    struct page *pgtbl;
-    struct page *pg;
-    uint32_t pdn, pfn;
-
-    if (!aligned(vaddr, PAGE_SIZE) || !aligned(paddr, PAGE_SIZE)) {
-        return -EINVAL;
-    }
-
-    if (flags & LARGE_PAGE) {   // large pages not supported yet
-        return -EINVAL;
-    }
-
-    pgdir = (struct page *) PAGE_DIR;
-    pdn = vaddr >> LARGE_PAGE_SHIFT;    // page directory number
-    pfn = (vaddr & (LARGE_PAGE_SIZE-1)) >> PAGE_SHIFT;
-    assert(pdn <= 1024);
-    assert(pfn <= 1024);
-
-    kprint("pdn = 0x%X, pfn = 0x%X\n", pdn, pfn);
-
-    pg = &pgdir[pdn];
-    if (pg->rsvd) {
-        // entire 4M region is reserved, fail
-        return -1;
-    }
-
-    if (!pg->p) {
-        // TODO: PDE is free, but we need to allocate a page table!! fix this later
-        return -1;
-        // // page is not present, i.e. free, use it!
-        // zeromem(pg, sizeof(struct page));
-        // pg->p = 1;  // present (in-use)
-        // pg->us = 1; // user-accessible (TODO: make param)
-        // pg->rw = 1; // writable (TODO: make param)
-        // pg->address = paddr >> PAGE_SHIFT;
-    }
-
-    assert(pg->large);
-
-    if (pg->ps) {
-        // PDE points to a 4M page that'a already mapped, fail!
-        return -1;
-    }
-
-    // now we have a PDE that's present, not reserved, and points to 4K PTE
-    // locate the PTE
-    pgtbl = (struct page *) (pg->address << PAGE_SHIFT);
-    pg = &pgtbl[pfn];
-
-    // repeat the bit-checking process
-    if (pg->rsvd) {
-        // page is reserved, fail!
-        return -1;
-    }
-    if (pg->p) {
-        // page is already mapped, fail!
-        return -1;
-    }
-    assert(!pg->large);
-
-    // we have a non-present PTE
-    zeromem(pg, sizeof(struct page));
-    pg->p = 1;
-    pg->us = 1;
-    pg->rw = 1;
-    pg->address = paddr >> PAGE_SHIFT;
-
-    kprint("mmap: virt 0x%08X -> phys 0x%08X\n", vaddr, paddr);
-
-    return 0;
-}
+extern int init_paging(void);
 
 void init_memory(const struct boot_info *info)
 {
     print_meminfo(info);
+    init_paging();
 
-    // zero the system page directory
-    struct pde *pgdir = (struct pde *) PAGE_DIR;
-    zeromem(pgdir, PAGE_SIZE);
+    // uint32_t addr = 0x100000;
+    // assert(map_page(addr, get_pfn(addr), 0) == 0);
+    // assert(map_page(addr, get_pfn(addr), 0) == -EINVAL);
 
-    // zero the kernel's page table.
-    // for now we only have one page table that maps to 0-4M,
-    // we can allocate new page tables later once the memory
-    // subsystem is figured out.
-    struct pte *pgtbl = (struct pte *) PAGE_TABLE;
-    zeromem(pgtbl, PAGE_SIZE);
-
-    // put our kernel page table in the page directory.
-    // for now we are using a 1:1 mapping, eventally I want to
-    // put the kernel up high, at 0xFC000000 or something
-    pgdir[0].p = 1;     // present
-    pgdir[0].rw = 1;    // writable
-    pgdir[0].us = 1;    // user-accessible (for now)
-    pgdir[0].ps = 0;    // point to a 4k page table
-    pgdir[0].address = PAGE_TABLE >> PAGE_SHIFT;
-    ((struct page *) pgdir)[0].large = 1;
-
-    // open up the first 640K of RAM, plus the VGA frame buffer,
-    // leave 0x0-0x1000 inaccessable so we can catch page faults.
-    // we are guaranteed to have at least 640K
-    for (int i = 0; i < 1024; i++) {
-        if ((i > 0 && i < 0xA0) || (i >= 0xB8 && i <= 0xBF)) {
-            pgtbl[i].p = 1;     // present
-            pgtbl[i].rw = 1;    // writable
-            pgtbl[i].us = 1;    // user-accessible (for now)
-            pgtbl[i].address = i;
-        }
-    }
-
-    uint32_t cr3 = 0;
-    cr3 |= PAGE_DIR;
-    // cr3 |= CR3_PCD;     // disable cache
-    // cr3 |= CR3_PWT;     // write-through (vs write-back)
-    load_cr3(cr3);
-
-    uint32_t cr0 = 0;
-    store_cr0(cr0);
-    cr0 |= CR0_PG;      // enable paging
-    load_cr0(cr0);
-
-
-    map_page(0x100000, 0x100000, 0);
+    // addr = 0x400000;
+    // assert(map_page(addr, get_pfn(addr), MAP_LARGE) == 0);
+    // assert(map_page(addr, get_pfn(addr), MAP_LARGE) == -EINVAL);
 }
 
 static void print_meminfo(const struct boot_info *info)

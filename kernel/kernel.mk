@@ -11,6 +11,7 @@ SOURCES := \
     irq.c \
     main.c \
     memory.c \
+    paging.c \
     pic.c \
     ps2kb.c \
     queue.c \

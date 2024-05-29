@@ -31,6 +31,11 @@ extern int g_test_crash_kernel;
     __asm__ volatile ("lidt 0");                    \
 })
 
+#define pgfault()                                   \
+({                                                  \
+    *((volatile int *) NULL) = 0xBAADC0D3;          \
+})                                                  \
+
 #define divzero()                                   \
 ({                                                  \
     __asm__ volatile ("idiv %0" :: "a"(0), "b"(0)); \

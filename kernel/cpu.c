@@ -26,6 +26,7 @@
 #include <cpu.h>
 #include <interrupt.h>
 #include <irq.h>
+#include <paging.h>
 
 #define CPU_DATA_AREA       0x1000
 
@@ -129,12 +130,12 @@ static void init_gdt(const struct boot_info * const info)
     lgdt(gdt_desc);
 
     // Reload segment registers with new segment selectors
-    load_cs(KERNEL_CS);
-    load_ds(KERNEL_DS);
-    load_es(KERNEL_DS);
-    load_ss(KERNEL_DS);
-    load_fs(0);
-    load_gs(0);
+    write_cs(KERNEL_CS);
+    write_ds(KERNEL_DS);
+    write_es(KERNEL_DS);
+    write_ss(KERNEL_DS);
+    write_fs(0);
+    write_gs(0);
 }
 
 static void init_idt(const struct boot_info * const info)

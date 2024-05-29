@@ -87,14 +87,6 @@
 #include <stdbool.h>
 
 /**
- * Privilege Levels
- */
-enum pl {
-    KERNEL_PL = 0,
-    USER_PL = 3,
-};
-
-/**
  * Register state upon receiving an interrupt.
  */
 struct iregs

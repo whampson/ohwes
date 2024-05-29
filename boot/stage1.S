@@ -98,6 +98,7 @@ Stage1:
         movw    %ax, %ss                # ss = (Stack Segment)
         movw    $STACK_OFFSET, %bp
         movw    %bp, %sp
+        movw    $RESETFLAG_WARMBOOT, %gs:BDA_RESETFLAG
 
 LoadRootDir:
         movw    m_RootDirCapacity, %cx  # calculate root dir size
@@ -417,7 +418,6 @@ ReadKeyThenReset:
 ##
 .globl Reset
 Reset:
-        movw    $RESETFLAG_WARMBOOT, %gs:BDA_RESETFLAG
         ljmp    $0xFFFF, $0x0000
 
 ##

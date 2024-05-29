@@ -34,25 +34,30 @@
 #include <panic.h>
 #include <debug.h>
 
-#define PAGE_SHIFT                      12
-#define PAGE_SIZE                       (1 << PAGE_SHIFT)
-
-#define LARGE_PAGE_SHIFT                22
-#define LARGE_PAGE_SIZE                 (1 << LARGE_PAGE_SHIFT)
+//
+// OS Version Info
+//
 
 #define OS_NAME                         "OH-WES"
 #define OS_VERSION                      "0.1"
 #define OS_MONIKER                      "Ronnie Raven"
 #define OS_BUILDDATE                    __DATE__ " " __TIME__
 
-extern void idle(void);                 // see entry.S
-extern void init(void);                 // see init.c
+//
+// Useful Kernel Macros
+//
 
 void timer_sleep(int millis);           // see timer.c
 void pcspk_beep(int freq, int millis);  // see timer.c
 
 #define beep(f,ms)                      pcspk_beep(f, ms)   // beep at frequency for millis (nonblocking)
 #define sleep(ms)                       timer_sleep(ms)     // spin for millis (blocking)
+
+#define reboot()                        \
+do {                                    \
+    ps2_cmd(PS2_CMD_SYSRESET);          \
+    die();                              \
+} while (0)
 
 #define die()                           for (;;)            // spin forever, satisfies __noreturn
 #define spin(cond)                      while (cond) { }    // spin while cond == true, TODO: THIS NEEDS TO HAVE A TIMEOUT!!
@@ -62,28 +67,30 @@ void pcspk_beep(int freq, int millis);  // see timer.c
 
 #define has_flag(x,f)                   (((x)&(f))==(f))
 #define countof(x)                      (sizeof(x)/sizeof(x[0]))
-#define div_round(n,d)                  (((n)<0)==((d)<0)?(((n)+(d)/2)/(d)):(((n)-(d)/2)/(d)))
 
-#define reboot()                        \
-do {                                    \
-    *((uint16_t *) 0x0472) = 0x1234;    \
-    ps2_cmd(PS2_CMD_SYSRESET);          \
-    die();                              \
-} while (0)
+#define align(x, n)                     (((x) + (n) - 1) & ~((n) - 1))
+#define aligned(x,n)                    ((x) == align(x,n))
 
-#define swap(a,b)                       \
-do {                                    \
-    (a) ^= (b);                         \
-    (b) ^= (a);                         \
-    (a) ^= (b);                         \
-} while(0)
+
+//
+// CPU Privilege
+//
+
+enum pl {
+    KERNEL_PL = 0,
+    USER_PL = 3,
+};
 
 #define getpl()                         \
 ({                                      \
     struct segsel cs;                   \
-    store_cs(cs);                       \
+   read_cs(cs);                       \
     cs.rpl;                             \
 })
+
+//
+// Strings
+//
 
 #define STRINGIFY(x)                    # x
 #define CONCAT(a,b)                     a ## b
@@ -92,6 +99,20 @@ do {                                    \
 #define ONOFF(cond)                     ((cond)?"on":"off")
 #define PLURAL(n,a)                     (((n)==1)?a:a "s")
 #define PLURAL2(n,a,b)                  (((n)==1)?a:b)
+
+
+//
+// Math
+//
+
+#define swap(a,b)                       \
+do {                                    \
+    (a) ^= (b);                         \
+    (b) ^= (a);                         \
+    (a) ^= (b);                         \
+} while(0)
+
+#define div_round(n,d)                  (((n)<0)==((d)<0)?(((n)+(d)/2)/(d)):(((n)-(d)/2)/(d)))
 
 #endif // __ASSEMBLER__
 

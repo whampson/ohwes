@@ -139,6 +139,16 @@
 #define CR3_PCD             (1 << 4)    // Page-Level Cache Disable
 
 /**
+ * CR4 register bits.
+ */
+#define CR4_VME             (1 << 0)    // Virtual-8086 Mode Extensions
+#define CR4_PVI             (1 << 1)    // Protected Mode Virtual Interrupts
+#define CR4_TSD             (1 << 2)    // Time Stamp Disable
+#define CR4_DE              (1 << 3)    // Debugging Extensions
+#define CR4_PSE             (1 << 4)    // Page Size Extensions
+#define CR4_MCE             (1 << 6)    // Machine Check Enable
+
+/**
  * Page Fault error code bits.
  */
 #define PF_P                (1 << 0)
@@ -626,40 +636,40 @@ __asm__ volatile (          \
     : "r"(segsel)           \
 )
 
-#define  load_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs))
-#define  load_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      : : "a"(ds))
-#define  load_es(es) __asm__ volatile ("movw %%ax, %%es"      : : "a"(es))
-#define  load_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      : : "a"(fs))
-#define  load_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs))
-#define  load_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss))
-#define store_cs(cs) __asm__ volatile ("movw %%cs, %%ax"      : "=a"(cs):)
-#define store_ds(cs) __asm__ volatile ("movw %%ds, %%ax"      : "=a"(ds):)
-#define store_es(cs) __asm__ volatile ("movw %%es, %%ax"      : "=a"(es):)
-#define store_fs(cs) __asm__ volatile ("movw %%fs, %%ax"      : "=a"(fs):)
-#define store_gs(cs) __asm__ volatile ("movw %%gs, %%ax"      : "=a"(gs):)
-#define store_ss(cs) __asm__ volatile ("movw %%ss, %%ax"      : "=a"(ss):)
+#define  read_cs(cs) __asm__ volatile ("movw %%cs, %%ax"      : "=a"(cs):)
+#define  read_ds(cs) __asm__ volatile ("movw %%ds, %%ax"      : "=a"(ds):)
+#define  read_es(cs) __asm__ volatile ("movw %%es, %%ax"      : "=a"(es):)
+#define  read_fs(cs) __asm__ volatile ("movw %%fs, %%ax"      : "=a"(fs):)
+#define  read_gs(cs) __asm__ volatile ("movw %%gs, %%ax"      : "=a"(gs):)
+#define  read_ss(cs) __asm__ volatile ("movw %%ss, %%ax"      : "=a"(ss):)
+#define write_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs))
+#define write_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      : : "a"(ds))
+#define write_es(es) __asm__ volatile ("movw %%ax, %%es"      : : "a"(es))
+#define write_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      : : "a"(fs))
+#define write_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs))
+#define write_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss))
 
-#define  load_eax(eax) __asm__ volatile ("" : : "a"(eax))
-#define  load_ebx(ebx) __asm__ volatile ("" : : "b"(ebx))
-#define  load_ecx(ecx) __asm__ volatile ("" : : "c"(ecx))
-#define  load_edx(edx) __asm__ volatile ("" : : "d"(edx))
-#define  load_esi(esi) __asm__ volatile ("" : : "S"(esi))
-#define  load_edi(edi) __asm__ volatile ("" : : "D"(edi))
-#define store_eax(eax) __asm__ volatile ("" : "=a"(eax):)
-#define store_ebx(ebx) __asm__ volatile ("" : "=b"(ebx):)
-#define store_ecx(ecx) __asm__ volatile ("" : "=c"(ecx):)
-#define store_edx(edx) __asm__ volatile ("" : "=d"(edx):)
-#define store_esi(esi) __asm__ volatile ("" : "=S"(esi):)
-#define store_edi(edi) __asm__ volatile ("" : "=D"(edi):)
+#define  read_eax(eax) __asm__ volatile ("" : "=a"(eax):)
+#define  read_ebx(ebx) __asm__ volatile ("" : "=b"(ebx):)
+#define  read_ecx(ecx) __asm__ volatile ("" : "=c"(ecx):)
+#define  read_edx(edx) __asm__ volatile ("" : "=d"(edx):)
+#define  read_esi(esi) __asm__ volatile ("" : "=S"(esi):)
+#define  read_edi(edi) __asm__ volatile ("" : "=D"(edi):)
+#define write_eax(eax) __asm__ volatile ("" : : "a"(eax))
+#define write_ebx(ebx) __asm__ volatile ("" : : "b"(ebx))
+#define write_ecx(ecx) __asm__ volatile ("" : : "c"(ecx))
+#define write_edx(edx) __asm__ volatile ("" : : "d"(edx))
+#define write_esi(esi) __asm__ volatile ("" : : "S"(esi))
+#define write_edi(edi) __asm__ volatile ("" : : "D"(edi))
 
-#define  load_cr0(cr0) __asm__ volatile ("movl %%eax, %%cr0" : : "a"(cr0))
-#define  load_cr2(cr2) __asm__ volatile ("movl %%eax, %%cr2" : : "a"(cr2))
-#define  load_cr3(cr3) __asm__ volatile ("movl %%eax, %%cr3" : : "a"(cr3))
-#define  load_cr4(cr4) __asm__ volatile ("movl %%eax, %%cr4" : : "a"(cr4))
-#define store_cr0(cr0) __asm__ volatile ("movl %%cr0, %%eax" : "=a"(cr0):)
-#define store_cr2(cr2) __asm__ volatile ("movl %%cr2, %%eax" : "=a"(cr2):)
-#define store_cr3(cr3) __asm__ volatile ("movl %%cr3, %%eax" : "=a"(cr3):)
-#define store_cr4(cr4) __asm__ volatile ("movl %%cr4, %%eax" : "=a"(cr4):)
+#define  read_cr0(cr0) __asm__ volatile ("movl %%cr0, %%eax" : "=a"(cr0):)
+#define  read_cr2(cr2) __asm__ volatile ("movl %%cr2, %%eax" : "=a"(cr2):)
+#define  read_cr3(cr3) __asm__ volatile ("movl %%cr3, %%eax" : "=a"(cr3):)
+#define  read_cr4(cr4) __asm__ volatile ("movl %%cr4, %%eax" : "=a"(cr4):)
+#define write_cr0(cr0) __asm__ volatile ("movl %%eax, %%cr0" : : "a"(cr0))
+#define write_cr2(cr2) __asm__ volatile ("movl %%eax, %%cr2" : : "a"(cr2))
+#define write_cr3(cr3) __asm__ volatile ("movl %%eax, %%cr3" : : "a"(cr3))
+#define write_cr4(cr4) __asm__ volatile ("movl %%eax, %%cr4" : : "a"(cr4))
 
 /**
  * Clears the interrupt flag, disabling interrupts.
