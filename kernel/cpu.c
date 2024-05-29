@@ -89,17 +89,56 @@ struct x86_desc * get_seg_desc(uint16_t segsel)
     return get_desc(GDT_BASE, segsel);
 }
 
+struct cpu_info g_cpu_info;
+
+const struct cpu_info * get_cpu_info(void)
+{
+    return &g_cpu_info;
+}
+
 static void init_gdt(const struct boot_info * const info);
 static void init_idt(const struct boot_info * const info);
 static void init_ldt(const struct boot_info * const info);
 static void init_tss(const struct boot_info * const info);
 
+#define cpuid(cmd,a,b,c,d)                              \
+    __asm__ volatile (                                  \
+        "cpuid"                                         \
+            : "=a"(a), "=b"(b), "=c"(c), "=d"(d)        \
+            : "a"(cmd)                                  \
+    )                                                   \
+
+#define CPUID_PSE   (1 << 3)
+#define CPUID_RDTSC (1 << 4)
+#define CPUID_RDMSR (1 << 5)
+#define CPUID_PAE   (1 << 6)
+#define CPUID_PGE   (1 << 13)
+#define CPUID_PAT   (1 << 16)
+
 void init_cpu(const struct boot_info * const info)
 {
+    uint32_t eax, ebx, ecx, edx;
+
+    zeromem(&g_cpu_info, sizeof(struct cpu_info));
+
     init_gdt(info);
     init_idt(info);
     init_ldt(info);
     init_tss(info);
+
+    if (has_cpuid()) {
+        const int FeatureInfo = 0x01;
+        cpuid(FeatureInfo, eax, ebx, ecx, edx);
+        kprint("cpuid(%02Xh): eax=%08X ebx=%08X, ecx=%08X, edx=%08X\n",
+             FeatureInfo, eax, ebx, ecx, edx);
+
+        g_cpu_info.large_page_support = (edx & CPUID_PSE);
+        g_cpu_info.rdtsc = (edx & CPUID_RDTSC);
+        g_cpu_info.rdmsr = (edx & CPUID_RDMSR);
+        g_cpu_info.pae = (edx & CPUID_PAE);
+        g_cpu_info.pge = (edx & CPUID_PGE);
+        g_cpu_info.pat = (edx & CPUID_PAT);
+    }
 }
 
 static void init_gdt(const struct boot_info * const info)

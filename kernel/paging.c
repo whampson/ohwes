@@ -20,6 +20,7 @@
  */
 
 #include <assert.h>
+#include <cpu.h>
 #include <ohwes.h>
 #include <paging.h>
 #include <errno.h>
@@ -56,9 +57,9 @@ static int set_page_mapping(
     bool rdonly, bool user,
     bool pde, bool large)
 {
-    if (pfn >= (1 << (32 - PAGE_SHIFT))) {
-        return -EINVAL;     // PFN is out of range
-    }
+    // if (pfn > 0xFFFFC) { // TODO: need to check this...
+    //     return -EINVAL;     // PFN is out of range
+    // }
 
     if (large && !aligned(pfn << PAGE_SHIFT, LARGE_PAGE_SIZE)) {
         return -EINVAL;     // PFN not valid for large page
@@ -126,6 +127,9 @@ void init_paging(void)
 {
     int ret;
     int flags;
+    const struct cpu_info *cpu;
+
+    cpu = get_cpu_info();
 
     // zero the system page directory
     struct pde *pgdir = get_page_directory();
@@ -160,43 +164,65 @@ void init_paging(void)
         }
     }
 
-    // TODO: check cpuid for CR4.PSE before mapping large pages
-
-    // list_page_mappings();
-
     uint32_t cr3 = 0;
     cr3 |= (uint32_t) pgdir;
     write_cr3(cr3);
 
-    // uint32_t cr4 = 0;
-    // read_cr4(cr4);
-    // cr4 |= CR4_PSE;     // allow 4M pages
-    // write_cr4(cr4);     // NOTE: CR4 was introduced on the Pentium! Should do a CPUID before running this
+    if (cpu->large_page_support) {
+        uint32_t cr4 = 0;
+        read_cr4(cr4);
+        cr4 |= CR4_PSE;     // allow 4M pages
+        write_cr4(cr4);
+    }
+    else {
+        kprint("mem: large pages not supported!\n");
+    }
 
     uint32_t cr0 = 0;
     read_cr0(cr0);
     cr0 |= CR0_PG;      // enable paging
+    cr0 |= CR0_WP;      // enable write-protection for supervisor accesses
     write_cr0(cr0);
+
+    // testing...
+    if (cpu->large_page_support) {
+        flags = MAP_LARGE | MAP_READONLY | MAP_USERMODE;
+        ret = map_page(0xFFC00000, get_pfn(0x01000000), flags);
+        assert(ret == 0);
+
+        uint32_t data = 0xCAFEBABE;
+        uint32_t addr = 0xFFFFFFFC;
+        volatile uint32_t *p = (uint32_t *) addr;
+        // *p = data;
+        (void) data;
+        (void) *p;
+
+        // TODO: unmap...
+    }
+
+    list_page_mappings();
 }
 
 #if DEBUG
-static void print_page_info(const struct page *page)
+static void print_page_info(uint32_t vaddr, const struct page *page)
 {
-    uint32_t base = page->pfn << PAGE_SHIFT;
-    uint32_t limit = base + PAGE_SIZE - 1;
+    uint32_t paddr = page->pfn << PAGE_SHIFT;
+    uint32_t plimit = paddr + PAGE_SIZE - 1;
+    uint32_t vlimit = vaddr + PAGE_SIZE - 1;
     if (PAGE_IS_LARGE(page)) {
-        limit = base + LARGE_PAGE_SIZE - 1;
+        plimit = paddr + LARGE_PAGE_SIZE - 1;
+        vlimit = vaddr + LARGE_PAGE_SIZE - 1;
     }
 
-    // page: pfn base-limit dt us kM
-    //   dt - directory/table entry
-    //   us - user/supervisor access
-    //   kM - 4k/4M frame
-    printf("page: %d %08x-%08x %c %c %c\n",
-        page->pfn, base, limit,
-        page->pde ? 'd' : 't',
+    //            vaddr-vlimit -> paddr-plimit rw u/s a/d g wt nc
+    printf("page: v(%08X-%08X) -> p(%08X-%08X) %-2s %c %c %c %s%s\n",
+        vaddr, vlimit, paddr, plimit,
+        page->rw ? "rw" : "r",
         page->us ? 'u' : 's',
-        page->pspat ? 'M' : 'k');
+        page->a ? (page->d ? 'd' : 'a') : '\0',
+        page->g ? 'g' : '\0',
+        page->pwt ? "wt " : "",
+        page->pcd ? "nc " : "");
 
 }
 
@@ -205,6 +231,7 @@ static void list_page_mappings(void)
     struct page *pgdir = get_page_directory();
     struct page* pgtbl;
     struct page *page;
+    uint32_t vaddr;
 
     for (int i = 0; i < PAGE_SIZE / PDE_SIZE; i++) {
         page = &pgdir[i];
@@ -219,12 +246,14 @@ static void list_page_mappings(void)
                 if (PAGE_IS_FREE(page)) {
                     continue;
                 }
-                print_page_info(page);
+                vaddr = i << LARGE_PAGE_SHIFT | j << PAGE_SHIFT;
+                print_page_info(vaddr, page);
             }
             continue;
         }
         else {
-            print_page_info(page);
+            vaddr = i << LARGE_PAGE_SHIFT;
+            print_page_info(vaddr, page);
         }
     }
 }

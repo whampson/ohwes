@@ -19,7 +19,20 @@
  * =============================================================================
  */
 
+#include <stdbool.h>
 #include <x86.h>
+
+struct cpu_info
+{
+    bool large_page_support;    // Page Size Extension Bit (4M page support)
+    bool rdtsc;                 // rdtsc Support
+    bool rdmsr;                 // rdmsr/wrmsr Support
+    bool pae;                   // Physical Address Extension
+    bool pge;                   // PTE Global Bit
+    bool pat;                   // Page Attribute Table
+};
+
+const struct cpu_info * get_cpu_info(void);
 
 struct tss * get_tss(struct tss *tss);
 struct x86_desc * get_seg_desc(uint16_t segsel);
