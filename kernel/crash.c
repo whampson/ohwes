@@ -71,7 +71,7 @@ void crash(struct iregs *regs)
     struct segsel *fault_cs;
     int curr_pl, fault_pl;
     bool pl_change;
-    uint32_t cr0, cr2, cr3;
+    uint32_t cr0, cr2, cr3, cr4;
     uint32_t *stack_ptr;
     uint16_t irq_mask;
     bool irq;
@@ -79,9 +79,13 @@ void crash(struct iregs *regs)
     bool pf;
 
     // grab the control registers
+    cr4 = 0;
     read_cr0(cr0);
     read_cr2(cr2);
     read_cr3(cr3);
+    if (has_cr4()) {
+        read_cr4(cr4);
+    }
 
     // get the current and faulting privilege levels
     read_cs(_cs);
@@ -209,8 +213,14 @@ void crash(struct iregs *regs)
 
     // dump control registers
     crash_print("\e[%d;0H", regs_line);
-    crash_print("\n CR0=%08X ", cr0);
-    crash_print("\n CR2=%08X CR3=%08X", cr2, cr3);
+    if (has_cr4()) {
+        crash_print("\n CR0=%08X CR2=%08X", cr0, cr2);
+        crash_print("\n CR3=%08X CR4=%08X", cr3, cr4);
+    }
+    else {
+        crash_print("\n CR0=%08X ", cr0);
+        crash_print("\n CR2=%08X CR3=%08X ", cr2, cr3);
+    }
 
     // dump context registers and error code
     crash_print("\n EAX=%08X EBX=%08X\n ECX=%08X EDX=%08X",

@@ -96,6 +96,14 @@ const struct cpu_info * get_cpu_info(void)
     return &g_cpu_info;
 }
 
+bool has_cr4(void)
+{
+    // Large pages are enabled by the PSE bit in CR4. The presence of this bit
+    // is determined by a call to CPUID EAX=01h, performed in init_cpu. Thus, if
+    // the CPU has large page support, the CR4 register must also be present.
+    return g_cpu_info.large_page_support;
+}
+
 static void init_gdt(const struct boot_info * const info);
 static void init_idt(const struct boot_info * const info);
 static void init_ldt(const struct boot_info * const info);

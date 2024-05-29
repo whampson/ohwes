@@ -33,6 +33,7 @@ struct cpu_info
 };
 
 const struct cpu_info * get_cpu_info(void);
+bool has_cr4(void);
 
 struct tss * get_tss(struct tss *tss);
 struct x86_desc * get_seg_desc(uint16_t segsel);
