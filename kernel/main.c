@@ -24,9 +24,11 @@
 #include <console.h>
 #include <ctype.h>
 #include <cpu.h>
+#include <errno.h>
 #include <interrupt.h>
 #include <io.h>
 #include <irq.h>
+#include <paging.h>
 #include <pic.h>
 #include <ps2.h>
 #include <test.h>
@@ -101,6 +103,48 @@ __fastcall void kmain(const struct boot_info *info)
     init_timer();
     init_rtc();
     init_tasks();
+
+    kprint("pages after kernel init:\n");
+    list_page_mappings();
+
+
+    const uint32_t vaddr = 0x80000000;
+    const uint32_t paddr = 0x10000000;
+    const int flags = 0;
+    int ret;
+
+    uint32_t pgtbl = 0x80000;
+    ret = map_page(vaddr, get_pfn(pgtbl), MAP_PAGETABLE | flags);
+    assert(ret == 0);
+
+    ret = map_page(vaddr, get_pfn(paddr), flags);
+    assert(ret == 0);
+    ret = map_page(vaddr, get_pfn(paddr), flags);
+    assert(ret == -EINVAL);
+
+    ret = map_page(vaddr + PAGE_SIZE, get_pfn(paddr), flags);
+    assert(ret == 0);
+
+    kprint("pages after mapping v(%08X) -> p(%08X)\n", vaddr, paddr);
+    list_page_mappings();
+
+    ret = unmap_page(vaddr, flags);
+    assert(ret == 0);
+
+    ret = unmap_page(vaddr, flags);
+    assert(ret == -EINVAL);
+
+    ret = unmap_page(vaddr + PAGE_SIZE, flags);
+    assert(ret == 0);
+
+    ret = unmap_page(vaddr, flags | MAP_PAGETABLE);
+    assert(ret == 0);
+
+    kprint("pages after clearing mapping\n");
+    list_page_mappings();
+
+
+    // TODO: nee a way to see mapped page tables as well as mapped pages
 
     // pgfault();
 

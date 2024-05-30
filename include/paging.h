@@ -84,7 +84,7 @@ struct page
  */
 int map_page(uint32_t addr, uint32_t pfn, int flags);
 
-// int unmap_page(uint32_t paddr, uint32_t vaddr, int flags);
+int unmap_page(uint32_t addr, int flags);
 
 void * get_page_directory(void);
 void * get_pde(uint32_t addr);
@@ -94,7 +94,7 @@ uint32_t get_pdn(uint32_t addr);
 uint32_t get_ptn(uint32_t addr);
 
 #if DEBUG
-static void list_page_mappings(void);
+void list_page_mappings(void);
 #endif
 
 
