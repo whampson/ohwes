@@ -31,6 +31,7 @@
 #define EBADF       3   // Bad File Descriptor
 #define ENOTTY      4   // Invalid IOCTL
 #define EBADRQC     5   // Bad Request Code
+#define ENOMEM      6   // No Memory
 
 
 // TOOD: consider this instead...

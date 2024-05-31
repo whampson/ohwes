@@ -25,14 +25,18 @@
 #include <paging.h>
 #include <errno.h>
 
+static bool has_large_page_support(void)
+{
+    struct cpu_info cpu;
+    get_cpu_info(&cpu);
+
+    return cpu.pse_support;
+}
+
 void init_paging(void)
 {
     int ret;
     int flags;
-    struct cpu_info cpu;
-
-    // get cpu info for things like large page support
-    get_cpu_info(&cpu);
 
     // zero the system page directory
     struct pde *pgdir = get_page_directory();
@@ -52,47 +56,36 @@ void init_paging(void)
 
     flags = MAP_USERMODE;   // temporarily allow usermode access, TODO: remove
 
+    // map the kernel's page table into the PDE;
+    // this divides the 0-4M virtual address region into 1024 4K pages
+    ret = map_page(0x0, get_pfn((uint32_t) pgtbl), flags | MAP_PAGETABLE);
+    assert(ret == 0);
 
-    if (cpu.pse_support) {
-        // TEMP TEMP TEMP
-        ret = map_page(0x0, 0, flags | MAP_LARGE);
-        assert(ret == 0);
-    }
-    else {
-        // map the kernel's page table into the PDE;
-        // this divides the 0-4M virtual address region into 1024 4K pages
-        ret = map_page(0x0, get_pfn((uint32_t) pgtbl), flags | MAP_PAGETABLE);
-        assert(ret == 0);
-
-        // open up the first 640K of RAM, plus the VGA frame buffer;
-        // leave 0x0-0x1000 inaccessible so we can catch page faults.
-        // we are guaranteed to have at least 640K
-        for (int i = 0; i < 1024; i++) {
-            if ((i > 0 && i < 0xA0) || (i >= 0xB8 && i <= 0xBF)) {
-                ret = map_page(i << PAGE_SHIFT, i, flags);
-                assert(ret == 0);
-            }
+    // open up the first 640K of RAM, plus the VGA frame buffer;
+    // leave 0x0-0x1000 inaccessible so we can catch page faults.
+    // we are guaranteed to have at least 640K
+    for (int i = 0; i < 1024; i++) {
+        if ((i > 0 && i < 0xA0) || (i >= 0xB8 && i <= 0xBF)) {
+            ret = map_page(i << PAGE_SHIFT, i, flags);
+            assert(ret == 0);
         }
     }
 
-    uint32_t cr3 = 0;
-    cr3 |= (uint32_t) pgdir;
-    write_cr3(cr3);
-
-    if (cpu.pse_support) {
+    if (has_large_page_support()) {
         uint32_t cr4 = 0;
         read_cr4(cr4);
-        cr4 |= CR4_PSE;     // allow 4M pages
+        cr4 |= CR4_PSE;         // allow 4M pages
         write_cr4(cr4);
     }
-    else {
-        kprint("mem: large pages not supported!\n");
-    }
+
+    uint32_t cr3 = 0;
+    cr3 |= (uint32_t) pgdir;    // set page directory address
+    write_cr3(cr3);
 
     uint32_t cr0 = 0;
     read_cr0(cr0);
-    cr0 |= CR0_PG;          // enable paging
-    cr0 |= CR0_WP;          // enable write-protection for supervisor accesses
+    cr0 |= CR0_PG;              // enable paging
+    cr0 |= CR0_WP;              // enable write-protection for supervisor accesses
     write_cr0(cr0);
 }
 
@@ -103,8 +96,19 @@ void * get_page_directory(void)
 
 void * get_pde(uint32_t addr)
 {
-    struct pde *pgdir = get_page_directory();
+    struct page *pgdir = get_page_directory();
     return &pgdir[get_pdn(addr)];
+}
+
+void * get_pte(uint32_t addr)
+{
+    struct page *pde = get_pde(addr);
+    if (!PAGE_IS_MAPPED(pde)) {
+        return NULL;    // page table is not mapped!
+    }
+
+    struct page *pgtbl = (struct page *) (pde->pfn << PAGE_SHIFT);
+    return &pgtbl[get_ptn(addr)];
 }
 
 uint32_t get_pfn(uint32_t addr)
@@ -119,53 +123,62 @@ uint32_t get_pdn(uint32_t addr)
 
 uint32_t get_ptn(uint32_t addr)
 {
-    return get_pfn(addr) & ((PAGE_SIZE / PTE_SIZE) - 1);
+    return (addr >> PAGE_SHIFT) & 0x3FF;
 }
 
 static int set_page_mapping(
     struct page *page,
     uint32_t pfn,
-    bool rdonly, bool user,
-    bool pde, bool large)
+    uint32_t flags,
+    uint32_t pte)
 {
-    // if (pfn > 0xFFFFC) { // TODO: need to check this...
-    //     return -EINVAL;     // PFN is out of range
-    // }
+    bool flag_ro = has_flag(flags, MAP_READONLY);
+    bool flag_user = has_flag(flags, MAP_USERMODE);
+    bool flag_pgtbl = has_flag(flags, MAP_PAGETABLE);
+    bool flag_large = has_flag(flags, MAP_LARGE);
+    bool flag_global = has_flag(flags, MAP_GLOBAL);
 
-    if (large && !aligned(pfn << PAGE_SHIFT, LARGE_PAGE_SIZE)) {
+    // TODO: ensure pfn does not point to a reserved physical region
+
+    if (pfn > 0xFFFFF) {
+        panic("invalid PFN");
+    }
+
+    if (flag_large && !aligned(pfn << PAGE_SHIFT, LARGE_PAGE_SIZE)) {
         return -EINVAL;     // PFN not valid for large page
     }
 
-    if (!PAGE_IS_FREE(page)) {
-        return -EINVAL;     // page already mapped! TODO: change error code
+    if (flag_large && flag_pgtbl) {
+        return -EINVAL;     // invalid flag combination
     }
 
-    zeromem(page, PTE_SIZE);
+    if (pte && (flag_large || flag_pgtbl)) {
+        return -EINVAL;     // flags are not valid for PTE mappings
+    }
 
-    if (!rdonly) {
+    if (PAGE_IS_MAPPED(page)) {
+        return -ENOMEM;     // page is already mapped!
+    }
+
+    if (flag_large && !has_large_page_support()) {
+        return -ENOMEM;     // CPU does not support large pages!
+    }
+
+    zeromem(page, sizeof(struct page));
+
+    if (!flag_ro) {
         page->rw = 1;
     }
-    if (user) {
+    if (flag_user) {
         page->us = 1;
     }
 
-    page->p = 1;
-    page->pde = pde;
-    page->pspat = pde && large;
-    page->pfn = pfn;
+    page->p = 1;                        // mark present (mapped)
+    page->pte = pte;                    // indicate PDE/PTE
+    page->pspat = !pte && flag_large;   // for PDEs: 1=4M (large) page, 0=4K table
+    page->pfn = pfn;                    // page file number
+    page->g = flag_global;              // global flag (TLB pinned)
 
-    return 0;
-}
-
-static int clear_page_mapping(struct page* page, int flags)
-{
-    (void) flags;
-
-    if (PAGE_IS_FREE(page)) {
-        return -EINVAL; // page not mapped! TODO: change error code
-    }
-
-    page->p = 0;
     return 0;
 }
 
@@ -173,81 +186,82 @@ int map_page(uint32_t addr, uint32_t pfn, int flags)
 {
     struct page *pde;
     struct page *pte;
-    struct page *pgtbl;
 
-    bool flag_ro = has_flag(flags, MAP_READONLY);
-    bool flag_user = has_flag(flags, MAP_USERMODE);
+    // check alignment
+    if (!aligned(addr, PAGE_SIZE)) {
+        return -EINVAL;     // address not aligned to a page boundary!
+    }
+
+    // grab the corresponding PDE
+    pde = get_pde(addr);
+    if (PAGE_IS_PTE(pde)) {
+        panic("expected PDE marked PTE!");
+    }
+
+    // are we trying to map a large page or a page table?
+    if (has_flag(flags, MAP_LARGE) || has_flag(flags, MAP_PAGETABLE)) {
+        // map the large page or page table into the page directory
+        return set_page_mapping(pde, pfn, flags, false);
+    }
+
+    // grab the corresponding PTE
+    pte = get_pte(addr);
+    if (pte == NULL) {
+        return -ENOMEM;     // page table is not mapped!
+    }
+
+    // map it!
+    return set_page_mapping(pte, pfn, flags, true);
+}
+
+static int clear_page_mapping(struct page* page, int flags)
+{
     bool flag_pgtbl = has_flag(flags, MAP_PAGETABLE);
     bool flag_large = has_flag(flags, MAP_LARGE);
 
-    bool large_page = flag_large || flag_pgtbl;
-
     if (flag_pgtbl && flag_large) {
-        return -EINVAL;         // invalid flag combination
+        return -EINVAL;     // invalid flag combination
     }
 
-    // if (flag_large && !get_cpu_info()->large_page_support) {
-    //     return -EINVAL;         // large pages not supported TODO: change error code
-    // }
-
-    // TODO: ensure pfn does not point to a reserved physical region
-    // TODO: make sure CPU supports large pages (>= Pentium, use cpuid)
-
-    pde = get_pde(addr);
-
-    if (large_page) {
-        return set_page_mapping(pde, pfn, flag_ro, flag_user, true, flag_large);
+    if (!PAGE_IS_MAPPED(page)) {
+        return -ENOMEM;     // page not mapped!
     }
 
-    if (PAGE_IS_FREE(pde) || !PAGE_IS_PDE(pde)) {
-        return -EINVAL;     // page table is not mapped! TODO: change error code
-    }
+    // TODO: INVLPG (486+ only)
 
-    pgtbl = (struct page *) (pde->pfn << PAGE_SHIFT);
-    pte = &pgtbl[get_ptn(addr)];
-
-    return set_page_mapping(pte, pfn, flag_ro, flag_user, false, false);
+    page->p = 0;            // clear present bit (unmap)
+    return 0;
 }
 
 int unmap_page(uint32_t addr, int flags)
 {
-    (void) flags;
-
     struct page *pde;
     struct page *pte;
-    struct page *pgtbl;
 
+    // check alignment
+    if (!aligned(addr, PAGE_SIZE)) {
+        return -EINVAL;     // address not aligned to a page boundary!
+    }
+
+    // grab the corresponding PDE
     pde = get_pde(addr);
-    if (PAGE_IS_FREE(pde)) {
-        return -EINVAL;     // address was not mapped!
+    if (PAGE_IS_PTE(pde)) {
+        panic("expected PDE marked PTE!");
     }
 
-    // sanity check, entry should be marked PDE
-    if (!PAGE_IS_PDE(pde)) {
-        assert(PAGE_IS_PDE(pde));
-        return -EINVAL;
-    }
-
-    if (PAGE_IS_LARGE(pde)) {
+    // are we unmapping a large page or page table?
+    if (has_flag(flags, MAP_LARGE) || has_flag(flags, MAP_PAGETABLE)) {
+        // unmap from page directory
         return clear_page_mapping(pde, flags);
     }
 
-    pgtbl = (struct page *) (pde->pfn << PAGE_SHIFT);
-    pte = &pgtbl[get_ptn(addr)];
-
-    if (flags & MAP_PAGETABLE) {
-        // ensure no pages in page table are mapped before freeing
-        // if anything is mapped, caller must free it
-        for (int i = 0; i < PAGE_SIZE / PTE_SIZE; i++) {
-            pte = &pgtbl[i];
-            if (!PAGE_IS_FREE(pte)) {
-                return -EINVAL; // page table still has mapped pages! TODO: change return value
-            }
-        }
-
-        return clear_page_mapping(pde, flags);
+    // grab the corresponding PTE
+    pte = get_pte(addr);
+    if (pte == NULL) {
+        return -ENOMEM;     // page table is not mapped!
     }
 
+    // unmap
     return clear_page_mapping(pte, flags);
 }
 
@@ -257,22 +271,25 @@ static void print_page_info(uint32_t vaddr, const struct page *page)
     uint32_t paddr = page->pfn << PAGE_SHIFT;
     uint32_t plimit = paddr + PAGE_SIZE - 1;
     uint32_t vlimit = vaddr + PAGE_SIZE - 1;
-    if (PAGE_IS_LARGE(page)) {
-        plimit = paddr + LARGE_PAGE_SIZE - 1;
+    if (!PAGE_IS_PTE(page)) {
+        if (PAGE_IS_LARGE(page)) {
+            plimit = paddr + LARGE_PAGE_SIZE - 1;
+        }
         vlimit = vaddr + LARGE_PAGE_SIZE - 1;
     }
 
-    //            vaddr-vlimit -> paddr-plimit rw u/s a/d g wt nc
-    printf("page: v(%08X-%08X) -> p(%08X-%08X) %-2s %c %c %c %s%s\n",
+    //            vaddr-vlimit -> paddr-plimit k/M/T rw u/s a/d g wt nc
+    printf("page: v(%08X-%08X) -> p(%08X-%08X) %c %-2s %c %c %c %s%s\n",
         vaddr, vlimit, paddr, plimit,
-        page->rw ? "rw" : "r",
-        page->us ? 'u' : 's',
-        page->a ? (page->d ? 'd' : 'a') : '\0',
-        page->g ? 'g' : '\0',
-        page->pwt ? "wt " : "",
-        page->pcd ? "nc " : "");
+        page->pte ? 'k' : (page->pspat ? 'M' : 'T'),    // (k) small page, (M) large page, (T) page table
+        page->rw ? "rw" : "r",                          // read/write
+        page->us ? 'u' : 's',                           // user/supervisor
+        page->a ? (page->d ? 'd' : 'a') : ' ',          // accessed/dirty
+        page->g ? 'g' : ' ',                            // global
+        page->pwt ? "wt " : "  ",                       // write-through
+        page->pcd ? "nc " : "  ");                      // no-cache
 
-    kbwait();
+    // kbwait();
 }
 
 void list_page_mappings(void)
@@ -284,23 +301,24 @@ void list_page_mappings(void)
 
     for (int i = 0; i < PAGE_SIZE / PDE_SIZE; i++) {
         page = &pgdir[i];
-        if (PAGE_IS_FREE(page)) {
+        if (!PAGE_IS_MAPPED(page)) {
             continue;
         }
 
+        vaddr = i << LARGE_PAGE_SHIFT;
+        print_page_info(vaddr, page);
+
         if (PAGE_IS_LARGE(page)) {
-            vaddr = i << LARGE_PAGE_SHIFT;
-            print_page_info(vaddr, page);
             continue;
         }
 
         pgtbl = (struct page *) (page->pfn << PAGE_SHIFT);
         for (int j = 0; j < PAGE_SIZE / PTE_SIZE; j++) {
             page = &pgtbl[j];
-            if (PAGE_IS_FREE(page)) {
+            if (!PAGE_IS_MAPPED(page)) {
                 continue;
             }
-            vaddr = i << LARGE_PAGE_SHIFT | j << PAGE_SHIFT;
+            vaddr = (i << LARGE_PAGE_SHIFT) | (j << PAGE_SHIFT);
             print_page_info(vaddr, page);
         }
     }

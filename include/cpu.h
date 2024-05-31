@@ -53,6 +53,17 @@ bool has_cpuid(void);
 
 bool get_cpu_info(struct cpu_info *info);
 
+#define flush_tlb()     \
+__asm__ volatile (      \
+    "                   \n\
+    movl %%cr3, %%eax   \n\
+    movl %%eax, %%cr3   \n\
+    "                   \
+    :                   \
+    :                   \
+    : "eax"             \
+)
+
 struct tss * get_tss(void);
 struct x86_desc * get_seg_desc(uint16_t segsel);
 

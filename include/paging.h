@@ -41,6 +41,7 @@
 //
 #define MAP_READONLY    (1 << 0)    // Read-only page
 #define MAP_USERMODE    (1 << 1)    // User accessible page
+#define MAP_GLOBAL      (1 << 2)    // Global page
 #define MAP_PAGETABLE   (1 << 30)   // Page table
 #define MAP_LARGE       (1 << 31)   // Large (4M) page
 
@@ -59,41 +60,65 @@ struct page
     uint32_t d      : 1;    // Dirty: software has written this page
     uint32_t pspat  : 1;    // Page Size: 1 = 4M, 0 = 4K (PDE); Page Attribute Table (PTE)
     uint32_t g      : 1;    // Global: pins page to TLB (requires CR4.PGE=1)
-    uint32_t pde    : 1;    // PDE: this is a page directory entry (OH-WES addition)
+    uint32_t pte    : 1;    // PTE: this is a page table leaf (OH-WES addition)
     uint32_t        : 2;    // (available for use)
     uint32_t pfn    : 20;   // Page Frame Number
 };
+static_assert(sizeof(struct page) == sizeof(uint32_t), "bad PDE/PTE size!");
 
-#define PAGE_IS_FREE(pg)    (!(pg)->p)                  // Page not mapped
-#define PAGE_IS_PDE(pg)     ((pg)->pde)                 // Page is a PDE
-#define PAGE_IS_LARGE(pg)   ((pg)->pde && (pg)->pspat)  // Page is a PDE that maps to a 4M region
+#define PAGE_IS_MAPPED(pg)  ((pg)->p)                   // Page is mapped
+#define PAGE_IS_PTE(pg)     ((pg)->pte)                 // Page is a PTE (leaf)
+#define PAGE_IS_LARGE(pg)   (!(pg)->pte && (pg)->pspat) // Page is a PDE that maps to a 4M region
 
 /**
  * Maps a virtual address region to a physical page. The physical page is
- * specified via a page frame number (PFN), which is a number indexing physical
+ * specified by a page frame number (PFN), which is a number indexing physical
  * memory as a contiguous block of `PAGE_SIZE`-sized and -aligned chunks.
  *
  * @param addr base virtual address
  * @param pfn physical page frame number
  * @param flags mapping flags
  *
- * @return `EINVAL` if
- *           the desired virtual address range is already in use,
- *           the page frame number refers to a system reserved page,
- *           both the `MAP_LARGE` and `MAP_PAGETABLE` flags are used
+ * @return `0` if successful;
+ *
+ *         `EINVAL` if
+ *           the desired virtual address is not aligned to a page boundary,
+ *           both the MAP_LARGE and MAP_PAGETABLE flags are used;
+ *
+ *         `ENOMEM` if
+ *           the desired virtual address is already in use,
+ *           a page table for the desired virtual address does not exist,
+ *           an attempt is made to map a large page when large pages are not
+ *           supported by the hardware
  */
 int map_page(uint32_t addr, uint32_t pfn, int flags);
 
+/**
+ * Unmaps a virtual address region.
+ *
+ * @param addr base virtual address
+ * @param flags mapping flags
+ *
+ * @return `0` if successful;
+ *
+ *         `EINVAL` if
+ *           the desired virtual address is not aligned to a page boundary,
+ *           both the MAP_LARGE and MAP_PAGETABLE flags are used;
+ *
+ *         `ENOMEM` if
+ *           the desired virtual address is not mapped,
+ *           a page table for the desired virtual address does not exist
+ */
 int unmap_page(uint32_t addr, int flags);
 
 void * get_page_directory(void);
-void * get_pde(uint32_t addr);
+void * get_pde(uint32_t addr);      // page directory entry
+void * get_pte(uint32_t addr);      // page table entry
 
-uint32_t get_pfn(uint32_t addr);
-uint32_t get_pdn(uint32_t addr);
-uint32_t get_ptn(uint32_t addr);
+uint32_t get_pfn(uint32_t addr);    // page file number (bits 31:12)
+uint32_t get_pdn(uint32_t addr);    // page directory number (bits 31:22)
+uint32_t get_ptn(uint32_t addr);    // page table number (bits 21:12)
 
 void list_page_mappings(void);
-
 
 #endif // __PAGING_H

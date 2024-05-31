@@ -97,57 +97,46 @@ __fastcall void kmain(const struct boot_info *info)
 #endif
 
     init_cpu(&g_boot);
-    init_memory(&g_boot);
     init_ps2(&g_boot);
     init_kb();
+    init_memory(&g_boot);
     init_timer();
     init_rtc();
     init_tasks();
 
     __sti();
 
-    // kprint("pages after kernel init:\n");
-    // list_page_mappings();
+    {
+        const int flags = MAP_GLOBAL;
+        int ret;
 
+        // map the page table
+        uint32_t pgtbl = 0x5C000;
+        zeromem((void *) pgtbl, PAGE_SIZE);
 
-    // const uint32_t vaddr = 0x80000000;
-    // const uint32_t paddr = 0x10000000;
-    // const int flags = 0;
-    // int ret;
+        ret = map_page(0x80007000, get_pfn(pgtbl), MAP_PAGETABLE | flags);
+        assert(ret == 0);
 
-    // uint32_t pgtbl = 0x80000;
-    // ret = map_page(vaddr, get_pfn(pgtbl), MAP_PAGETABLE | flags);
-    // assert(ret == 0);
+        ret = map_page(0x80007000, get_pfn(0x7000), MAP_READONLY | flags);
+        assert(ret == 0);
 
-    // ret = map_page(vaddr, get_pfn(paddr), flags);
-    // assert(ret == 0);
-    // ret = map_page(vaddr, get_pfn(paddr), flags);
-    // assert(ret == -EINVAL);
+        ret = map_page(0xC0000000, get_pfn(0x0), MAP_LARGE | flags);
+        assert(ret == 0);
 
-    // ret = map_page(vaddr + PAGE_SIZE, get_pfn(paddr), flags);
-    // assert(ret == 0);
+        // *((uint32_t *) 0x00007BFC) = 0xCAFEBABE;
+        // kprint("%08X %08X %08X\n",
+        //     *((uint32_t *) 0x00007BFC),
+        //     *((uint32_t *) 0x80007BFC),
+        //     *((uint32_t *) 0xC0007BFC));
 
-    // kprint("pages after mapping v(%08X) -> p(%08X)\n", vaddr, paddr);
-    // list_page_mappings();
+        ret = unmap_page(0x80007000, MAP_PAGETABLE | flags);
+        assert(ret == 0);
 
-    // ret = unmap_page(vaddr, flags);
-    // assert(ret == 0);
+        ret = unmap_page(0xC0000000, MAP_LARGE | flags);
+        assert(ret == 0);
 
-    // ret = unmap_page(vaddr, flags);
-    // assert(ret == -EINVAL);
-
-    // ret = unmap_page(vaddr + PAGE_SIZE, flags);
-    // assert(ret == 0);
-
-    // ret = unmap_page(vaddr, flags | MAP_PAGETABLE);
-    // assert(ret == 0);
-
-    // kprint("pages after clearing mapping\n");
-    list_page_mappings();
-
-    // TODO: nee a way to see mapped page tables as well as mapped pages
-
-    // pgfault();
+        list_page_mappings();
+    }
 
 
 #ifdef DEBUG
