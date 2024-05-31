@@ -160,26 +160,27 @@ static void print_meminfo(const struct boot_info *info)
     int kb_free_16M = 0;    // between 1M and 4G
 
     if (!info->mem_map) {
-        kprint("bios-e820: memory map not available\n");
+        kprint("mem: bios-e820: memory map not available\n");
         if (info->kb_high_e801h != 0) {
             kb_free_1M = info->kb_high_e801h;
             kb_free_16M = (info->kb_extended << 6);
         }
         else {
-            kprint("bios-e801: memory map not available\n");
+            kprint("mem: bios-e801: memory map not available\n");
             kb_free_1M = info->kb_high;
         }
         kb_free_low = info->kb_low;
         kb_free = kb_free_low + kb_free_1M + kb_free_16M;
     }
     else {
+        kprint("mem: bios-e820: ACPI memory map at %08X\n", info->mem_map);
         const acpi_mmap_t *e = info->mem_map;
         while (e->type != 0) {
             uint32_t base = (uint32_t) e->base;
             uint32_t limit = (uint32_t) e->length - 1;
 
 #if SHOW_MEMMAP
-            kprint("bios-e820: %08lX-%08lX ", base, base+limit, e->attributes, e->type);
+            kprint("mem: bios-e820: %08lX-%08lX ", base, base+limit, e->attributes, e->type);
             switch (e->type) {
                 case ACPI_MMAP_TYPE_USABLE: kprint("free"); break;
                 case ACPI_MMAP_TYPE_RESERVED: kprint("reserved"); break;
@@ -219,7 +220,7 @@ static void print_meminfo(const struct boot_info *info)
         }
     }
 
-    kprint("boot: %dk free", kb_free);
+    kprint("mem: %dk free", kb_free);
     if (kb_total) kprint(", %dk total", kb_total);
     if (kb_bad) kprint(", %dk bad", kb_bad);
     kprint("\n");

@@ -19,72 +19,41 @@
  * =============================================================================
  */
 
+#ifndef __CPU_H
+#define __CPU_H
+
 #include <stdbool.h>
 #include <x86.h>
 
 struct cpu_info
 {
-    bool large_page_support;    // Page Size Extension Bit (4M page support)
-    bool rdtsc;                 // rdtsc Support
-    bool rdmsr;                 // rdmsr/wrmsr Support
-    bool pae;                   // Physical Address Extension
-    bool pge;                   // PTE Global Bit
-    bool pat;                   // Page Attribute Table
+    char vendor_id[13];         // e.g. "GenuineIntel"
+    char family;                // cpu family
+    char model;                 // cpu model
+    char stepping;              // cpu stepping
+    char level;                 // max CPUID parameter number
+    char type;                  // cpu type
+    char family_extended;       // cpu family (extended)
+    char model_extended;        // cpu model (extended)
+    uint32_t level_extended;    // max CPUID extended parameter number
+
+    char brand_index;
+    char brand_name[49];
+
+    bool fpu_support;           // cpu contains an on-chip x87 FPU
+    bool pse_support;           // large page support (CR4.PSE bit)
+    bool pge_support;           // global page support (CR4.PGE bit)
+    bool pat_support;           // page attribute table support (CR4.PAT bit)
+    bool tsc_support;           // cpu has RDTSC instruction
+    bool msr_support;           // cpu has RDMSR/WRMSR instrctions
 };
 
-const struct cpu_info * get_cpu_info(void);
 bool has_cr4(void);
+bool has_cpuid(void);
 
-struct tss * get_tss(struct tss *tss);
+bool get_cpu_info(struct cpu_info *info);
+
+struct tss * get_tss(void);
 struct x86_desc * get_seg_desc(uint16_t segsel);
 
-extern __fastcall void _thunk_except00h(void);
-extern __fastcall void _thunk_except01h(void);
-extern __fastcall void _thunk_except02h(void);
-extern __fastcall void _thunk_except03h(void);
-extern __fastcall void _thunk_except04h(void);
-extern __fastcall void _thunk_except05h(void);
-extern __fastcall void _thunk_except06h(void);
-extern __fastcall void _thunk_except07h(void);
-extern __fastcall void _thunk_except08h(void);
-extern __fastcall void _thunk_except09h(void);
-extern __fastcall void _thunk_except0Ah(void);
-extern __fastcall void _thunk_except0Bh(void);
-extern __fastcall void _thunk_except0Ch(void);
-extern __fastcall void _thunk_except0Dh(void);
-extern __fastcall void _thunk_except0Eh(void);
-extern __fastcall void _thunk_except0Fh(void);
-extern __fastcall void _thunk_except10h(void);
-extern __fastcall void _thunk_except11h(void);
-extern __fastcall void _thunk_except12h(void);
-extern __fastcall void _thunk_except13h(void);
-extern __fastcall void _thunk_except14h(void);
-extern __fastcall void _thunk_except15h(void);
-extern __fastcall void _thunk_except16h(void);
-extern __fastcall void _thunk_except17h(void);
-extern __fastcall void _thunk_except18h(void);
-extern __fastcall void _thunk_except19h(void);
-extern __fastcall void _thunk_except1Ah(void);
-extern __fastcall void _thunk_except1Bh(void);
-extern __fastcall void _thunk_except1Ch(void);
-extern __fastcall void _thunk_except1Dh(void);
-extern __fastcall void _thunk_except1Eh(void);
-extern __fastcall void _thunk_except1Fh(void);
-extern __fastcall void _thunk_irq00h(void);
-extern __fastcall void _thunk_irq01h(void);
-extern __fastcall void _thunk_irq02h(void);
-extern __fastcall void _thunk_irq03h(void);
-extern __fastcall void _thunk_irq04h(void);
-extern __fastcall void _thunk_irq05h(void);
-extern __fastcall void _thunk_irq06h(void);
-extern __fastcall void _thunk_irq07h(void);
-extern __fastcall void _thunk_irq08h(void);
-extern __fastcall void _thunk_irq09h(void);
-extern __fastcall void _thunk_irq0Ah(void);
-extern __fastcall void _thunk_irq0Bh(void);
-extern __fastcall void _thunk_irq0Ch(void);
-extern __fastcall void _thunk_irq0Dh(void);
-extern __fastcall void _thunk_irq0Eh(void);
-extern __fastcall void _thunk_irq0Fh(void);
-extern __fastcall void _thunk_syscall(void);
-extern __fastcall void _thunk_test(void);
+#endif // __CPU_H

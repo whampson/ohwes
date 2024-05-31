@@ -29,7 +29,7 @@
 
 #else // __KERNEL_MODE__
 
-extern __noreturn void kpanic(const char *, ...);
+extern void kpanic(const char *, ...);
 #define panic(...) kpanic(__VA_ARGS__)
 
 #endif

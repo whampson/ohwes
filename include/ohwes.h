@@ -33,6 +33,7 @@
 #include <string.h>
 #include <panic.h>
 #include <debug.h>
+#include <fs.h>
 
 //
 // OS Version Info
@@ -47,8 +48,8 @@
 // Useful Kernel Macros
 //
 
-void timer_sleep(int millis);           // see timer.c
-void pcspk_beep(int freq, int millis);  // see timer.c
+extern void timer_sleep(int millis);           // see timer.c
+extern void pcspk_beep(int freq, int millis);  // see timer.c
 
 #define beep(f,ms)                      pcspk_beep(f, ms)   // beep at frequency for millis (nonblocking)
 #define sleep(ms)                       timer_sleep(ms)     // spin for millis (blocking)
@@ -71,6 +72,12 @@ do {                                    \
 #define align(x, n)                     (((x) + (n) - 1) & ~((n) - 1))
 #define aligned(x,n)                    ((x) == align(x,n))
 
+extern int console_read(struct file *file, char *buf, size_t count);
+extern int console_write(struct file *file, const char *buf, size_t count);
+
+#define kbflush()                       ({ char __c; while (console_read(NULL, &__c, 1) != 0) { } })
+#define kbhit()                         ({ char __c; while (console_read(NULL, &__c, 1) == 0) { } })
+#define kbwait()                        ({ kbflush(); kbhit(); })
 
 //
 // CPU Privilege

@@ -93,9 +93,7 @@ uint32_t get_pfn(uint32_t addr);
 uint32_t get_pdn(uint32_t addr);
 uint32_t get_ptn(uint32_t addr);
 
-#if DEBUG
 void list_page_mappings(void);
-#endif
 
 
 #endif // __PAGING_H

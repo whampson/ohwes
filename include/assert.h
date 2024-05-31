@@ -33,7 +33,7 @@ do { \
     } \
 } while (0)
 #else  // DEBUG
-#define assert(x) (void) 0
+#define assert(x) (void) (x)
 #endif
 
 #define static_assert _Static_assert

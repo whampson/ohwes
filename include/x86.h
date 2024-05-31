@@ -177,25 +177,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#define flags_cf(e)         ((e) & EFLAGS_CF)
-#define flags_pf(e)         ((e) & EFLAGS_PF)
-#define flags_af(e)         ((e) & EFLAGS_AF)
-#define flags_zf(e)         ((e) & EFLAGS_ZF)
-#define flags_sf(e)         ((e) & EFLAGS_SF)
-#define flags_tf(e)         ((e) & EFLAGS_TF)
-#define flags_if(e)         ((e) & EFLAGS_IF)
-#define flags_df(e)         ((e) & EFLAGS_DF)
-#define flags_of(e)         ((e) & EFLAGS_OF)
-#define flags_iopl(e)       (((e) & EFLAGS_IOPL) >> 12)
-#define flags_nt(e)         ((e) & EFLAGS_NT)
-#define flags_rf(e)         ((e) & EFLAGS_RF)
-#define flags_vm(e)         ((e) & EFLAGS_VM)
-#define flags_ac(e)         ((e) & EFLAGS_AC)
-#define flags_vif(e)        ((e) & EFLAGS_VIF)
-#define flags_vip(e)        ((e) & EFLAGS_VIP)
-#define flags_id(e)         ((e) & EFLAGS_ID)
-
-
 /**
  * EFLAGS Register
  */
@@ -636,41 +617,6 @@ __asm__ volatile (          \
     : "r"(segsel)           \
 )
 
-#define  read_cs(cs) __asm__ volatile ("movw %%cs, %%ax"      : "=a"(cs):)
-#define  read_ds(cs) __asm__ volatile ("movw %%ds, %%ax"      : "=a"(ds):)
-#define  read_es(cs) __asm__ volatile ("movw %%es, %%ax"      : "=a"(es):)
-#define  read_fs(cs) __asm__ volatile ("movw %%fs, %%ax"      : "=a"(fs):)
-#define  read_gs(cs) __asm__ volatile ("movw %%gs, %%ax"      : "=a"(gs):)
-#define  read_ss(cs) __asm__ volatile ("movw %%ss, %%ax"      : "=a"(ss):)
-#define write_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs))
-#define write_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      : : "a"(ds))
-#define write_es(es) __asm__ volatile ("movw %%ax, %%es"      : : "a"(es))
-#define write_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      : : "a"(fs))
-#define write_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs))
-#define write_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss))
-
-#define  read_eax(eax) __asm__ volatile ("" : "=a"(eax):)
-#define  read_ebx(ebx) __asm__ volatile ("" : "=b"(ebx):)
-#define  read_ecx(ecx) __asm__ volatile ("" : "=c"(ecx):)
-#define  read_edx(edx) __asm__ volatile ("" : "=d"(edx):)
-#define  read_esi(esi) __asm__ volatile ("" : "=S"(esi):)
-#define  read_edi(edi) __asm__ volatile ("" : "=D"(edi):)
-#define write_eax(eax) __asm__ volatile ("" : : "a"(eax))
-#define write_ebx(ebx) __asm__ volatile ("" : : "b"(ebx))
-#define write_ecx(ecx) __asm__ volatile ("" : : "c"(ecx))
-#define write_edx(edx) __asm__ volatile ("" : : "d"(edx))
-#define write_esi(esi) __asm__ volatile ("" : : "S"(esi))
-#define write_edi(edi) __asm__ volatile ("" : : "D"(edi))
-
-#define  read_cr0(cr0) __asm__ volatile ("movl %%cr0, %%eax" : "=a"(cr0):)
-#define  read_cr2(cr2) __asm__ volatile ("movl %%cr2, %%eax" : "=a"(cr2):)
-#define  read_cr3(cr3) __asm__ volatile ("movl %%cr3, %%eax" : "=a"(cr3):)
-#define  read_cr4(cr4) __asm__ volatile ("movl %%cr4, %%eax" : "=a"(cr4):)
-#define write_cr0(cr0) __asm__ volatile ("movl %%eax, %%cr0" : : "a"(cr0))
-#define write_cr2(cr2) __asm__ volatile ("movl %%eax, %%cr2" : : "a"(cr2))
-#define write_cr3(cr3) __asm__ volatile ("movl %%eax, %%cr3" : : "a"(cr3))
-#define write_cr4(cr4) __asm__ volatile ("movl %%eax, %%cr4" : : "a"(cr4))
-
 /**
  * Clears the interrupt flag, disabling interrupts.
  */
@@ -729,21 +675,55 @@ __asm__ volatile (                                                          \
 )
 
 /**
- * Checks whether the current processor has the CPUID instruction.
+ * Executes the CPUID instruction.
  *
- * @return a nonzero value if the CPUID instruction is supported
+ * @param eax CPUID command
+ * @param param0 EAX returned by CPUID
+ * @param param1 EBX returned by CPUID
+ * @param param2 ECX returned by CPUID
+ * @param param3 EDX returned by CPUID
  */
-#define has_cpuid()                                                         \
-({                                                                          \
-    uint32_t __flags, __x;                                                  \
-    cli_save(__flags);                                                      \
-    __flags |= EFLAGS_ID;                                                   \
-    restore_flags(__flags);                                                 \
-    cli_save(__flags);                                                      \
-    __x = flags_id(__flags);                                                \
-    __x;                                                                    \
-})
+#define __cpuid(eax,param0,param1,param2,param3)                            \
+__asm__ volatile (                                                          \
+    "cpuid"                                                                 \
+    : "=a"(param0), "=b"(param1), "=c"(param2), "=d"(param3)                \
+    : "a"(eax)                                                              \
+)
 
+#define  read_cs(cs) __asm__ volatile ("movw %%cs, %%ax"      : "=a"(cs):)
+#define  read_ds(cs) __asm__ volatile ("movw %%ds, %%ax"      : "=a"(ds):)
+#define  read_es(cs) __asm__ volatile ("movw %%es, %%ax"      : "=a"(es):)
+#define  read_fs(cs) __asm__ volatile ("movw %%fs, %%ax"      : "=a"(fs):)
+#define  read_gs(cs) __asm__ volatile ("movw %%gs, %%ax"      : "=a"(gs):)
+#define  read_ss(cs) __asm__ volatile ("movw %%ss, %%ax"      : "=a"(ss):)
+#define write_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs))
+#define write_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      : : "a"(ds))
+#define write_es(es) __asm__ volatile ("movw %%ax, %%es"      : : "a"(es))
+#define write_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      : : "a"(fs))
+#define write_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs))
+#define write_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss))
+
+#define  read_eax(eax) __asm__ volatile ("" : "=a"(eax):)
+#define  read_ebx(ebx) __asm__ volatile ("" : "=b"(ebx):)
+#define  read_ecx(ecx) __asm__ volatile ("" : "=c"(ecx):)
+#define  read_edx(edx) __asm__ volatile ("" : "=d"(edx):)
+#define  read_esi(esi) __asm__ volatile ("" : "=S"(esi):)
+#define  read_edi(edi) __asm__ volatile ("" : "=D"(edi):)
+#define write_eax(eax) __asm__ volatile ("" : : "a"(eax))
+#define write_ebx(ebx) __asm__ volatile ("" : : "b"(ebx))
+#define write_ecx(ecx) __asm__ volatile ("" : : "c"(ecx))
+#define write_edx(edx) __asm__ volatile ("" : : "d"(edx))
+#define write_esi(esi) __asm__ volatile ("" : : "S"(esi))
+#define write_edi(edi) __asm__ volatile ("" : : "D"(edi))
+
+#define  read_cr0(cr0) __asm__ volatile ("movl %%cr0, %%eax" : "=a"(cr0):)
+#define  read_cr2(cr2) __asm__ volatile ("movl %%cr2, %%eax" : "=a"(cr2):)
+#define  read_cr3(cr3) __asm__ volatile ("movl %%cr3, %%eax" : "=a"(cr3):)
+#define  read_cr4(cr4) __asm__ volatile ("movl %%cr4, %%eax" : "=a"(cr4):)
+#define write_cr0(cr0) __asm__ volatile ("movl %%eax, %%cr0" : : "a"(cr0))
+#define write_cr2(cr2) __asm__ volatile ("movl %%eax, %%cr2" : : "a"(cr2))
+#define write_cr3(cr3) __asm__ volatile ("movl %%eax, %%cr3" : : "a"(cr3))
+#define write_cr4(cr4) __asm__ volatile ("movl %%eax, %%cr4" : : "a"(cr4))
 
 /**
  * Page Directory Entry for 32-bit Paging

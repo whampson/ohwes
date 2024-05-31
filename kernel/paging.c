@@ -29,6 +29,10 @@ void init_paging(void)
 {
     int ret;
     int flags;
+    struct cpu_info cpu;
+
+    // get cpu info for things like large page support
+    get_cpu_info(&cpu);
 
     // zero the system page directory
     struct pde *pgdir = get_page_directory();
@@ -48,7 +52,8 @@ void init_paging(void)
 
     flags = MAP_USERMODE;   // temporarily allow usermode access, TODO: remove
 
-    if (get_cpu_info()->large_page_support) {
+
+    if (cpu.pse_support) {
         // TEMP TEMP TEMP
         ret = map_page(0x0, 0, flags | MAP_LARGE);
         assert(ret == 0);
@@ -74,7 +79,7 @@ void init_paging(void)
     cr3 |= (uint32_t) pgdir;
     write_cr3(cr3);
 
-    if (get_cpu_info()->large_page_support) {
+    if (cpu.pse_support) {
         uint32_t cr4 = 0;
         read_cr4(cr4);
         cr4 |= CR4_PSE;     // allow 4M pages
@@ -181,9 +186,9 @@ int map_page(uint32_t addr, uint32_t pfn, int flags)
         return -EINVAL;         // invalid flag combination
     }
 
-    if (flag_large && !get_cpu_info()->large_page_support) {
-        return -EINVAL;         // large pages not supported TODO: change error code
-    }
+    // if (flag_large && !get_cpu_info()->large_page_support) {
+    //     return -EINVAL;         // large pages not supported TODO: change error code
+    // }
 
     // TODO: ensure pfn does not point to a reserved physical region
     // TODO: make sure CPU supports large pages (>= Pentium, use cpuid)
@@ -246,7 +251,7 @@ int unmap_page(uint32_t addr, int flags)
     return clear_page_mapping(pte, flags);
 }
 
-#if DEBUG
+// #if DEBUG
 static void print_page_info(uint32_t vaddr, const struct page *page)
 {
     uint32_t paddr = page->pfn << PAGE_SHIFT;
@@ -267,6 +272,7 @@ static void print_page_info(uint32_t vaddr, const struct page *page)
         page->pwt ? "wt " : "",
         page->pcd ? "nc " : "");
 
+    kbwait();
 }
 
 void list_page_mappings(void)
@@ -299,4 +305,4 @@ void list_page_mappings(void)
         }
     }
 }
-#endif
+// #endif

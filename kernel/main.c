@@ -104,49 +104,51 @@ __fastcall void kmain(const struct boot_info *info)
     init_rtc();
     init_tasks();
 
-    kprint("pages after kernel init:\n");
+    sti();
+
+    // kprint("pages after kernel init:\n");
+    // list_page_mappings();
+
+
+    // const uint32_t vaddr = 0x80000000;
+    // const uint32_t paddr = 0x10000000;
+    // const int flags = 0;
+    // int ret;
+
+    // uint32_t pgtbl = 0x80000;
+    // ret = map_page(vaddr, get_pfn(pgtbl), MAP_PAGETABLE | flags);
+    // assert(ret == 0);
+
+    // ret = map_page(vaddr, get_pfn(paddr), flags);
+    // assert(ret == 0);
+    // ret = map_page(vaddr, get_pfn(paddr), flags);
+    // assert(ret == -EINVAL);
+
+    // ret = map_page(vaddr + PAGE_SIZE, get_pfn(paddr), flags);
+    // assert(ret == 0);
+
+    // kprint("pages after mapping v(%08X) -> p(%08X)\n", vaddr, paddr);
+    // list_page_mappings();
+
+    // ret = unmap_page(vaddr, flags);
+    // assert(ret == 0);
+
+    // ret = unmap_page(vaddr, flags);
+    // assert(ret == -EINVAL);
+
+    // ret = unmap_page(vaddr + PAGE_SIZE, flags);
+    // assert(ret == 0);
+
+    // ret = unmap_page(vaddr, flags | MAP_PAGETABLE);
+    // assert(ret == 0);
+
+    // kprint("pages after clearing mapping\n");
     list_page_mappings();
-
-
-    const uint32_t vaddr = 0x80000000;
-    const uint32_t paddr = 0x10000000;
-    const int flags = 0;
-    int ret;
-
-    uint32_t pgtbl = 0x80000;
-    ret = map_page(vaddr, get_pfn(pgtbl), MAP_PAGETABLE | flags);
-    assert(ret == 0);
-
-    ret = map_page(vaddr, get_pfn(paddr), flags);
-    assert(ret == 0);
-    ret = map_page(vaddr, get_pfn(paddr), flags);
-    assert(ret == -EINVAL);
-
-    ret = map_page(vaddr + PAGE_SIZE, get_pfn(paddr), flags);
-    assert(ret == 0);
-
-    kprint("pages after mapping v(%08X) -> p(%08X)\n", vaddr, paddr);
-    list_page_mappings();
-
-    ret = unmap_page(vaddr, flags);
-    assert(ret == 0);
-
-    ret = unmap_page(vaddr, flags);
-    assert(ret == -EINVAL);
-
-    ret = unmap_page(vaddr + PAGE_SIZE, flags);
-    assert(ret == 0);
-
-    ret = unmap_page(vaddr, flags | MAP_PAGETABLE);
-    assert(ret == 0);
-
-    kprint("pages after clearing mapping\n");
-    list_page_mappings();
-
 
     // TODO: nee a way to see mapped page tables as well as mapped pages
 
     // pgfault();
+
 
 #ifdef DEBUG
     g_test_crash_kernel = 0;
@@ -212,7 +214,6 @@ static void print_info(const struct boot_info *info)
     kprint("boot: kernel %08X,%X\n", info->kernel, info->kernel_size);
     kprint("boot: stack %08X\n", info->stack);
     if (info->ebda) kprint("boot: EBDA %08X\n", info->ebda);
-    if (info->mem_map) kprint("boot: ACPI memory map %08X\n", info->mem_map);
 }
 
 #ifdef DEBUG

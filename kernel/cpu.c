@@ -28,6 +28,8 @@
 #include <irq.h>
 #include <paging.h>
 
+#define CHATTY               1
+
 #define CPU_DATA_AREA       0x1000
 
 //
@@ -57,6 +59,33 @@ static_assert(GDT_BASE + GDT_LIMIT < LDT_BASE, "GDT overlaps LDT!");
 static_assert(LDT_BASE + LDT_LIMIT < TSS_BASE, "LDT overlaps TSS!");
 static_assert(IDT_SIZE + GDT_SIZE + LDT_SIZE + TSS_SIZE <= PAGE_SIZE, "CPU data runs into next page!");
 
+//
+// CPUID.EAX=01h EAX return fields.
+//
+#define CPUID_STEPPING_SHIFT    0
+#define CPUID_STEPPING_MASK     0x0F
+#define CPUID_MODEL_SHIFT       4
+#define CPUID_MODEL_MASK        0x0F
+#define CPUID_FAMILY_SHIFT      8
+#define CPUID_FAMILY_MASK       0x0F
+#define CPUID_TYPE_SHIFT        12
+#define CPUID_TYPE_MASK         0x03
+#define CPUID_EXT_MODEL_SHIFT   16
+#define CPUID_EXT_MODEL_MASK    0x0F
+#define CPUID_EXT_FAMILY_SHIFT  20
+#define CPUID_EXT_FAMILY_MASK   0xFF
+
+//
+// CPUID.EAX=01h EDX return bits.
+//
+#define CPUID_FPU               (1 << 0)
+#define CPUID_PSE               (1 << 3)
+#define CPUID_TSC               (1 << 4)
+#define CPUID_MSR               (1 << 5)
+#define CPUID_PAE               (1 << 6)
+#define CPUID_PGE               (1 << 13)
+#define CPUID_PAT               (1 << 16)
+
 /**
  * Gets a Segment Descriptor from a descriptor table.
  *
@@ -67,7 +96,7 @@ static_assert(IDT_SIZE + GDT_SIZE + LDT_SIZE + TSS_SIZE <= PAGE_SIZE, "CPU data 
 #define get_desc(table,segsel) \
     (&((struct x86_desc*)(table))[(segsel)>>3])
 
-struct tss * get_tss(struct tss *tss)
+struct tss * get_tss(void)
 {
     return (struct tss *) TSS_BASE;
 }
@@ -89,19 +118,83 @@ struct x86_desc * get_seg_desc(uint16_t segsel)
     return get_desc(GDT_BASE, segsel);
 }
 
-struct cpu_info g_cpu_info;
-
-const struct cpu_info * get_cpu_info(void)
+bool has_cpuid(void)
 {
-    return &g_cpu_info;
+    uint32_t flags;
+
+    cli_save(flags);
+    flags |= EFLAGS_ID;         // attempt to set ID flags
+    restore_flags(flags);
+    cli_save(flags);            // readback
+
+    return flags & EFLAGS_ID;   // if it's still set, CPUID supported
 }
 
 bool has_cr4(void)
 {
     // Large pages are enabled by the PSE bit in CR4. The presence of this bit
-    // is determined by a call to CPUID EAX=01h, performed in init_cpu. Thus, if
-    // the CPU has large page support, the CR4 register must also be present.
-    return g_cpu_info.large_page_support;
+    // is determined by a call to CPUID EAX=01h. Thus, if  the CPU has large
+    // page support, the CR4 register must also be present.
+
+    struct cpu_info cpu;
+    get_cpu_info(&cpu);
+
+    return cpu.pse_support;
+}
+
+
+bool get_cpu_info(struct cpu_info *info)
+{
+    uint32_t eax, ebx, ecx, edx;
+    uint32_t char_buf[4];
+
+    zeromem(info, sizeof(info));
+    zeromem(char_buf, sizeof(char_buf));
+
+    if (!has_cpuid()) {
+        return false;        // return after zeroing struct so support bools are false
+    }
+
+    static_assert(sizeof(char_buf) <= sizeof(info->brand_name), "brand name buffer too small");
+
+    __cpuid(0x0, eax, char_buf[0], char_buf[2], char_buf[1]);
+    memcpy(info->vendor_id, char_buf, 12);
+    info->vendor_id[12] = '\0';
+    info->level = eax;
+
+    if (info->level >= 1) {
+        __cpuid(0x1, eax, ebx, ecx, edx);
+        info->stepping = (eax >> CPUID_STEPPING_SHIFT) & CPUID_STEPPING_MASK;
+        info->model = (eax >> CPUID_MODEL_SHIFT) & CPUID_MODEL_MASK;
+        info->family = (eax >> CPUID_FAMILY_SHIFT) & CPUID_FAMILY_MASK;
+        info->type = (eax >> CPUID_TYPE_SHIFT) & CPUID_TYPE_MASK;
+        info->model_extended = (eax >> CPUID_EXT_MODEL_SHIFT) & CPUID_EXT_MODEL_MASK;
+        info->family_extended = (eax >> CPUID_EXT_FAMILY_SHIFT) & CPUID_EXT_FAMILY_MASK;
+        info->fpu_support = edx & CPUID_FPU;
+        info->pse_support = edx & CPUID_PSE;
+        info->pge_support = edx & CPUID_PGE;
+        info->pat_support = edx & CPUID_PAT;
+        info->tsc_support = edx & CPUID_TSC;
+        info->msr_support = edx & CPUID_MSR;
+        info->brand_index = ebx & 0xFF;
+    }
+
+    __cpuid(0x80000000, eax, ebx, ecx, edx);
+    if (eax & 0x80000000) {
+        info->level_extended = eax;
+    }
+
+    if (info->level_extended >= 0x80000004) {
+        __cpuid(0x80000002, char_buf[0], char_buf[1], char_buf[2], char_buf[3]);
+        memcpy(info->brand_name, char_buf, sizeof(char_buf));
+        __cpuid(0x80000003, char_buf[0], char_buf[1], char_buf[2], char_buf[3]);
+        memcpy(info->brand_name + 16, char_buf, sizeof(char_buf));
+        __cpuid(0x80000004, char_buf[0], char_buf[1], char_buf[2], char_buf[3]);
+        memcpy(info->brand_name + 32, char_buf, sizeof(char_buf));
+        info->brand_name[48] = '\0';
+    }
+
+    return true;
 }
 
 static void init_gdt(const struct boot_info * const info);
@@ -109,44 +202,79 @@ static void init_idt(const struct boot_info * const info);
 static void init_ldt(const struct boot_info * const info);
 static void init_tss(const struct boot_info * const info);
 
-#define cpuid(cmd,a,b,c,d)                              \
-    __asm__ volatile (                                  \
-        "cpuid"                                         \
-            : "=a"(a), "=b"(b), "=c"(c), "=d"(d)        \
-            : "a"(cmd)                                  \
-    )                                                   \
-
-#define CPUID_PSE   (1 << 3)
-#define CPUID_RDTSC (1 << 4)
-#define CPUID_RDMSR (1 << 5)
-#define CPUID_PAE   (1 << 6)
-#define CPUID_PGE   (1 << 13)
-#define CPUID_PAT   (1 << 16)
+extern __fastcall void _thunk_except00h(void);
+extern __fastcall void _thunk_except01h(void);
+extern __fastcall void _thunk_except02h(void);
+extern __fastcall void _thunk_except03h(void);
+extern __fastcall void _thunk_except04h(void);
+extern __fastcall void _thunk_except05h(void);
+extern __fastcall void _thunk_except06h(void);
+extern __fastcall void _thunk_except07h(void);
+extern __fastcall void _thunk_except08h(void);
+extern __fastcall void _thunk_except09h(void);
+extern __fastcall void _thunk_except0Ah(void);
+extern __fastcall void _thunk_except0Bh(void);
+extern __fastcall void _thunk_except0Ch(void);
+extern __fastcall void _thunk_except0Dh(void);
+extern __fastcall void _thunk_except0Eh(void);
+extern __fastcall void _thunk_except0Fh(void);
+extern __fastcall void _thunk_except10h(void);
+extern __fastcall void _thunk_except11h(void);
+extern __fastcall void _thunk_except12h(void);
+extern __fastcall void _thunk_except13h(void);
+extern __fastcall void _thunk_except14h(void);
+extern __fastcall void _thunk_except15h(void);
+extern __fastcall void _thunk_except16h(void);
+extern __fastcall void _thunk_except17h(void);
+extern __fastcall void _thunk_except18h(void);
+extern __fastcall void _thunk_except19h(void);
+extern __fastcall void _thunk_except1Ah(void);
+extern __fastcall void _thunk_except1Bh(void);
+extern __fastcall void _thunk_except1Ch(void);
+extern __fastcall void _thunk_except1Dh(void);
+extern __fastcall void _thunk_except1Eh(void);
+extern __fastcall void _thunk_except1Fh(void);
+extern __fastcall void _thunk_irq00h(void);
+extern __fastcall void _thunk_irq01h(void);
+extern __fastcall void _thunk_irq02h(void);
+extern __fastcall void _thunk_irq03h(void);
+extern __fastcall void _thunk_irq04h(void);
+extern __fastcall void _thunk_irq05h(void);
+extern __fastcall void _thunk_irq06h(void);
+extern __fastcall void _thunk_irq07h(void);
+extern __fastcall void _thunk_irq08h(void);
+extern __fastcall void _thunk_irq09h(void);
+extern __fastcall void _thunk_irq0Ah(void);
+extern __fastcall void _thunk_irq0Bh(void);
+extern __fastcall void _thunk_irq0Ch(void);
+extern __fastcall void _thunk_irq0Dh(void);
+extern __fastcall void _thunk_irq0Eh(void);
+extern __fastcall void _thunk_irq0Fh(void);
+extern __fastcall void _thunk_syscall(void);
+extern __fastcall void _thunk_test(void);
 
 void init_cpu(const struct boot_info * const info)
 {
-    uint32_t eax, ebx, ecx, edx;
-
-    zeromem(&g_cpu_info, sizeof(struct cpu_info));
-
     init_gdt(info);
     init_idt(info);
     init_ldt(info);
     init_tss(info);
 
-    if (has_cpuid()) {
-        const int FeatureInfo = 0x01;
-        cpuid(FeatureInfo, eax, ebx, ecx, edx);
-        kprint("cpuid(%02Xh): eax=%08X ebx=%08X, ecx=%08X, edx=%08X\n",
-             FeatureInfo, eax, ebx, ecx, edx);
-
-        g_cpu_info.large_page_support = (edx & CPUID_PSE);
-        g_cpu_info.rdtsc = (edx & CPUID_RDTSC);
-        g_cpu_info.rdmsr = (edx & CPUID_RDMSR);
-        g_cpu_info.pae = (edx & CPUID_PAE);
-        g_cpu_info.pge = (edx & CPUID_PGE);
-        g_cpu_info.pat = (edx & CPUID_PAT);
+#ifdef CHATTY
+    struct cpu_info cpu_info;
+    if (get_cpu_info(&cpu_info)) {
+        kprint("cpuid: family=%d,model=%d,stepping=%d,level=%d,type=%d\n"
+               "cpuid: extended_family=%d,extended_model=%d,extended_level=%02Xh\n"
+               "cpuid: vendor=%s,name=%s\n"
+               "cpuid: brand_index=%02Xh,fpu=%d,pse=%d,pge=%d,pat=%d,tsc=%d,msr=%d\n",
+            cpu_info.family, cpu_info.model, cpu_info.stepping,
+            cpu_info.level, cpu_info.type,
+            cpu_info.family_extended, cpu_info.model_extended, cpu_info.level_extended,
+            cpu_info.vendor_id, cpu_info.brand_name, cpu_info.brand_index,
+            cpu_info.fpu_support, cpu_info.pse_support, cpu_info.pge_support,
+            cpu_info.pat_support, cpu_info.tsc_support, cpu_info.msr_support);
     }
+#endif
 }
 
 static void init_gdt(const struct boot_info * const info)
