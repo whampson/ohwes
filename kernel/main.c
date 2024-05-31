@@ -77,7 +77,7 @@ __fastcall void kmain(const struct boot_info *info)
     // 0x0????-0x0FFFF: kernel stack (grows towards 0)
     // 0x10000-(EBDA ): kernel and system
 
-    cli();
+    __cli();
     memcpy(&g_boot, info, sizeof(struct boot_info));
 
     init_pic();
@@ -104,7 +104,7 @@ __fastcall void kmain(const struct boot_info *info)
     init_rtc();
     init_tasks();
 
-    sti();
+    __sti();
 
     // kprint("pages after kernel init:\n");
     // list_page_mappings();

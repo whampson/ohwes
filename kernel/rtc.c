@@ -517,11 +517,11 @@ int rtc_read(struct file *file, char *buf, size_t count)
     // get current tick count
     cli_save(flags);
     tick = get_rtc()->ticks;
-    sti();
+    __sti();
 
     // spin until another tick happens
     spin(tick == get_rtc()->ticks);
-    cli();
+    __cli();
 
     // capture new tick count
     tick = get_rtc()->ticks;

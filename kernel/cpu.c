@@ -302,7 +302,7 @@ static void init_gdt(const struct boot_info * const info)
 
     // Create GDT descriptor and use it to load GDTR, effectively "setting" the GDT
     struct pseudo_desc gdt_desc = { .base = GDT_BASE, .limit = GDT_LIMIT };
-    lgdt(gdt_desc);
+    __lgdt(gdt_desc);
 
     // Reload segment registers with new segment selectors
     write_cs(KERNEL_CS);
@@ -363,7 +363,7 @@ static void init_idt(const struct boot_info * const info)
 
     // Load the IDTR
     struct pseudo_desc idt_desc = { .base = IDT_BASE, .limit = IDT_LIMIT };
-    lidt(idt_desc);
+    __lidt(idt_desc);
 }
 
 static void init_ldt(const struct boot_info * const info)
@@ -380,7 +380,7 @@ static void init_ldt(const struct boot_info * const info)
     make_ldt_desc(ldt_desc, KERNEL_PL, LDT_BASE, LDT_LIMIT);
 
     // Load LDTR
-    lldt(_GDT_LOCALDESC);
+    __lldt(_GDT_LOCALDESC);
 }
 
 static void init_tss(const struct boot_info * const info)
@@ -406,5 +406,5 @@ static void init_tss(const struct boot_info * const info)
     make_tss_desc(pTssDesc, KERNEL_PL, TSS_BASE, TSS_LIMIT);
 
     // Load Task Register
-    ltr(_GDT_TASKSTATE);
+    __ltr(_GDT_TASKSTATE);
 }

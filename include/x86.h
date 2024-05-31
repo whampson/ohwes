@@ -571,7 +571,7 @@ static inline void make_trap_gate(struct x86_desc *desc, int segsel, int dpl, vo
  *              tricky; the limit field should be aligned to an odd-word address
  *              (address MOD 4 equals 2)
  */
-#define lgdt(desc)          \
+#define __lgdt(desc)        \
 __asm__ volatile (          \
     "lgdt %0"               \
     :                       \
@@ -586,7 +586,7 @@ __asm__ volatile (          \
  *              tricky; the limit field should be aligned to an odd-word address
  *              (address MOD 4 equals 2)
  */
-#define lidt(desc)          \
+#define __lidt(desc)        \
 __asm__ volatile (          \
     "lidt %0"               \
     :                       \
@@ -598,7 +598,7 @@ __asm__ volatile (          \
  *
  * @param segsel segment selector for the LDT
  */
-#define lldt(segsel)        \
+#define __lldt(segsel)      \
 __asm__ volatile (          \
     "lldt %w0"              \
     :                       \
@@ -610,7 +610,7 @@ __asm__ volatile (          \
  *
  * @param segsel segment selector for the TSS
  */
-#define ltr(segsel)         \
+#define __ltr(segsel)       \
 __asm__ volatile (          \
     "ltr %w0"               \
     :                       \
@@ -620,7 +620,7 @@ __asm__ volatile (          \
 /**
  * Clears the interrupt flag, disabling interrupts.
  */
-#define cli()                                                               \
+#define __cli()                                                             \
 __asm__ volatile (                                                          \
     "cli"                                                                   \
     :                                                                       \
@@ -631,7 +631,7 @@ __asm__ volatile (                                                          \
 /**
  * Sets the interrupt flag, enabling interrupts.
  */
-#define sti()                                                               \
+#define __sti()                                                             \
 __asm__ volatile (                                                          \
     "sti"                                                                   \
     :                                                                       \

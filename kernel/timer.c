@@ -117,9 +117,9 @@ void timer_sleep(int millis)
     pit->sleep_ticks = div_round(millis, pit->quantum_ms);
     // kprint("timer: sleeping for %dms (%d ticks)\n", millis, pit.sleep_ticks);
 
-    sti();
+    __sti();
     while (pit->sleep_ticks) { }
-    cli();
+    __cli();
 
     restore_flags(flags);
 }

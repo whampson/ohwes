@@ -97,7 +97,7 @@ void crash(struct iregs *regs)
     irq_setmask(0xFFFF);
     irq_unmask(IRQ_KEYBOARD);
     irq_unmask(IRQ_TIMER);
-    sti();
+    __sti();
     // TODO: should probably check whether we crashed from the keyboard or timer
     // ISR before deciding to enable those interrupts. Also the console_write()
     // function, because if we crashed there we're SOL here...
@@ -247,7 +247,7 @@ void crash(struct iregs *regs)
 done:
     kbwait();
     crash_print("\e[0;0H\e[37;40m\e[2J\e5");    // restore console
-    cli();
+    __cli();
     irq_setmask(irq_mask);
     return;
 }
@@ -264,7 +264,7 @@ void kpanic(const char *fmt, ...)
     irq_setmask(0xFFFF);
     irq_unmask(IRQ_KEYBOARD);
     irq_unmask(IRQ_TIMER);
-    sti();
+    __sti();
     // TODO: should probably check whether we crashed from the keyboard or timer
     // ISR before deciding to enable those interrupts. Also the console_write()
     // function, because if we crashed there we're SOL here...
@@ -279,7 +279,7 @@ void kpanic(const char *fmt, ...)
     kprint("\n");
 
     // turn interrupts back off
-    cli();
+    __cli();
     irq_setmask(irq_mask);
 
     // const int banner_line = 8;
