@@ -53,19 +53,11 @@ static void print_banner(const char *banner);
 static void crash_print(const char *fmt, ...);
 static void interrupt_crash(struct iregs *regs);
 
-extern int console_read(struct file *file, char *buf, size_t count);
-extern int console_write(struct file *file, const char *buf, size_t count);
-
-#define kbflush()   while (console_read(NULL, &c, 1) != 0) { }
-#define kbhit()     while (console_read(NULL, &c, 1) == 0) { }
-#define kbwait()    ({ kbflush(); kbhit(); })
-
 #define BRIGHT(s)   "\e[1m" s "\e[22m"
 
 __fastcall
 void crash(struct iregs *regs)
 {
-    char c;
     uint16_t _cs;
     struct segsel *curr_cs;
     struct segsel *fault_cs;
@@ -260,25 +252,44 @@ done:
     return;
 }
 
-__noreturn
+// __noreturn
 void kpanic(const char *fmt, ...)
 {
     va_list args;
+    uint16_t irq_mask;
     char buf[CRASH_BUFSIZ];
 
+    // enable select interrupts
+    irq_mask = irq_getmask();
+    irq_setmask(0xFFFF);
+    irq_unmask(IRQ_KEYBOARD);
+    irq_unmask(IRQ_TIMER);
+    sti();
+    // TODO: should probably check whether we crashed from the keyboard or timer
+    // ISR before deciding to enable those interrupts. Also the console_write()
+    // function, because if we crashed there we're SOL here...
+
     va_start(args, fmt);
-    // kprint("panic: ");
     vsnprintf(buf, sizeof(buf), fmt, args);
+    kprint("panic: %s", buf);
     va_end(args);
 
-    const int banner_line = 8;
+    kprint("Press any key to continue...");
+    kbwait();
+    kprint("\n");
 
-    crash_print("\e[0;0H\e[37;4%dm\e[2J\e5", PANIC_COLOR);
-    crash_print("\e[%d;0H", banner_line);
-    print_banner(" Kernel Panic ");
-    crash_print("\n\n\e[37;4%dm", PANIC_COLOR);
-    crash_print(buf);
-    die();
+    // turn interrupts back off
+    cli();
+    irq_setmask(irq_mask);
+
+    // const int banner_line = 8;
+
+    // crash_print("\e[0;0H\e[37;4%dm\e[2J\e5", PANIC_COLOR);
+    // crash_print("\e[%d;0H", banner_line);
+    // print_banner(" Kernel Panic ");
+    // crash_print("\n\n\e[37;4%dm", PANIC_COLOR);
+    // crash_print(buf);
+    // die();
 }
 
 static void center_text(const char *str, ...)
