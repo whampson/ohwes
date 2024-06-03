@@ -28,6 +28,72 @@
 /*
  Physical Address Map:
 
+LOW MEMORY:
+
+  100000 +----------------------------+ 1M
+         |////////////////////////////|
+         | (reserved for hardware) ///|
+         |////////////////////////////|
+   C0000 +----------------------------+ 768K
+         |                            |
+         | VGA Frame Buffer           |
+         |                            |
+   B8000 +----------------------------+ 736K
+         |////////////////////////////|
+         | (reserved for VGA) ////////|
+         |////////////////////////////|
+   A0000 +----------------------------+ 640K
+         |////////////////////////////|
+         | (reservred for EBDA) //////|
+         |////////////////////////////|
+   9FC00 +----------------------------+ 639K    <-- address can vary by hardware
+         |                            |
+         | (free)                     |
+         |                            |
+   91000 +----------------------------+ 128K
+         | User Stack                 |         <-- TODO: dynamically allocate
+   90000 +----------------------------+ 128K
+         |                            |
+         |                            |
+         |                            |
+         | (free)                     |
+         |                            |
+         |                            |
+         |                            |
+         |                            |
+         +----------------------------+ (varies)
+         |                            |
+         |                            |
+         | Kernel Code                |
+         |                            |
+         |                            |
+   20000 +----------------------------+ 128K
+         |                            |
+         |                            |
+         | DMA Buffer                 |
+         |                            |
+         |                            |
+   10000 +----------------------------+ 64K
+         | Kernel Stack               |         <-- TODO: dynamically allocate
+    F000 +----------------------------+ 63K
+         |                            |
+         | (free)                     |
+         |                            |
+    5000 +----------------------------+ 20K
+         | Kernel Page Table (0-4M)   |         <-- TODO: dynamically allocate
+    4000 +----------------------------+ 16K
+         | Memory Info                |
+    3000 +----------------------------+ 12K
+         | IDT/GDT/LDT/TSS            |
+    2000 +----------------------------+ 8K
+         | System Page Directory      |
+    1000 +----------------------------+ 4K
+         | Zero Page                  |
+       0 +============================+ 0K
+
+
+HIGH MEMORY:
+
 FFFFFFFF +----------------------------+ 4G
          |                            |
          |                            |
@@ -49,102 +115,34 @@ FFFFFFFF +----------------------------+ 4G
          |                            |
          |                            |
   100000 +----------------------------+ 1M
-         |////////////////////////////|
-         | (reserved for hardware) ///|
-         |////////////////////////////|
-   C0000 +----------------------------+ 768K
-         |                            |
-         | VGA Frame Buffer           |
-         |                            |
-   B8000 +----------------------------+ 736K
-         |////////////////////////////|
-         | (reserved for VGA) ////////|
-         |////////////////////////////|
-   A0000 +----------------------------+ 640K
-         |////////////////////////////|
-         | (reservred for EBDA) //////|
-         |////////////////////////////|
-   9FC00 +----------------------------+ 639K (this address can vary by hardware)
-         |                            | -----------+
-         |                            |            |
-         |                            |            |
-         | Kernel Stack               |            +-- consider dynamically allocating process kernel stacks...
-         |                            |            |
-         |                            |            |
-         |                            |            |
-         +----------------------------+ (varies) --+
-         |                            |
-         |                            |
-         |                            |
-         | (free)                     |
-         |                            |
-         |                            |
-         |                            |
-         +----------------------------+ (varies)
-         |                            |
-         |                            |
-         |                            |
-         | Kernel Code                |
-         |                            |
-         |                            |
-         |                            |
-   20000 +----------------------------+ 128K
-         |                            |
-         | DMA Buffer                 |
-         |                            |
-   10000 +----------------------------+ 64K
-         |                            |
-         | (free)                     |
-         |                            |
-    C000 +----------------------------+ 52K  ---+
-         | Console 3 Input Buffer     |         |
-    B000 +----------------------------+ 48K     |
-         | Console 3 Frame Buffer     |         |
-    A000 +----------------------------+ 40K     |
-         | Console 2 Input Buffer     |         |
-    9000 +----------------------------+ 36K     |
-         | Console 2 Frame Buffer     |         |
-    8000 +----------------------------+ 32K     + -- consider dynamically allocating these...
-         | Console 1 Input Buffer     |         |
-    7000 +----------------------------+ 28K     |
-         | Console 1 Frame Buffer     |         |
-    6000 +----------------------------+ 24K     |
-         | Console 0 Input Buffer     |         |
-    5000 +----------------------------+ 20K     |
-         | Console 0 Frame Buffer     |         |
-    4000 +----------------------------+ 16K ----+
-         | Kernel Page Table (0-4M)   |
-    3000 +----------------------------+ 12K
-         | System Page Directory      |
-    2000 +----------------------------+ 8K
-         | IDT/GDT/LDT/TSS            |
-    1000 +----------------------------+ 4K
-         | Zero Page                  |
-       0 +============================+ 0K
+
 
 NOTES:
-    * Console frame buffer assumed to be 80x25 (2 bytes per char), therefore it
-      fits within one page (4000 bytes, 96 extra bytes)
     * VGA frame buffer hardware is mapped at 0xA0000-0xBFFFF. Which chunk of
       this range is used depends on the VGA hardware configuration (see vga.c).
-      For now, we are using the region from 0xB8000-0xBFFFF (CGA).
+      For now, we are using the region from 0xB8000-0xBFFFF (CGA config).
 */
 
-static void print_meminfo(const struct boot_info *info);
-extern int init_paging(void);
-
-void init_memory(const struct boot_info *info)
+struct mem_info
 {
-    print_meminfo(info);
-    init_paging();
+    bool large_page_support;        // large page = 4M bytes = 1024 4K pages
+    uint32_t total_physical_pages;
+};
 
-    // uint32_t addr = 0x100000;
-    // assert(map_page(addr, get_pfn(addr), 0) == 0);
-    // assert(map_page(addr, get_pfn(addr), 0) == -EINVAL);
+struct mem_info *g_mem_info;
 
-    // addr = 0x400000;
-    // assert(map_page(addr, get_pfn(addr), MAP_LARGE) == 0);
-    // assert(map_page(addr, get_pfn(addr), MAP_LARGE) == -EINVAL);
+static void print_meminfo(const struct boot_info *info);
+extern int init_paging(const struct boot_info *boot_info, uint32_t pgtbl);
+
+void init_memory(const struct boot_info *boot_info)
+{
+    zeromem((void *) SYSTEM_MEMORY_PAGE, PAGE_SIZE);
+    g_mem_info = (struct mem_info *) SYSTEM_MEMORY_PAGE;
+
+    print_meminfo(boot_info);   // TODO: copy ACPI memory map to mem info page
+    init_paging(boot_info, KERNEL_PAGE_TABLE);
+
+    print_page_mappings();
 }
 
 static void print_meminfo(const struct boot_info *info)

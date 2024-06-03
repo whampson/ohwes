@@ -60,7 +60,7 @@ do {                                    \
     die();                              \
 } while (0)
 
-#define die()                           for (;;)            // spin forever, satisfies __noreturn
+#define die()                           ({ __cli(); kprint("system halted"); for (;;); }) // spin forever, satisfies __noreturn
 #define spin(cond)                      while (cond) { }    // spin while cond == true, TODO: THIS NEEDS TO HAVE A TIMEOUT!!
 
 #define zeromem(p,n)                    memset(p, 0, n)
@@ -120,6 +120,7 @@ do {                                    \
 } while(0)
 
 #define div_round(n,d)                  (((n)<0)==((d)<0)?(((n)+(d)/2)/(d)):(((n)-(d)/2)/(d)))
+#define div_ceil(n,d)                   (((n)+(d)-1)/(d))
 
 #endif // __ASSEMBLER__
 

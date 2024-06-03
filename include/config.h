@@ -30,9 +30,26 @@
 #define SHOW_MEMMAP                     1
 #define PRINT_IOCTL                     0
 
-#define KERNEL_BASE                     0x20000
+//
+// static memory
+//
+
+#define ZERO_PAGE                       0x0000
+#define SYSTEM_CPU_PAGE                 0x1000
+#define SYSTEM_PAGE_DIRECTORY           0x2000
+#define SYSTEM_MEMORY_PAGE              0x3000
+#define KERNEL_PAGE_TABLE               0x4000
+#define KERNEL_STACK_PAGE               0xF000
+#define SYSTEM_DMA_AREA                 0x10000 // 0x10000-0x1FFFF
+#define KERNEL_BASE                     0x20000 // 0x20000-????
 #define KERNEL_ENTRY                    KERNEL_BASE
-#define KERNEL_STACK_DEFAULT            0x9FC00
+#define USER_STACK_PAGE                 0x90000 // 0x90000-0x90FFF
+#define SYSTEM_FRAME_BUFFER             0xB8000
+// TODO: map zero page physical contents elsewhere (for reboot param, etc.)
+
+//
+// x86 descriptors
+//
 
 // GDT
 #define _GDT_NULL                       0
@@ -43,12 +60,12 @@
 #define _GDT_USER_DS                    (0x28|USER_PL)
 #define _GDT_TASKSTATE                  (0x30|KERNEL_PL)
 
+// GDT segment selectors
 #define KERNEL_CS                       _GDT_KERNEL_CS
 #define KERNEL_DS                       _GDT_KERNEL_DS
 #define KERNEL_SS                       KERNEL_DS
 #define USER_CS                         _GDT_USER_CS
 #define USER_DS                         _GDT_USER_DS
 #define USER_SS                         USER_DS
-
 
 #endif // __CONFIG_H

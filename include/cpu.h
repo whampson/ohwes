@@ -25,17 +25,15 @@
 #include <stdbool.h>
 #include <x86.h>
 
-struct cpu_info
+struct cpuid
 {
     char vendor_id[13];         // e.g. "GenuineIntel"
     char family;                // cpu family
     char model;                 // cpu model
     char stepping;              // cpu stepping
-    char level;                 // max CPUID parameter number
     char type;                  // cpu type
-    char family_extended;       // cpu family (extended)
-    char model_extended;        // cpu model (extended)
-    uint32_t level_extended;    // max CPUID extended parameter number
+    char level;                 // max parameter number
+    uint32_t level_extended;    // max extended parameter number
 
     char brand_index;
     char brand_name[49];
@@ -48,10 +46,13 @@ struct cpu_info
     bool msr_support;           // cpu has RDMSR/WRMSR instrctions
 };
 
-bool has_cr4(void);
-bool has_cpuid(void);
+bool cpu_has_cr4(void);
+bool cpu_has_cpuid(void);
 
-bool get_cpu_info(struct cpu_info *info);
+bool get_cpuid(struct cpuid *cpuid_info);
+
+struct x86_desc * cpu_get_desc(uint16_t segsel);
+struct tss * cpu_get_tss(void);
 
 #define flush_tlb()     \
 __asm__ volatile (      \
@@ -59,12 +60,7 @@ __asm__ volatile (      \
     movl %%cr3, %%eax   \n\
     movl %%eax, %%cr3   \n\
     "                   \
-    :                   \
-    :                   \
-    : "eax"             \
+    : : : "eax"         \
 )
-
-struct tss * get_tss(void);
-struct x86_desc * get_seg_desc(uint16_t segsel);
 
 #endif // __CPU_H

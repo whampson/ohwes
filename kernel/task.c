@@ -32,6 +32,8 @@ void init_tasks(void)
     struct task *t0;
     zeromem(task_list, sizeof(task_list));
 
+    // TODO: completely redo this
+
     t0 = &task_list[0];
 
     t0->pid = 0;

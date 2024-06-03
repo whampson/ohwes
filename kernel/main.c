@@ -36,8 +36,6 @@
 #include <syscall.h>
 #include <debug.h>
 
-#define INIT_STACK          0xC000
-
 extern void init_vga(void);
 extern void init_console(void);
 extern void init_cpu(const struct boot_info *info);
@@ -100,56 +98,54 @@ __fastcall void kmain(const struct boot_info *info)
     init_ps2(&g_boot);
     init_kb();
     init_memory(&g_boot);
-    init_timer();
-    init_rtc();
-    init_tasks();
+    // init_timer();
+    // init_rtc();
+    // init_tasks();
 
-    __sti();
+    // {
+    //     const int flags = MAP_GLOBAL;
+    //     int ret;
 
-    {
-        const int flags = MAP_GLOBAL;
-        int ret;
+    //     // map the page table
+    //     uint32_t pgtbl = 0x5C000;
+    //     zeromem((void *) pgtbl, PAGE_SIZE);
 
-        // map the page table
-        uint32_t pgtbl = 0x5C000;
-        zeromem((void *) pgtbl, PAGE_SIZE);
+    //     ret = map_page(0x80007000, get_pfn(pgtbl), MAP_PAGETABLE | flags);
+    //     assert(ret == 0);
 
-        ret = map_page(0x80007000, get_pfn(pgtbl), MAP_PAGETABLE | flags);
-        assert(ret == 0);
+    //     ret = map_page(0x80007000, get_pfn(0x7000), MAP_READONLY | flags);
+    //     assert(ret == 0);
 
-        ret = map_page(0x80007000, get_pfn(0x7000), MAP_READONLY | flags);
-        assert(ret == 0);
+    //     ret = map_page(0xC0000000, get_pfn(0x0), MAP_LARGE | flags);
+    //     assert(ret == 0);
 
-        ret = map_page(0xC0000000, get_pfn(0x0), MAP_LARGE | flags);
-        assert(ret == 0);
+    //     // *((uint32_t *) 0x00007BFC) = 0xCAFEBABE;
+    //     // kprint("%08X %08X %08X\n",
+    //     //     *((uint32_t *) 0x00007BFC),
+    //     //     *((uint32_t *) 0x80007BFC),
+    //     //     *((uint32_t *) 0xC0007BFC));
 
-        // *((uint32_t *) 0x00007BFC) = 0xCAFEBABE;
-        // kprint("%08X %08X %08X\n",
-        //     *((uint32_t *) 0x00007BFC),
-        //     *((uint32_t *) 0x80007BFC),
-        //     *((uint32_t *) 0xC0007BFC));
+    //     ret = unmap_page(0x80007000, MAP_PAGETABLE | flags);
+    //     assert(ret == 0);
 
-        ret = unmap_page(0x80007000, MAP_PAGETABLE | flags);
-        assert(ret == 0);
+    //     ret = unmap_page(0xC0000000, MAP_LARGE | flags);
+    //     assert(ret == 0);
 
-        ret = unmap_page(0xC0000000, MAP_LARGE | flags);
-        assert(ret == 0);
-
-        list_page_mappings();
-    }
+    //     list_page_mappings();
+    // }
 
 
-#ifdef DEBUG
-    g_test_crash_kernel = 0;
-    irq_register(IRQ_RTC, debug_interrupt);
-#endif
+// #ifdef DEBUG
+//     g_test_crash_kernel = 0;
+//     irq_register(IRQ_RTC, debug_interrupt);
+// #endif
 
     // TODO: eventually this should load a program called 'init'
     // that forks itself and spawns the shell program
     // (if we're following the Unix model)
 
     kprint("boot: entering ring3...\n");
-    enter_ring3(init, INIT_STACK);
+    enter_ring3(init, USER_STACK_PAGE + PAGE_SIZE);
 }
 
 static void enter_ring3(void (*entry), uint32_t stack)
@@ -199,10 +195,11 @@ static void print_info(const struct boot_info *info)
         nparallel, PLURAL(nparallel, "port"));
     kprint("boot: %s ps/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
     kprint("boot: video mode is %02X\n", info->video_mode);
-    kprint("boot: stage2 %08X,%X\n", info->stage2, info->stage2_size);
-    kprint("boot: kernel %08X,%X\n", info->kernel, info->kernel_size);
-    kprint("boot: stack %08X\n", info->stack);
-    if (info->ebda) kprint("boot: EBDA %08X\n", info->ebda);
+    kprint("boot: stage2:\t\t%08X,%X\n", info->stage2, info->stage2_size);
+    kprint("boot: kernel:\t\t%08X,%X\n", info->kernel, info->kernel_size);
+    kprint("boot: stack:\t\t%08X\n", info->stack);
+    kprint("boot: framebuf:\t%08X,%X\n", info->framebuffer, info->framebuffer_pages << PAGE_SHIFT);
+    if (info->ebda) kprint("boot: EBDA\t\t%08X\n", info->ebda);
 }
 
 #ifdef DEBUG

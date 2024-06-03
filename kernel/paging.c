@@ -20,78 +20,132 @@
  */
 
 #include <assert.h>
+#include <boot.h>
 #include <cpu.h>
 #include <ohwes.h>
 #include <paging.h>
 #include <errno.h>
 
-static bool has_large_page_support(void)
+struct paging_info
 {
-    struct cpu_info cpu;
-    get_cpu_info(&cpu);
+    bool large_page_support;
+};
+struct paging_info _pginfo;
+struct paging_info *g_paging_info = &_pginfo;
 
-    return cpu.pse_support;
-}
-
-void init_paging(void)
+static void init_page_mappings(const struct boot_info *boot_info, uint32_t pgtbl)
 {
-    int ret;
-    int flags;
+    int flags = MAP_USERMODE;
 
-    // zero the system page directory
-    struct pde *pgdir = get_page_directory();
-    assert(aligned((uint32_t) pgdir, PAGE_SIZE));
-    zeromem(pgdir, PAGE_SIZE);
+    // map page table (addressability: 0-4M)
+    map_page(0x0, get_pfn(pgtbl), MAP_PAGETABLE | flags);
+    if (identity_map(pgtbl, 0) < 0) {
+        panic("failed to map kernel page table!");
+    }
 
-    // zero the kernel's page table;
-    // for now we only have one page table that maps to 0-4M,
-    // we can allocate new page tables later once the memory
-    // subsystem is figured out
-    struct pte *pgtbl = (struct pte *) PAGE_TABLE;  // TODO: dynamically alloc
-    zeromem(pgtbl, PAGE_SIZE);
+    // map system page directory
+    if (identity_map(SYSTEM_PAGE_DIRECTORY, 0) < 0) {
+        panic("failed to map page directory!");
+    }
 
-    // // API sanity checks
-    // assert(map_page(0, 0, MAP_PAGETABLE | MAP_LARGE) == -EINVAL);   // bad flag combination
-    // assert(map_page(0x0, 1, MAP_LARGE) == -EINVAL);                 // invalid PFN for large page
+    // map GDT/IDT/LDT/TSS etc.
+    if (identity_map(SYSTEM_CPU_PAGE, 0) < 0) {
+        panic("failed to map CPU page!");
+    }
 
-    flags = MAP_USERMODE;   // temporarily allow usermode access, TODO: remove
+    // map memory info area
+    if (identity_map(SYSTEM_MEMORY_PAGE, 0) < 0) {
+        panic("failed to map memory info page!");
+    }
 
-    // map the kernel's page table into the PDE;
-    // this divides the 0-4M virtual address region into 1024 4K pages
-    ret = map_page(0x0, get_pfn((uint32_t) pgtbl), flags | MAP_PAGETABLE);
-    assert(ret == 0);
-
-    // open up the first 640K of RAM, plus the VGA frame buffer;
-    // leave 0x0-0x1000 inaccessible so we can catch page faults.
-    // we are guaranteed to have at least 640K
-    for (int i = 0; i < 1024; i++) {
-        if ((i > 0 && i < 0xA0) || (i >= 0xB8 && i <= 0xBF)) {
-            ret = map_page(i << PAGE_SHIFT, i, flags);
-            assert(ret == 0);
+    // map video frame buffer
+    uint32_t framebuf_pages = boot_info->framebuffer_pages;
+    assert(boot_info->framebuffer == SYSTEM_FRAME_BUFFER);
+    for (int i = 0; i < framebuf_pages; i++) {
+        uint32_t va = boot_info->framebuffer + (i << PAGE_SHIFT);
+        if (identity_map(va, 0) < 0) {
+            panic("failed to map frame buffer page!");
         }
     }
 
-    if (has_large_page_support()) {
+    // map kernel code
+    uint32_t num_code_pages = div_ceil(boot_info->kernel_size, PAGE_SIZE);
+    assert(boot_info->kernel == KERNEL_BASE);
+    for (int i = 0; i < num_code_pages; i++) {
+        uint32_t va = boot_info->kernel + (i << PAGE_SHIFT);
+        if (identity_map(va, flags) < 0) {
+            panic("failed to map kernel code page!");
+        }
+    }
+
+    // map kernel stack
+    uint32_t stack_page = boot_info->stack - PAGE_SIZE;
+    assert(stack_page == KERNEL_STACK_PAGE);
+    if (identity_map(stack_page, 0) < 0) {
+        panic("failed to map kernel stack page!");
+    }
+
+    // map user stack page
+    identity_map(USER_STACK_PAGE, MAP_USERMODE);
+
+    // TODO: configure GDT to reflect kernel and user data/code/stack pages
+}
+
+void init_paging(const struct boot_info *boot_info, uint32_t pgtbl)
+{
+    // clear paging info
+    zeromem(g_paging_info, sizeof(struct paging_info));
+
+    // zero the system page directory
+    void *pgdir = get_page_directory();
+    assert(aligned((uint32_t) pgdir, PAGE_SIZE));
+    zeromem(pgdir, PAGE_SIZE);
+
+    // zero the kernel page table
+    assert(aligned(pgtbl, PAGE_SIZE));
+    zeromem((void *) pgtbl, PAGE_SIZE);
+
+    // // TODO: page mapping API sanity checks
+    // assert(map_page(0, 0, MAP_PAGETABLE | MAP_LARGE) == -EINVAL);   // bad flag combination
+    // assert(map_page(0x0, 1, MAP_LARGE) == -EINVAL);                 // invalid PFN for large page
+
+    // map the pages necessary to continue code execution
+    init_page_mappings(boot_info, pgtbl);
+
+    // check large page support
+    struct cpuid cpuid;
+    get_cpuid(&cpuid);
+    g_paging_info->large_page_support = cpuid.pse_support;
+
+    // configure CR4
+    if (large_page_support()) {
         uint32_t cr4 = 0;
         read_cr4(cr4);
         cr4 |= CR4_PSE;         // allow 4M pages
         write_cr4(cr4);
     }
 
+    // configure CR3
     uint32_t cr3 = 0;
     cr3 |= (uint32_t) pgdir;    // set page directory address
     write_cr3(cr3);
 
+    // configure CR0
     uint32_t cr0 = 0;
     read_cr0(cr0);
     cr0 |= CR0_PG;              // enable paging
-    cr0 |= CR0_WP;              // enable write-protection for supervisor accesses
-    write_cr0(cr0);
+    cr0 |= CR0_WP;              // enable write-protection for supervisor
+    write_cr0(cr0);             //   to prevent kernel from writing read-only page
+}
+
+bool large_page_support(void)
+{
+    return g_paging_info->large_page_support;
 }
 
 void * get_page_directory(void)
 {
-    return (void *) PAGE_DIR;
+    return (void *) SYSTEM_PAGE_DIRECTORY;
 }
 
 void * get_pde(uint32_t addr)
@@ -160,7 +214,7 @@ static int set_page_mapping(
         return -ENOMEM;     // page is already mapped!
     }
 
-    if (flag_large && !has_large_page_support()) {
+    if (flag_large && !large_page_support()) {
         return -ENOMEM;     // CPU does not support large pages!
     }
 
@@ -292,7 +346,7 @@ static void print_page_info(uint32_t vaddr, const struct page *page)
     // kbwait();
 }
 
-void list_page_mappings(void)
+void print_page_mappings(void)
 {
     struct page *pgdir = get_page_directory();
     struct page* pgtbl;

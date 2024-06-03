@@ -75,7 +75,7 @@ void crash(struct iregs *regs)
     read_cr0(cr0);
     read_cr2(cr2);
     read_cr3(cr3);
-    if (has_cr4()) {
+    if (cpu_has_cr4()) {
         read_cr4(cr4);
     }
 
@@ -99,8 +99,8 @@ void crash(struct iregs *regs)
     irq_unmask(IRQ_TIMER);
     __sti();
     // TODO: should probably check whether we crashed from the keyboard or timer
-    // ISR before deciding to enable those interrupts. Also the console_write()
-    // function, because if we crashed there we're SOL here...
+    //    ISR before deciding to enable those interrupts. Also the console_write()
+    //    function, because if we crashed there we're SOL here...
 
     // locate faulting stack
     if (pl_change) {
@@ -117,8 +117,8 @@ void crash(struct iregs *regs)
     }
 
 
-    // layout tuning params
-    const int banner_line = 5;
+    // crash screen layout tuning params
+    const int banner_line = 4;
     const int irq_banner_line = 9;
     const int regs_line = 17;
     const int seg_regs_line = 18;
@@ -169,7 +169,7 @@ void crash(struct iregs *regs)
     crash_print("\e[0;0H\e[37;4%dm\e[2J\e5", CRASH_COLOR);
     crash_print("\e[%d;0H", banner_line);
     print_banner(" Fatal Exception ");
-    crash_print("\n\n\e[37;4%dm", CRASH_COLOR);
+    crash_print("\n\n\n\e[37;4%dm", CRASH_COLOR);
     crash_print("\tA fatal exception " BRIGHT("%02X") " has occurred at " BRIGHT("%04X:%08X") ". The program",
         regs->vec_num, regs->cs, regs->eip);
     crash_print("\n\tmay be able to continue execution. Press any key to continue or");
@@ -185,10 +185,10 @@ void crash(struct iregs *regs)
     }
     else if (pf) {
         crash_print("\n\t * Details:");
+        crash_print("\n\t    - Linear Address: %08X", cr2);
         crash_print("\n\t    - %s %s Access Violation",
             regs->err_code & PF_US ? "User" : "Supervisor",
             regs->err_code & PF_WR ? "Write" : "Read");
-        crash_print("\n\t    - Linear Address: %08X", cr2);
         if (!(regs->err_code & PF_P)) {
             crash_print("\n\t    - Page Not Present");
         }
@@ -205,7 +205,7 @@ void crash(struct iregs *regs)
 
     // dump control registers
     crash_print("\e[%d;0H", regs_line);
-    if (has_cr4()) {
+    if (cpu_has_cr4()) {
         crash_print("\n CR0=%08X CR2=%08X", cr0, cr2);
         crash_print("\n CR3=%08X CR4=%08X", cr3, cr4);
     }
@@ -238,9 +238,9 @@ void crash(struct iregs *regs)
     for (int l = 0; l < stack_num_lines; l++) {
         crash_print("\e[%d;%dH",
             VGA_ROWS - stack_num_lines + l + 1, stack_left_col);
-        crash_print("%08X:", stack_ptr);
-        for (int w = 0; w < stack_width_dwords; w++, stack_ptr++) {
-            crash_print(" %08X", *stack_ptr);
+        crash_print("%08X:", stack_ptr - 1);
+        for (int w = 0; w < stack_width_dwords; w++, stack_ptr--) {
+            crash_print(" %08X", *(stack_ptr - 1));
         }
     }
 
@@ -274,7 +274,7 @@ void kpanic(const char *fmt, ...)
     kprint("panic: %s", buf);
     va_end(args);
 
-    kprint("Press any key to continue...");
+    kprint("\nPress any key to continue...");
     kbwait();
     kprint("\n");
 

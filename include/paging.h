@@ -22,11 +22,6 @@
 #ifndef __PAGING_H
 #define __PAGING_H
 
-#include <stdint.h>
-
-#define PAGE_DIR            0x2000
-#define PAGE_TABLE          0x3000  // TODO: dyn alloc this
-
 #define PAGE_SHIFT          12
 #define PAGE_SIZE           (1 << PAGE_SHIFT)
 
@@ -44,6 +39,9 @@
 #define MAP_GLOBAL      (1 << 2)    // Global page
 #define MAP_PAGETABLE   (1 << 30)   // Page table
 #define MAP_LARGE       (1 << 31)   // Large (4M) page
+
+#ifndef __ASSEMBLER__
+#include <stdint.h>
 
 //
 // Combined x86 4K and 4M PDE/PTE.
@@ -111,6 +109,8 @@ int map_page(uint32_t addr, uint32_t pfn, int flags);
  */
 int unmap_page(uint32_t addr, int flags);
 
+#define identity_map(addr,flags)    map_page(addr, get_pfn(addr), flags)
+
 void * get_page_directory(void);
 void * get_pde(uint32_t addr);      // page directory entry
 void * get_pte(uint32_t addr);      // page table entry
@@ -119,6 +119,10 @@ uint32_t get_pfn(uint32_t addr);    // page file number (bits 31:12)
 uint32_t get_pdn(uint32_t addr);    // page directory number (bits 31:22)
 uint32_t get_ptn(uint32_t addr);    // page table number (bits 21:12)
 
-void list_page_mappings(void);
+bool large_page_support(void);
+
+void print_page_mappings(void);
+
+#endif // __ASSEMBLY__
 
 #endif // __PAGING_H

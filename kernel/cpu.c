@@ -28,16 +28,16 @@
 #include <irq.h>
 #include <paging.h>
 
+#if DEBUG
 #define CHATTY               1
-
-#define CPU_DATA_AREA       0x1000
+#endif
 
 //
 // x86 Descriptor table and TSS geometry.
 //
 // IDT
 #define IDT_COUNT           256
-#define IDT_BASE            CPU_DATA_AREA
+#define IDT_BASE            SYSTEM_CPU_PAGE
 #define IDT_LIMIT           (IDT_COUNT*DESC_SIZE-1)
 #define IDT_SIZE            (IDT_LIMIT+1)
 // GDT                                              //
@@ -96,12 +96,7 @@ static_assert(IDT_SIZE + GDT_SIZE + LDT_SIZE + TSS_SIZE <= PAGE_SIZE, "CPU data 
 #define get_desc(table,segsel) \
     (&((struct x86_desc*)(table))[(segsel)>>3])
 
-struct tss * get_tss(void)
-{
-    return (struct tss *) TSS_BASE;
-}
-
-struct x86_desc * get_seg_desc(uint16_t segsel)
+struct x86_desc * cpu_get_desc(uint16_t segsel)
 {
     struct segsel *ss = (struct segsel *) &segsel;
 
@@ -118,7 +113,12 @@ struct x86_desc * get_seg_desc(uint16_t segsel)
     return get_desc(GDT_BASE, segsel);
 }
 
-bool has_cpuid(void)
+struct tss * cpu_get_tss(void)
+{
+    return (struct tss *) TSS_BASE;
+}
+
+bool cpu_has_cpuid(void)
 {
     uint32_t flags;
 
@@ -130,28 +130,28 @@ bool has_cpuid(void)
     return flags & EFLAGS_ID;   // if it's still set, CPUID supported
 }
 
-bool has_cr4(void)
+bool cpu_has_cr4(void)
 {
     // Large pages are enabled by the PSE bit in CR4. The presence of this bit
     // is determined by a call to CPUID EAX=01h. Thus, if  the CPU has large
     // page support, the CR4 register must also be present.
 
-    struct cpu_info cpu;
-    get_cpu_info(&cpu);
+    struct cpuid cpu;
+    get_cpuid(&cpu);
 
     return cpu.pse_support;
 }
 
-
-bool get_cpu_info(struct cpu_info *info)
+bool get_cpuid(struct cpuid *info)
 {
+    uint8_t ext_family, ext_model;
     uint32_t eax, ebx, ecx, edx;
     uint32_t char_buf[4];
 
     zeromem(info, sizeof(info));
     zeromem(char_buf, sizeof(char_buf));
 
-    if (!has_cpuid()) {
+    if (!cpu_has_cpuid()) {
         return false;        // return after zeroing struct so support bools are false
     }
 
@@ -162,14 +162,24 @@ bool get_cpu_info(struct cpu_info *info)
     info->vendor_id[12] = '\0';
     info->level = eax;
 
+
     if (info->level >= 1) {
         __cpuid(0x1, eax, ebx, ecx, edx);
-        info->stepping = (eax >> CPUID_STEPPING_SHIFT) & CPUID_STEPPING_MASK;
-        info->model = (eax >> CPUID_MODEL_SHIFT) & CPUID_MODEL_MASK;
-        info->family = (eax >> CPUID_FAMILY_SHIFT) & CPUID_FAMILY_MASK;
+
         info->type = (eax >> CPUID_TYPE_SHIFT) & CPUID_TYPE_MASK;
-        info->model_extended = (eax >> CPUID_EXT_MODEL_SHIFT) & CPUID_EXT_MODEL_MASK;
-        info->family_extended = (eax >> CPUID_EXT_FAMILY_SHIFT) & CPUID_EXT_FAMILY_MASK;
+        info->family = (eax >> CPUID_FAMILY_SHIFT) & CPUID_FAMILY_MASK;
+        info->model = (eax >> CPUID_MODEL_SHIFT) & CPUID_MODEL_MASK;
+        info->stepping = (eax >> CPUID_STEPPING_SHIFT) & CPUID_STEPPING_MASK;
+        ext_model = (eax >> CPUID_EXT_MODEL_SHIFT) & CPUID_EXT_MODEL_MASK;
+        ext_family = (eax >> CPUID_EXT_FAMILY_SHIFT) & CPUID_EXT_FAMILY_MASK;
+
+        if (info->family == 0x0F) {
+            info->family += ext_family;
+        }
+        if (info->model == 0x06 || info->model) {
+            info->model += (ext_model << 4);
+        }
+
         info->fpu_support = edx & CPUID_FPU;
         info->pse_support = edx & CPUID_PSE;
         info->pge_support = edx & CPUID_PGE;
@@ -261,18 +271,15 @@ void init_cpu(const struct boot_info * const info)
     init_tss(info);
 
 #ifdef CHATTY
-    struct cpu_info cpu_info;
-    if (get_cpu_info(&cpu_info)) {
-        kprint("cpuid: family=%d,model=%d,stepping=%d,level=%d,type=%d\n"
-               "cpuid: extended_family=%d,extended_model=%d,extended_level=%02Xh\n"
-               "cpuid: vendor=%s,name=%s\n"
-               "cpuid: brand_index=%02Xh,fpu=%d,pse=%d,pge=%d,pat=%d,tsc=%d,msr=%d\n",
-            cpu_info.family, cpu_info.model, cpu_info.stepping,
-            cpu_info.level, cpu_info.type,
-            cpu_info.family_extended, cpu_info.model_extended, cpu_info.level_extended,
-            cpu_info.vendor_id, cpu_info.brand_name, cpu_info.brand_index,
-            cpu_info.fpu_support, cpu_info.pse_support, cpu_info.pge_support,
-            cpu_info.pat_support, cpu_info.tsc_support, cpu_info.msr_support);
+    struct cpuid cpuid;
+    if (get_cpuid(&cpuid)) {
+        kprint("cpuid: family=%d,model=%d,stepping=%d,type=%d,level=%d,ext_level=%02Xh\n"
+               "cpuid: index=%02Xh,ven=%s,name=%s\n"
+               "cpuid: fpu=%d,pse=%d,pge=%d,pat=%d,tsc=%d,msr=%d\n",
+            cpuid.family, cpuid.model, cpuid.stepping, cpuid.type,cpuid.level,
+            cpuid.level_extended, cpuid.brand_index, cpuid.vendor_id, cpuid.brand_name,
+            cpuid.fpu_support, cpuid.pse_support, cpuid.pge_support,
+            cpuid.pat_support, cpuid.tsc_support, cpuid.msr_support);
     }
 #endif
 }
