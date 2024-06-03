@@ -32,15 +32,17 @@ endif
 # Create a raw binary executable, no symbols or anything
 #   1 - input ELF
 #   2 - output file
+#   3 - additional objcopy arguments
 define raw-bin
 	@mkdir -p $(dir $2)
-	${OBJCOPY} -Obinary $1 $2
+	${OBJCOPY} -Obinary $3 $1 $2
 endef
 
 # Create a system (.sys) file from the current TARGET file.
 #   1 - system file target path
+#   2 - additional objcopy arguments
 define make-sys
-  $(call raw-bin,${TARGET_DIR}/${TARGET},${TARGET_DIR}/$1)
+  $(call raw-bin,${TARGET_DIR}/${TARGET},${TARGET_DIR}/$1,$2)
   $(eval TGT_POSTCLEAN += ${RM} ${TARGET_DIR}/$1)
 endef
 
