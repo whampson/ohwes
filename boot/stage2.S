@@ -23,6 +23,7 @@
 # =============================================================================
 
 #include <boot.h>
+#include <paging.h>
 #include "x86_boot.h"
 
 .text
@@ -84,10 +85,7 @@ Entry32:
 
 KernelParams:
         movl    $KERNEL_BASE, m_KernelBase      # store the kernel base
-        movl    m_pEbda, %eax                   # put stack underneath EBDA if
-        test    %eax, %eax                      #   EBDA address is known
-        jnz     SetupStack
-        movl    $KERNEL_STACK_DEFAULT, %eax     # otherwise use default address
+        movl    $KERNEL_STACK_PAGE + PAGE_SIZE, %eax  # otherwise use default address
 
 SetupStack:
         movl    %eax, %ebp
@@ -221,6 +219,8 @@ _VgaDone:
         movb    %al, m_VideoMode
         movb    %bh, m_VideoPage
         movb    %ah, m_VideoCols
+        movl    $0xB8000, m_pFrameBuffer
+        movl    $((0xC0000 - 0xB8000) >> PAGE_SHIFT), m_FrameBufferPages
         ret
 
 _VgaError:
@@ -538,6 +538,8 @@ g_BootParams:
   m_VideoCols:          .long   0
   m_CursorStartLine:    .long   0
   m_CursorEndLine:      .long   0
+  m_pFrameBuffer:       .long   0
+  m_FrameBufferPages:   .long   0
 
   m_pEbda:              .long   0
 

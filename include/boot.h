@@ -148,6 +148,8 @@ struct boot_info {
     uint32_t video_cols;            // VGA column count (BIOS INT 10h,AH=0Fh)
     uint32_t cursor_start;          // VGA cursor scan line top
     uint32_t cursor_end;            // VGA cursor scan line bottom
+    intptr_t framebuffer;           // memory-mapped VGA frame buffer
+    uint32_t framebuffer_pages;     // number of memory-mapped frame buffer pages
 
     const void *ebda;               // Extended BIOS Data Area
     // TODO: BPB?
