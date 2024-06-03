@@ -438,13 +438,6 @@ int _doprintf(
     return nwritten;
 }
 
-// static char *sprintf_buffer;    // TODO: these values need to live at a
-// static size_t buffer_size;      //   well-known address at runtime. will need
-//                                 //   linker script to ensure RODATA and BSS
-//                                 //   segments end up within the kernel image
-//                                 //   address space
-
-
 static void _console_putc(struct printf_state *state, char c)
 {
     (void) state;
