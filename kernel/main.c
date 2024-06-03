@@ -98,9 +98,9 @@ __fastcall void kmain(const struct boot_info *info)
     init_ps2(&g_boot);
     init_kb();
     init_memory(&g_boot);
-    // init_timer();
-    // init_rtc();
-    // init_tasks();
+    init_timer();
+    init_rtc();
+    init_tasks();
 
     // {
     //     const int flags = MAP_GLOBAL;
