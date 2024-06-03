@@ -27,6 +27,7 @@
 #include <ps2.h>
 #include <vga.h>
 #include <fs.h>
+#include <io.h>
 
 #define NUM_CONSOLES    1
 
@@ -178,6 +179,9 @@ int console_write(struct file *file, const char *buf, size_t count)
 
     for (int i = 0; i < count; i++) {
         _dowrite(buf[i]);
+#if E9_HACK
+        outb(0xE9, buf[i]);
+#endif
     }
 
     return count;

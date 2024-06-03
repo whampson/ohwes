@@ -142,7 +142,9 @@ void init_memory(const struct boot_info *boot_info)
     print_meminfo(boot_info);   // TODO: copy ACPI memory map to mem info page
     init_paging(boot_info, KERNEL_PAGE_TABLE);
 
+#if PRINT_PAGE_MAP
     print_page_mappings();
+#endif
 }
 
 static void print_meminfo(const struct boot_info *info)
@@ -177,7 +179,7 @@ static void print_meminfo(const struct boot_info *info)
             uint32_t base = (uint32_t) e->base;
             uint32_t limit = (uint32_t) e->length - 1;
 
-#if SHOW_MEMMAP
+#if PRINT_MEMORY_MAP
             kprint("mem: bios-e820: %08lX-%08lX ", base, base+limit, e->attributes, e->type);
             switch (e->type) {
                 case ACPI_MMAP_TYPE_USABLE: kprint("free"); break;

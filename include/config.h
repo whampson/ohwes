@@ -27,8 +27,10 @@
 //
 
 #define MIN_KB_REQUIRED                 639     // let's see how long this lasts!
-#define SHOW_MEMMAP                     1
+#define PRINT_MEMORY_MAP                1
 #define PRINT_IOCTL                     0
+#define PRINT_PAGE_MAP                  1
+#define E9_HACK                         1
 
 //
 // static memory
