@@ -19,6 +19,8 @@
  * =============================================================================
  */
 
+#include <errno.h>
+
 #include <ctype.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -36,26 +38,27 @@
 
 #define NUM_BUFSIZ 64
 
+struct printf_state
+{
+    va_list args;               // format arguments
+    char *buffer;               // sprintf/snprintf buffer
+    size_t snprintf_avail;      // snprintf num chars available in buffer
+};
+
+typedef void (*printf_fn)(struct printf_state *, char);
+
 extern int console_write(struct file *file, const char *buf, size_t count);
 
-void _dowrite(char c)
-{
-    if (getpl() == KERNEL_PL) {     // TODO: different linkage if kernel mode
-        console_write(NULL, &c, 1);
-    }
-    else {
-        // TODO: send in chunks to minimize syscalls
-        write(stdout_fd, &c, 1);
-    }
-}
-
-int _doprintf(const char *format, va_list *args, void (*putc)(char))
+int _doprintf(
+    const char *format,
+    struct printf_state *state,
+    void (*putc)(struct printf_state *, char))
 {
     int nwritten = 0;
 
-    #define write(c) \
+#define write_char(c) \
     do { \
-        (*putc)(c); \
+        (*putc)(state, c); \
         nwritten++; \
     } while(0)
 
@@ -88,7 +91,7 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
         //
         c = *format++;
         if (c != '%') {
-            write(c);
+            write_char(c);
             continue;
         }
 
@@ -127,7 +130,7 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
             c = *format++;
         }
         if (c == '*') {
-            width = va_arg(*args, int);
+            width = va_arg(state->args, int);
             if (width < 0) {    // negative width enables left justify
                 width = -width;
                 ljustify = true;
@@ -148,7 +151,7 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
                 c = *format++;
             }
             if (c == '*') {
-                prec = va_arg(*args, int);
+                prec = va_arg(state->args, int);
                 if (prec < 0) { // precision ignored if negative
                     default_prec = true;
                     prec = 1;
@@ -232,23 +235,23 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
             // strings: write then continue to top of loop
             //
             default: {
-                write('%');         // abort! just write the format string
+                write_char('%');         // abort! just write the format string
                 while (format_start < format) {
-                    write(*format_start++);
+                    write_char(*format_start++);
                 }
                 continue;
             }
             case '%': {
-                write(c);
+                write_char(c);
                 continue;
             }
             case 'c': {
-                write((char) va_arg(*args, int));
+                write_char((char) va_arg(state->args, int));
                 continue;
             }
             case 's': {
                 if (length == L_DEFAULT) {
-                    const char *str = va_arg(*args, const char*);
+                    const char *str = va_arg(state->args, const char*);
                     if (str == NULL) {
                         str = "(null)";
                     }
@@ -263,15 +266,15 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
 
                     if (!ljustify) {
                         while (width-- > prec) {
-                            write(' ');
+                            write_char(' ');
                         }
                     }
 
-                    while (len-- > 0 && *str != '\0') write(*str++);
+                    while (len-- > 0 && *str != '\0') write_char(*str++);
 
                     if (ljustify) {
                         while (width-- > prec) {
-                            write(' ');
+                            write_char(' ');
                         }
                     }
                 }
@@ -301,14 +304,14 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
                 signd = true;
                 intmax_t n = 0;
                 switch (length) {
-                    default:    n = va_arg(*args, int); break;
-                    case L_HH:  n = va_arg(*args, signed char); break;
-                    case L_H:   n = va_arg(*args, short); break;
-                    case L_L:   n = va_arg(*args, long); break;
-                    case L_LL:  n = va_arg(*args, long long); break;
-                    case L_J:   n = va_arg(*args, intmax_t); break;
-                    case L_Z:   n = va_arg(*args, size_t); break;
-                    case L_T:   n = va_arg(*args, ptrdiff_t); break;
+                    default:    n = va_arg(state->args, int); break;
+                    case L_HH:  n = va_arg(state->args, signed char); break;
+                    case L_H:   n = va_arg(state->args, short); break;
+                    case L_L:   n = va_arg(state->args, long); break;
+                    case L_LL:  n = va_arg(state->args, long long); break;
+                    case L_J:   n = va_arg(state->args, intmax_t); break;
+                    case L_Z:   n = va_arg(state->args, size_t); break;
+                    case L_T:   n = va_arg(state->args, ptrdiff_t); break;
                 }
                 if (n < 0) {
                     negative = true;
@@ -320,14 +323,14 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
             case 'u': {
             get_unsigned:
                 switch (length) {
-                    default:    num = va_arg(*args, unsigned int); break;
-                    case L_HH:  num = va_arg(*args, unsigned char); break;
-                    case L_H:   num = va_arg(*args, unsigned short); break;
-                    case L_L:   num = va_arg(*args, unsigned long); break;
-                    case L_LL:  num = va_arg(*args, unsigned long long); break;
-                    case L_J:   num = va_arg(*args, uintmax_t); break;
-                    case L_Z:   num = va_arg(*args, size_t); break;
-                    case L_T:   num = va_arg(*args, ptrdiff_t); break;
+                    default:    num = va_arg(state->args, unsigned int); break;
+                    case L_HH:  num = va_arg(state->args, unsigned char); break;
+                    case L_H:   num = va_arg(state->args, unsigned short); break;
+                    case L_L:   num = va_arg(state->args, unsigned long); break;
+                    case L_LL:  num = va_arg(state->args, unsigned long long); break;
+                    case L_J:   num = va_arg(state->args, uintmax_t); break;
+                    case L_Z:   num = va_arg(state->args, size_t); break;
+                    case L_T:   num = va_arg(state->args, ptrdiff_t); break;
                 }
                 break;
             }
@@ -396,59 +399,77 @@ int _doprintf(const char *format, va_list *args, void (*putc)(char))
                 while (width > len) { num_zeros++; len++; }
             }
             else {
-                while (width > len) { width--; write(' '); }       // spaces always come first...
+                while (width > len) { width--; write_char(' '); }       // spaces always come first...
             }
         }
 
         // write sign char
         if (sign_char) {
-            write(sign_char);                               // followed by the sign...
+            write_char(sign_char);                               // followed by the sign...
         }
 
         // write any radix prefixes
         if (altflag) {
             if (radix == 16 && !zero) {
-                write('0');
-                write((capital) ? 'X' : 'x');           // then the radix prefix (0x etc)...
+                write_char('0');
+                write_char((capital) ? 'X' : 'x');           // then the radix prefix (0x etc)...
             }
         }
 
         // write any leading zeros
         while (num_zeros-- > 0) {
-            write('0');                                 // then any leading zeros...
+            write_char('0');                                 // then any leading zeros...
         }
 
         // write stringifed number
-        while (++p != &buf[NUM_BUFSIZ]) write(*p);      // next, the number itself...
+        while (++p != &buf[NUM_BUFSIZ]) write_char(*p);      // next, the number itself...
 
         // write padding for left justify
         if (ljustify) {
             while (width > len) {
                 width--;
-                write(' ');                             // and finally, trailing spaces.
+                write_char(' ');                             // and finally, trailing spaces.
             }
         }
     }
 
+#undef write_char
+
     return nwritten;
 }
 
-static char *sprintf_buffer;
-static char *sprintf_buffer;
-static size_t buffer_size;
+// static char *sprintf_buffer;    // TODO: these values need to live at a
+// static size_t buffer_size;      //   well-known address at runtime. will need
+//                                 //   linker script to ensure RODATA and BSS
+//                                 //   segments end up within the kernel image
+//                                 //   address space
 
-static void _sprintf_putc(char c)
+
+static void _console_putc(struct printf_state *state, char c)
 {
-    *sprintf_buffer++ = c;
-    *sprintf_buffer = '\0';
+    (void) state;
+
+    if (getpl() == KERNEL_PL) {     // TODO: different linkage if kernel mode
+        console_write(NULL, &c, 1);
+    }
+    else {
+        // TODO: send in chunks to minimize syscalls
+        write(stdout_fd, &c, 1);
+    }
 }
 
-static void _snprintf_putc(char c)
+
+static void _sprintf_putc(struct printf_state *state, char c)
 {
-    if (buffer_size > 0) {
-        *sprintf_buffer++ = c;
-        *sprintf_buffer = '\0';
-        buffer_size--;
+    *state->buffer++ = c;
+    *state->buffer = '\0';
+}
+
+static void _snprintf_putc(struct printf_state *state, char c)
+{
+    if (state->snprintf_avail > 0) {
+        state->snprintf_avail--;
+        _sprintf_putc(state, c);
     }
 }
 
@@ -459,17 +480,18 @@ int printf(const char *format, ...)
 {
     int nwritten;
     va_list args;
+    struct printf_state state = { };
+
+    if (format == NULL) {
+        return -EINVAL;
+    }
 
     va_start(args, format);
-    nwritten = _doprintf(format, &args, _dowrite);
+    state.args = args;
+    nwritten = _doprintf(format, &state, _console_putc);
     va_end(args);
 
     return nwritten;
-}
-
-int vprintf(const char *format, va_list args)
-{
-    return _doprintf(format, &args, _dowrite);
 }
 
 /**
@@ -479,12 +501,21 @@ int vprintf(const char *format, va_list args)
 */
 int sprintf(char *buffer, const char *format, ...)
 {
+    int nwritten;
     va_list args;
+    struct printf_state state = { };
+
+    if (buffer == NULL || format == NULL) {
+        return -EINVAL;
+    }
 
     va_start(args, format);
-    sprintf_buffer = buffer;
-    *sprintf_buffer = '\0';
-    int nwritten = _doprintf(format, &args, _sprintf_putc);
+
+    state.args = args;
+    state.buffer = buffer;
+    state.buffer[0] = '\0';
+    nwritten = _doprintf(format, &state, _sprintf_putc);
+
     va_end(args);
 
     return nwritten;
@@ -500,24 +531,50 @@ int sprintf(char *buffer, const char *format, ...)
 */
 int snprintf(char *buffer, size_t bufsz, const char *format, ...)
 {
+    int nlength;
     va_list args;
+    struct printf_state state = { };
+
+    if (buffer == NULL || format == NULL) {
+        return -EINVAL;
+    }
 
     va_start(args, format);
-    sprintf_buffer = buffer;
-    *sprintf_buffer = '\0';
-    buffer_size = bufsz;
-    int nlength = _doprintf(format, &args, _snprintf_putc);
+
+    state.args = args;
+    state.buffer = buffer;
+    state.buffer[0] = '\0';
+    state.snprintf_avail = bufsz;
+    nlength = _doprintf(format, &state, _snprintf_putc);
+
     va_end(args);
 
     return nlength; // num chars which would've been written if bufsz ignored
 }
 
+int vprintf(const char *format, va_list args)
+{
+    struct printf_state state = { };
+
+    if (format == NULL || args == NULL) {
+        return -EINVAL;
+    }
+
+    state.args = args;
+    return _doprintf(format, &state, _console_putc);
+}
+
 int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args)
 {
-    sprintf_buffer = buffer;
-    *sprintf_buffer = '\0';
-    buffer_size = bufsz;
-    int nlength = _doprintf(format, &args, _snprintf_putc);
+    struct printf_state state = { };
 
-    return nlength;
+    if (buffer == NULL || format == NULL || args == NULL) {
+        return -EINVAL;
+    }
+
+    state.args = args;
+    state.buffer = buffer;
+    state.buffer[0] = '\0';
+    state.snprintf_avail = bufsz;
+    return _doprintf(format, &state, _snprintf_putc);
 }
