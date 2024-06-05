@@ -53,7 +53,7 @@ struct char_dev cdevs[] =
 
 struct file _rtc;   // TODO: MOVE!!
 
-int __syscall sys_open(const char *name, int flags)
+__syscall int sys_open(const char *name, int flags)
 {
     uint32_t cli_flags;
     int devid;

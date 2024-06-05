@@ -1,11 +1,12 @@
 {
     "configurations": [
         {
-            "name": "OH-WES [Win32]",
+            "name": "OH-WES Kernel [Win32]",
             "includePath": [
                 "${workspaceFolder}/include/*"
             ],
             "defines": [
+                "__KERNEL__",
                 "DEBUG",
                 "TEST_BUILD"
             ],

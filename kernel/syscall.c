@@ -32,7 +32,7 @@
 // corruption in the event of a task switch.
 // !!!!!!!
 
-int __syscall __noreturn sys_exit(int status)
+__syscall __noreturn int sys_exit(int status)
 {
     assert(getpl() == KERNEL_PL);
 
@@ -42,7 +42,7 @@ int __syscall __noreturn sys_exit(int status)
     die();
 }
 
-int __syscall sys_read(int fd, void *buf, size_t count)
+__syscall int sys_read(int fd, void *buf, size_t count)
 {
     struct file *f;
 
@@ -62,7 +62,7 @@ int __syscall sys_read(int fd, void *buf, size_t count)
     return f->fops->read(f, buf, count);
 }
 
-int __syscall sys_write(int fd, const void *buf, size_t count)
+__syscall int sys_write(int fd, const void *buf, size_t count)
 {
     struct file *f;
 
@@ -82,7 +82,7 @@ int __syscall sys_write(int fd, const void *buf, size_t count)
     return f->fops->write(f, buf, count);
 }
 
-int __syscall sys_close(int fd)
+__syscall int sys_close(int fd)
 {
     struct file *f;
     int ret;
@@ -106,7 +106,7 @@ int __syscall sys_close(int fd)
     return ret;
 }
 
-int __syscall sys_ioctl(int fd, unsigned int num, void *arg)
+__syscall int sys_ioctl(int fd, unsigned int num, void *arg)
 {
     uint32_t seq;
     uint32_t code;

@@ -1,7 +1,6 @@
 TARGET := kernel/kernel.elf
 TARGETSYS := sys/ohwes.sys
 
-# entry.S MUST be first so the entrypoint is at a known location
 SOURCES := \
     console.c \
     cpu.c \
@@ -32,7 +31,7 @@ ifeq "${TEST_BUILD}" "1"
 
 endif
 
-TGT_CFLAGS  := -Wno-unused-function
+TGT_CFLAGS  := -Wno-unused-function -D__KERNEL__
 TGT_LDFLAGS := -T kernel/kernel.ld
 # we only want the .text section right now for our hacky kernel image
 OBJCOPYFLAGS := --only-section=.text

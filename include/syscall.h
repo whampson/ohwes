@@ -25,7 +25,9 @@
 #include <stddef.h>
 #include <interrupt.h>
 
+//
 // syscall numbers
+//
 #define _sys_exit                       0
 #define _sys_read                       1
 #define _sys_write                      2
@@ -36,73 +38,149 @@
 
 #ifndef __ASSEMBLER__
 
-#define __syscall __attribute__((regparm(0)))
-
-// user-callable kernel routines
-extern void exit(int);
+//
+// syscall C functions
+// symbol names must match the above _sys_* defines
+//
+extern int exit(int);
 extern int read(int, void *, size_t);
 extern int write(int, const void *, size_t);
 extern int open(const char *, int);
 extern int close(int);
 extern int ioctl(int, unsigned int, void*);
 
-#define SYSCALL_FN_EPILOGUE                                                     \
-({                                                                              \
+#define _SYSCALL_PROLOGUE                                                       \
+    int _retval                                                                 \
+
+#define _SYSCALL_EPILOGUE                                                       \
+    /* set errno */                                                             \
     if (_retval < 0) {                                                          \
         errno = -_retval;                                                       \
         return -1;                                                              \
     }                                                                           \
-})
+    return _retval                                                              \
 
-#define SYSCALL_FN1(type,name,atype,a)                                          \
-type name(atype a)                                                              \
+#define SYSCALL1(name,atype,a)                                                  \
+int name(atype a)                                                               \
 {                                                                               \
-    int _retval;                                                                \
+    _SYSCALL_PROLOGUE;                                                          \
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
         : "=a"(_retval)                                                         \
         : "a"(_sys_##name), "b"(a)                                              \
     );                                                                          \
-    SYSCALL_FN_EPILOGUE;                                                        \
-    return _retval;                                                             \
+    _SYSCALL_EPILOGUE;                                                          \
 }
 
-#define SYSCALL_FN1_VOID(name,atype,a)                                          \
-void name(atype a)                                                              \
+#define SYSCALL2(name,atype,a,btype,b)                                          \
+int name(atype a, btype b)                                                      \
 {                                                                               \
-    __asm__ volatile (                                                          \
-        "int $0x80"                                                             \
-        :                                                                       \
-        : "a"(_sys_##name), "b"(a)                                              \
-    );                                                                          \
-}
-
-#define SYSCALL_FN2(type,name,atype,a,btype,b)                                  \
-type name(atype a, btype b)                                                     \
-{                                                                               \
-    int _retval;                                                                \
+    _SYSCALL_PROLOGUE;                                                          \
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
         : "=a"(_retval)                                                         \
         : "a"(_sys_##name), "b"(a), "c"(b)                                      \
     );                                                                          \
-    SYSCALL_FN_EPILOGUE;                                                        \
-    return _retval;                                                             \
+    _SYSCALL_EPILOGUE;                                                          \
 }
 
-#define SYSCALL_FN3(type,name,atype,a,btype,b,ctype,c)                          \
-type name(atype a, btype b, ctype c)                                            \
+#define SYSCALL3(name,atype,a,btype,b,ctype,c)                                  \
+int name(atype a, btype b, ctype c)                                             \
 {                                                                               \
-    int _retval;                                                                \
+    _SYSCALL_PROLOGUE;                                                          \
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
         : "=a"(_retval)                                                         \
         : "a"(_sys_##name), "b"(a), "c"(b), "d"(c)                              \
     );                                                                          \
-    SYSCALL_FN_EPILOGUE;                                                        \
-    return _retval;                                                             \
+    _SYSCALL_EPILOGUE;                                                          \
 }
 
-#endif // __ASSEMBLER__
+#define SYSCALL4(name,atype,a,btype,b,ctype,c,dtype,d)                          \
+int name(atype a, btype b, ctype c, dtype d)                                    \
+{                                                                               \
+    _SYSCALL_PROLOGUE;                                                          \
+    __asm__ volatile (                                                          \
+        "int $0x80"                                                             \
+        : "=a"(_retval)                                                         \
+        : "a"(_sys_##name), "b"(a), "c"(b), "d"(c), "S"(d)                      \
+    );                                                                          \
+    _SYSCALL_EPILOGUE;                                                          \
+}
 
-#endif // __SYSCALL_H
+#define SYSCALL5(name,atype,a,btype,b,ctype,c,dtype,d,etype,e)                  \
+int name(atype a, btype b, ctype c, dtype d, etype e)                           \
+{                                                                               \
+    _SYSCALL_PROLOGUE;                                                          \
+    __asm__ volatile (                                                          \
+        "int $0x80"                                                             \
+        : "=a"(_retval)                                                         \
+        : "a"(_sys_##name), "b"(a), "c"(b), "d"(c), "S"(d), "D"(e)              \
+    );                                                                          \
+    _SYSCALL_EPILOGUE;                                                          \
+}
+
+#ifdef __KERNEL__
+#define __syscall __attribute__((regparm(0)))
+
+#define _KERNEL_SYSCALL_PROLOGUE                                                \
+    int _retval                                                                 \
+
+#define _KERNEL_SYSCALL_EPILOGUE                                                \
+    /* set errno */                                                             \
+    if (_retval < 0) {                                                          \
+        errno = -_retval;                                                       \
+        return -1;                                                              \
+    }                                                                           \
+    return _retval                                                              \
+
+#define KERNEL_SYSCALL1(name,atype,a)                                           \
+extern __syscall int sys_##name(atype a);                                       \
+int name(atype a)                                                               \
+{                                                                               \
+    _KERNEL_SYSCALL_PROLOGUE;                                                   \
+    _retval = sys_##name(a);                                                    \
+    _KERNEL_SYSCALL_EPILOGUE;                                                   \
+}
+
+#define KERNEL_SYSCALL2(name,atype,a,btype,b)                                   \
+extern __syscall int sys_##name(atype a, btype b);                              \
+int name(atype a, btype b)                                                      \
+{                                                                               \
+    _KERNEL_SYSCALL_PROLOGUE;                                                   \
+    _retval = sys_##name(a, b);                                                 \
+    _KERNEL_SYSCALL_EPILOGUE;                                                   \
+}
+
+#define KERNEL_SYSCALL3(name,atype,a,btype,b,ctype,c)                           \
+extern __syscall int sys_##name(atype a, btype b, ctype c);                     \
+int name(atype a, btype b, ctype c)                                             \
+{                                                                               \
+    _KERNEL_SYSCALL_PROLOGUE;                                                   \
+    _retval = sys_##name(a, b, c);                                              \
+    _KERNEL_SYSCALL_EPILOGUE;                                                   \
+}
+
+#define KERNEL_SYSCALL4(name,atype,a,btype,b,ctype,c,dtype,d)                   \
+extern __syscall int sys_##name(atype a, btype b, ctype c, dtype d);            \
+int name(atype a, btype b, ctype c, dtype d)                                    \
+{                                                                               \
+    _KERNEL_SYSCALL_PROLOGUE;                                                   \
+    _retval = sys_##name(a, b, c, d);                                           \
+    _KERNEL_SYSCALL_EPILOGUE;                                                   \
+}
+
+#define KERNEL_SYSCALL5(name,atype,a,btype,b,ctype,c,dtype,d,etype,e)           \
+extern __syscall int sys_##name(atype a, btype b, ctype c, dtype d, etype e);   \
+int name(atype a, btype b, ctype c, dtype d, etype e)                           \
+{                                                                               \
+    _KERNEL_SYSCALL_PROLOGUE;                                                   \
+    _retval = sys_##name(a, b, c, d, e);                                        \
+    _KERNEL_SYSCALL_EPILOGUE;                                                   \
+}
+
+#endif  // __KERNEL__
+
+#endif  // __ASSEMBLER__
+
+#endif  // __SYSCALL_H
