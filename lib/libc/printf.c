@@ -45,21 +45,175 @@ struct printf_state
     size_t snprintf_avail;      // snprintf num chars available in buffer
 };
 
-typedef void (*printf_fn)(struct printf_state *, char);
+typedef int (*printf_fn)(struct printf_state *, char);
+
+static int _console_putc(struct printf_state *state, char c);
+static int _sprintf_putc(struct printf_state *state, char c);
+static int _snprintf_putc(struct printf_state *state, char c);
+
+static int _doprintf(
+    const char *format,
+    struct printf_state *state,
+    printf_fn putc);
+
+/**
+ * "Writes the results to the output stream stdout."
+*/
+int printf(const char *format, ...)
+{
+    int nwritten;
+    va_list args;
+    struct printf_state state = { };
+
+    if (format == NULL) {
+        return -EINVAL;
+    }
+
+    va_start(args, format);
+    state.args = args;
+    nwritten = _doprintf(format, &state, _console_putc);
+    va_end(args);
+
+    return nwritten;
+}
+
+/**
+ * "Writes the results to a character string buffer. The behavior is undefined if
+ * the string to be written (plus the terminating null character) exceeds the
+ * size of the array pointed to by buffer."
+*/
+int sprintf(char *buffer, const char *format, ...)
+{
+    int nwritten;
+    va_list args;
+    struct printf_state state = { };
+
+    if (buffer == NULL || format == NULL) {
+        return -EINVAL;
+    }
+
+    va_start(args, format);
+
+    state.args = args;
+    state.buffer = buffer;
+    state.buffer[0] = '\0';
+    nwritten = _doprintf(format, &state, _sprintf_putc);
+
+    va_end(args);
+
+    return nwritten;
+}
+
+/**
+ * "Writes the results to a character string buffer. At most bufsz - 1
+ * characters are written. The resulting character string will be terminated
+ * with a null character, unless bufsz is zero. If bufsz is zero, nothing is
+ * written and buffer may be a null pointer, however the return value (number of
+ * bytes that would be written not including the null terminator) is still
+ * calculated and returned."
+*/
+int snprintf(char *buffer, size_t bufsz, const char *format, ...)
+{
+    int nlength;
+    va_list args;
+    struct printf_state state = { };
+
+    if (buffer == NULL || format == NULL) {
+        return -EINVAL;
+    }
+
+    va_start(args, format);
+
+    state.args = args;
+    state.buffer = buffer;
+    state.buffer[0] = '\0';
+    state.snprintf_avail = bufsz;
+    nlength = _doprintf(format, &state, _snprintf_putc);
+
+    va_end(args);
+
+    return nlength;
+}
+
+int vprintf(const char *format, va_list args)
+{
+    struct printf_state state = { };
+
+    if (format == NULL || args == NULL) {
+        return -EINVAL;
+    }
+
+    state.args = args;
+    return _doprintf(format, &state, _console_putc);
+}
+
+int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args)
+{
+    struct printf_state state = { };
+
+    if (buffer == NULL || format == NULL || args == NULL) {
+        return -EINVAL;
+    }
+
+    state.args = args;
+    state.buffer = buffer;
+    state.buffer[0] = '\0';
+    state.snprintf_avail = bufsz;
+    return _doprintf(format, &state, _snprintf_putc);
+}
 
 extern int console_write(struct file *file, const char *buf, size_t count);
 
-int _doprintf(
+static int _console_putc(struct printf_state *state, char c)
+{
+    (void) state;
+
+    if (getpl() == KERNEL_PL) {
+        // TOOD: figure out a way to do this without needing a console_write
+        // export
+        console_write(NULL, &c, 1);
+        return 1;
+    }
+
+    // TODO: send in chunks to minimize syscalls
+    return write(stdout_fd, &c, 1);
+}
+
+static int _sprintf_putc(struct printf_state *state, char c)
+{
+    *state->buffer++ = c;
+    *state->buffer = '\0';
+
+    return 1;
+}
+
+static int _snprintf_putc(struct printf_state *state, char c)
+{
+    if (state->snprintf_avail > 0) {
+        state->snprintf_avail--;
+        _sprintf_putc(state, c);
+    }
+
+    // always return 1 so we can keep track of the number of chars that would've
+    // been written if the buffer was large enough
+    return 1;
+}
+
+static int _doprintf(
     const char *format,
     struct printf_state *state,
-    void (*putc)(struct printf_state *, char))
+    printf_fn putc)
 {
     int nwritten = 0;
+    int retval = 0;
 
-#define write_char(c) \
+#define _putchar(c) \
     do { \
-        (*putc)(state, c); \
-        nwritten++; \
+        retval = (*putc)(state, c); \
+        if (retval < 0) { \
+            goto done; \
+        } \
+        nwritten += retval; \
     } while(0)
 
     const char *format_start = format;
@@ -91,7 +245,7 @@ int _doprintf(
         //
         c = *format++;
         if (c != '%') {
-            write_char(c);
+            _putchar(c);
             continue;
         }
 
@@ -234,19 +388,19 @@ int _doprintf(
             //
             // strings: write then continue to top of loop
             //
-            default: {
-                write_char('%');         // abort! just write the format string
+            default: {  // invalid conversion char:
+                _putchar('%');  // abort! just write the format string
                 while (format_start < format) {
-                    write_char(*format_start++);
+                    _putchar(*format_start++);
                 }
                 continue;
             }
             case '%': {
-                write_char(c);
+                _putchar(c);
                 continue;
             }
             case 'c': {
-                write_char((char) va_arg(state->args, int));
+                _putchar((char) va_arg(state->args, int));
                 continue;
             }
             case 's': {
@@ -266,15 +420,17 @@ int _doprintf(
 
                     if (!ljustify) {
                         while (width-- > prec) {
-                            write_char(' ');
+                            _putchar(' ');
                         }
                     }
 
-                    while (len-- > 0 && *str != '\0') write_char(*str++);
+                    while (len-- > 0 && *str != '\0') {
+                        _putchar(*str++);
+                    }
 
                     if (ljustify) {
                         while (width-- > prec) {
-                            write_char(' ');
+                            _putchar(' ');
                         }
                     }
                 }
@@ -336,12 +492,13 @@ int _doprintf(
             }
         }
 
-        static char digits[]     = "0123456789abcdefghijklmnopqrstuvwxyz";
-        static char digits_cap[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
         zero = (num == 0);
 
         // convert num to string
+
+        static char digits[]     = "0123456789abcdefghijklmnopqrstuvwxyz";
+        static char digits_cap[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
         p = &buf[NUM_BUFSIZ-1];
         while (num) {
             if (capital) {
@@ -399,175 +556,48 @@ int _doprintf(
                 while (width > len) { num_zeros++; len++; }
             }
             else {
-                while (width > len) { width--; write_char(' '); }       // spaces always come first...
+                while (width > len) {
+                    width--; _putchar(' ');   // spaces always come first...
+                }
             }
         }
 
         // write sign char
         if (sign_char) {
-            write_char(sign_char);                               // followed by the sign...
+            _putchar(sign_char);              // followed by the sign...
         }
 
         // write any radix prefixes
         if (altflag) {
             if (radix == 16 && !zero) {
-                write_char('0');
-                write_char((capital) ? 'X' : 'x');           // then the radix prefix (0x etc)...
+                _putchar('0');
+                _putchar((capital)?'X':'x');  // then the radix prefix...
             }
         }
 
         // write any leading zeros
         while (num_zeros-- > 0) {
-            write_char('0');                                 // then any leading zeros...
+            _putchar('0');                    // then any leading zeros...
         }
 
         // write stringifed number
-        while (++p != &buf[NUM_BUFSIZ]) write_char(*p);      // next, the number itself...
+        while (++p != &buf[NUM_BUFSIZ]) {
+            _putchar(*p);                     // next, the number itself...
+        }
 
         // write padding for left justify
         if (ljustify) {
             while (width > len) {
                 width--;
-                write_char(' ');                             // and finally, trailing spaces.
+                _putchar(' ');                // and finally, trailing spaces.
             }
         }
     }
 
-#undef write_char
+    retval = nwritten;
 
-    return nwritten;
-}
+done:
+    return retval;
 
-static void _console_putc(struct printf_state *state, char c)
-{
-    (void) state;
-
-    if (getpl() == KERNEL_PL) {     // TODO: different linkage if kernel mode
-        console_write(NULL, &c, 1);
-    }
-    else {
-        // TODO: send in chunks to minimize syscalls
-        write(stdout_fd, &c, 1);
-    }
-}
-
-
-static void _sprintf_putc(struct printf_state *state, char c)
-{
-    *state->buffer++ = c;
-    *state->buffer = '\0';
-}
-
-static void _snprintf_putc(struct printf_state *state, char c)
-{
-    if (state->snprintf_avail > 0) {
-        state->snprintf_avail--;
-        _sprintf_putc(state, c);
-    }
-}
-
-/**
- * "Writes the results to the output stream stdout."
-*/
-int printf(const char *format, ...)
-{
-    int nwritten;
-    va_list args;
-    struct printf_state state = { };
-
-    if (format == NULL) {
-        return -EINVAL;
-    }
-
-    va_start(args, format);
-    state.args = args;
-    nwritten = _doprintf(format, &state, _console_putc);
-    va_end(args);
-
-    return nwritten;
-}
-
-/**
- * "Writes the results to a character string buffer. The behavior is undefined if
- * the string to be written (plus the terminating null character) exceeds the
- * size of the array pointed to by buffer."
-*/
-int sprintf(char *buffer, const char *format, ...)
-{
-    int nwritten;
-    va_list args;
-    struct printf_state state = { };
-
-    if (buffer == NULL || format == NULL) {
-        return -EINVAL;
-    }
-
-    va_start(args, format);
-
-    state.args = args;
-    state.buffer = buffer;
-    state.buffer[0] = '\0';
-    nwritten = _doprintf(format, &state, _sprintf_putc);
-
-    va_end(args);
-
-    return nwritten;
-}
-
-/**
- * "Writes the results to a character string buffer. At most bufsz - 1
- * characters are written. The resulting character string will be terminated
- * with a null character, unless bufsz is zero. If bufsz is zero, nothing is
- * written and buffer may be a null pointer, however the return value (number of
- * bytes that would be written not including the null terminator) is still
- * calculated and returned."
-*/
-int snprintf(char *buffer, size_t bufsz, const char *format, ...)
-{
-    int nlength;
-    va_list args;
-    struct printf_state state = { };
-
-    if (buffer == NULL || format == NULL) {
-        return -EINVAL;
-    }
-
-    va_start(args, format);
-
-    state.args = args;
-    state.buffer = buffer;
-    state.buffer[0] = '\0';
-    state.snprintf_avail = bufsz;
-    nlength = _doprintf(format, &state, _snprintf_putc);
-
-    va_end(args);
-
-    return nlength; // num chars which would've been written if bufsz ignored
-}
-
-int vprintf(const char *format, va_list args)
-{
-    struct printf_state state = { };
-
-    if (format == NULL || args == NULL) {
-        return -EINVAL;
-    }
-
-    state.args = args;
-    return _doprintf(format, &state, _console_putc);
-}
-
-int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args)
-{
-    struct printf_state state = { };
-
-    if (buffer == NULL || format == NULL || args == NULL) {
-        return -EINVAL;
-    }
-
-    state.args = args;
-    state.buffer = buffer;
-    state.buffer[0] = '\0';
-    state.snprintf_avail = bufsz;
-    return _doprintf(format, &state, _snprintf_putc);
+#undef _putchar
 }

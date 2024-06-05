@@ -91,7 +91,7 @@ enum pl {
 #define getpl()                         \
 ({                                      \
     struct segsel cs;                   \
-   read_cs(cs);                       \
+    read_cs(cs);                        \
     cs.rpl;                             \
 })
 

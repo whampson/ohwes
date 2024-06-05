@@ -41,6 +41,7 @@ void init(void)
     tmain_ring3();
 #endif
 
+    // TODO: beep and sleep need syscalls
     // beep(1000, 100);
     // sleep(100);
     // beep(1250, 100); // requires kernel for cli
@@ -50,16 +51,7 @@ void init(void)
 
     char c;
     int count = 0;
-    // int csinum = 0;
-    // char csiterm = 0;
-    // int state = 0;
-    // enum {
-    //     S_NORM,
-    //     S_ESC,
-    //     S_CSI,
-    // };
 
-    // nasty forever-input loop code follows, tread lightly
     while (true) {
         c = 0;
         count = read(stdin_fd, &c, 1);
@@ -74,62 +66,6 @@ void init(void)
         else {
             printf("%c", c);
         }
-
-        // // escape sequence decoding...
-        // switch (c) {
-        //     case '\e':
-        //         state = S_ESC;
-        //         break;
-        //     case '[':
-        //         if (state == S_ESC) {
-        //             state = S_CSI;
-        //             csinum = 0;
-        //             csiterm = '\0';
-        //         }
-        //         break;
-        //     default:
-        //         if (state == S_CSI && !csiterm) {
-        //             if (isdigit(c)) {
-        //                 csinum *= 10;
-        //                 csinum += (c - '0');
-        //             }
-        //             else {
-        //                 csiterm = c;
-        //             }
-        //         }
-        //         else {
-        //             state = S_NORM;
-        //         }
-        // }
-
-        // if (state == S_CSI && csiterm == '~') {
-        //     //
-        //     // usermode crashes
-        //     //
-        //     switch (csinum) {
-        //         case 11:        // F1
-        //             divzero();
-        //             break;
-        //         // case 12:        // F2
-        //         //     __asm__ volatile ("int $2");    // NMI
-        //         //     break;
-        //         case 13:        // F3
-        //             dbgbrk();
-        //             break;
-        //         case 14:        // F4
-        //             assert(true == false);
-        //             break;
-        //         case 15:        // F5
-        //             testint();
-        //             break;
-        //         case 17:        // F6
-        //             panic("you fucked up in userland!!");
-        //             break;
-        //         // case 18:        // F7
-        //         //     __asm__ volatile ("int $0x2D");
-        //         //     break;
-        //     }
-        // }
 
         if (c == 3) {   // CTRL+C
             exit(1);

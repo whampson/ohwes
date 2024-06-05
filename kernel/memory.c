@@ -175,11 +175,12 @@ static void print_meminfo(const struct boot_info *info)
     else {
         kprint("mem: bios-e820: ACPI memory map at %08X\n", info->mem_map);
         const acpi_mmap_t *e = info->mem_map;
-        while (e->type != 0) {
+        while (e->type != 0)
+        {
+#if PRINT_MEMORY_MAP
             uint32_t base = (uint32_t) e->base;
             uint32_t limit = (uint32_t) e->length - 1;
 
-#if PRINT_MEMORY_MAP
             kprint("mem: bios-e820: %08lX-%08lX ", base, base+limit, e->attributes, e->type);
             switch (e->type) {
                 case ACPI_MMAP_TYPE_USABLE: kprint("free"); break;
