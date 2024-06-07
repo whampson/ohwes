@@ -135,47 +135,47 @@ int name(atype a, btype b, ctype c, dtype d, etype e)                           
     return _retval                                                              \
 
 #define KERNEL_SYSCALL1(name,atype,a)                                           \
-extern __syscall int sys_##name(atype a);                                       \
+extern __syscall int k##name(atype a);                                          \
 int name(atype a)                                                               \
 {                                                                               \
     _KERNEL_SYSCALL_PROLOGUE;                                                   \
-    _retval = sys_##name(a);                                                    \
+    _retval = k##name(a);                                                       \
     _KERNEL_SYSCALL_EPILOGUE;                                                   \
 }
 
 #define KERNEL_SYSCALL2(name,atype,a,btype,b)                                   \
-extern __syscall int sys_##name(atype a, btype b);                              \
+extern __syscall int k##name(atype a, btype b);                                 \
 int name(atype a, btype b)                                                      \
 {                                                                               \
     _KERNEL_SYSCALL_PROLOGUE;                                                   \
-    _retval = sys_##name(a, b);                                                 \
+    _retval = k##name(a, b);                                                    \
     _KERNEL_SYSCALL_EPILOGUE;                                                   \
 }
 
 #define KERNEL_SYSCALL3(name,atype,a,btype,b,ctype,c)                           \
-extern __syscall int sys_##name(atype a, btype b, ctype c);                     \
+extern __syscall int k##name(atype a, btype b, ctype c);                        \
 int name(atype a, btype b, ctype c)                                             \
 {                                                                               \
     _KERNEL_SYSCALL_PROLOGUE;                                                   \
-    _retval = sys_##name(a, b, c);                                              \
+    _retval = k##name(a, b, c);                                                 \
     _KERNEL_SYSCALL_EPILOGUE;                                                   \
 }
 
 #define KERNEL_SYSCALL4(name,atype,a,btype,b,ctype,c,dtype,d)                   \
-extern __syscall int sys_##name(atype a, btype b, ctype c, dtype d);            \
+extern __syscall int k##name(atype a, btype b, ctype c, dtype d);               \
 int name(atype a, btype b, ctype c, dtype d)                                    \
 {                                                                               \
     _KERNEL_SYSCALL_PROLOGUE;                                                   \
-    _retval = sys_##name(a, b, c, d);                                           \
+    _retval = k##name(a, b, c, d);                                              \
     _KERNEL_SYSCALL_EPILOGUE;                                                   \
 }
 
 #define KERNEL_SYSCALL5(name,atype,a,btype,b,ctype,c,dtype,d,etype,e)           \
-extern __syscall int sys_##name(atype a, btype b, ctype c, dtype d, etype e);   \
+extern __syscall int k##name(atype a, btype b, ctype c, dtype d, etype e);      \
 int name(atype a, btype b, ctype c, dtype d, etype e)                           \
 {                                                                               \
     _KERNEL_SYSCALL_PROLOGUE;                                                   \
-    _retval = sys_##name(a, b, c, d, e);                                        \
+    _retval = k##name(a, b, c, d, e);                                           \
     _KERNEL_SYSCALL_EPILOGUE;                                                   \
 }
 

@@ -19,6 +19,7 @@ SCRIPT_DIR := scripts
 BOOTIMG := ${TARGET_DIR}/boot/bootsect.bin
 BOOTSYS := ${TARGET_DIR}/sys/boot.sys
 KERNSYS := ${TARGET_DIR}/sys/ohwes.sys
+INITEXE := ${TARGET_DIR}/init/init.exe
 DISKIMG := ${TARGET_DIR}/ohwes.img
 
 SUBMAKEFILES := \
@@ -29,7 +30,7 @@ MAKEFLAGS := --no-print-directory
 .PHONY: all ohwes tools
 .PHONY: img floppy format-floppy
 .PHONY: run run-bochs debug debug-boot
-.PHONY: clean nuke
+.PHONY: clean nuke relink
 
 all:
 ohwes: all
@@ -45,12 +46,14 @@ img: tools ohwes
 	fatfs attr -s ${DISKIMG} BOOT.SYS
 	fatfs add ${DISKIMG} ${KERNSYS} OHWES.SYS
 	fatfs attr -s ${DISKIMG} OHWES.SYS
+	fatfs add ${DISKIMG} ${INITEXE} INIT.EXE
 	fatfs list -Aa ${DISKIMG}
 
 floppy: ohwes
 	dd if=${BOOTIMG} of=/dev/fd0 bs=512 count=1 conv=notrunc
 	cp ${BOOTSYS} /a/
 	cp ${KERNSYS} /a/
+	cp ${INITEXE} /a/
 
 format-floppy:
 	mkdosfs -s 1 -S 512 /dev/fd0

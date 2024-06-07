@@ -57,6 +57,9 @@
 #define KERNEL_SEGMENT      FLAT2SEG(KERNEL_BASE)  // kernel segment address
 #define KERNEL_OFFSET       FLAT2OFF(KERNEL_BASE)  // kernel segment offset
 
+#define INIT_SEGMENT        FLAT2SEG(INIT_BASE)
+#define INIT_OFFSET         FLAT2OFF(INIT_BASE)
+
 /*----------------------------------------------------------------------------*
  * BIOS Data Area
  * See https://stanislavs.org/helppc/bios_data_area.html

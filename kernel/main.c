@@ -36,6 +36,8 @@
 #include <syscall.h>
 #include <debug.h>
 
+#define CHATTY 1
+
 extern void init_vga(void);
 extern void init_console(void);
 extern void init_cpu(const struct boot_info *info);
@@ -53,7 +55,7 @@ extern void tmain(void);
 
 extern void init(void);     // usermode entry point
 
-static void enter_ring3(void (*entry), uint32_t stack);
+static void enter_ring3(uint32_t entry, uint32_t stack);
 static void print_info(const struct boot_info *info);
 
 #ifdef DEBUG
@@ -77,21 +79,23 @@ __fastcall void kmain(const struct boot_info *info)
 
     __cli();
     memcpy(&g_boot, info, sizeof(struct boot_info));
+    info = &g_boot;     // reassign ptr so we don't lose access to the data
 
     init_pic();
     init_irq();
     init_vga();
     init_console();     // safe to print now
 
-    kprint("\n" OS_NAME " " OS_VERSION " '" OS_MONIKER "'\n");
-    kprint("Build: " OS_BUILDDATE "\n");
-    kprint("\n");
-    print_info(&g_boot);
-
 #if TEST_BUILD
     kprint("boot: TEST BUILD\n");
     kprint("boot: running tests...\n");
     tmain();
+#endif
+
+    kprint("\n" OS_NAME " " OS_VERSION ", build " OS_BUILDDATE "\n");
+    kprint("\n");
+#if CHATTY
+    print_info(&g_boot);
 #endif
 
     init_cpu(&g_boot);
@@ -102,53 +106,26 @@ __fastcall void kmain(const struct boot_info *info)
     init_rtc();
     init_tasks();
 
-    // {
-    //     const int flags = MAP_GLOBAL;
-    //     int ret;
+#ifdef DEBUG
+    g_test_crash_kernel = 0;
+    irq_register(IRQ_RTC, debug_interrupt);
+#endif
 
-    //     // map the page table
-    //     uint32_t pgtbl = 0x5C000;
-    //     zeromem((void *) pgtbl, PAGE_SIZE);
-
-    //     ret = map_page(0x80007000, get_pfn(pgtbl), MAP_PAGETABLE | flags);
-    //     assert(ret == 0);
-
-    //     ret = map_page(0x80007000, get_pfn(0x7000), MAP_READONLY | flags);
-    //     assert(ret == 0);
-
-    //     ret = map_page(0xC0000000, get_pfn(0x0), MAP_LARGE | flags);
-    //     assert(ret == 0);
-
-    //     // *((uint32_t *) 0x00007BFC) = 0xCAFEBABE;
-    //     // kprint("%08X %08X %08X\n",
-    //     //     *((uint32_t *) 0x00007BFC),
-    //     //     *((uint32_t *) 0x80007BFC),
-    //     //     *((uint32_t *) 0xC0007BFC));
-
-    //     ret = unmap_page(0x80007000, MAP_PAGETABLE | flags);
-    //     assert(ret == 0);
-
-    //     ret = unmap_page(0xC0000000, MAP_LARGE | flags);
-    //     assert(ret == 0);
-
-    //     list_page_mappings();
-    // }
-
-
-// #ifdef DEBUG
-//     g_test_crash_kernel = 0;
-//     irq_register(IRQ_RTC, debug_interrupt);
-// #endif
-
+    // ----------------------------------------------------------------------
     // TODO: eventually this should load a program called 'init'
     // that forks itself and spawns the shell program
     // (if we're following the Unix model)
 
+    assert(info->init_size > 0);
+    assert(info->init_size <= 0x10000);
+
     kprint("boot: entering ring3...\n");
-    enter_ring3(init, USER_STACK_PAGE + PAGE_SIZE);
+    const uint32_t init_base = INIT_BASE;
+    const uint32_t user_stack = USER_STACK_PAGE + PAGE_SIZE;    // start at top
+    enter_ring3(init_base, user_stack);
 }
 
-static void enter_ring3(void (*entry), uint32_t stack)
+static void enter_ring3(uint32_t entry, uint32_t stack)
 {
     assert(getpl() == KERNEL_PL);
 
@@ -185,21 +162,19 @@ static void print_info(const struct boot_info *info)
     bool gameport = info->hwflags.has_gameport;
     bool mouse = info->hwflags.has_ps2mouse;
 
-    // intptr_t kernel_end = info->kernel+info->kernel_size-1;
-    // intptr_t stage2_end = info->stage2+info->stage2_size-1;
-
-    kprint("boot: boot info found at %08X\n", info);
     kprint("boot: %d %s, %d serial %s, %d parallel %s\n",
         nfloppies, PLURAL2(nfloppies, "floppy", "floppies"),
         nserial, PLURAL(nserial, "port"),
         nparallel, PLURAL(nparallel, "port"));
     kprint("boot: %s ps/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
-    kprint("boot: video mode is %02X\n", info->video_mode);
-    kprint("boot: stage2:\t\t%08X,%X\n", info->stage2, info->stage2_size);
-    kprint("boot: kernel:\t\t%08X,%X\n", info->kernel, info->kernel_size);
-    kprint("boot: stack:\t\t%08X\n", info->stack);
-    kprint("boot: framebuf:\t%08X,%X\n", info->framebuffer, info->framebuffer_pages << PAGE_SHIFT);
-    if (info->ebda) kprint("boot: EBDA\t\t%08X\n", info->ebda);
+    kprint("boot: video mode is %02Xh\n", info->video_mode);
+    kprint("boot: stage2:\t\t%08X,%Xh\n", info->stage2, info->stage2_size);
+    kprint("boot: kernel:\t\t%08X,%Xh\n", info->kernel, info->kernel_size);
+    kprint("boot: init:\t\t%08X,%Xh\n", INIT_BASE, info->init_size);
+    kprint("boot: framebuf:\t%08X,%Xh\n", info->framebuffer, info->framebuffer_pages << PAGE_SHIFT);
+    kprint("boot: kernel stack:\t%08Xh\n", info->stack);
+    kprint("boot: user stack:\t%08Xh\n", USER_STACK_PAGE + PAGE_SIZE);
+    if (info->ebda) kprint("boot: EBDA\t\t%08Xh\n", info->ebda);
 }
 
 #ifdef DEBUG

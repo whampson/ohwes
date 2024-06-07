@@ -1,7 +1,8 @@
-TARGET := kernel/kernel.elf
-TARGETSYS := sys/ohwes.sys
+TARGET := elf/kernel.elf
+TARGETEXE := sys/ohwes.sys
 
 SOURCES := \
+    _crt.c \
     console.c \
     cpu.c \
     crash.c \
@@ -39,10 +40,8 @@ OBJCOPYFLAGS := --only-section=.text
 LINKLIBS := \
     lib/libc.a \
     lib/libgcc.a \
-    lib/init.a \
-    # TODO: make init.a into executable
 
 $(eval $(call add-linklibs,${LINKLIBS}))
 # TODO: do this automatically when LINKLIBS set?
-TGT_POSTMAKE := $(call make-sys,${TARGETSYS},${OBJCOPYFLAGS})
-# TODO: do this automatically when TARGETSYS is set?
+TGT_POSTMAKE := $(call make-exe,${TARGETEXE},${OBJCOPYFLAGS})
+# TODO: do this automatically when TARGETEXE is set?

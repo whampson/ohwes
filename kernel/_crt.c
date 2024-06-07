@@ -13,66 +13,23 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: init/init.c
- *      Created: March 24, 2024
+ *         File: kernel/_crt.c
+ *      Created: June 5, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#include <ohwes.h>
-#include <fs.h>
-#include <ctype.h>
+#include <errno.h>
 #include <syscall.h>
 
-#if TEST_BUILD
-void tmain_ring3(void);
-#endif
-
-extern void rtc_test(void);     // TODO: make exe
+int _errno;
 
 //
-// Runs in ring 3.
+// kread, kwrite, etc...
 //
-
-int main(void)
-{
-    assert(getpl() == USER_PL);
-
-    printf("\e4\e[5;33mHello, world!\e[m\n");
-
-#if TEST_BUILD
-    printf("running user mode tests...\n");
-    tmain_ring3();
-#endif
-
-    // TODO: beep and sleep need syscalls
-    // beep(1000, 100);
-    // sleep(100);
-    // beep(1250, 100); // requires kernel for cli
-    // TODO: make a test beep program!
-
-    // rtc_test();
-
-    char c;
-    int count = 0;
-
-    while (true) {
-        c = 0;
-        count = read(stdin_fd, &c, 1);
-        if (count == 0) {
-            continue;   // TODO: blocking I/O for console
-        }
-
-        assert(count == 1);
-        if (iscntrl(c)) {
-            printf("^%c", 0x40 ^ c);
-        }
-        else {
-            printf("%c", c);
-        }
-
-        if (c == 3) {   // CTRL+C
-            exit(1);
-        }
-    }
-}
+KERNEL_SYSCALL1(exit, int,status)
+KERNEL_SYSCALL3(read, int,fd, void*,buf, size_t,count)
+KERNEL_SYSCALL3(write, int,fd, const void*,buf, size_t,count)
+KERNEL_SYSCALL2(open, const char*,name, int,flags)
+KERNEL_SYSCALL1(close, int,fd)
+KERNEL_SYSCALL3(ioctl, int,fd, unsigned int,cmd, void*,arg)

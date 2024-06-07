@@ -26,15 +26,24 @@
 #include <ioctl.h>
 #include <task.h>
 #include <syscall.h>
+#include <paging.h>
 
 // !!!!!!!
 // TODO: All of these need to safely access the current task struct, to prevent
 // corruption in the event of a task switch.
 // !!!!!!!
 
+
+//
+// User mode entry points for kernel functions.
+//
 __syscall __noreturn int sys_exit(int status)
 {
     assert(getpl() == KERNEL_PL);
+
+#if PRINT_PAGE_MAP
+    print_page_mappings();
+#endif
 
     kprint("\nexit: returned %d\n", status);
     // idle();     // TODO: switch task, handle signals, etc.
@@ -156,4 +165,60 @@ __syscall int sys_ioctl(int fd, unsigned int num, void *arg)
     // TODO: validate device number
 
     return f->fops->ioctl(f, num, arg);
+}
+
+//
+// Kernel mode analogs for user-accessible kernel functions.
+//
+
+int kexit(int status)
+{
+    (void) status;
+
+    assert(false);
+    return -1;
+}
+
+int kread(int fd, const void *buf, size_t count)
+{
+    (void) fd;
+    (void) buf;
+    (void) count;
+
+    assert(false);
+    return -1;
+}
+
+int kwrite(int fd, void *buf, size_t count)
+{
+    (void) fd;
+
+    return console_write(NULL, buf, count);
+}
+
+int kopen(const char *name, int flags)
+{
+    (void) name;
+    (void) flags;
+
+    assert(false);
+    return -1;
+}
+
+int kclose(int fd)
+{
+    (void) fd;
+
+    assert(false);
+    return -1;
+}
+
+int kioctl(int fd, unsigned int num, void *arg)
+{
+    (void) fd;
+    (void) num;
+    (void) arg;
+
+    assert(false);
+    return -1;
 }

@@ -153,6 +153,8 @@ struct boot_info {
 
     const void *ebda;               // Extended BIOS Data Area
     // TODO: BPB?
+
+    uint32_t init_size; // TEMP
 };
 // TODO: define offsets assert offsets using define
 // and use defines in ASM code to keep in-line with struct

@@ -35,10 +35,10 @@ struct paging_info *g_paging_info = &_pginfo;
 
 static void init_page_mappings(const struct boot_info *boot_info, uint32_t pgtbl)
 {
-    int flags = MAP_USERMODE;
-
     // map page table (addressability: 0-4M)
-    map_page(0x0, get_pfn(pgtbl), MAP_PAGETABLE | flags);
+    // TODO: USERMODE needed because we have some usermode pages in here for
+    // init.exe and we  haven't given init.exe it's own page table yet...
+    map_page(0x0, get_pfn(pgtbl), MAP_PAGETABLE | MAP_USERMODE);
     if (identity_map(pgtbl, 0) < 0) {
         panic("failed to map kernel page table!");
     }
@@ -69,11 +69,11 @@ static void init_page_mappings(const struct boot_info *boot_info, uint32_t pgtbl
     }
 
     // map kernel code
-    uint32_t num_code_pages = div_ceil(boot_info->kernel_size, PAGE_SIZE);
+    uint32_t num_kernel_code_pages = div_ceil(boot_info->kernel_size, PAGE_SIZE);
     assert(boot_info->kernel == KERNEL_BASE);
-    for (int i = 0; i < num_code_pages; i++) {
+    for (int i = 0; i < num_kernel_code_pages; i++) {
         uint32_t va = boot_info->kernel + (i << PAGE_SHIFT);
-        if (identity_map(va, flags) < 0) {
+        if (identity_map(va, 0) < 0) {
             panic("failed to map kernel code page!");
         }
     }
@@ -85,8 +85,19 @@ static void init_page_mappings(const struct boot_info *boot_info, uint32_t pgtbl
         panic("failed to map kernel stack page!");
     }
 
+    // map user code
+    uint32_t num_user_code_pages = div_ceil(boot_info->init_size, PAGE_SIZE);
+    for (int i = 0; i < num_user_code_pages; i++) {
+        uint32_t va = INIT_BASE + (i << PAGE_SHIFT);
+        if (identity_map(va, MAP_USERMODE) < 0) {
+            panic("failed to map user code pages!");
+        }
+    }
+
     // map user stack page
-    identity_map(USER_STACK_PAGE, MAP_USERMODE);
+    if (identity_map(USER_STACK_PAGE, MAP_USERMODE) < 0) {
+        panic("failed to map user stack page!");
+    }
 
     // TODO: configure GDT to reflect kernel and user data/code/stack pages
 }

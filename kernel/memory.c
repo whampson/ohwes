@@ -141,10 +141,6 @@ void init_memory(const struct boot_info *boot_info)
 
     print_meminfo(boot_info);   // TODO: copy ACPI memory map to mem info page
     init_paging(boot_info, KERNEL_PAGE_TABLE);
-
-#if PRINT_PAGE_MAP
-    print_page_mappings();
-#endif
 }
 
 static void print_meminfo(const struct boot_info *info)
@@ -173,7 +169,6 @@ static void print_meminfo(const struct boot_info *info)
         kb_free = kb_free_low + kb_free_1M + kb_free_16M;
     }
     else {
-        kprint("mem: bios-e820: ACPI memory map at %08X\n", info->mem_map);
         const acpi_mmap_t *e = info->mem_map;
         while (e->type != 0)
         {

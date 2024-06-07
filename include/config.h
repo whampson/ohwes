@@ -36,17 +36,19 @@
 // static memory
 //
 
-#define ZERO_PAGE                       0x0000
-#define SYSTEM_CPU_PAGE                 0x1000
-#define SYSTEM_PAGE_DIRECTORY           0x2000
-#define SYSTEM_MEMORY_PAGE              0x3000
-#define KERNEL_PAGE_TABLE               0x4000
-#define KERNEL_STACK_PAGE               0xF000
-#define SYSTEM_DMA_AREA                 0x10000 // 0x10000-0x1FFFF
-#define KERNEL_BASE                     0x20000 // 0x20000-????
+#define ZERO_PAGE                       0x0000      //  0x0000 - 0x0FFF
+#define SYSTEM_CPU_PAGE                 0x1000      //  0x1000 - 0x1FFF
+#define SYSTEM_PAGE_DIRECTORY           0x2000      //  0x2000 - 0x2FFF
+#define SYSTEM_MEMORY_PAGE              0x3000      //  0x3000 - 0x3FFF
+#define KERNEL_PAGE_TABLE               0x4000      //  0x4000 - 0x4FFF
+#define KERNEL_STACK_PAGE               0xF000      //  0xF000 - 0xFFFF
+#define SYSTEM_DMA_AREA                 0x10000     // 0x10000 - 0x1FFFF
+#define KERNEL_BASE                     0x20000     // 0x20000 - 0x7FFFF
 #define KERNEL_ENTRY                    KERNEL_BASE
-#define USER_STACK_PAGE                 0x90000 // 0x90000-0x90FFF
-#define SYSTEM_FRAME_BUFFER             0xB8000
+#define INIT_BASE                       0x80000     // 0x80000 - 0x8FFFF
+#define INIT_ENTRY                      INIT_BASE
+#define USER_STACK_PAGE                 0x90000     // 0x90000 - 0x90FFF
+#define SYSTEM_FRAME_BUFFER             0xB8000     // 0xB8000 - 0xB8FFF
 // TODO: map zero page physical contents elsewhere (for reboot param, etc.)
 
 //

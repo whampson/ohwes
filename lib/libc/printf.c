@@ -162,18 +162,9 @@ int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args)
     return _doprintf(format, &state, _snprintf_putc);
 }
 
-extern int console_write(struct file *file, const char *buf, size_t count);
-
 static int _console_putc(struct printf_state *state, char c)
 {
     (void) state;
-
-    if (getpl() == KERNEL_PL) {
-        // TOOD: figure out a way to do this without needing a console_write
-        // export
-        console_write(NULL, &c, 1);
-        return 1;
-    }
 
     // TODO: send in chunks to minimize syscalls
     return write(stdout_fd, &c, 1);
