@@ -71,12 +71,12 @@ struct kb {
     bool has_altcode;
 
     // character input buffer
-    struct queue inputq;
+    struct char_queue inputq;
     char ibuf[KB_BUFFER_SIZE];
 
-    // key event buffer
-    struct queue eventq;            // TODO: make this work with non-char types
-    struct key_event ebuf[KB_BUFFER_SIZE];
+    // // key event buffer
+    // struct char_queue eventq;            // TODO: make queue w/ generic type
+    // struct key_event ebuf[KB_BUFFER_SIZE];
 
     // spurious scancode tracking
     int ack_count;

@@ -14,7 +14,6 @@ SOURCES := \
     paging.c \
     pic.c \
     ps2kb.c \
-    queue.c \
     rtc.c \
     syscall.c \
     task.c \
@@ -32,7 +31,8 @@ ifeq "${TEST_BUILD}" "1"
 
 endif
 
-TGT_CFLAGS  := -Wno-unused-function -D__KERNEL__
+TGT_ASFLAGS := -D__KERNEL__
+TGT_CFLAGS  := -D__KERNEL__ -Wno-unused-function
 TGT_LDFLAGS := -T kernel/kernel.ld
 # we only want the .text section right now for our hacky kernel image
 OBJCOPYFLAGS := --only-section=.text
@@ -40,6 +40,7 @@ OBJCOPYFLAGS := --only-section=.text
 LINKLIBS := \
     lib/libc.a \
     lib/libgcc.a \
+    lib/libos.a \
 
 $(eval $(call add-linklibs,${LINKLIBS}))
 # TODO: do this automatically when LINKLIBS set?

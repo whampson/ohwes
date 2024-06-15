@@ -5,6 +5,7 @@ INCDIRS    := include
 SUBMAKEFILES := \
     lib/libc/libc.mk \
     lib/libgcc/libgcc.mk \
+    lib/libos/libos.mk \
     boot/x86_boot.mk \
     kernel/kernel.mk \
     init/init.mk \

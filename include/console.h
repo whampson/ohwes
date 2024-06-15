@@ -45,7 +45,7 @@ struct console
     bool initialized;               // console initalized?
     int cols, rows;                 // screen dimensions
     void *framebuf;                 // frame buffer
-    queue_t inputq;                 // input queue
+    struct char_queue inputq;       // input queue
     char tabstop[MAX_TABSTOPS];     // tab stops
     char csiparam[MAX_CSIPARAMS];   // control sequence parameters
     int paramidx;                   // control sequence parameter index

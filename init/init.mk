@@ -7,7 +7,8 @@ SOURCES := \
     init.c \
     rtc_test.c \
 
-TGT_CFLAGS := -D__USER_MODE__
+TGT_ASFLAGS := -D__USER_MODE__
+TGT_CFLAGS  := -D__USER_MODE__
 TGT_LDFLAGS := -T init/init.ld
 
 $(eval $(call add-linklibs,${LINKLIBS}))

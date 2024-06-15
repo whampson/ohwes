@@ -60,6 +60,8 @@ if [ "$1" = "qemu" ]; then
         gdb \
             -ex 'target remote localhost:1234' \
             -ex 'add-symbol-file bin/elf/kernel.elf' \
+            -ex 'set confirm off' \
+            -ex 'add-symbol-file bin/elf/init.elf' \
             -ex 'lay src' -ex 'lay reg' \
             -ex 'b kmain'
     else

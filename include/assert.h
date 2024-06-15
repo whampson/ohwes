@@ -25,6 +25,9 @@
 #define __ASSERT_H
 
 #ifdef DEBUG
+
+#ifdef __KERNEL__
+
 #include <panic.h>
 #define assert(x) \
 do { \
@@ -32,8 +35,24 @@ do { \
         panic("%s:%d assertion failed: " #x "\n", __FILE__, __LINE__); \
     } \
 } while (0)
+
+#else
+
+#include <syscall.h>
+#define assert(x) \
+do { \
+    if (!(x)) { \
+        printf("%s:%d assertion failed: " #x "\n", __FILE__, __LINE__); \
+        exit(1); \
+    } \
+} while (0)
+
+#endif // __KERNEL__
+
 #else  // DEBUG
+
 #define assert(x) (void) (x)
+
 #endif
 
 #define static_assert _Static_assert

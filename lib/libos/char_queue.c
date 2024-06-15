@@ -27,32 +27,29 @@
 #include <stdint.h>
 #include <string.h>
 
-void q_init(queue_t *q, char *buf, size_t len)
+void q_init(struct char_queue *q, char *buf, size_t length)
 {
-    memset(q, 0, sizeof(struct queue));
+    memset(q, 0, sizeof(struct char_queue));
     q->ring = buf;
-    q->len = len;
+    q->length = length;
 }
 
-bool q_empty(const queue_t *q)
+bool q_empty(const struct char_queue *q)
 {
     return q->count == 0;
 }
 
-bool q_full(const queue_t *q)
+bool q_full(const struct char_queue *q)
 {
-    return q->count == q->len;
+    return q->count == q->length;
 }
 
-char q_get(queue_t *q)
+char q_get(struct char_queue *q)
 {
     assert(!q_empty(q));
-    if (q_empty(q)) {
-        panic("attempt to get from an empty queue!");
-    }
 
     char c = q->ring[q->rptr++];
-    if (q->rptr >= q->len) {
+    if (q->rptr >= q->length) {
         q->rptr = 0;
     }
 
@@ -60,17 +57,36 @@ char q_get(queue_t *q)
     return c;
 }
 
-void q_put(queue_t *q, char c)
+void q_put(struct char_queue *q, char c)
 {
     assert(!q_full(q));
-    if (q_full(q)) {
-        panic("attempt to put into a full queue!");
-    }
 
     q->ring[q->wptr++] = c;
-    if (q->wptr >= q->len) {
+    if (q->wptr >= q->length) {
         q->wptr = 0;
     }
 
     q->count++;
+}
+
+char q_erase(struct char_queue *q)
+{
+    assert(!q_empty(q));
+
+    if (q->wptr == 0) {
+        q->wptr = q->length;
+    }
+
+    q->count--;
+    return q->ring[--q->wptr];
+}
+
+size_t q_length(struct char_queue *q)
+{
+    return q->length;
+}
+
+size_t q_count(struct char_queue *q)
+{
+    return q->count;
 }

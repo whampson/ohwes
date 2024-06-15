@@ -148,24 +148,26 @@ static void defaults(struct console *cons)
 
 int console_read(struct file *file, char *buf, size_t count)
 {
+    int nread;
+    uint32_t flags;
     (void) file;
 
     if (!buf) {
         return -EINVAL;
     }
 
-    uint32_t flags;
-    cli_save(flags);
+    nread = 0;
+    while (count--) {
+        spin(q_empty(m_inputq));    // block until a character appears
+        // TODO: allow nonblocking input
 
-    // TODO: blocking vs nonblocking
-
-    int nread = 0;
-    while (count-- && !q_empty(m_inputq)) {
+        cli_save(flags);
         *buf++ = q_get(m_inputq);
+        restore_flags(flags);
         nread++;
     }
 
-    restore_flags(flags);
+
     return nread;
 }
 

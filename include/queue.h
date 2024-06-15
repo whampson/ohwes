@@ -4,22 +4,26 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-struct queue {
+struct char_queue {
     char *ring;
     uint32_t rptr;
     uint32_t wptr;
-    size_t len;
+    size_t length;
     size_t count;
 };
 
-typedef struct queue queue_t;
+void q_init(struct char_queue *q, char *buf, size_t length);
 
-void q_init(queue_t *q, char *buf, size_t len);
+bool q_empty(const struct char_queue *q);
+bool q_full(const struct char_queue *q);
 
-bool q_empty(const queue_t *q);
-bool q_full(const queue_t *q);
+char q_get(struct char_queue *q);            // pop from front of queue
+void q_put(struct char_queue *q, char c);    // push to back of queue
 
-char q_get(queue_t *q);
-void q_put(queue_t *q, char c);
+char q_erase(struct char_queue *q);          // pop from back of queue
+// void q_insert(struct char_queue *q, char c);  // push to front of queue
+
+size_t q_length(struct char_queue *q);       // size of ring buffer
+size_t q_count(struct char_queue *q);        // number of chars in queue
 
 #endif /* __QUEUE_H */
