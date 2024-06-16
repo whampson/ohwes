@@ -23,13 +23,15 @@
 #include <fs.h>
 #include <ctype.h>
 #include <syscall.h>
-#include <queue.h>
+#include <char_queue.h>
 
 #if TEST_BUILD
 void tmain_ring3(void);
 #endif
 
 extern void rtc_test(void);     // TODO: make exe
+
+static void test_char_queue(void);
 
 static void basic_shell(void);
 static size_t /*
@@ -59,8 +61,97 @@ int main(void)
 
     // rtc_test();
 
+    test_char_queue();
+
     basic_shell();
     return 0;
+}
+
+static void test_char_queue(void)
+{
+    const size_t QueueLength = 4;
+
+    char buf[QueueLength];
+    struct char_queue _queue;
+    struct char_queue *queue = &_queue;
+
+    // init
+    char_queue_init(queue, buf, QueueLength);
+    assert(char_queue_empty(queue));
+    assert(!char_queue_full(queue));
+
+    // put into rear
+    assert(char_queue_put(queue, 'A') == true);
+    assert(!char_queue_empty(queue));
+    assert(!char_queue_full(queue));
+
+    // get from front
+    assert(char_queue_get(queue) == 'A');
+    assert(char_queue_empty(queue));
+    assert(!char_queue_full(queue));
+
+    // put into front
+    assert(char_queue_insert(queue, 'a') == true);
+    assert(!char_queue_empty(queue));
+    assert(!char_queue_full(queue));
+
+    // get from rear
+    assert(char_queue_erase(queue) == 'a');
+    assert(char_queue_empty(queue));
+    assert(!char_queue_full(queue));
+
+    // fill from rear
+    assert(char_queue_put(queue, 'W') == true);
+    assert(char_queue_put(queue, 'X') == true);
+    assert(char_queue_put(queue, 'Y') == true);
+    assert(char_queue_put(queue, 'Z') == true);
+    assert(char_queue_put(queue, 'A') == false);
+    assert(!char_queue_empty(queue));
+    assert(char_queue_full(queue));
+
+    // drain from front
+    assert(char_queue_get(queue) == 'W');
+    assert(char_queue_get(queue) == 'X');
+    assert(char_queue_get(queue) == 'Y');
+    assert(char_queue_get(queue) == 'Z');
+    assert(char_queue_get(queue) == '\0');
+    assert(char_queue_empty(queue));
+    assert(!char_queue_full(queue));
+
+    // fill from front
+    assert(char_queue_insert(queue, 'a') == true);
+    assert(char_queue_insert(queue, 'b') == true);
+    assert(char_queue_insert(queue, 'c') == true);
+    assert(char_queue_insert(queue, 'd') == true);
+    assert(char_queue_insert(queue, 'e') == false);
+    assert(!char_queue_empty(queue));
+    assert(char_queue_full(queue));
+
+    // drain from rear
+    assert(char_queue_erase(queue) == 'a');
+    assert(char_queue_erase(queue) == 'b');
+    assert(char_queue_erase(queue) == 'c');
+    assert(char_queue_erase(queue) == 'd');
+    assert(char_queue_erase(queue) == '\0');
+    assert(char_queue_empty(queue));
+    assert(!char_queue_full(queue));
+
+    // combined front/rear usage
+    assert(char_queue_put(queue, '1') == true);
+    assert(char_queue_put(queue, '2') == true);
+    assert(char_queue_put(queue, '3') == true);
+    assert(char_queue_put(queue, '4') == true);
+    assert(char_queue_full(queue));
+    assert(char_queue_erase(queue) == '4');
+    assert(char_queue_erase(queue) == '3');
+    assert(char_queue_insert(queue, '5') == true);
+    assert(char_queue_insert(queue, '6') == true);
+    assert(char_queue_full(queue));
+    assert(char_queue_get(queue) == '6');
+    assert(char_queue_get(queue) == '5');
+    assert(char_queue_get(queue) == '1');
+    assert(char_queue_get(queue) == '2');
+    assert(char_queue_empty(queue));
 }
 
 static void basic_shell(void)
@@ -77,7 +168,7 @@ static void basic_shell(void)
     int count;
     const char *prompt = "&";
 
-    q_init(lineq, _lineq_buf, sizeof(_lineq_buf));
+    char_queue_init(lineq, _lineq_buf, sizeof(_lineq_buf));
 
     while (true) {
         // read a line
@@ -111,15 +202,15 @@ static void basic_shell(void)
                 break;
         }
 
-        bool full = (q_count(lineq) == q_length(lineq) - 1);    // allow one space for newline
+        bool full = (char_queue_count(lineq) == char_queue_length(lineq) - 1);    // allow one space for newline
 
         // put translated character into queue
         if (c == '\b') {
-            if (q_empty(lineq)) {
+            if (char_queue_empty(lineq)) {
                 printf("\a");       // beep!
                 goto read_char;
             }
-            c = q_erase(lineq);
+            c = char_queue_erase(lineq);
             if (iscntrl(c)) {
                 printf("\b");
             }
@@ -127,14 +218,14 @@ static void basic_shell(void)
             goto read_char;
         }
         else if (c == '\n' || !full) {
-            q_put(lineq, c);
+            char_queue_put(lineq, c);
         }
         else if (full) {
             printf("\a");       // beep!
             goto read_char;
         }
 
-        assert(!q_full(lineq));
+        assert(!char_queue_full(lineq));
 
         // echo char
         if (iscntrl(c) && c != '\t' && c != '\n') {
@@ -170,8 +261,8 @@ static void basic_shell(void)
 static size_t drain_queue(struct char_queue *q, char *buf, size_t bufsiz)
 {
     size_t count = 0;
-    while (!q_empty(q) && bufsiz--) {
-        *buf++ = q_get(q);
+    while (!char_queue_empty(q) && bufsiz--) {
+        *buf++ = char_queue_get(q);
         count++;
     }
 

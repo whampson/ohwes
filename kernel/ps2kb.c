@@ -33,7 +33,7 @@
 #include <io.h>
 #include <irq.h>
 #include <ps2.h>
-#include <queue.h>
+#include <char_queue.h>
 #include <string.h>
 #include <debug.h>
 
@@ -120,7 +120,7 @@ void init_kb(void)
     cli_save(flags);
 
     zeromem(g_kb, sizeof(struct kb));
-    q_init(&g_kb->inputq, g_kb->ibuf, KB_BUFFER_SIZE);
+    char_queue_init(&g_kb->inputq, g_kb->ibuf, KB_BUFFER_SIZE);
     g_kb->numlk = 1;
 
     // disable keyboard
@@ -184,8 +184,8 @@ int kb_read(void)
 
     // grab a character from the queue
     c = -1;
-    if (!q_empty(&g_kb->inputq)) {
-        c = q_get(&g_kb->inputq);
+    if (!char_queue_empty(&g_kb->inputq)) {
+        c = char_queue_get(&g_kb->inputq);
     }
 
     restore_flags(flags);
@@ -194,13 +194,13 @@ int kb_read(void)
 
 void kb_putq(char c)
 {
-    if (q_full(&g_kb->inputq)) {
+    if (char_queue_full(&g_kb->inputq)) {
         kprint("ps2kb: buffer full!\n");
         beep(750, 50);
         return;
     }
 
-    q_put(&g_kb->inputq, c);
+    char_queue_put(&g_kb->inputq, c);
 }
 
 static void update_leds(void)

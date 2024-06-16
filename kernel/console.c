@@ -106,7 +106,7 @@ void init_console(void)
 
     for (int i = 0; i < NUM_CONSOLES; i++) {
         defaults(&consoles[i]);
-        q_init(&consoles[i].inputq, _input_buffers[i], INPUT_BUFFER_SIZE);
+        char_queue_init(&consoles[i].inputq, _input_buffers[i], INPUT_BUFFER_SIZE);
     }
 
     irq_register(IRQ_TIMER, drain_kb);
@@ -158,11 +158,11 @@ int console_read(struct file *file, char *buf, size_t count)
 
     nread = 0;
     while (count--) {
-        spin(q_empty(m_inputq));    // block until a character appears
+        spin(char_queue_empty(m_inputq));    // block until a character appears
         // TODO: allow nonblocking input
 
         cli_save(flags);
-        *buf++ = q_get(m_inputq);
+        *buf++ = char_queue_get(m_inputq);
         restore_flags(flags);
         nread++;
     }
@@ -194,8 +194,8 @@ static void drain_kb(void)
     int c;
 
     while ((c = kb_read()) != -1) {
-        if (!q_full(m_inputq)) {
-            q_put(m_inputq, (char) c);
+        if (!char_queue_full(m_inputq)) {
+            char_queue_put(m_inputq, (char) c);
         }
         else {
             kprint("console: input buffer full!\n");

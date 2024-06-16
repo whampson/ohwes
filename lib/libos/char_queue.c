@@ -13,40 +13,38 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/queue.c
- *      Created: March 6, 2024
+ *         File: lib/libos/char_queue.c
+ *      Created: June 15, 2024
  *       Author: Wes Hampson
- *
  * =============================================================================
  */
 
-#include <ohwes.h>
 #include <assert.h>
-#include <queue.h>
-#include <stdbool.h>
-#include <stdint.h>
 #include <string.h>
+#include <char_queue.h>
 
-void q_init(struct char_queue *q, char *buf, size_t length)
+void char_queue_init(struct char_queue *q, char *buf, size_t length)
 {
     memset(q, 0, sizeof(struct char_queue));
     q->ring = buf;
     q->length = length;
 }
 
-bool q_empty(const struct char_queue *q)
+bool char_queue_empty(const struct char_queue *q)
 {
     return q->count == 0;
 }
 
-bool q_full(const struct char_queue *q)
+bool char_queue_full(const struct char_queue *q)
 {
     return q->count == q->length;
 }
 
-char q_get(struct char_queue *q)
+char char_queue_get(struct char_queue *q)
 {
-    assert(!q_empty(q));
+    if (char_queue_empty(q)) {
+        return '\0';
+    }
 
     char c = q->ring[q->rptr++];
     if (q->rptr >= q->length) {
@@ -57,9 +55,11 @@ char q_get(struct char_queue *q)
     return c;
 }
 
-void q_put(struct char_queue *q, char c)
+bool char_queue_put(struct char_queue *q, char c)
 {
-    assert(!q_full(q));
+    if (char_queue_full(q)) {
+        return false;
+    }
 
     q->ring[q->wptr++] = c;
     if (q->wptr >= q->length) {
@@ -67,11 +67,14 @@ void q_put(struct char_queue *q, char c)
     }
 
     q->count++;
+    return true;
 }
 
-char q_erase(struct char_queue *q)
+char char_queue_erase(struct char_queue *q)
 {
-    assert(!q_empty(q));
+    if (char_queue_empty(q)) {
+        return '\0';
+    }
 
     if (q->wptr == 0) {
         q->wptr = q->length;
@@ -81,12 +84,27 @@ char q_erase(struct char_queue *q)
     return q->ring[--q->wptr];
 }
 
-size_t q_length(struct char_queue *q)
+bool char_queue_insert(struct char_queue *q, char c)
+{
+    if (char_queue_full(q)) {
+        return false;
+    }
+
+    if (q->rptr == 0) {
+        q->rptr = q->length;
+    }
+    q->ring[--q->rptr] = c;
+
+    q->count++;
+    return true;
+}
+
+size_t char_queue_length(struct char_queue *q)
 {
     return q->length;
 }
 
-size_t q_count(struct char_queue *q)
+size_t char_queue_count(struct char_queue *q)
 {
     return q->count;
 }
