@@ -46,9 +46,9 @@ char char_queue_get(struct char_queue *q)
         return '\0';
     }
 
-    char c = q->ring[q->rptr++];
-    if (q->rptr >= q->length) {
-        q->rptr = 0;
+    char c = q->ring[q->head++];
+    if (q->head >= q->length) {
+        q->head = 0;
     }
 
     q->count--;
@@ -61,9 +61,9 @@ bool char_queue_put(struct char_queue *q, char c)
         return false;
     }
 
-    q->ring[q->wptr++] = c;
-    if (q->wptr >= q->length) {
-        q->wptr = 0;
+    q->ring[q->tail++] = c;
+    if (q->tail >= q->length) {
+        q->tail = 0;
     }
 
     q->count++;
@@ -76,12 +76,12 @@ char char_queue_erase(struct char_queue *q)
         return '\0';
     }
 
-    if (q->wptr == 0) {
-        q->wptr = q->length;
+    if (q->tail == 0) {
+        q->tail = q->length;
     }
 
     q->count--;
-    return q->ring[--q->wptr];
+    return q->ring[--q->tail];
 }
 
 bool char_queue_insert(struct char_queue *q, char c)
@@ -90,10 +90,10 @@ bool char_queue_insert(struct char_queue *q, char c)
         return false;
     }
 
-    if (q->rptr == 0) {
-        q->rptr = q->length;
+    if (q->head == 0) {
+        q->head = q->length;
     }
-    q->ring[--q->rptr] = c;
+    q->ring[--q->head] = c;
 
     q->count++;
     return true;

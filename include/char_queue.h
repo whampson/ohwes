@@ -32,8 +32,8 @@ struct char_queue {
     char *ring;         // character queue ring buffer pointer
     size_t length;      // total ring buffer size
     size_t count;       // number of characters in the queue
-    uint32_t rptr;      // read pointer
-    uint32_t wptr;      // write pointer
+    uint32_t head;      // head pointer
+    uint32_t tail;      // tail pointer
 };
 
 /**
