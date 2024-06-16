@@ -24,6 +24,8 @@
 #ifndef __ASSERT_H
 #define __ASSERT_H
 
+#define static_assert _Static_assert
+
 #ifdef DEBUG
 
 #ifdef __KERNEL__
@@ -47,14 +49,10 @@ do { \
     } \
 } while (0)
 
-#endif // __KERNEL__
+#endif  // __KERNEL__
 
-#else  // DEBUG
-
+#else   // DEBUG
 #define assert(x) (void) (x)
-
-#endif
-
-#define static_assert _Static_assert
+#endif  // DEBUG
 
 #endif  // __ASSERT_H
