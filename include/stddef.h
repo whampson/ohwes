@@ -46,6 +46,6 @@ typedef long long max_align_t;
 
 // typedef short wchar_t;
 
-#endif // __ASSEMBLER
+#endif // __ASSEMBLER__
 
 #endif // __STDDEF_H
