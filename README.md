@@ -55,7 +55,7 @@ MSYS2> pacman -Syu mingw32/mingw-w64-i686-toolchain
 
 4. Install cross-compiler. This will be used to build the operating system code. Currently, we are using GCC 7.1.0 graciously pre-compiled by *lordmilko* at [lordmilko/i386-elf-tools](https://github.com/lordmilko/i686-elf-tools).
     1. Download [i686-elf-tools-windows.zip](https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-windows.zip)
-    2. Extract .zip to `build/i686-elf-tools/bin`
+    2. Extract .zip contents to `build/i686-elf-tools/`
 
 5. Use a MINGW32 shell to build OH-WES (see [Building OH-WES](#building-oh-wes))
 
