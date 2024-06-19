@@ -169,7 +169,7 @@ static void timer_interrupt(void)
     volatile struct pit_state *pit;
 
     pit = get_pit();
-    pit->ticks++;
+    pit->ticks++;       // TODO: read tick count from PIT?
 
     if (pit->pcspk_ticks) {
         pit->pcspk_ticks--;

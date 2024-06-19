@@ -45,6 +45,10 @@
 #define SYSTEM_DMA_AREA                 0x10000     // 0x10000 - 0x1FFFF
 #define KERNEL_BASE                     0x20000     // 0x20000 - 0x7FFFF
 #define KERNEL_ENTRY                    KERNEL_BASE
+#ifdef TEST_BUILD
+#define TEST_BASE                       0x60000     // 0x60000 - 0x6FFFF
+#define TEST_ENTRY                      TEST_BASE
+#endif
 #define INIT_BASE                       0x80000     // 0x80000 - 0x8FFFF
 #define INIT_ENTRY                      INIT_BASE
 #define USER_STACK_PAGE                 0x90000     // 0x90000 - 0x90FFF

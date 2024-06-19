@@ -85,6 +85,16 @@ static void init_page_mappings(const struct boot_info *boot_info, uint32_t pgtbl
         panic("failed to map kernel stack page!");
     }
 
+#if TEST_BUILD
+    // map test code
+    uint32_t num_test_code_pages = (2 << 16) >> PAGE_SHIFT;
+    for (int i = 0; i < num_test_code_pages; i++) {
+        uint32_t va = TEST_BASE + (i << PAGE_SHIFT);
+        if (identity_map(va, MAP_USERMODE) < 0) {
+            panic("failed to map test code pages!");
+        }
+    }
+#else
     // map user code
     uint32_t num_user_code_pages = div_ceil(boot_info->init_size, PAGE_SIZE);
     for (int i = 0; i < num_user_code_pages; i++) {
@@ -93,6 +103,7 @@ static void init_page_mappings(const struct boot_info *boot_info, uint32_t pgtbl
             panic("failed to map user code pages!");
         }
     }
+#endif
 
     // map user stack page
     if (identity_map(USER_STACK_PAGE, MAP_USERMODE) < 0) {

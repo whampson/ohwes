@@ -60,7 +60,7 @@ do {                                    \
     die();                              \
 } while (0)
 
-#define die()                           ({ __cli(); kprint("system halted"); for (;;); }) // spin forever, satisfies __noreturn
+#define die()                           ({ kprint("system halted"); for (;;); }) // spin forever, satisfies __noreturn
 #define spin(cond)                      while (cond) { }    // spin while cond == true, TODO: THIS NEEDS TO HAVE A TIMEOUT!!
 
 #define zeromem(p,n)                    memset(p, 0, n)
@@ -100,6 +100,7 @@ enum pl {
 //
 
 #define STRINGIFY(x)                    # x
+#define STRINGIFY_LITERAL(x)            STRINGIFY(x)
 #define CONCAT(a,b)                     a ## b
 #define HASNO(cond)                     ((cond)?"has":"no")
 #define YN(cond)                        ((cond)?"yes":"no")

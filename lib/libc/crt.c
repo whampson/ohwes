@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: init/_crt.c
+ *         File: lib/libc/crt.c
  *      Created: April 15, 2024
  *       Author: Wes Hampson
  * =============================================================================

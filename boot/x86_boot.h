@@ -60,6 +60,11 @@
 #define INIT_SEGMENT        FLAT2SEG(INIT_BASE)
 #define INIT_OFFSET         FLAT2OFF(INIT_BASE)
 
+#ifdef TEST_BUILD
+#define TEST_SEGMENT        FLAT2SEG(TEST_BASE)
+#define TEST_OFFSET         FLAT2OFF(TEST_BASE)
+#endif
+
 /*----------------------------------------------------------------------------*
  * BIOS Data Area
  * See https://stanislavs.org/helppc/bios_data_area.html

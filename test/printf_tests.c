@@ -4,15 +4,17 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <ohwes.h>
-#include "tests.h"
+#include <syscall.h>
+#include "test.h"
 
-void testprint(const char *msg)
+#define _console_write      _wr
+
+void _wr(const char *msg)
 {
     const char *a = msg;
     while (*a != '\0')
     {
-        putchar(*a++);
+        write(stdout_fd, a++, 1);
     }
 }
 
@@ -70,23 +72,25 @@ void test_printf(void)
     //
     {
         #define _TEST_SPRINTF(exp_ret,exp_buf,...) \
+            buf[0] = '\0'; \
             int _ret = sprintf(buf, __VA_ARGS__); \
             bool _pass = (_ret == (exp_ret)) && (strcmp(buf, exp_buf) == 0); \
 
         #define _TEST_SNPRINTF(exp_ret,exp_buf,n,...) \
+            buf[0] = '\0'; \
             int _ret = snprintf(buf, n, __VA_ARGS__); \
             bool _pass = (_ret == (exp_ret)) && (exp_buf == NULL || strcmp(buf, exp_buf) == 0); \
 
         #define _TEST_CHECK(exp_ret,exp_buf,...) \
             if (!_pass) { \
-                testprint("!! sprintf SANITY CHECK FAILED: " #__VA_ARGS__ "\n"); \
+                _console_write("!! sprintf SANITY CHECK FAILED: " #__VA_ARGS__ "\n"); \
                 if (_ret != (exp_ret)) { \
-                    testprint("!! return value does not match expected value of " #exp_ret "\n"); \
+                    _console_write("!! return value does not match expected value of " #exp_ret "\n"); \
                 } \
-                testprint("!! \texp='" exp_buf "'\n"); \
-                testprint("!! \tgot='"); \
-                testprint(buf); \
-                testprint("'\n"); \
+                _console_write("!! \texp_buf='" exp_buf "'\n"); \
+                _console_write("!! \tgot_buf='"); \
+                _console_write(buf); \
+                _console_write("'\n"); \
             } \
 
         #define TEST_SPRINTF(exp_ret,exp_buf,...) \
@@ -114,7 +118,7 @@ void test_printf(void)
 
     // snprintf return value is num chars that would've been printed had limit
     //   not been reached
-    TEST_SNPRINTF(0, "", 0, NULL);  // NULL ok if n==0
+    TEST_SNPRINTF(-EINVAL, "", 0, NULL);  // NULL ok if n==0
     TEST_SNPRINTF(3, "a", 1, "abc");
     TEST_SNPRINTF(3, "abc", 3, "abc");
     TEST_SNPRINTF(3, "", 0, "abc");
@@ -139,11 +143,11 @@ void test_printf(void)
 
     #define _TEST_CHECK(expected,...) \
         if (!_pass) { \
-            testprint("!! printf FAILED: " #__VA_ARGS__ "\n"); \
-            testprint("!! \texp='" expected "'\n"); \
-            testprint("!! \tgot='"); \
-            testprint(buf); \
-            testprint("'\n"); \
+            _console_write("!! printf FAILED: " #__VA_ARGS__ "\n"); \
+            _console_write("!! \texp='" expected "'\n"); \
+            _console_write("!! \tgot='"); \
+            _console_write(buf); \
+            _console_write("'\n"); \
         } \
 
     #define TEST(expected,...) \

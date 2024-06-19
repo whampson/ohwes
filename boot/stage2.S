@@ -70,6 +70,16 @@ LoadInit:       # TODO: remove this once we have a working disk driver in the ke
         movw    $INIT_OFFSET, %bx
         call    LoadFile
 
+#ifdef TEST_BUILD
+LoadTest:
+        leaw    sz_TestFileName, %si
+        call    FindFile
+        movw    $TEST_SEGMENT, %ax
+        movw    %ax, %es
+        movw    $TEST_OFFSET, %bx
+        call    LoadFile
+#endif
+
 SwitchToProtectedMode:
         cli                             # make sure interrupts are off
         lgdtl   GdtReg                  # load the temp GDT
@@ -558,6 +568,8 @@ g_BootParams:
 ##
 # Strings
 ##
+sz_TestFileName:
+        .asciz          "TEST    EXE"
 sz_InitFileName:
         .asciz          "INIT    EXE"
 sz_KernelFileName:

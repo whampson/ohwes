@@ -41,12 +41,6 @@ __syscall __noreturn int sys_exit(int status)
 {
     assert(getpl() == KERNEL_PL);
 
-    if (status == 0) {
-#if PRINT_PAGE_MAP
-    print_page_mappings();
-#endif
-    }
-
     kprint("\nexit: returned %d\n", status);
     // idle();     // TODO: switch task, handle signals, etc.
 

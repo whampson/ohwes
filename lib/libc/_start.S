@@ -13,14 +13,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 # -----------------------------------------------------------------------------
-#         File: init/entry.S
-#      Created: June 5, 2024
+#         File: lib/libc/_start.S
+#      Created: June 16, 2024
 #       Author: Wes Hampson
 # =============================================================================
 
-#include <syscall.h>
-
-// TODO: This is how we start init.exe until I write a proper program loader.
+// TODO: This is how we start until I write a proper program loader.
 
 .text
 .code32

@@ -171,7 +171,7 @@ _FindFile_Loop:
         popw    %si                     #   pop vars
         addw    $32, %di                #   advance ptr
         decw    %bx                     #   decrement loop counter
-        jz      DiskError               # zero? file not found!
+        jz      FileNotFound            # zero? file not found!
         jmp     _FindFile_Loop          # otherwise: keep searchin'
 
 _FindFile_Done:
@@ -431,6 +431,16 @@ DiskError:
         PRINT   sz_DiskError
         jmp     ReadKeyThenReset
 
+##
+# -----------------------------------------------------------------------------
+# FileNotFound
+# -----------------------------------------------------------------------------
+# Prints a disk error message, waits for a key press, then resets the system.
+##
+.globl FileNotFound
+FileNotFound:
+        PRINT   sz_FileNotFound
+        jmp     ReadKeyThenReset
 
 # -----------------------------------------------------------------------------
 # ------------------------------ Padding & Data -------------------------------
@@ -444,6 +454,8 @@ sz_Stage2FileName:
         .asciz  "BOOT    SYS"
 sz_DiskError:
         .asciz  "\r\nDiskette read error!"
+sz_FileNotFound:
+        .asciz  "\r\nFile not found!"
 sz_KeyPress:
         .asciz  "\r\nPress any key to try again..."
 

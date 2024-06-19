@@ -40,6 +40,7 @@ do { \
 
 #else
 
+#include <stdio.h>
 #include <syscall.h>
 #define assert(x) \
 do { \

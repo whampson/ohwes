@@ -1,14 +1,17 @@
 # debug build toggle and params
-DEBUG      := 1
-DEBUGOPT   := 1
-DEBUGFLAGS := -DDEBUG -g
-TEST_BUILD := 0
+DEBUG           := 1
+DEBUGOPT        := 1
+TEST_BUILD      := 0
+GLOBAL_FLAGS    := -Wall -Werror
 
 ifeq "${TEST_BUILD}" "1"
-  DEBUGFLAGS += -DTEST_BUILD
+  GLOBAL_FLAGS += -DTEST_BUILD
+endif
+ifeq "${DEBUG}" "1"
+  GLOBAL_FLAGS += -DDEBUG -g
 endif
 ifeq "${DEBUGOPT}" "1"
-  DEBUGFLAGS += -Og
+  GLOBAL_FLAGS += -Og
 endif
 
 # important dirs
@@ -17,9 +20,16 @@ BUILD_DIR  := obj
 SCRIPT_DIR := scripts
 
 BOOTIMG := ${TARGET_DIR}/boot/bootsect.bin
-BOOTSYS := ${TARGET_DIR}/sys/boot.sys
-KERNSYS := ${TARGET_DIR}/sys/ohwes.sys
-INITEXE := ${TARGET_DIR}/init/init.exe
+
+FILES   := \
+    ${TARGET_DIR}/sys/boot.sys \
+    ${TARGET_DIR}/sys/ohwes.sys \
+    ${TARGET_DIR}/init/init.exe \
+
+ifeq "${TEST_BUILD}" "1"
+  FILES += ${TARGET_DIR}/test/test.exe
+endif
+
 DISKIMG := ${TARGET_DIR}/ohwes.img
 
 SUBMAKEFILES := \
@@ -27,7 +37,7 @@ SUBMAKEFILES := \
 
 MAKEFLAGS := --no-print-directory
 
-.PHONY: all ohwes tools
+.PHONY: all ohwes tools test
 .PHONY: img floppy format-floppy
 .PHONY: run run-bochs debug debug-boot
 .PHONY: clean nuke relink
@@ -42,18 +52,13 @@ img: tools ohwes
 	@mkdir -p $(dir ${DISKIMG})
 	fatfs create --force ${DISKIMG} 2880
 	dd if=${BOOTIMG} of=${DISKIMG} bs=512 count=1 conv=notrunc
-	fatfs add ${DISKIMG} ${BOOTSYS} BOOT.SYS
-	fatfs attr -s ${DISKIMG} BOOT.SYS
-	fatfs add ${DISKIMG} ${KERNSYS} OHWES.SYS
-	fatfs attr -s ${DISKIMG} OHWES.SYS
-	fatfs add ${DISKIMG} ${INITEXE} INIT.EXE
+	$(foreach _file,${FILES},fatfs add ${DISKIMG} ${_file} $(notdir ${_file});\
+	    fatfs attr -s ${DISKIMG} $(notdir ${_file});)
 	fatfs list -Aa ${DISKIMG}
 
 floppy: ohwes
 	dd if=${BOOTIMG} of=/dev/fd0 bs=512 count=1 conv=notrunc
-	cp ${BOOTSYS} /a/
-	cp ${KERNSYS} /a/
-	cp ${INITEXE} /a/
+	$(foreach file,${FILES},cp ${file} /a/;)
 
 format-floppy:
 	mkdosfs -s 1 -S 512 /dev/fd0

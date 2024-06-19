@@ -31,9 +31,9 @@
 #include <paging.h>
 #include <pic.h>
 #include <ps2.h>
-#include <test.h>
 #include <x86.h>
 #include <syscall.h>
+
 #include <debug.h>
 
 #define CHATTY 1
@@ -50,6 +50,7 @@ extern void init_timer(void);
 extern void init_rtc(void);
 extern void init_tasks(void);
 #ifdef TEST_BUILD
+typedef int (*test_main)(void);
 extern void tmain(void);
 #endif
 
@@ -86,12 +87,6 @@ __fastcall void kmain(const struct boot_info *info)
     init_vga();
     init_console();     // safe to print now
 
-#if TEST_BUILD
-    kprint("boot: TEST BUILD\n");
-    kprint("boot: running tests...\n");
-    tmain();
-#endif
-
     kprint("\n" OS_NAME " " OS_VERSION ", build " OS_BUILDDATE "\n");
     kprint("\n");
 #if CHATTY
@@ -116,13 +111,18 @@ __fastcall void kmain(const struct boot_info *info)
     // that forks itself and spawns the shell program
     // (if we're following the Unix model)
 
+#if TEST_BUILD
+    kprint("boot: TEST BUILD\n");
+    uint32_t ring3_base = TEST_BASE;
+#else
+    uint32_t ring3_base = INIT_BASE;
+#endif
+
     assert(info->init_size > 0);
     assert(info->init_size <= 0x10000);
 
     kprint("boot: entering ring3...\n");
-    const uint32_t init_base = INIT_BASE;
-    const uint32_t user_stack = USER_STACK_PAGE + PAGE_SIZE;    // start at top
-    enter_ring3(init_base, user_stack);
+    enter_ring3(ring3_base, USER_STACK_PAGE + PAGE_SIZE);
 }
 
 static void enter_ring3(uint32_t entry, uint32_t stack)

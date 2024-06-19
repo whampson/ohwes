@@ -10,6 +10,10 @@ SUBMAKEFILES := \
     kernel/kernel.mk \
     init/init.mk \
 
+ifeq "${TEST_BUILD}" "1"
+  SUBMAKEFILES += test/test.mk
+endif
+
 # use cross-compiler toolchain
 PREFIX     := i686-elf-
 AR         := $(PREFIX)ar
@@ -20,14 +24,16 @@ OBJCOPY    := $(PREFIX)objcopy
 
 # flags, etc.
 ARFLAGS    := -rcsv
-ASFLAGS    := -Wall -Werror
-CFLAGS     := -Wall -Werror -nostdinc -ffreestanding -std=c11
+ASFLAGS    := ${GLOBAL_FLAGS}
+CFLAGS     := ${GLOBAL_FLAGS} -nostdinc -ffreestanding -std=c11
 CFLAGS     += -include lib/libgcc/gcc.h    # automatically include GCC stuff
-LDFLAGS    := -nostdlib
+LDFLAGS    := ${GLOBAL_FLAGS} -nostdlib
 
 ifeq "${DEBUG}" "1"
   ASFLAGS += ${DEBUGFLAGS}
   CFLAGS += ${DEBUGFLAGS}
+else
+  CFLAGS += -O1
 endif
 
 # Create a raw binary executable, no symbols or anything

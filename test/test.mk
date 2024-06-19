@@ -1,9 +1,10 @@
-TARGET := elf/init.elf
-TARGETEXE := init/init.exe
+TARGET := elf/test.elf
+TARGETEXE := test/test.exe
 
 SOURCES := \
-    init.c \
-    rtc_test.c \
+    test.c \
+    char_queue_tests.c \
+    printf_tests.c \
 
 LINKLIBS := \
     lib/libc.a \
@@ -12,7 +13,7 @@ LINKLIBS := \
 
 TGT_ASFLAGS := -D__USER_MODE__
 TGT_CFLAGS  := -D__USER_MODE__
-TGT_LDFLAGS := -T init/init.ld
+TGT_LDFLAGS := -T test/test.ld
 
 $(eval $(call add-linklibs,${LINKLIBS}))
 TGT_POSTMAKE := $(call make-exe,${TARGETEXE},${OBJCOPYFLAGS})
