@@ -124,9 +124,8 @@ int Add(const Command *cmd, const CommandArgs *args)
         pFileDesc = pParentDir;
         while (!IsFree(pFileDesc)) {
             pFileDesc++;
-            int slotsLeft = (pParent->FileSize / sizeof(DirEntry)) - CeilDiv((pFileDesc - pParentDir), sizeof(DirEntry));
-            LogInfo("slots left: %d\n", slotsLeft);
-            SafeRIF(slotsLeft != 0, "directory is full!\n");
+            uint32_t slotsLeft = (dirSize / sizeof(DirEntry)) - (uint32_t) (pFileDesc - pParentDir);
+            SafeRIF(slotsLeft > 0, "directory is full!\n");
         }
         InitDirEntry(pFileDesc);
         pFileDesc->FirstCluster = disk->FindNextFreeCluster();
