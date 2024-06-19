@@ -117,10 +117,10 @@ static void get_time(struct rtc_time *time, bool alarm);
 static int set_time(struct rtc_time *time, bool alarm);
 
 struct rtc {
-    uint32_t ticks;
-    uint32_t a_ticks;
-    uint32_t p_ticks;
-    uint32_t u_ticks;
+    uint64_t int_count;         // interrupt count
+    uint64_t alarm_ticks;       // alarm ticks
+    uint64_t periodic_ticks;    // periodic (clock) ticks
+    uint64_t update_ticks;      // update ended
 };
 static struct rtc _rtc; // TODO: make per-process
 
@@ -209,17 +209,17 @@ static void rtc_interrupt(void)
     uint8_t reg_c;
 
     reg_c = rd_c();
-    get_rtc()->ticks++;
-
     if (reg_c & REG_C_AF) {
-        get_rtc()->a_ticks++;
+        get_rtc()->alarm_ticks++;
     }
     if (reg_c & REG_C_PF) {
-        get_rtc()->p_ticks++;
+        get_rtc()->periodic_ticks++;
     }
     if (reg_c & REG_C_UF) {
-        get_rtc()->u_ticks++;
+        get_rtc()->update_ticks++;
     }
+
+    get_rtc()->int_count++;
 }
 
 static void set_mode(int mask)
@@ -514,17 +514,17 @@ int rtc_read(struct file *file, char *buf, size_t count)
     // TODO: encode interrupt type into returned value
     // TODO: tick 'count/sizeof(uint32_t)' times?
 
-    // get current tick count
+    // get current interrupt count
     cli_save(flags);
-    tick = get_rtc()->ticks;
+    tick = get_rtc()->int_count;
     __sti();
 
-    // spin until another tick happens
-    spin(tick == get_rtc()->ticks);
+    // spin until another interrupt happens
+    spin(tick == get_rtc()->int_count);
     __cli();
 
-    // capture new tick count
-    tick = get_rtc()->ticks;
+    // capture new interrupt count
+    tick = get_rtc()->int_count;
     memcpy(buf, &tick, sizeof(uint32_t));
 
     restore_flags(flags);
