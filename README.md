@@ -24,14 +24,32 @@ hooking up a a real serial terminal and see if I can interact with the system ov
 serial I/O port, as well as play with the GPU and attempt to implement a 3D graphics
 driver. Maybe even port DOOM or GTA3? :-)
 
-##  How do I play with it?
-### Cloning the repo
+##  How do I use it?
+### Clone the repo
 ```
 > git clone --recurse-submodules https://github.com/whampson/ohwes
 ```
 
-### Preparing the Environment
-#### Windows
+### Prepare the Environment
+#### Install GCC Cross Compiler
+Install a GCC cross-compiler. This will be used to build the operating system
+code. Currently, we are using GCC 7.1.0 graciously pre-compiled by *lordmilko*
+at [lordmilko/i386-elf-tools](https://github.com/lordmilko/i686-elf-tools):
+1. Download [i686-elf-tools-windows.zip](https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-windows.zip) or [i686-elf-tools-linux.zip](https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-linux.zip).
+2. Extract .zip contents to `build/i686-elf-tools/`
+    * Your build directory structure should look like this:
+        ```
+        ohwes/
+        └───build/
+            └───i686-elf-tools/
+                ├───bin/
+                ├───include/
+                ├───lib/
+                ├───libexec/
+                └───share/
+        ```
+
+#### Install Native Build Tools (Windows)
 OH-WES is built on Windows under a MINGW32 environment using a GNU Make and GCC.
 
 1. Install MSYS2 and QEMU.
@@ -41,7 +59,7 @@ PS> winget install qemu
 ```
 If you do not have winget, see [Windows Package Manager for Developers](https://learn.microsoft.com/en-us/windows/package-manager/#windows-package-manager-for-developers).
 
-2. Update MSYS2. You may need to run this command twice if you are prompted to
+2. Update MSYS2. You will need to run this command again if you are prompted to
 restart the shell.
 ```
 MSYS2> pacman -Syuu
@@ -49,27 +67,19 @@ MSYS2> pacman -Syuu
 
 3. Install native build tools.
 ```
-MSYS2> pacman -Syu msys2/make
+MSYS2> pacman -Syu msys/make
 MSYS2> pacman -Syu mingw32/mingw-w64-i686-toolchain
 ```
 
-4. Install cross-compiler. This will be used to build the operating system code. Currently, we are using GCC 7.1.0 graciously pre-compiled by *lordmilko* at [lordmilko/i386-elf-tools](https://github.com/lordmilko/i686-elf-tools).
-    1. Download [i686-elf-tools-windows.zip](https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-windows.zip)
-    2. Extract .zip contents to `build/i686-elf-tools/`
+4. Use a MINGW32 shell to build OH-WES (see [Building OH-WES](#building-oh-wes)).
 
-5. Use a MINGW32 shell to build OH-WES (see [Building OH-WES](#building-oh-wes))
-
-### Linux (Debian)
+#### Install Native Build Tools (Linux/Debian)
 1. Install build-essential
 ```
 > apt-get install build-essential
 ```
 
-2. Install cross-compiler. This will be used to build the operating system code. Currently, we are using GCC 7.1.0 graciously pre-compiled by *lordmilko* at [lordmilko/i386-elf-tools](https://github.com/lordmilko/i686-elf-tools).
-    1. Download [i686-elf-tools-linux.zip](https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-linux.zip)
-    2. Extract .zip to `build/i686-elf-tools/bin`
-
-### Building OH-WES
+### Build OH-WES
 Open a Bash shell (MINGW32 on Windows) and navigate to the project root, then
 source the environment script. This script will ensure your PATH is set
 correctly and that the necessary tools are accessible (this only needs to be
@@ -84,7 +94,7 @@ Now, simply run `make` to begin building OH-WES!
 > make
 ```
 
-### Running OH-WES with QEMU or Bochs
+### Run OH-WES with QEMU or Bochs
 To run with QEMU, install QEMU and make sure `qemu-system-i386` is in your path, then:
 ```
 > make run
@@ -96,7 +106,7 @@ file and put it in the project root, then:
 > make run-bochs
 ```
 
-### Creating an OH-WES floppy disk image
+### Create an OH-WES Floppy Disk Image
 You can create a floppy disk image of OH-WES by running the following:
 ```
 > make img
@@ -106,7 +116,7 @@ This builds my `fatfs` tool then creates a FAT-12 floppy disk image using it.
 You can point other emulators to this image, or write it to a real floppy disk
 via the `dd` command.
 
-### Creating a real OH-WES floppy disk 💾
+### Create a Bootable OH-WES Floppy Disk 💾
 You may also bypass creating an image and write the files directly to disk if your system
 has FAT-12 support:
 ```
