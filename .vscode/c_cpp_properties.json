@@ -1,7 +1,14 @@
 {
     "configurations": [
         {
-            "name": "OH-WES Kernel [Win32]",
+            "name": "OH-WES Tools [Win32]",
+            "defines": [],
+            "compilerPath": "C:/msys64/mingw32/bin/gcc",
+            "intelliSenseMode": "gcc-x86",
+            "configurationProvider": "ms-vscode.makefile-tools"
+        },
+        {
+            "name": "OH-WES",
             "includePath": [
                 "${workspaceFolder}/include/*"
             ],
@@ -11,38 +18,9 @@
                 "TEST_BUILD"
             ],
             "forcedInclude": [
-                "${workspaceFolder}/lib/libgcc/gcc.h"
+                "${workspaceFolder}/include/config.h"
             ],
             "compilerPath": "${workspaceFolder}/build/i686-elf-tools/bin/i686-elf-gcc",
-            "cStandard": "c11",
-            "intelliSenseMode": "gcc-x86",
-            "compilerArgs": [
-                "-ffreestanding",
-                "-nostdinc",
-                "-nostdlib"
-            ],
-            "configurationProvider": "ms-vscode.makefile-tools"
-        },
-        {
-            "name": "OH-WES Tools [Win32]",
-            "defines": [],
-            "compilerPath": "C:/msys64/mingw32/bin/gcc",
-            "intelliSenseMode": "gcc-x86",
-            "configurationProvider": "ms-vscode.makefile-tools"
-        },
-        {
-            "name": "OH-WES [macOS]",
-            "includePath": [
-                "${workspaceFolder}/include/*"
-            ],
-            "defines": [
-                "DEBUG",
-                "TEST_BUILD"
-            ],
-            "forcedInclude": [
-                "${workspaceFolder}/lib/libgcc/gcc.h"
-            ],
-            "compilerPath": "/usr/local/bin/i686-elf-gcc",
             "cStandard": "c11",
             "intelliSenseMode": "gcc-x86",
             "compilerArgs": [

@@ -33,7 +33,7 @@
 #include <io.h>
 #include <irq.h>
 #include <ps2.h>
-#include <char_queue.h>
+#include <queue.h>
 #include <string.h>
 #include <debug.h>
 

@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: lib/libc/string.c
+ *         File: lib/string.c
  *      Created: January 3, 2024
  *       Author: Wes Hampson
  * =============================================================================

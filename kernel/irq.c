@@ -32,7 +32,7 @@ extern __fastcall void crash(struct iregs *regs);
 
 #define MAX_HANDLERS    8
 
-static irq_handler handler_map[NUM_IRQS][MAX_HANDLERS] = { };
+irq_handler handler_map[NUM_IRQS][MAX_HANDLERS] = { };
 
 void init_irq(void)
 {

@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: lib/libos/char_queue.c
+ *         File: lib/queue.c
  *      Created: June 15, 2024
  *       Author: Wes Hampson
  * =============================================================================
@@ -21,7 +21,7 @@
 
 #include <assert.h>
 #include <string.h>
-#include <char_queue.h>
+#include <queue.h>
 
 void char_queue_init(struct char_queue *q, char *buf, size_t length)
 {

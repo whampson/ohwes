@@ -13,23 +13,34 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: lib/libc/crt.c
- *      Created: April 15, 2024
+ *         File: lib/stdio.c
+ *      Created: January 4, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#include <errno.h>
+#include <stdio.h>
+#include <fs.h>
 #include <syscall.h>
 
-int _errno;
+void stdout_fn(char c)
+{
+    write(stdout_fd, &c, 1);
+}
 
-//
-// Usermode system call function definitions
-//
-SYSCALL1(exit, int,status)
-SYSCALL3(read, int,fd, void*,buf, size_t,count)
-SYSCALL3(write, int,fd, const void*,buf, size_t,count)
-SYSCALL2(open, const char*,name, int,flags)
-SYSCALL1(close, int,fd)
-SYSCALL3(ioctl, int,fd, unsigned int,cmd, void*,arg)
+int putchar(int c)
+{
+    // TODO: write to stdout, return EOF on error
+    stdout_fn(c);
+    return c;
+}
+
+int puts(const char *str)
+{
+    // TODO: write to stdout, return EOF on error
+    while (*str) {
+        stdout_fn(*str++);
+    }
+    stdout_fn('\n');
+    return 1;
+}

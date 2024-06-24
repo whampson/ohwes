@@ -1,7 +1,7 @@
 # debug build toggle and params
 DEBUG           := 1
 DEBUGOPT        := 1
-TEST_BUILD      := 0
+TEST_BUILD      := 1
 GLOBAL_FLAGS    := -Wall -Werror
 
 ifeq "${TEST_BUILD}" "1"
@@ -19,15 +19,14 @@ TARGET_DIR := bin
 BUILD_DIR  := obj
 SCRIPT_DIR := scripts
 
-BOOTIMG := ${TARGET_DIR}/boot/bootsect.bin
+BOOTIMG := ${TARGET_DIR}/bootsect.bin
 
 FILES   := \
-    ${TARGET_DIR}/sys/boot.sys \
-    ${TARGET_DIR}/sys/ohwes.sys \
-    ${TARGET_DIR}/init/init.exe \
+    ${TARGET_DIR}/boot.sys \
+    ${TARGET_DIR}/ohwes.sys \
 
 ifeq "${TEST_BUILD}" "1"
-  FILES += ${TARGET_DIR}/test/test.exe
+  FILES += ${TARGET_DIR}/test.exe
 endif
 
 DISKIMG := ${TARGET_DIR}/ohwes.img

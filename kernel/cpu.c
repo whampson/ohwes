@@ -29,7 +29,7 @@
 #include <paging.h>
 
 #if DEBUG
-#define CHATTY               1
+#define CHATTY               0
 #endif
 
 //

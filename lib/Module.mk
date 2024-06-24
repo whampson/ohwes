@@ -1,9 +1,10 @@
-TARGET := lib/libc.a
+TARGET  := lib.a
 SOURCES := \
-    _start.S \
-    crt.c \
     ctype.c \
     errno.c \
+    math.c \
     printf.c \
+    queue.c \
     stdio.c \
     string.c \
+    syscall.c \

@@ -13,23 +13,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/_crt.c
- *      Created: June 5, 2024
+ *         File: lib/errno.c
+ *      Created: March 26, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
 #include <errno.h>
-#include <syscall.h>
 
 int _errno;
-
-//
-// kread, kwrite, etc...
-//
-KERNEL_SYSCALL1(exit, int,status)
-KERNEL_SYSCALL3(read, int,fd, void*,buf, size_t,count)
-KERNEL_SYSCALL3(write, int,fd, const void*,buf, size_t,count)
-KERNEL_SYSCALL2(open, const char*,name, int,flags)
-KERNEL_SYSCALL1(close, int,fd)
-KERNEL_SYSCALL3(ioctl, int,fd, unsigned int,cmd, void*,arg)

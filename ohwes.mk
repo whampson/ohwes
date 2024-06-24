@@ -2,17 +2,16 @@
 INCDIRS    := include
 
 # OS modules
-SUBMAKEFILES := \
-    lib/libc/libc.mk \
-    lib/libgcc/libgcc.mk \
-    lib/libos/libos.mk \
-    boot/x86_boot.mk \
-    kernel/kernel.mk \
-    init/init.mk \
+MODULES := \
+    boot \
+    kernel \
+    lib \
 
 ifeq "${TEST_BUILD}" "1"
-  SUBMAKEFILES += test/test.mk
+  MODULES += test
 endif
+
+SUBMAKEFILES := $(addsuffix /Module.mk,${MODULES})
 
 # use cross-compiler toolchain
 PREFIX     := i686-elf-
@@ -25,8 +24,9 @@ OBJCOPY    := $(PREFIX)objcopy
 # flags, etc.
 ARFLAGS    := -rcsv
 ASFLAGS    := ${GLOBAL_FLAGS}
+ASFLAGS    += -include config.h
 CFLAGS     := ${GLOBAL_FLAGS} -nostdinc -ffreestanding -std=c11
-CFLAGS     += -include lib/libgcc/gcc.h    # automatically include GCC stuff
+CFLAGS     += -include config.h
 LDFLAGS    := ${GLOBAL_FLAGS} -nostdlib
 
 ifeq "${DEBUG}" "1"

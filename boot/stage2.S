@@ -60,16 +60,6 @@ LoadKernel:
         movw    $KERNEL_OFFSET, %bx
         call    LoadFile                # load the kernel into low memory
 
-LoadInit:       # TODO: remove this once we have a working disk driver in the kernel
-        leaw    sz_InitFileName, %si
-        call    FindFile
-        movl    DIRENTRY_FILESIZE(%di), %ecx
-        movl    %ecx, m_InitSize      # store init size
-        movw    $INIT_SEGMENT, %ax
-        movw    %ax, %es
-        movw    $INIT_OFFSET, %bx
-        call    LoadFile
-
 #ifdef TEST_BUILD
 LoadTest:
         leaw    sz_TestFileName, %si
@@ -570,8 +560,6 @@ g_BootParams:
 ##
 sz_TestFileName:
         .asciz          "TEST    EXE"
-sz_InitFileName:
-        .asciz          "INIT    EXE"
 sz_KernelFileName:
         .asciz          "OHWES   SYS"
 sz_MemError:

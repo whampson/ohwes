@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: lib/libc/ctype.c
+ *         File: lib/ctype.c
  *      Created: December 27, 2023
  *       Author: Wes Hampson
  *

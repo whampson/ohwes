@@ -24,7 +24,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <char_queue.h>
+#include <queue.h>
 
 #define VGA_COLS            80
 #define VGA_ROWS            25

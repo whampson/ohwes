@@ -13,20 +13,22 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: lib/libgcc/math.c
+ *         File: lib/math.c
  *      Created: December 26, 2023
  *       Author: Wes Hampson
  *
- * GCC math routines for operations that don't have hardware support.
+ * Math routines for operations that don't have hardware support.
  *
  * https://gcc.gnu.org/onlinedocs/gccint/Integer-library-routines.html
  * =============================================================================
  */
 
-#ifdef __GNUC__
-
 #include <stddef.h>
 #include <stdint.h>
+
+#ifndef __GNUC__
+#error "Please compile using GCC."
+#else
 
 /**
  * https://dox.ipxe.org/____udivmoddi4_8c.html
@@ -36,13 +38,12 @@ uint64_t __udivmoddi4(uint64_t num, uint64_t den, uint64_t *rem_p)
    uint64_t quot = 0, qbit = 1;
 
     if (den == 0) {
-        /* Intentional divide by zero, without
-           triggering a compiler warning which
-           would abort the build */
+        // intentional divide by zero, without triggering a compiler warning
+        // which would abort the build
         return 1 / ((unsigned) den);
     }
 
-    /* Left-justify denominator and count shift */
+    // left-justify denominator and count shift
     while ((int64_t) den >= 0) {
         den <<= 1;
         qbit <<= 1;
@@ -116,4 +117,4 @@ uint64_t __umoddi3(uint64_t num, uint64_t den)
     return v;
 }
 
-#endif  /* __GNUC__ */
+#endif  // __GNUC__

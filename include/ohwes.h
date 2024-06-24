@@ -22,7 +22,6 @@
 #ifndef __OHWES_H
 #define __OHWES_H
 
-#include <config.h>
 #include <interrupt.h>
 #include <x86.h>
 

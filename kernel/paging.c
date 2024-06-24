@@ -73,7 +73,7 @@ static void init_page_mappings(const struct boot_info *boot_info, uint32_t pgtbl
     assert(boot_info->kernel == KERNEL_BASE);
     for (int i = 0; i < num_kernel_code_pages; i++) {
         uint32_t va = boot_info->kernel + (i << PAGE_SHIFT);
-        if (identity_map(va, 0) < 0) {
+        if (identity_map(va, 0 | MAP_USERMODE) < 0) {   // TODO: temp usermode
             panic("failed to map kernel code page!");
         }
     }
@@ -92,15 +92,6 @@ static void init_page_mappings(const struct boot_info *boot_info, uint32_t pgtbl
         uint32_t va = TEST_BASE + (i << PAGE_SHIFT);
         if (identity_map(va, MAP_USERMODE) < 0) {
             panic("failed to map test code pages!");
-        }
-    }
-#else
-    // map user code
-    uint32_t num_user_code_pages = div_ceil(boot_info->init_size, PAGE_SIZE);
-    for (int i = 0; i < num_user_code_pages; i++) {
-        uint32_t va = INIT_BASE + (i << PAGE_SHIFT);
-        if (identity_map(va, MAP_USERMODE) < 0) {
-            panic("failed to map user code pages!");
         }
     }
 #endif

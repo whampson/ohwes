@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/char_queue.h
+ *         File: include/queue.h
  *      Created: June 15, 2024
  *       Author: Wes Hampson
  *
@@ -21,8 +21,8 @@
  * =============================================================================
  */
 
-#ifndef __CHAR_QUEUE_H
-#define __CHAR_QUEUE_H
+#ifndef __QUEUE_H
+#define __QUEUE_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -126,4 +126,4 @@ size_t char_queue_length(struct char_queue *q);
  */
 size_t char_queue_count(struct char_queue *q);
 
-#endif /* __CHAR_QUEUE_H */
+#endif  // __QUEUE_H

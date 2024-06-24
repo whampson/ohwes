@@ -1,7 +1,7 @@
-TARGET = boot/boot.elf
-TARGETBIN = boot/boot.bin
-TARGET_STAGE1 = boot/bootsect.bin
-TARGET_STAGE2 = sys/boot.sys
+TARGET = boot.elf
+TARGETBIN = boot.bin
+TARGET_STAGE1 = bootsect.bin
+TARGET_STAGE2 = boot.sys
 
 .SECONDARY: ${TARGET_STAGE1} ${TARGET_STAGE2}
 

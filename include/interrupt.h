@@ -137,7 +137,7 @@ static_assert(offsetof(struct iregs, vec_num) == SIZEOF_IREGS_CTX_REGS, "offseto
 static_assert(offsetof(struct iregs, esp) == SIZEOF_IREGS_NO_PL_CHANGE, "offsetof(struct iregs, vec_num) == SIZEOF_IREGS_NO_PL_CHANGE");
 static_assert(sizeof(struct iregs) == SIZEOF_IREGS, "sizeof(struct iregs) == SIZEOF_IREGS");
 
-__fastcall void switch_context(struct iregs *regs);     // see entry.S
+__fastcall __noreturn void switch_context(struct iregs *regs);     // see entry.S
 
 typedef void (__fastcall *idt_thunk)(void);
 

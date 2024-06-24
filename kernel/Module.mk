@@ -1,8 +1,7 @@
-TARGET := elf/kernel.elf
-TARGETEXE := sys/ohwes.sys
+TARGET := kernel.elf
+TARGETEXE := ohwes.sys
 
 SOURCES := \
-    _crt.c \
     console.c \
     cpu.c \
     crash.c \
@@ -28,9 +27,7 @@ TGT_LDFLAGS := -T kernel/kernel.ld
 OBJCOPYFLAGS := --only-section=.text
 
 LINKLIBS := \
-    lib/libc.a \
-    lib/libgcc.a \
-    lib/libos.a \
+    lib.a \
 
 $(eval $(call add-linklibs,${LINKLIBS}))
 # TODO: do this automatically when LINKLIBS set?

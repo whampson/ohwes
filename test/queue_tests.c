@@ -1,4 +1,4 @@
-#include <char_queue.h>
+#include <queue.h>
 #include "test.h"
 
 void test_char_queue(void)

@@ -54,7 +54,12 @@ typedef int (*test_main)(void);
 extern void tmain(void);
 #endif
 
-extern void init(void);     // usermode entry point
+int init(void);     // usermode entry point
+
+static void basic_shell(void);
+static size_t /*
+    it is now my duty to completely
+*/  drain_queue(struct char_queue *q, char *buf, size_t bufsiz);
 
 static void enter_ring3(uint32_t entry, uint32_t stack);
 static void print_info(const struct boot_info *info);
@@ -82,9 +87,11 @@ __fastcall void kmain(const struct boot_info *info)
     memcpy(&g_boot, info, sizeof(struct boot_info));
     info = &g_boot;     // reassign ptr so we don't lose access to the data
 
+    init_cpu(&g_boot);
     init_pic();
     init_irq();
     init_vga();
+    init_tasks();
     init_console();     // safe to print now
 
     kprint("\n" OS_NAME " " OS_VERSION ", build " OS_BUILDDATE "\n");
@@ -93,36 +100,149 @@ __fastcall void kmain(const struct boot_info *info)
     print_info(&g_boot);
 #endif
 
-    init_cpu(&g_boot);
+
     init_ps2(&g_boot);
     init_kb();
     init_memory(&g_boot);
     init_timer();
     init_rtc();
-    init_tasks();
-
-#ifdef DEBUG
-    g_test_crash_kernel = 0;
-    irq_register(IRQ_RTC, debug_interrupt);
-#endif
-
-    // ----------------------------------------------------------------------
-    // TODO: eventually this should load a program called 'init'
-    // that forks itself and spawns the shell program
-    // (if we're following the Unix model)
-
-#if TEST_BUILD
-    kprint("boot: TEST BUILD\n");
-    uint32_t ring3_base = TEST_BASE;
-#else
-    uint32_t ring3_base = INIT_BASE;
-#endif
-
-    assert(info->init_size > 0);
-    assert(info->init_size <= 0x10000);
 
     kprint("boot: entering ring3...\n");
-    enter_ring3(ring3_base, USER_STACK_PAGE + PAGE_SIZE);
+    enter_ring3((uint32_t) init, USER_STACK_PAGE + PAGE_SIZE);  // TODO: page privilege
+}
+
+int init(void)
+{
+
+//
+// Runs in ring 3.
+//
+    assert(getpl() == USER_PL);
+
+    // TODO: load shell program from disk
+
+    printf("\e4\e[5;33mHello, world!\e[m\n");
+    basic_shell();
+
+    return 0;
+}
+
+static void basic_shell(void)
+{
+#define INPUT_LEN 128
+
+    char _lineq_buf[INPUT_LEN];   // TOOD: NEED AN ALLOCATOR
+    struct char_queue _lineq;
+    struct char_queue *lineq = &_lineq;
+
+    char line[INPUT_LEN];
+
+    char c;
+    int count;
+    const char *prompt = "&";
+
+    char_queue_init(lineq, _lineq_buf, sizeof(_lineq_buf));
+
+    while (true) {
+        // read a line
+        printf(prompt);
+        line[0] = '\0';
+
+    read_char:
+        // read a character
+        count = read(stdin_fd, &c, 1);
+        if (count == 0) {
+            panic("read returned 0!");
+        }
+        assert(count == 1);
+
+        //
+        // TODO: all this line processing stuff needs to go in the terminal line discipline
+        //
+
+        // handle special characters and translations
+        switch (c) {
+            case '\b':      // ECHOE
+                break;
+            case '\r':
+                c = '\n';   // ICRNL
+                break;
+            case 3:
+                exit(1);    // CTRL+C
+                break;
+            case 4:
+                exit(0);    // CTRL+D
+                break;
+        }
+
+        bool full = (char_queue_count(lineq) == char_queue_length(lineq) - 1);    // allow one space for newline
+
+        // put translated character into queue
+        if (c == '\b') {
+            if (char_queue_empty(lineq)) {
+                printf("\a");       // beep!
+                goto read_char;
+            }
+            c = char_queue_erase(lineq);
+            if (iscntrl(c)) {
+                printf("\b");
+            }
+            printf("\b");
+            goto read_char;
+        }
+        else if (c == '\n' || !full) {
+            char_queue_put(lineq, c);
+        }
+        else if (full) {
+            printf("\a");       // beep!
+            goto read_char;
+        }
+
+        assert(!char_queue_full(lineq));
+
+        // echo char
+        if (iscntrl(c) && c != '\t' && c != '\n') {
+            printf("^%c", 0x40 ^ c);        // ECHOCTL
+        }
+        else {
+            printf("%c", c);                // ECHO
+        }
+
+        // next char if not newline
+        if (c != '\n') {
+            goto read_char;
+        }
+
+        // get and print entire line
+        size_t count = drain_queue(lineq, line, sizeof(line));
+        if (strncmp(line, "\n", count) != 0) {
+            printf("%.*s", count, line);
+        }
+
+        //
+        // process command line
+        //
+        if (strncmp(line, "cls\n", count) == 0) {
+            printf("\033[2J");
+        }
+        if (strncmp(line, "exit\n", count) == 0) {
+            exit(0);
+        }
+    }
+}
+
+static size_t drain_queue(struct char_queue *q, char *buf, size_t bufsiz)
+{
+    size_t count = 0;
+    while (!char_queue_empty(q) && bufsiz--) {
+        *buf++ = char_queue_get(q);
+        count++;
+    }
+
+    if (bufsiz > 0) {
+        *buf = '\0';
+    }
+    return count;
 }
 
 static void enter_ring3(uint32_t entry, uint32_t stack)
@@ -142,12 +262,11 @@ static void enter_ring3(uint32_t entry, uint32_t stack)
     regs.es = USER_DS;
     regs.ebp = stack;
     regs.esp = stack;
-    regs.eip = (uint32_t) entry;
+    regs.eip = entry;
     regs.eflags = eflags._value;
 
     // drop to ring 3
     switch_context(&regs);
-    die();
 }
 
 static void print_info(const struct boot_info *info)

@@ -13,34 +13,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: lib/libc/stdio.c
- *      Created: January 4, 2024
+ *         File: lib/syscall.c
+ *      Created: June 19, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#include <stdio.h>
-#include <fs.h>
+#include <errno.h>
 #include <syscall.h>
 
-void stdout_fn(char c)
-{
-    write(stdout_fd, &c, 1);
-}
-
-int putchar(int c)
-{
-    // TODO: write to stdout, return EOF on error
-    stdout_fn(c);
-    return c;
-}
-
-int puts(const char *str)
-{
-    // TODO: write to stdout, return EOF on error
-    while (*str) {
-        stdout_fn(*str++);
-    }
-    stdout_fn('\n');
-    return 1;
-}
+//
+// system call linkage
+//
+_syscall1(exit, int,status)
+_syscall3(read, int,fd, void*,buf, size_t,count)
+_syscall3(write, int,fd, const void*,buf, size_t,count)
+_syscall2(open, const char*,name, int,flags)
+_syscall1(close, int,fd)
+_syscall3(ioctl, int,fd, unsigned int,cmd, void*,arg)
