@@ -1,7 +1,7 @@
 # debug build toggle and params
 DEBUG           := 1
 DEBUGOPT        := 1
-TEST_BUILD      := 1
+TEST_BUILD      := 0
 GLOBAL_FLAGS    := -Wall -Werror
 
 ifeq "${TEST_BUILD}" "1"
