@@ -50,5 +50,8 @@
         "Hampson",
         "ohwes"
     ],
-    "makefile.makePath": "make"
+    "makefile.makePath": "make",
+    "vscode-nmake-tools.workspaceBuildDirectories": [
+        "."
+    ]
 }

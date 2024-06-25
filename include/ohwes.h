@@ -29,6 +29,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <string.h>
 #include <panic.h>
 #include <debug.h>
@@ -52,12 +53,6 @@ extern void pcspk_beep(int freq, int millis);  // see timer.c
 
 #define beep(f,ms)                      pcspk_beep(f, ms)   // beep at frequency for millis (nonblocking)
 #define sleep(ms)                       timer_sleep(ms)     // spin for millis (blocking)
-
-#define reboot()                        \
-do {                                    \
-    ps2_cmd(PS2_CMD_SYSRESET);          \
-    die();                              \
-} while (0)
 
 #define die()                           ({ kprint("system halted"); for (;;); }) // spin forever, satisfies __noreturn
 #define spin(cond)                      while (cond) { }    // spin while cond == true, TODO: THIS NEEDS TO HAVE A TIMEOUT!!

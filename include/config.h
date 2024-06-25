@@ -35,7 +35,6 @@
 //
 // static memory
 //
-
 #define ZERO_PAGE                       0x0000      //  0x0000 - 0x0FFF
 #define SYSTEM_CPU_PAGE                 0x1000      //  0x1000 - 0x1FFF
 #define SYSTEM_PAGE_DIRECTORY           0x2000      //  0x2000 - 0x2FFF

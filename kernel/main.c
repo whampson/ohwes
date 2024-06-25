@@ -73,7 +73,7 @@ struct boot_info g_boot;
 
 __fastcall void kmain(const struct boot_info *info)
 {
-    // --- Crude Memory Map upon entry ---
+    // --- Memory Map upon entry ---
     // 0x00000-0x004FF: reserved for Real Mode IVT and BDA (do we still need this?)
     // 0x00500-0x007FF: ACPI memory map table
     // 0x00800-0x00FFF: CPU data area (GDT/IDT/LDT/TSS/etc.)

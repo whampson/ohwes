@@ -18,15 +18,15 @@
 #       Author: Wes Hampson
 #  Environment: 16-bit Real Mode
 #
-# Stage 1 boot loader, also known as the boot sector. This code lives in the
-# first addressable sector of the boot disk. It's sole purpose is to load stage
-# 2 of the boot process (which does more system initialization before loading
-# the kernel). Space is important here, as we only have 512 bytes to work with,
-# 64 of which are reserved by the FAT12 File System, leaving only 448 bytes for
-# our boot code/data. Any labels defined globally here will be accessible by
-# the 16-bit Real Mode portion of stage 2.
+# Stage 1 boot loader. This code lives in the first addressable sector of the
+# boot disk, also known as the boot sector. It's sole purpose is to load stage
+# 2 of the boot loader (which collects system information before loading the
+# kernel image). Space is important here, as we only have 512 bytes to work
+# with, 64 of which are reserved by the FAT12 File System, leaving only 448
+# bytes for our boot code/data. Any labels defined globally here will be
+# accessible by the 16-bit Real Mode portion of stage 2.
 #
-# Designed for a 1.44MB floppy with 512-byte sectors and a FAT12 file system.
+# Designed for a 1.44MB floppy with 512-byte sectors formatted with FAT12.
 # =============================================================================
 
 #include <boot.h>
@@ -47,83 +47,78 @@
 # FAT parameters in a known location. We are given exactly three bytes to jump
 # to the next section of code which follows the parameter table.
 ##
-.globl Entry
-Entry:
-        jmp     Stage1
+.globl entry
+entry:
+        jmp     stage1
         nop
 
 ##
 # BIOS Parameter Block for a FAT12-formatted 3.5" 1.44MB floppy disk.
 # DO NOT MOVE THIS. Tweak with care.
 ##
-.globl g_Bpb
-g_Bpb:
-  m_OemName:            .ascii          "WHAM!SON"
-  m_SectorSize:         .short          512
-  m_SectorsPerCluster:  .byte           1
-  m_ReservedSectors:    .short          1
-  m_FatCount:           .byte           2
-  m_RootDirCapacity:    .short          224
-  m_SectorCount:        .short          2880
-  m_MediaType:          .byte           0xF0
-  m_SectorsPerFat:      .short          9
-  m_SectorsPerTrack:    .short          18
-  m_HeadCount:          .short          2
-  m_HiddenSectors:      .int            0
-  m_SectorCount32:      .int            0
-  m_DriveNumber:        .byte           0
-  _Reserved:            .byte           0
-  m_Signature:          .byte           0x29
-  m_VolumeId:           .int            0xCA55E77E
-  m_Label:              .ascii          "OH-WES     "
-  m_FsType:             .ascii          "FAT12   "
+.globl bios_param_block
+bios_param_block:
+  oem_name:                 .ascii          "WHAM!SON"
+  sector_size:              .short          512
+  sectors_per_cluster:      .byte           1
+  reserved_sectors:         .short          1
+  fat_count:                .byte           2
+  root_dir_capacity:        .short          224
+  sector_count:             .short          2880
+  media_type:               .byte           0xF0
+  sectors_per_fat:          .short          9
+  sectors_per_track:        .short          18
+  head_count:               .short          2
+  hidden_sectors:           .int            0
+  sector_count32:           .int            0
+  drive_number:             .byte           0
+  _reserved:                .byte           0
+  extended_boot_signature:  .byte           0x29
+  volume_id:                .int            0xCA55E77E
+  volume_label:             .ascii          "OH-WES     "
+  fs_type:                  .ascii          "FAT12   "
 
 ##
 # Initial boot loader code.
 # Gotta be tight; file must assemble to no more than 512 bytes!
 #
-# We start off executing at 0x7C00 in 16-bit Real Mode. We load BOOT.SYS at
-# 0x7E00, immediately after the boot sector in memory, then jump to the stage 2
-# code.
+# We start off executing at 0x7C00 in 16-bit Real Mode. We disable interrupts,
+# set up our segment registers, then locate BOOT.SYS (stage 2) on disk. We load
+# stage 2 far away at 0x90000 so it doesn't get overwritten by our kernel image.
 ##
-Stage1:
-        cli                             # no interrupts!
-        xorw    %ax, %ax                # set up segment regs
-        movw    %ax, %ds                # ds = 0
-        movw    %ax, %es                # es = 0
-        movw    %ax, %fs                # fs = 0
-        movw    $BDA_SEGMENT, %ax
-        movw    %ax, %gs                # gs = (BIOS Data Area segment)
-        movw    $STACK_SEGMENT, %ax
-        movw    %ax, %ss                # ss = (Stack Segment)
-        movw    $STACK_OFFSET, %bp
-        movw    %bp, %sp
-        movw    $RESETFLAG_WARMBOOT, %gs:BDA_RESETFLAG
+stage1:
+        # setup
+        cli
+        xorw            %ax, %ax
+        movw            %ax, %ds
+        movw            %ax, %es
+        movw            %ax, %fs
+        LOAD_SEGREG     $BDA_SEGMENT, %gs
 
-LoadRootDir:
-        movw    m_RootDirCapacity, %cx  # calculate root dir size
-        shlw    $5, %cx                 #   maxentries*32
-        movw    m_SectorsPerFat, %ax    # calculate root dir start sector
-        mulb    m_FatCount              #   nreserved+(nfatsectors*nfats)
-        addw    m_ReservedSectors, %ax
-        movw    %ax, g_FirstCluster     # store the sector index for later
-        decw    %cx                     # caclulate num sectors to read
-        shrw    $9, %cx                 #   ((nbytes-1)/512)+1
-        incw    %cx                     # first data cluster immediately follows
-        addw    %cx, g_FirstCluster     #   root dir, add nsectors here
-        movw    $ROOTDIR_BASE, %bx      # root dir base addr
-        call    LoadSectors             # read root dir
+        # load the root directory
+        movw            root_dir_capacity, %cx  # calculate root dir size:
+        shlw            $DIRENTRY_SHIFT, %cx    #  capacity*sizeof(dir_entry)
+        movw            sectors_per_fat, %ax    # calculate start sector:
+        mulb            fat_count               #  nreserved+(nfatsectors*nfats)
+        addw            reserved_sectors, %ax
+        movw            %ax, first_cluster
+        decw            %cx                     # caclulate num sectors to read:
+        shrw            $SECTOR_SHIFT, %cx      #  nsectors=((nbytes-1)/512)+1
+        incw            %cx
+        addw            %cx, first_cluster      # 1st cluster follows root dir
+        movw            $ROOTDIR_BASE, %bx
+        call            load_sectors             # read root dir
 
-LoadStage2:
-        leaw    sz_Stage2FileName, %si
-        call    FindFile                # returns: di = dir entry ptr
-        movl    DIRENTRY_FILESIZE(%di), %ecx
-        pushl   %ecx                    # put stage2 size on stack
-        movw    $STAGE2_BASE, %bx
-        call    LoadFile                # load stage 2!
+        # load stage 2 binary
+        leaw            sz_stage2_filename, %si
+        call            find_file                # returns: di = dir entry ptr
+        movl            FILESIZE(%di), %ecx
+        pushl           %ecx                    # put stage2 size on stack
+        movw            $STAGE2_BASE, %bx
+        call            load_file                # load stage 2!
 
-GoToStage2:
-        jmp     Stage2                  # let's go...!
+        # continue...
+        jmp             stage2
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
@@ -131,13 +126,17 @@ GoToStage2:
 
 ##
 # -----------------------------------------------------------------------------
-# FindFile
+# find_file
 # -----------------------------------------------------------------------------
-# Locates the directory entry of a file in the root directory given a file name.
-# If the file cannot be found, the system will enter an error state.
+# Given a file name, locates the directory entry of the file in the root
+# directory. If the file cannot be found, the system will halt in an error
+# state.
 #
-# WARNING: ASSUMES FILE IS NOT FRAGMENTED!
-#          This routine does not follow the cluster chain by reading the FAT.
+# WARNINGS:
+#     - ASSUMES ROOT DIRECTORY IS ALREADY LOADED AT A KNOWN ADDRESS!
+#     - ASSUMES FILE IS NOT FRAGMENTED! In order to preserve space, this
+#       function does not read the cluster map, so a fragmented file cannot be
+#       loaded.
 #
 # Inputs:
 #       ds:si - file name ptr, e.g. "FILE    TXT"
@@ -148,88 +147,87 @@ GoToStage2:
 # Clobbers:
 #       ax, bx, cx, dx
 ##
-.globl FindFile
-FindFile:
-        pushw   %bp
-        movw    %sp, %bp
+.globl find_file
+find_file:
+        pushw           %bp
+        movw            %sp, %bp
 
-        pushw   %es                     # bp-2: old es
-        movw    %ds, %ax
-        movw    %ax, %es                # ensure es == ds (for cmpsb)
+        pushw           %es                     # bp-2: old es
+        movw            %ds, %ax
+        movw            %ax, %es                # ensure es == ds (for cmpsb)
 
-        movw    $ROOTDIR_BASE, %di      # start at the top of the root dir
-        movw    m_RootDirCapacity, %bx  # loop count
-        cld                             # clear direction flag
+        movw            $ROOTDIR_BASE, %di      # start at top of root dir
+        movw            root_dir_capacity, %bx  # loop count
+        cld                                     # clear direction flag
 
-_FindFile_Loop:
-        pushw   %si                     # bp-4: file name to be searched for
-        pushw   %di                     # bp-6: dir ptr, offset 0 is file name
-        movw    $11, %cx                # file name length
-   repe cmpsb                           # match?
-        jz      _FindFile_Done          #  yep! we're done
-        popw    %di                     # otherwise:
-        popw    %si                     #   pop vars
-        addw    $32, %di                #   advance ptr
-        decw    %bx                     #   decrement loop counter
-        jz      FileNotFound            # zero? file not found!
-        jmp     _FindFile_Loop          # otherwise: keep searchin'
+_find_file_loop:
+        pushw           %si                     # bp-4: file name to look for
+        pushw           %di                     # bp-6: dir ptr, ptr[0]=filename
+        movw            $FILENAME_LENGTH, %cx
+   repe cmpsb                                   # match?
+        jz              _find_file_done         #  yep! we're done
+        popw            %di                     # otherwise:
+        popw            %si                     #  pop vars
+        addw            $DIRENTRY_SIZE, %di     #  advance ptr
+        decw            %bx                     #  decrement loop counter
+        jz              disk_error              # zero? file not found!
+        jmp             _find_file_loop         # otherwise: keep searchin'
 
-_FindFile_Done:
-        movw    -6(%bp), %di            # output the dir entry ptr
-        movw    -2(%bp), %ax            # restore old es
-        movw    %ax, %es
+_find_file_done:
+        movw            -6(%bp), %di            # output dir entry ptr
+        movw            -2(%bp), %ax            # restore old es
+        movw            %ax, %es
 
         leave
         ret
 ##
 # -----------------------------------------------------------------------------
-# LoadFile
+# load_file
 # -----------------------------------------------------------------------------
 # Loads a file from disk given a directory entry.
 #
-# NOTES:
-#     - File must be contiguous! In order to preserve space, this function does
-#       not read the cluster map, so a fragmented file cannot be loaded.
-#     - Destination buffer cannot cross a segment boundary. This means the
-#       maximum loadable file size is 64k.
+# WARNINGS:
+#     - ASSUMES FILE IS NOT FRAGMENTED! In order to preserve space, this
+#       function does not read the cluster map, so a fragmented file cannot be
+#       loaded.
 #
 # Inputs:
 #       es:bx - destination buffer
 #       ds:di - dir entry ptr
 #
+# Outputs:
+#       [es:bx] - data written to buffer
+#
 # Clobbers:
 #       ax, bx, ecx, dx
 ##
-.globl LoadFile
-LoadFile:
-        pushw   %bp
-        movw    %sp, %bp
+.globl load_file
+load_file:
+        pushw           %bp
+        movw            %sp, %bp
 
-        movw    DIRENTRY_CLUSTER(%di), %ax # first cluster for file
-        subw    $2, %ax                 # cluster indices 0 and 1 reserved
-        movl    DIRENTRY_FILESIZE(%di), %ecx # file size in bytes
+        movw            CLUSTER(%di), %ax       # first cluster for file
+        subw            $CLUSTER_NUM_OFFSET, %ax
+        movl            FILESIZE(%di), %ecx     # file size in bytes
 
-        decl    %ecx                    # calculate num clusters to read
-        shrl    $9, %ecx                #  ((nbytes-1)/512)+1
-        incw    %cx
-        xchgw   %ax, %cx                # convert nclusters to nsectors
-        mulb    m_SectorsPerCluster     #  nclusters = (nsectors*spt)
-        xchgw   %ax, %cx
-        addw    g_FirstCluster, %ax     # calculate absolute sector address
+        decl            %ecx                    # calculate num clusters to read
+        shrl            $SECTOR_SHIFT, %ecx     #  nsectors=((nbytes-1)/512)+1
+        incw            %cx
+        xchgw           %ax, %cx                # convert nclusters to nsectors
+        mulb            sectors_per_cluster     #  nclusters=(nsectors*spt)
+        xchgw           %ax, %cx
+        addw            first_cluster, %ax      # calculate abs. sector address
 
-        call    LoadSectors             # read it in!
+        call            load_sectors            # read it in!
 
         leave
         ret
 
 ##
 # -----------------------------------------------------------------------------
-# LoadSectors
+# load_sectors
 # -----------------------------------------------------------------------------
-# Reads one or more sectors from the primary disk drive into a buffer.
-# In this case, the primary disk drive is floppy drive 0.
-#
-# NOTE: Function will fail if the destination buffer crosses a segment boundary!
+# Reads one or more sectors from the boot disk into a buffer.
 #
 # Inputs:
 #       es:bx - buffer address
@@ -239,69 +237,66 @@ LoadFile:
 # Clobbers:
 #       ax, bx, cx, dx
 ##
-.globl LoadSectors
-LoadSectors:
-        pushw   %bp
-        movw    %sp, %bp
+.globl load_sectors
+load_sectors:
+        pushw           %bp
+        movw            %sp, %bp
 
-        pushw   %bx                     # bp-2: buffer
-        pushw   %ax                     # bp-4: lba
-        pushw   %cx                     # bp-6: count
-        pushw   $RETRY_COUNT            # bp-8: nretries
+        pushw           %bx                     # bp-2: buffer
+        pushw           %ax                     # bp-4: lba
+        pushw           %cx                     # bp-6: count
+        pushw           $RETRY_COUNT            # bp-8: nretries
 
-_LoadSectors_Loop:
-        decw    -8(%bp)                 # --nretries
-        movw    -4(%bp), %ax            # ax = logical block address
-        call    LbaToChs                # returns: cx=cyl, dh=head, dl=sect
+_load_sectors_loop:
+        decw            -8(%bp)                 # --nretries
+        movw            -4(%bp), %ax            # ax = lba
+        call            lba2chs                 # ret: cx=cyl, dh=head, dl=sect
 
         # combine cylinder and sector into cx like below:
         #   cx =       ---ch--- ---cl---
         #   cylinder : 76543210 98
         #   sector   :            543210
-        xchgb   %cl, %ch
-        rorb    $2, %cl
-        orb     %dl, %cl
+        xchgb           %cl, %ch
+        rorb            $2, %cl
+        orb             %dl, %cl
 
-        movw    -2(%bp), %bx            # es:bx=buffer
-        movb    m_DriveNumber, %dl      # dl=drive
-        movb    $1, %al                 # al=count
-        movb    $0x02, %ah              # ah=fn:LoadSectors
-        int     $0x13                   # ch=cyl, dh=head, cl=sect
-        jnc     _LoadSectors_Next       # read error if carry flag set
+        movw            -2(%bp), %bx            # es:bx=buffer
+        movb            drive_number, %dl       # dl=drive
+        movb            $1, %al                 # al=count
+        movb            $0x02, %ah              # ah=fn (load_sectors)
+        int             $0x13                   # cx=cyl/sect, dh=head
+        jnc             _load_sectors_check_wrap# error if carry flag set
+        cmpw            $0, -8(%bp)
+        jz              disk_error              # fail if no retries left
+        jmp             _load_sectors_loop      # otherwise try again!
 
-        cmpw    $0, -8(%bp)             # fail if no retries left
-        jz      DiskError
-        jmp     _LoadSectors_Loop
+_load_sectors_check_wrap:
+        PRINT           sz_progress_char
+        movw            -2(%bp), %bx            # save old buf
+        movw            sector_size, %ax        # buf += sector_size
+        addw            %ax, -2(%bp)
+        cmpw            %bx, -2(%bp)            # if CF set, we wrapped
+        jnc             _load_sectors_loop_tail # otherwise continue on!
 
-_LoadSectors_Next:
-        PRINT   sz_ProgressChar          # visual feedback that it's working!
+_load_sectors_inc_segreg:
+        movw            %es, %ax
+        addw            $SEGMENT_SIZE>>4, %ax
+        movw            %ax, %es
 
-        movw    -2(%bp), %bx            # save old buf
-        movw    m_SectorSize, %ax
-        addw    %ax, -2(%bp)            # buf += m_SectorSize
-        cmpw    %bx, -2(%bp)            # did we wrap? (64k)
-        jnc     _LoadSectors_Continue   #   if not, continue on
+_load_sectors_loop_tail:
+        movw            $RETRY_COUNT, -8(%bp)   # reset nretries
+        incw            -4(%bp)                 # ++lba
+        decw            -6(%bp)                 # --count
+        jz              _load_sectors_Done      # done if count == 0
+        jmp             _load_sectors_loop
 
-_LoadSectors_IncSegReg:                 # otherwise increment the segment reg
-        movw    %es, %ax
-        addw    $0x1000, %ax
-        movw    %ax, %es
-
-_LoadSectors_Continue:
-        movw    $RETRY_COUNT, -8(%bp)   # reset nretries
-        incw    -4(%bp)                 # ++lba
-        decw    -6(%bp)                 # --count
-
-        jz      _LoadSectors_Done       # done if count == 0
-        jmp     _LoadSectors_Loop
-
-_LoadSectors_Done:
+_load_sectors_Done:
         leave
         ret
 
 ##
 # -----------------------------------------------------------------------------
-# LbaToChs
+# lba2chs
 # -----------------------------------------------------------------------------
 # Converts a Logical Block Address into a Cylinder-Head-Sector address.
 #
@@ -316,8 +311,8 @@ _LoadSectors_Done:
 # Clobbers:
 #       ax, bx, cx, dx
 ##
-.globl LbaToChs
-LbaToChs:
+.globl lba2chs
+lba2chs:
         # TEST DATA -- disk with 2 heads, 80 tracks, and 18 sectors per track:
         #  LBA = C,H,S
         #   0  = 0,0,1
@@ -332,31 +327,31 @@ LbaToChs:
         # 2880 = 80,0,1
 
         # C = LBA / (HPC * SPT)
-        movw    %ax, %cx                # save lba for later
-        movw    m_SectorsPerTrack, %bx  # bx = spt
-        imulw   m_HeadCount, %bx        # bx = hpc * spt
-        xorw    %dx, %dx                # clear dx
-        idivw   %bx                     # ax = dx:ax / bx
-        pushw   %ax                     # save cylinder for later
+        movw            %ax, %cx                # save lba for later
+        movw            sectors_per_track, %bx  # bx = spt
+        imulw           head_count, %bx         # bx = hpc*spt
+        xorw            %dx, %dx                # clear dx
+        idivw           %bx                     # ax = dx:ax/bx
+        pushw           %ax                     # save cylinder for later
 
         # H = (LBA / SPT) mod HPC
         # S = (LBA mod SPT) + 1
-        xorw    %dx, %dx                # clear dx
-        movw    %cx, %ax                # ax = lba
-        idivw   m_SectorsPerTrack       # ax = dx:ax / spt, dx = dx:ax mod spt
-        incw    %dx                     # +1
-        movb    %dl, %cl                # save head for later
-        xorw    %dx, %dx                # clear dx
-        idivw   m_HeadCount             # dx = dx:ax mod hpc (ax = lba / spt)
-        movb    %dl, %dh                # dh = head
-        movb    %cl, %dl                # dl = sector
-        popw    %cx                     # cx = cylinder
+        xorw            %dx, %dx                # clear dx
+        movw            %cx, %ax                # ax = lba
+        idivw           sectors_per_track       # ax = lba/spt, dx=lba%spt
+        incw            %dx                     # +1
+        movb            %dl, %cl                # save head for later
+        xorw            %dx, %dx                # clear dx
+        idivw           head_count              # dx = (lba/spt)%hpc
+        movb            %dl, %dh                # dh = head
+        movb            %cl, %dl                # dl = sector
+        popw            %cx                     # cx = cylinder
 
         ret
 
 ##
 # -----------------------------------------------------------------------------
-# PrintStr
+# print_string
 # -----------------------------------------------------------------------------
 # Prints a zero-terminated string at the current curusor location and
 # advances the cursor.
@@ -367,22 +362,23 @@ LbaToChs:
 # Clobbers:
 #       ax, bx, si
 ##
-.globl PrintStr
-PrintStr:
-        xorw    %ax, %ax
-        movb    $0x0E, %ah
-        movw    $0x07, %bx
+.globl print_string
+print_string:
+        xorw            %ax, %ax
+        movb            $0x0E, %ah
+        movw            $0x07, %bx
         lodsb
-        andb    %al, %al
-        jz      _PrintStr_done
-        int     $0x10
-        jmp     PrintStr
-_PrintStr_done:
+        andb            %al, %al
+        jz              _print_string_done
+        int             $0x10
+        jmp             print_string
+
+_print_string_done:
         ret
 
 ##
 # -----------------------------------------------------------------------------
-# ReadKey
+# readkey
 # -----------------------------------------------------------------------------
 # Waits for keyboard input.
 #
@@ -392,74 +388,60 @@ _PrintStr_done:
 # Clobbers:
 #       ah
 ##
-.globl ReadKey
-ReadKey:
-        xorb    %ah, %ah
-        int     $0x16
+.globl readkey
+readkey:
+        xorb            %ah, %ah
+        int             $0x16
         ret
 
 ##
 # -----------------------------------------------------------------------------
-# ReadKeyThenReset
+# readkey_then_reset
 # -----------------------------------------------------------------------------
 # Waits for keyboard input, then resets the machine.
 ##
-.globl ReadKeyThenReset
-ReadKeyThenReset:
-        PRINT   sz_KeyPress
-        call    ReadKey
-        jmp     Reset
+.globl readkey_then_reset
+readkey_then_reset:
+        PRINT           sz_try_again
+        call            readkey
+        jmp             reset
 
 ##
 # -----------------------------------------------------------------------------
-# Reset
+# reset
 # -----------------------------------------------------------------------------
-# Performs a warm boot by jumping to the CPU reset vector.
+# Performs a soft reset by jumping to the CPU reset vector.
 ##
-.globl Reset
-Reset:
-        ljmp    $0xFFFF, $0x0000
+.globl reset
+reset:
+        movw            $WARMBOOT, %gs:BDA_RESETFLAG
+        ljmp            $0xFFFF, $0x0000
 
 ##
 # -----------------------------------------------------------------------------
-# DiskError
+# disk_error
 # -----------------------------------------------------------------------------
 # Prints a disk error message, waits for a key press, then resets the system.
 ##
-.globl DiskError
-DiskError:
-        PRINT   sz_DiskError
-        jmp     ReadKeyThenReset
-
-##
-# -----------------------------------------------------------------------------
-# FileNotFound
-# -----------------------------------------------------------------------------
-# Prints a disk error message, waits for a key press, then resets the system.
-##
-.globl FileNotFound
-FileNotFound:
-        PRINT   sz_FileNotFound
-        jmp     ReadKeyThenReset
+.globl disk_error
+disk_error:
+        PRINT           sz_disk_error
+        jmp             readkey_then_reset
 
 # -----------------------------------------------------------------------------
 # ------------------------------ Padding & Data -------------------------------
 # -----------------------------------------------------------------------------
 
-g_FirstCluster:
-        .word   0
-sz_ProgressChar:
-        .asciz  "."
-sz_Stage2FileName:
-        .asciz  "BOOT    SYS"
-sz_DiskError:
-        .asciz  "\r\nDiskette read error!"
-sz_FileNotFound:
-        .asciz  "\r\nFile not found!"
-sz_KeyPress:
-        .asciz  "\r\nPress any key to try again..."
+first_cluster:
+        .word           0
+sz_progress_char:
+        .asciz          "."
+sz_stage2_filename:
+        .asciz          "BOOT    SYS"
+sz_disk_error:
+        .asciz          "\r\nDisk error!"
+sz_try_again:
+        .asciz          "\r\nPress any key to try again..."
 
-# pad the remaining space up to the size of a sector (512 bytes)
-# TODO: find way to error if assembly >510
-.space          0x1FE - (. - Entry), 0xCC       # pad with debugbreak opcode
-.short          0xAA55                          # boot sector indicator
+.space                  0x1FE - (. - entry), 0xCC       # pad with debugbreak
+.short                  0xAA55                          # boot sector indicator

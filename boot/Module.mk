@@ -11,7 +11,7 @@ SOURCES = \
 	stage1.S \
 	stage2.S \
 
-TGT_LDFLAGS := -Ttext 0x7C00 -e Entry
+TGT_LDFLAGS := -Ttext 0x7C00 -e entry
 
 ###
 # split boot.elf into boot.bin, bootsect.bin and boot.sys

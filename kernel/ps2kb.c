@@ -392,7 +392,8 @@ static void kb_interrupt(void)
         case KEY_DELETE:
         case KEY_KPDOT:
             if (g_kb->ctrl && g_kb->alt) {
-                reboot();
+                ps2_cmd(PS2_CMD_SYSRESET);
+                for (;;);
             }
             break;
     }

@@ -640,41 +640,6 @@ __asm__ volatile (                                                          \
 )
 
 /**
- * Saves the EFLAGS register, then clears interrupts.
- *
- * @param flags - a 32-bit number used for storing the EFLAGS register;
- *                note this NOT a pointer, due to the way GCC inline assembly
- *                handles parameters
- */
-#define cli_save(flags)                                                     \
-__asm__ volatile (                                                          \
-    "                                                                       \n\
-    pushfl                                                                  \n\
-    popl %0                                                                 \n\
-    cli                                                                     \n\
-    "                                                                       \
-    : "=r"(flags)                                                           \
-    :                                                                       \
-    : "cc"                                                                  \
-)
-
-/**
- * Sets the EFLAGS register.
- *
- * @param flags - a 32-bit number containing the EFLAGS to be set
- */
-#define restore_flags(flags)                                                \
-__asm__ volatile (                                                          \
-    "                                                                       \n\
-    push %0                                                                 \n\
-    popfl                                                                   \n\
-    "                                                                       \
-    :                                                                       \
-    : "r"(flags)                                                            \
-    : "cc"                                                                  \
-)
-
-/**
  * Executes the CPUID instruction.
  *
  * @param eax CPUID command

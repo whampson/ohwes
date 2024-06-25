@@ -135,17 +135,17 @@ struct boot_info {
     uint32_t stage2_size;           // stage2 image size bytes
     intptr_t stack;                 // stack base upon leaving stage2
 
-    uint32_t kb_low;                // 1K pages 0 to 640K (BIOS INT 12h)
-    uint32_t kb_high;               // 1K pages 1M to 16M (BIOS INT 15h,AX=88h)
-    uint32_t kb_high_e801h;         // 1K pages 1M to 16M (BIOS INT 15h,AX=E801h)
-    uint32_t kb_extended;           // 64K pages 16M to 4G (BIOS INT 15h,AX=E801h)
-    const acpi_mmap_t *mem_map;     // ACPI Memory Map (BIOS INT 15h,AX=E820h)
+    uint32_t kb_low;                // 1K blocks 0 to 640K (INT 12h)
+    uint32_t kb_high;               // 1K blocks 1M to 16M (INT 15h,AX=88h)
+    uint32_t kb_high_e801h;         // 1K blocks 1M to 16M (INT 15h,AX=E801h)
+    uint32_t kb_extended;           // 64K blocks 16M to 4G (INT 15h,AX=E801h)
+    const acpi_mmap_t *mem_map;     // ACPI Memory Map (INT 15h,AX=E820h)
 
-    struct hwflags hwflags;         // system hardware flags (BIOS INT 11h)
+    struct hwflags hwflags;         // system hardware flags (INT 11h)
     uint32_t a20_mode;              // method used to enable A20 line, one of A20_*
-    uint32_t video_mode;            // VGA video mode (BIOS INT 10h,AH=0Fh)
-    uint32_t video_page;            // VGA active display page (BIOS INT 10h,AH=0Fh)
-    uint32_t video_cols;            // VGA column count (BIOS INT 10h,AH=0Fh)
+    uint32_t video_mode;            // VGA video mode (INT 10h,AH=0Fh)
+    uint32_t video_page;            // VGA active display page (INT 10h,AH=0Fh)
+    uint32_t video_cols;            // VGA column count (INT 10h,AH=0Fh)
     uint32_t cursor_start;          // VGA cursor scan line top
     uint32_t cursor_end;            // VGA cursor scan line bottom
     intptr_t framebuffer;           // memory-mapped VGA frame buffer

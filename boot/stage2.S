@@ -18,8 +18,12 @@
 #       Author: Wes Hampson
 #  Environment: 16-bit Real Mode (except for jump to Protected Mode)
 #
-# Gathers information about the system using the BIOS, then switches into
-# 32-bit Protected Mode with a flat memory model.
+# Stage 2 boot loader. This code is loaded by stage 1 and is responsible for
+# gathering as much information about the system as possible from the BIOS and
+# loading the kernel image before switching into the CPU inti 32-bit Protected
+# Mode. It then performs minimal Protected Mode CPU initialization before
+# jumping to the kernel entry point, passing along the collected system
+# information in a boot_info struct.
 # =============================================================================
 
 #include <boot.h>
@@ -36,12 +40,12 @@
 # -----------------------------------------------------------------------------
 
 ##
-# Stage 2 entry point.
+# Stage 2 entry point. We land here after jumping from stage 1.
 ##
-.globl Stage2
-Stage2:
-        popl    %ecx                    # ...we made it!
-        movl    %ecx, m_Stage2Size      # store stage2 size
+.globl stage2
+stage2:
+        popl    %ecx                    # pop stage2 size and store it
+        movl    %ecx, stage2_size
 
         call    CollectBootParams
         call    InitConsole
@@ -52,7 +56,7 @@ LoadKernel:
         leaw    sz_KernelFileName, %si  # locate the kernel image on disk
         call    FindFile                # returns: di = dir entry ptr
         movl    DIRENTRY_FILESIZE(%di), %ecx
-        movl    %ecx, m_KernelSize      # store kernel size
+        movl    %ecx, kernel_size      # store kernel size
         call    CheckKernelSize
 
         movw    $KERNEL_SEGMENT, %ax
@@ -94,16 +98,16 @@ Entry32:
         movw    %ax, %gs
 
 KernelParams:
-        movl    $KERNEL_BASE, m_KernelBase      # store the kernel base
+        movl    $KERNEL_BASE, kernel_base      # store the kernel base
         movl    $KERNEL_STACK_PAGE + PAGE_SIZE, %eax  # otherwise use default address
 
 SetupStack:
         movl    %eax, %ebp
-        movl    %ebp, m_StackBase               # store stack ptr in boot params
+        movl    %ebp, stack_base               # store stack ptr in boot params
         movl    %ebp, %esp
 
 EnterKernel:
-        movl    $g_BootParams, %ecx             # pass bootparams ptr to kernel
+        movl    $boot_info, %ecx             # pass bootparams ptr to kernel
         ljmpl   $BOOT_CS, $KERNEL_ENTRY         # bye bye bootloader!
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -126,8 +130,8 @@ EnterKernel:
 CollectBootParams:
         xorl    %eax, %eax
         int     $0x11
-        movw    %ax, m_HwFlags
-        movl    $STAGE2_BASE, m_Stage2Base
+        movw    %ax, hwflags
+        movl    $STAGE2_BASE, stage2_base
         movzwl  %gs:BDA_EBDA_ADDR, %ebx
         shll    $4, %ebx
         movl    %ebx, m_pEbda
@@ -150,14 +154,14 @@ CollectBootParams:
 # the BIOS again in Unreal Mode).
 ##
 CheckKernelSize:
-        movl    m_KernelSize, %ecx
+        movl    kernel_size, %ecx
         movl    $KERNEL_BASE, %eax
         cmpl    $0, m_pEbda
         jz      _NoEbda
         movl    m_pEbda, %ebx           # EBDA -> effective top of low memory
         jmp     _KernelSizeCheck
 _NoEbda:
-        movl    m_RamLo_Legacy, %ebx
+        movl    kb_low, %ebx
         shll    $10, %ebx
 _KernelSizeCheck:
         subl    %eax, %ebx              # Capacity = pTopOfMem - pKernelBase
@@ -181,7 +185,7 @@ InitConsole:
         movb    $0x0F, %ah      # store video page
         int     $0x10
         jc      _VgaError
-        movb    %bh, m_VideoPage
+        movb    %bh, video_page
 
         movb    $0x03, %ah      # store cursor position (bh=page)
         int     $0x10
@@ -216,7 +220,7 @@ InitConsole:
         // je      _VgaDone
         xorw    %ax, %ax
         movb    $0x02, %ah      # restore cursor position if screen not cleared
-        movb    m_VideoPage, %bh
+        movb    video_page, %bh
         movb    _m_CursorRow, %dh
         movb    _m_CursorColumn, %dl
         int     $0x10
@@ -226,9 +230,9 @@ _VgaDone:
         movb    $0x0F, %ah      # gather and store video params
         int     $0x10
         jc      _VgaError
-        movb    %al, m_VideoMode
-        movb    %bh, m_VideoPage
-        movb    %ah, m_VideoCols
+        movb    %al, video_mode
+        movb    %bh, video_page
+        movb    %ah, vga_cols
         movl    $0xB8000, m_pFrameBuffer
         movl    $((0xC0000 - 0xB8000) >> PAGE_SHIFT), m_FrameBufferPages
         ret
@@ -306,7 +310,7 @@ _DetectMemory_e820_Loop:
         movw    $0, -4(%edi)            # ...ensure it is stored as zero
         jmp     _DetectMemory_e820_Loop
 _DetectMemory_e820_End:
-        movl    $MEMMAP_BASE, m_pMemoryMap
+        movl    $MEMMAP_BASE, mem_map
 
 _DetectMemory_e820_Done:
         ret
@@ -330,8 +334,8 @@ DetectMemory_e801:
         movw    %cx, %ax
         movw    %dx, %bx
 _DetectMemory_e801_Store:
-        movw    %ax, m_RamLo_E801h  # contiguous RAM >1M in 1K blocks, up to 16M
-        movw    %bx, m_RamHi_E801h  # contiguous RAM >16M in 64K blocks
+        movw    %ax, kb_high_e801h  # contiguous RAM >1M in 1K blocks, up to 16M
+        movw    %bx, kb_extended  # contiguous RAM >16M in 64K blocks
 _DetectMemory_e801_Done:
         ret
 
@@ -351,13 +355,13 @@ DetectMemory_Legacy:
         je      _DetectMemory_Legacy_Lo
         cmpb    $0x86, %ah                     # (unsupported func)
         je      _DetectMemory_Legacy_Lo
-        movw    %ax, m_RamHi_Legacy            # contiguous RAM >1M in 1K blocks
+        movw    %ax, kb_high            # contiguous RAM >1M in 1K blocks
 
 _DetectMemory_Legacy_Lo:
         clc
         int     $0x12
         jc      _DetectMemory_Legacy_Error
-        movw    %ax, m_RamLo_Legacy            # contiguous RAM <1M in 1K blocks
+        movw    %ax, kb_low            # contiguous RAM <1M in 1K blocks
         jz      _DetectMemory_Legacy_Error
         ret
 
@@ -418,7 +422,7 @@ _TestA20_Done:
 _EnableA20_Bios:
         movw    $0x2401, %ax
         int     $0x15
-        movw    $A20_BIOS, m_A20Method
+        movw    $A20_BIOS, a20_method
         ret
 
 ##
@@ -430,7 +434,7 @@ _EnableA20_Port92h:
         orb     $0x02, %al          # A20 enable bit
         andb    $0xFE, %al          # clear (possible) reset flag
         outb    %al, $0x92
-        movw    $A20_FAST, m_A20Method
+        movw    $A20_FAST, a20_method
         ret
 
 ##
@@ -464,7 +468,7 @@ _EnableA20_Keyboard:
         outb    %al, $0x64
 
         call    KbOut_Wait      # (delay)
-        movw    $A20_KEYBOARD, m_A20Method
+        movw    $A20_KEYBOARD, a20_method
         ret
 
 KbOut_Wait:
@@ -524,36 +528,32 @@ GdtBase:
 
 
 ##
-# struct BootParams
+# struct boot_info
 ##
 .align 4
-.globl g_BootParams
-g_BootParams:
-  m_KernelBase:         .long   0
-  m_KernelSize:         .long   0
-  m_Stage2Base:         .long   0
-  m_Stage2Size:         .long   0
-  m_StackBase:          .long   0
+.globl boot_info
+boot_info:
+  kernel_base:          .long   0
+  kernel_size:          .long   0
+  stage2_base:          .long   0
+  stage2_size:          .long   0
+  stack_base:           .long   0
 
-  m_RamLo_Legacy:       .long   0
-  m_RamHi_Legacy:       .long   0
-  m_RamLo_E801h:        .long   0
-  m_RamHi_E801h:        .long   0
-  m_pMemoryMap:         .long   0
+  kb_low:               .long   0       # 1K blocks 0 to 640K (INT 12h)
+  kb_high:              .long   0       # 1K blocks 1M to 16M (INT 15h,AX=88h)
+  kb_high_e801h:        .long   0       # 1K blocks 1M to 16M (INT 15h,AX=E801h)
+  kb_extended:          .long   0       # 64K blocks 16M to 4G (INT 15h,AX=E801h)
+  mem_map:              .long   0       # ACPI Memory Map (INT 15h,AX=E820h)
 
-  m_HwFlags:            .long   0
-  m_A20Method:          .long   A20_NONE
-  m_VideoMode:          .long   0
-  m_VideoPage:          .long   0
-  m_VideoCols:          .long   0
+  hwflags:            .long   0
+  a20_method:          .long   A20_NONE
+  video_mode:          .long   0
+  video_page:          .long   0
+  vga_cols:          .long   0
   m_CursorStartLine:    .long   0
   m_CursorEndLine:      .long   0
   m_pFrameBuffer:       .long   0
   m_FrameBufferPages:   .long   0
-
-  m_pEbda:              .long   0
-
-  m_InitSize:           .long   0       # TEMP!!!
 
 ##
 # Strings
