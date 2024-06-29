@@ -50,7 +50,7 @@ if [ "$1" = "qemu" ]; then
         "$QEMU_PATH" $QEMU_FLAGS &
         gdb \
             -ex 'target remote localhost:1234' \
-            -ex 'add-symbol-file bin/boot/boot.elf' \
+            -ex 'add-symbol-file bin/boot.elf' \
             -ex 'lay src' -ex 'lay reg' \
             -ex 'b Entry' \
             -ex 'b Stage2' \
@@ -59,9 +59,8 @@ if [ "$1" = "qemu" ]; then
         "$QEMU_PATH" $QEMU_FLAGS &
         gdb \
             -ex 'target remote localhost:1234' \
-            -ex 'add-symbol-file bin/elf/kernel.elf' \
+            -ex 'add-symbol-file bin/kernel.elf' \
             -ex 'set confirm off' \
-            -ex 'add-symbol-file bin/elf/init.elf' \
             -ex 'lay src' -ex 'lay reg' \
             -ex 'b kmain'
     else

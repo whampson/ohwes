@@ -9,7 +9,7 @@ SOURCES := \
     i8042.c \
     irq.c \
     main.c \
-    memory.c \
+    mm.c \
     paging.c \
     pic.c \
     ps2kb.c \

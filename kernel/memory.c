@@ -123,23 +123,31 @@ NOTES:
       For now, we are using the region from 0xB8000-0xBFFFF (CGA config).
 */
 
-struct mem_info
+// struct mem_info
+// {
+//     bool large_page_support;        // large page = 4M bytes = 1024 4K pages
+//     uint32_t total_physical_pages;
+// };
+
+struct mm_info
 {
-    bool large_page_support;        // large page = 4M bytes = 1024 4K pages
-    uint32_t total_physical_pages;
+    pde_t *pde;
 };
 
-struct mem_info *g_mem_info;
+struct mm_info kernel_mm =
+{
+    .pde = SYSTEM_PAGE_DIRECTORY
+};
 
 static void print_meminfo(const struct boot_info *info);
 extern int init_paging(const struct boot_info *boot_info, uint32_t pgtbl);
 
 void init_memory(const struct boot_info *boot_info)
 {
-    zeromem((void *) SYSTEM_MEMORY_PAGE, PAGE_SIZE);
-    g_mem_info = (struct mem_info *) SYSTEM_MEMORY_PAGE;
+    // zeromem((void *) SYSTEM_MEMORY_PAGE, PAGE_SIZE);
+    // g_mem_info = (struct mem_info *) SYSTEM_MEMORY_PAGE;
 
-    print_meminfo(boot_info);   // TODO: copy ACPI memory map to mem info page
+    // print_meminfo(boot_info);   // TODO: copy ACPI memory map to mem info page
     init_paging(boot_info, KERNEL_PAGE_TABLE);
 }
 

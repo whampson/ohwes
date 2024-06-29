@@ -14,115 +14,166 @@
  * SOFTWARE.
  * -----------------------------------------------------------------------------
  *         File: include/paging.h
- *      Created: May 27, 2024
+ *      Created: June 25, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
+// Inspiration:
+// https://www.kernel.org/doc/gorman/html/understand/understand006.html
+
 #ifndef __PAGING_H
 #define __PAGING_H
 
-#define PAGE_SHIFT          12
-#define PAGE_SIZE           (1 << PAGE_SHIFT)
+#define PAGE_SHIFT              12
+#define PAGE_SIZE               (1 << PAGE_SHIFT)
+#define PAGE_MASK               (~(PAGE_SIZE - 1))
 
-#define LARGE_PAGE_SHIFT    22
-#define LARGE_PAGE_SIZE     (1 << LARGE_PAGE_SHIFT)
+#define PGDIR_SHIFT             22
+#define PGDIR_SIZE              (1 << PGDIR_SHIFT)
+#define PGDIR_MASK              (~(PGDIR_SIZE - 1))
 
-#define PDE_SIZE            4
-#define PTE_SIZE            4
+#define LARGE_PAGE_SHIFT        PGDIR_SHIFT
+#define LARGE_PAGE_SIZE         (1 << LARGE_PAGE_SHIFT)
+#define LARGE_PAGE_MASK         (~(LARGE_PAGE_SIZE - 1))
+
+#define PDE_COUNT               1024                // PDEs per page directory
+#define PTE_COUNT               1024                // PTEs per page table
+
+//   10987654321098765432109876543210
+//  +---------+---------+-----------+
+//  |   PDN   |   PTN   |  OFFSET   | Linear Address
+//  +---------+---------+-----------+
+//  |        PFN        | ATTR BITS | pte_t/pde_t
+//  +---------+---------+-----------+
+//  |   PFN   |    0    | ATTR BITS | pde_t (large page)
+//  +---------+---------+-----------+
+//
+// PDN = Page Directory Number  offset of pde_t in page directory
+// PTN = Page Table Number      offset of pte_t in page table
+// PFN = Page Frame Number      physical page number
+
+#define __ptn(addr)             ((addr >> PAGE_SHIFT) & (PTE_COUNT - 1))
+#define __pdn(addr)             ((addr >> PGDIR_SHIFT) & (PDE_COUNT - 1))
+#define __pfn(addr)             (addr >> PAGE_SHIFT)
+
+#define PAGE_ALIGN(addr)        (((addr) + (PAGE_SIZE - 1)) & PAGE_MASK)
+#define LARGE_PAGE_ALIGN(addr)  (((addr) + (LARGE_PAGE_SIZE - 1)) & LARGE_PAGE_MASK)
 
 //
-// Mapping Flags
+// Page Attribute Flags
 //
-#define MAP_READONLY    (1 << 0)    // Read-only page
-#define MAP_USERMODE    (1 << 1)    // User accessible page
-#define MAP_GLOBAL      (1 << 2)    // Global page
-#define MAP_PAGETABLE   (1 << 30)   // Page table
-#define MAP_LARGE       (1 << 31)   // Large (4M) page
+#define _PAGE_PRESENT           (1 << 0)        // present in memory
+#define _PAGE_RW                (1 << 1)        // read/write accessible
+#define _PAGE_USER              (1 << 2)        // user accessible
+#define _PAGE_PWT               (1 << 3)        // cache: write-through
+#define _PAGE_PCD               (1 << 4)        // cache: disable
+#define _PAGE_ACCESSED          (1 << 5)        // page accessed
+#define _PAGE_DIRTY             (1 << 6)        // page written
+#define _PAGE_PS                (1 << 7)        // 4M page (PDEs); PAT (PTEs)
+#define _PAGE_GLOBAL            (1 << 8)        // TLB pinned
+#define _PAGE_PDE               (1 << 9)        // this is a PDE
+#define _PAGE_LARGE             (_PAGE_PS)
 
 #ifndef __ASSEMBLER__
+
+#include <assert.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include <mm.h>
+
+typedef uint32_t pte_t;
+typedef uint32_t pde_t;
+typedef uint32_t pgflags_t;
 
 //
-// Combined x86 4K and 4M PDE/PTE.
-// Designed to map onto a `struct pde` or `struct pte`
+// Combined x86 PDE/PTE.
+// Designed to map onto a `struct x86_pde` or `struct x86_pte` or be used cast
+// from a `pde_t` or `pte_t`. Useful for debugging.
 //
-struct page
-{
-    uint32_t p      : 1;    // Present: page mapping in use
-    uint32_t rw     : 1;    // Read/Write: 1 = writable
-    uint32_t us     : 1;    // User/Supervisor: 1 = user accessible
-    uint32_t pwt    : 1;    // Page-Level Write-Through
-    uint32_t pcd    : 1;    // Page-Level Cache Disable
-    uint32_t a      : 1;    // Accessed: software has accessed this page
-    uint32_t d      : 1;    // Dirty: software has written this page
-    uint32_t pspat  : 1;    // Page Size: 1 = 4M, 0 = 4K (PDE); Page Attribute Table (PTE)
-    uint32_t g      : 1;    // Global: pins page to TLB (requires CR4.PGE=1)
-    uint32_t pte    : 1;    // PTE: this is a page table leaf (OH-WES addition)
-    uint32_t        : 2;    // (available for use)
-    uint32_t pfn    : 20;   // Page Frame Number
+struct pginfo {
+    union {
+        struct {
+            uint32_t p   : 1;   // Present: page mapping present in memory
+            uint32_t rw  : 1;   // Read/Write: 1 = writable
+            uint32_t us  : 1;   // User/Supervisor: 1 = user accessible
+            uint32_t pwt : 1;   // Page-Level Cache Write-Through
+            uint32_t pcd : 1;   // Page-Level Cache Disable
+            uint32_t a   : 1;   // Accessed: software has accessed this page
+            uint32_t d   : 1;   // Dirty: software has written this page
+            uint32_t ps  : 1;   // Page Size: 1=4M, 0=4K (PDEs only, requires CR4.PSE=1)
+            uint32_t g   : 1;   // Global: pins page to TLB (requires CR4.PGE=1)
+            uint32_t pde : 1;   // PDE: this is a PDE
+            uint32_t     : 2;   // (available for use)
+            uint32_t pfn : 20;  // Page Frame Number
+        };
+        uint32_t _value;
+    };
 };
-static_assert(sizeof(struct page) == sizeof(uint32_t), "bad PDE/PTE size!");
+static_assert(sizeof(struct pginfo) == sizeof(uint32_t), "bad size!");
 
-#define PAGE_IS_MAPPED(pg)  ((pg)->p)                   // Page is mapped
-#define PAGE_IS_PTE(pg)     ((pg)->pte)                 // Page is a PTE (leaf)
-#define PAGE_IS_LARGE(pg)   (!(pg)->pte && (pg)->pspat) // Page is a PDE that maps to a 4M region
+#define __pte(x)                    ((pte_t) (x))
+#define __pde(x)                    ((pde_t) (x))
+#define __pgflags(x)                ((pgflags_t) (x))
+#define __pginfo(x)                 ((struct pginfo) { ._value = (x) })
 
-/**
- * Maps a virtual address region to a physical page. The physical page is
- * specified by a page frame number (PFN), which is a number indexing physical
- * memory as a contiguous block of `PAGE_SIZE`-sized and -aligned chunks.
- *
- * @param addr base virtual address
- * @param pfn physical page frame number
- * @param flags mapping flags
- *
- * @return `0` if successful;
- *
- *         `EINVAL` if
- *           the desired virtual address is not aligned to a page boundary,
- *           both the MAP_LARGE and MAP_PAGETABLE flags are used;
- *
- *         `ENOMEM` if
- *           the desired virtual address is already in use,
- *           a page table for the desired virtual address does not exist,
- *           an attempt is made to map a large page when large pages are not
- *           supported by the hardware
- */
-int map_page(uint32_t addr, uint32_t pfn, int flags);
+#define __mkpde(addr,flags)         __pde(      PAGE_ALIGN(addr) | __pgflags((flags)|_PAGE_PRESENT|_PAGE_PDE))
+#define __mkpde_large(addr,flags)   __pde(LARGE_PAGE_ALIGN(addr) | __pgflags((flags)|_PAGE_PRESENT|_PAGE_PDE|_PAGE_LARGE))
 
-/**
- * Unmaps a virtual address region.
- *
- * @param addr base virtual address
- * @param flags mapping flags
- *
- * @return `0` if successful;
- *
- *         `EINVAL` if
- *           the desired virtual address is not aligned to a page boundary,
- *           both the MAP_LARGE and MAP_PAGETABLE flags are used;
- *
- *         `ENOMEM` if
- *           the desired virtual address is not mapped,
- *           a page table for the desired virtual address does not exist
- */
-int unmap_page(uint32_t addr, int flags);
+#define __mkpte(addr,flags)         __pte(PAGE_ALIGN(addr) | __pgflags((flags)|_PAGE_PRESENT))
 
-#define identity_map(addr,flags)    map_page(addr, get_pfn(addr), flags)
+// Future-proofing a bit here...
+// Intel paging structures are always read/execute in kernel mode so long as the
+// present bit is set. We're going to treat these flags from the perspective of
+// a user process, i.e. we can disable read/execute if we make the page
+// accessible only by the kernel. Other architectures may be different.
 
-void * get_page_directory(void);
-void * get_pde(uint32_t addr);      // page directory entry
-void * get_pte(uint32_t addr);      // page table entry
+static inline bool pte_none(pte_t pte)          { return !pte; }
+static inline void pte_clear(pte_t *pte)        { *pte = 0; }
 
-uint32_t get_pfn(uint32_t addr);    // page file number (bits 31:12)
-uint32_t get_pdn(uint32_t addr);    // page directory number (bits 31:22)
-uint32_t get_ptn(uint32_t addr);    // page table number (bits 21:12)
+static inline bool pte_read(pte_t pte)          { return (pte & _PAGE_USER) == _PAGE_USER; }
+static inline bool pte_exec(pte_t pte)          { return (pte & _PAGE_USER) == _PAGE_USER; }
+static inline bool pte_write(pte_t pte)         { return (pte & _PAGE_RW) == _PAGE_RW; }
+static inline bool pte_user(pte_t pte)          { return (pte & _PAGE_USER) == _PAGE_USER; }
+static inline bool pte_dirty(pte_t pte)         { return (pte & _PAGE_DIRTY) == _PAGE_DIRTY; }
 
-bool large_page_support(void);
+static inline pte_t pte_mkread(pte_t pte)       { pte |= _PAGE_USER; return pte; }
+static inline pte_t pte_mkexec(pte_t pte)       { pte |= _PAGE_USER; return pte; }
+static inline pte_t pte_mkwrite(pte_t pte)      { pte |= _PAGE_RW; return pte; }
+static inline pte_t pte_mkuser(pte_t pte)       { pte |= _PAGE_USER; return pte; }
+static inline pte_t pte_mkdirty(pte_t pte)      { pte |= _PAGE_DIRTY; return pte; }
+static inline pte_t pte_mkclean(pte_t pte)      { pte &= ~_PAGE_DIRTY; return pte; }
 
-void print_page_mappings(void);
+static inline pte_t pte_rdprotect(pte_t pte)    { pte &= ~_PAGE_USER; return pte; }
+static inline pte_t pte_exprotect(pte_t pte)    { pte &= ~_PAGE_USER; return pte; }
+static inline pte_t pte_wrprotect(pte_t pte)    { pte &= ~_PAGE_RW; return pte; }
 
-#endif // __ASSEMBLY__
+static inline uint32_t pte_index(pte_t pte)     { return __ptn(pte); }
+static inline uint32_t pte_page(pte_t pte)      { return pte & PAGE_MASK; }
 
-#endif // __PAGING_H
+// ---------------------------------------------
+
+static inline bool pde_none(pde_t pde)          { return !pde; }
+static inline void pde_clear(pde_t *pde)        { *pde = 0; }
+
+static inline bool pde_large(pde_t pde)         { return (pde & _PAGE_LARGE) == _PAGE_LARGE; }
+static inline bool pde_bad(pde_t pde)
+{
+    return ((pde & (_PAGE_PDE|_PAGE_PRESENT)) != (_PAGE_PDE|_PAGE_PRESENT))
+        || (pde_large(pde) && __ptn(pde) != 0);
+}
+
+static inline uint32_t pde_index(pde_t pde)     { return __pdn(pde); }
+static inline uint32_t pde_page(pde_t pde)      { return pde & PAGE_MASK; }
+
+pde_t * get_pde(struct mm_info *mm, uint32_t addr);
+pte_t * get_pte(pde_t *pde, uint32_t addr);
+
+// pte_t set_pde(pde_t pde, uint32_t addr, pgflags_t flags);
+// pte_t set_pte(pte_t pte, uint32_t addr, pgflags_t flags);
+
+// pte_t * alloc_pte(pde_t *pde, uint32_t addr, pgflags_t flags);
+
+#endif  // __ASSEMBLER__
+
+#endif  // __PAGING_H

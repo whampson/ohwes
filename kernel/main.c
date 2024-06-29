@@ -54,6 +54,9 @@ typedef int (*test_main)(void);
 extern void tmain(void);
 #endif
 
+
+extern void init_mm(void);
+
 int init(void);     // usermode entry point
 
 static void basic_shell(void);
@@ -103,12 +106,15 @@ __fastcall void kmain(const struct boot_info *info)
 
     init_ps2(&g_boot);
     init_kb();
-    init_memory(&g_boot);
+    // init_memory(&g_boot);
     init_timer();
     init_rtc();
 
-    kprint("boot: entering ring3...\n");
-    enter_ring3((uint32_t) init, USER_STACK_PAGE + PAGE_SIZE);  // TODO: page privilege
+    init_mm();
+    die();
+
+    // kprint("boot: entering ring3...\n");
+    // enter_ring3((uint32_t) init, USER_STACK_PAGE + PAGE_SIZE);  // TODO: page privilege
 }
 
 int init(void)
