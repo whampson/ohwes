@@ -41,7 +41,7 @@
 extern void init_vga(void);
 extern void init_console(void);
 extern void init_cpu(const struct boot_info *info);
-extern void init_memory(const struct boot_info *info);
+extern void init_mm(const struct boot_info *info);
 extern void init_pic(void);
 extern void init_irq(void);
 extern void init_ps2(const struct boot_info *info);
@@ -53,9 +53,6 @@ extern void init_tasks(void);
 typedef int (*test_main)(void);
 extern void tmain(void);
 #endif
-
-
-extern void init_mm(void);
 
 int init(void);     // usermode entry point
 
@@ -90,12 +87,12 @@ __fastcall void kmain(const struct boot_info *info)
     memcpy(&g_boot, info, sizeof(struct boot_info));
     info = &g_boot;     // reassign ptr so we don't lose access to the data
 
-    init_cpu(&g_boot);
     init_pic();
     init_irq();
     init_vga();
     init_tasks();
     init_console();     // safe to print now
+    init_cpu(&g_boot);
 
     kprint("\n" OS_NAME " " OS_VERSION ", build " OS_BUILDDATE "\n");
     kprint("\n");
@@ -106,23 +103,20 @@ __fastcall void kmain(const struct boot_info *info)
 
     init_ps2(&g_boot);
     init_kb();
-    // init_memory(&g_boot);
     init_timer();
     init_rtc();
+    init_mm(&g_boot);
 
-    init_mm();
-    die();
-
-    // kprint("boot: entering ring3...\n");
-    // enter_ring3((uint32_t) init, USER_STACK_PAGE + PAGE_SIZE);  // TODO: page privilege
+    kprint("boot: entering ring3...\n");
+    enter_ring3((uint32_t) init, USER_STACK_PAGE + PAGE_SIZE);  // TODO: page privilege
 }
 
 int init(void)
 {
 
-//
-// Runs in ring 3.
-//
+    //
+    // Runs in ring 3.
+    //
     assert(getpl() == USER_PL);
 
     // TODO: load shell program from disk

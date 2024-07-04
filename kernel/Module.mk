@@ -10,7 +10,6 @@ SOURCES := \
     irq.c \
     main.c \
     mm.c \
-    paging.c \
     pic.c \
     ps2kb.c \
     rtc.c \

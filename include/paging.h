@@ -46,8 +46,6 @@
 //  +---------+---------+-----------+
 //  |        PFN        | ATTR BITS | pte_t/pde_t
 //  +---------+---------+-----------+
-//  |   PFN   |    0    | ATTR BITS | pde_t (large page)
-//  +---------+---------+-----------+
 //
 // PDN = Page Directory Number  offset of pde_t in page directory
 // PTN = Page Table Number      offset of pte_t in page table
@@ -128,8 +126,36 @@ static_assert(sizeof(struct pginfo) == sizeof(uint32_t), "bad size!");
 // a user process, i.e. we can disable read/execute if we make the page
 // accessible only by the kernel. Other architectures may be different.
 
+static inline uint32_t pde_index(pde_t pde)     { return __pdn(pde); }
+static inline void * pde_page(pde_t pde)        { return (void *) (pde & PAGE_MASK); }
+
+static inline bool pde_none(pde_t pde)          { return !pde; }
+static inline void pde_clear(pde_t *pde)        { *pde = 0; }
+
+static inline bool pde_large(pde_t pde)         { return (pde & _PAGE_LARGE) == _PAGE_LARGE; }
+static inline bool pde_bad(pde_t pde)
+{
+    return ((pde & (_PAGE_PDE|_PAGE_PRESENT)) != (_PAGE_PDE|_PAGE_PRESENT))
+        || (pde_large(pde) && __ptn(pde) != 0);
+}
+
+static inline pde_t * pde_offset(struct mm_info *mm, uint32_t addr)
+{
+    return ((pde_t *) (mm)->pgdir) + __pdn(addr);
+}
+
+// ---------------------------------------------
+
+static inline uint32_t pte_index(pte_t pte)     { return __ptn(pte); }
+static inline void * pte_page(pte_t pte)        { return (void *) (pte & PAGE_MASK); }
+
 static inline bool pte_none(pte_t pte)          { return !pte; }
 static inline void pte_clear(pte_t *pte)        { *pte = 0; }
+
+static inline pde_t * pte_offset(pde_t *pde, uint32_t addr)
+{
+    return ((pte_t *) pde_page(*pde)) + __ptn(addr);
+}
 
 static inline bool pte_read(pte_t pte)          { return (pte & _PAGE_USER) == _PAGE_USER; }
 static inline bool pte_exec(pte_t pte)          { return (pte & _PAGE_USER) == _PAGE_USER; }
@@ -147,32 +173,6 @@ static inline pte_t pte_mkclean(pte_t pte)      { pte &= ~_PAGE_DIRTY; return pt
 static inline pte_t pte_rdprotect(pte_t pte)    { pte &= ~_PAGE_USER; return pte; }
 static inline pte_t pte_exprotect(pte_t pte)    { pte &= ~_PAGE_USER; return pte; }
 static inline pte_t pte_wrprotect(pte_t pte)    { pte &= ~_PAGE_RW; return pte; }
-
-static inline uint32_t pte_index(pte_t pte)     { return __ptn(pte); }
-static inline uint32_t pte_page(pte_t pte)      { return pte & PAGE_MASK; }
-
-// ---------------------------------------------
-
-static inline bool pde_none(pde_t pde)          { return !pde; }
-static inline void pde_clear(pde_t *pde)        { *pde = 0; }
-
-static inline bool pde_large(pde_t pde)         { return (pde & _PAGE_LARGE) == _PAGE_LARGE; }
-static inline bool pde_bad(pde_t pde)
-{
-    return ((pde & (_PAGE_PDE|_PAGE_PRESENT)) != (_PAGE_PDE|_PAGE_PRESENT))
-        || (pde_large(pde) && __ptn(pde) != 0);
-}
-
-static inline uint32_t pde_index(pde_t pde)     { return __pdn(pde); }
-static inline uint32_t pde_page(pde_t pde)      { return pde & PAGE_MASK; }
-
-pde_t * get_pde(struct mm_info *mm, uint32_t addr);
-pte_t * get_pte(pde_t *pde, uint32_t addr);
-
-// pte_t set_pde(pde_t pde, uint32_t addr, pgflags_t flags);
-// pte_t set_pte(pte_t pte, uint32_t addr, pgflags_t flags);
-
-// pte_t * alloc_pte(pde_t *pde, uint32_t addr, pgflags_t flags);
 
 #endif  // __ASSEMBLER__
 
