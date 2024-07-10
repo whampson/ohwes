@@ -22,6 +22,7 @@
 #include <vga.h>
 #include <x86.h>
 #include <io.h>
+#include <ohwes.h>
 
 void init_vga(void)
 {

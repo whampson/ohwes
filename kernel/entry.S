@@ -136,10 +136,10 @@ recv_interrupt:
         movl            %edi, IREGS_EDI(%esp)
         movl            %ebp, IREGS_EBP(%esp)
         movl            %eax, IREGS_EAX(%esp)
-        STORE_SEGREG    %ds, IREGS_DS(%esp)
-        STORE_SEGREG    %es, IREGS_ES(%esp)
-        STORE_SEGREG    %fs, IREGS_FS(%esp)
-        STORE_SEGREG    %gs, IREGS_GS(%esp)
+        STORE_SEGMENT    %ds, IREGS_DS(%esp)
+        STORE_SEGMENT    %es, IREGS_ES(%esp)
+        STORE_SEGMENT    %fs, IREGS_FS(%esp)
+        STORE_SEGMENT    %gs, IREGS_GS(%esp)
         movl            %esp, %ecx                      # ecx = fastcall param
         movl            IREGS_VEC_NUM(%esp), %eax
         test            %eax, %eax
@@ -193,10 +193,10 @@ end_syscall:
         movl            IREGS_ECX(%esp), %ecx
         movl            IREGS_EBX(%esp), %ebx
         movl            %eax, IREGS_ERR_CODE(%esp) # reuse error code slot to
-        LOAD_SEGREG     IREGS_DS(%esp), %ds        #  temporarily store eax,
-        LOAD_SEGREG     IREGS_ES(%esp), %es        #  used by these macros to
-        LOAD_SEGREG     IREGS_FS(%esp), %fs        #  restore segment registers
-        LOAD_SEGREG     IREGS_GS(%esp), %gs
+        LOAD_SEGMENT     IREGS_DS(%esp), %ds        #  temporarily store eax,
+        LOAD_SEGMENT     IREGS_ES(%esp), %es        #  used by these macros to
+        LOAD_SEGMENT     IREGS_FS(%esp), %fs        #  restore segment registers
+        LOAD_SEGMENT     IREGS_GS(%esp), %gs
         movl            IREGS_ERR_CODE(%esp), %eax # restore eax
         addl            $IREGS_EIP, %esp
         iret

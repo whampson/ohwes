@@ -122,6 +122,13 @@ enum acpi_mmap_type {
  * System Boot Info
  *----------------------------------------------------------------------------*/
 
+#define _BI_KERNEL_BASE         0x00
+#define _BI_KERNEL_SIZE         0x04
+#define _BI_STAGE2_BASE         0x08
+#define _BI_STAGE2_SIZE         0x0C
+#define _BI_STACK_BASE          0x10
+#define _BI_LOWMEM_LIMIT        0x14
+
 /**
  * System information collected during boot and passed onto the kernel.
  */
@@ -129,11 +136,12 @@ struct boot_info {
     //
     // !!! KEEP OFFSETS IN-LINE WITH src/boot/stage2.h !!!
     //
-    intptr_t kernel;                // kernel image base address
+    intptr_t kernel_base;           // kernel image base address
     uint32_t kernel_size;           // kernel image size bytes
-    intptr_t stage2;                // stage2 image base address
+    intptr_t stage2_base;           // stage2 image base address
     uint32_t stage2_size;           // stage2 image size bytes
-    intptr_t stack;                 // stack base upon leaving stage2
+    intptr_t stack_base;            // stack base upon leaving stage2
+    intptr_t lowmem_limit;          // highest general-purpose address in low memory (below 1M)
 
     uint32_t kb_low;                // 1K blocks 0 to 640K (INT 12h)
     uint32_t kb_high;               // 1K blocks 1M to 16M (INT 15h,AX=88h)
@@ -142,22 +150,25 @@ struct boot_info {
     const acpi_mmap_t *mem_map;     // ACPI Memory Map (INT 15h,AX=E820h)
 
     struct hwflags hwflags;         // system hardware flags (INT 11h)
-    uint32_t a20_mode;              // method used to enable A20 line, one of A20_*
-    uint32_t video_mode;            // VGA video mode (INT 10h,AH=0Fh)
-    uint32_t video_page;            // VGA active display page (INT 10h,AH=0Fh)
-    uint32_t video_cols;            // VGA column count (INT 10h,AH=0Fh)
-    uint32_t cursor_start;          // VGA cursor scan line top
-    uint32_t cursor_end;            // VGA cursor scan line bottom
-    intptr_t framebuffer;           // memory-mapped VGA frame buffer
-    uint32_t framebuffer_pages;     // number of memory-mapped frame buffer pages
-
-    const void *ebda;               // Extended BIOS Data Area
-    // TODO: BPB?
-
-    uint32_t init_size; // TEMP
+    uint32_t a20_method;            // method used to enable A20 line, one of A20_*
+    uint32_t vga_mode;              // VGA video mode (INT 10h,AH=0Fh)
+    uint32_t vga_page;              // VGA active display page (INT 10h,AH=0Fh)
+    uint32_t vga_cols;              // VGA column count (INT 10h,AH=0Fh)
+    uint32_t vga_cursor_start;      // VGA cursor scan line top
+    uint32_t vga_cursor_end;        // VGA cursor scan line bottom
+    intptr_t vga_framebuffer_base;  // memory-mapped VGA frame buffer
+    uint32_t vga_framebuffer_size;  // VGA frame buffer size bytes
 };
-// TODO: define offsets assert offsets using define
-// and use defines in ASM code to keep in-line with struct
+static_assert(offsetof(struct boot_info, kernel_base) == _BI_KERNEL_BASE, "invalid offset!");
+static_assert(offsetof(struct boot_info, kernel_size) == _BI_KERNEL_SIZE, "invalid offset!");
+static_assert(offsetof(struct boot_info, stage2_base) == _BI_STAGE2_BASE, "invalid offset!");
+static_assert(offsetof(struct boot_info, stage2_size) == _BI_STAGE2_SIZE, "invalid offset!");
+static_assert(offsetof(struct boot_info, stack_base) == _BI_STACK_BASE, "invalid offset!");
+static_assert(offsetof(struct boot_info, lowmem_limit) == _BI_LOWMEM_LIMIT, "invalid offset!");
+static_assert(offsetof(struct boot_info, kernel_base) == _BI_KERNEL_BASE, "invalid offset!");
+static_assert(offsetof(struct boot_info, kernel_base) == _BI_KERNEL_BASE, "invalid offset!");
+static_assert(offsetof(struct boot_info, kernel_base) == _BI_KERNEL_BASE, "invalid offset!");
+static_assert(offsetof(struct boot_info, kernel_base) == _BI_KERNEL_BASE, "invalid offset!");
 
 #endif  // __ASSEMBLER__
 

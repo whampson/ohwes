@@ -32,12 +32,12 @@
 #include <boot.h>
 #include "x86_boot.h"
 
-.text
 .code16
 
 # -----------------------------------------------------------------------------
 # --------------------------------- Stage 1 -----------------------------------
 # -----------------------------------------------------------------------------
+.section .stage1, "ax", @progbits
 
 ##
 # Boot loader entry point. This is where the BIOS drops us off.
@@ -53,7 +53,7 @@ entry:
         nop
 
 ##
-# BIOS Parameter Block for a FAT12-formatted 3.5" 1.44MB floppy disk.
+# BIOS Parameter Block for a 3.5" 1.44MB floppy disk formatted with FAT12.
 # DO NOT MOVE THIS. Tweak with care.
 ##
 .globl bios_param_block
@@ -87,13 +87,17 @@ bios_param_block:
 # stage 2 far away at 0x90000 so it doesn't get overwritten by our kernel image.
 ##
 stage1:
-        # setup
         cli
+        ljmp            $0, $_setup
+
+_setup:
+        # setup segment registers and stack
         xorw            %ax, %ax
         movw            %ax, %ds
         movw            %ax, %es
-        movw            %ax, %fs
-        LOAD_SEGREG     $BDA_SEGMENT, %gs
+        movw            %ax, %ss
+        movw            $STACK_BASE, %sp
+        LOAD_SEGMENT    $BDA_SEGMENT, %gs
 
         # load the root directory
         movw            root_dir_capacity, %cx  # calculate root dir size:
@@ -106,19 +110,19 @@ stage1:
         shrw            $SECTOR_SHIFT, %cx      #  nsectors=((nbytes-1)/512)+1
         incw            %cx
         addw            %cx, first_cluster      # 1st cluster follows root dir
-        movw            $ROOTDIR_BASE, %bx
-        call            load_sectors             # read root dir
+        movw            $FAT_ROOTDIR_BASE, %bx
+        call            load_sectors            # read root dir
 
         # load stage 2 binary
         leaw            sz_stage2_filename, %si
-        call            find_file                # returns: di = dir entry ptr
+        call            find_file               # returns: di = dir entry ptr
         movl            FILESIZE(%di), %ecx
         pushl           %ecx                    # put stage2 size on stack
         movw            $STAGE2_BASE, %bx
-        call            load_file                # load stage 2!
+        call            load_file               # load stage 2!
 
         # continue...
-        jmp             stage2
+        jmp             stage2                  # enter stage 2!
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
@@ -156,7 +160,7 @@ find_file:
         movw            %ds, %ax
         movw            %ax, %es                # ensure es == ds (for cmpsb)
 
-        movw            $ROOTDIR_BASE, %di      # start at top of root dir
+        movw            $FAT_ROOTDIR_BASE, %di  # start at top of root dir
         movw            root_dir_capacity, %bx  # loop count
         cld                                     # clear direction flag
 
@@ -196,7 +200,7 @@ _find_file_done:
 #       ds:di - dir entry ptr
 #
 # Outputs:
-#       [es:bx] - data written to buffer
+#       [es:bx] - file data written to buffer
 #
 # Clobbers:
 #       ax, bx, ecx, dx
@@ -233,6 +237,9 @@ load_file:
 #       es:bx - buffer address
 #          ax - logical block address of starting sector
 #          cx - sector count
+#
+# Outputs:
+#       [es:bx] - sector data written to buffer
 #
 # Clobbers:
 #       ax, bx, cx, dx
@@ -287,10 +294,10 @@ _load_sectors_loop_tail:
         movw            $RETRY_COUNT, -8(%bp)   # reset nretries
         incw            -4(%bp)                 # ++lba
         decw            -6(%bp)                 # --count
-        jz              _load_sectors_Done      # done if count == 0
+        jz              _load_sectors_done      # done if count == 0
         jmp             _load_sectors_loop
 
-_load_sectors_Done:
+_load_sectors_done:
         leave
         ret
 
@@ -439,7 +446,7 @@ sz_progress_char:
 sz_stage2_filename:
         .asciz          "BOOT    SYS"
 sz_disk_error:
-        .asciz          "\r\nDisk error!"
+        .asciz          "\r\nDiskette read error!"
 sz_try_again:
         .asciz          "\r\nPress any key to try again..."
 

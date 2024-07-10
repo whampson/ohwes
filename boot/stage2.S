@@ -30,14 +30,12 @@
 #include <paging.h>
 #include "x86_boot.h"
 
-.text
 .code16
-
-// TODO: Test some of this stuff, like A20 methods, or flick thru video modes
 
 # -----------------------------------------------------------------------------
 # --------------------------------- Stage 2 -----------------------------------
 # -----------------------------------------------------------------------------
+.section .stage2, "ax", @progbits
 
 ##
 # Stage 2 entry point. We land here after jumping from stage 1.
@@ -47,32 +45,31 @@ stage2:
         popl    %ecx                    # pop stage2 size and store it
         movl    %ecx, stage2_size
 
-        call    CollectBootParams
-        call    InitConsole
-        call    EnableA20
-        call    DetectMemory
+        call    collect_boot_params
+        call    init_console
+        call    enable_a20
+        call    detect_memory
 
 LoadKernel:
         leaw    sz_KernelFileName, %si  # locate the kernel image on disk
-        call    FindFile                # returns: di = dir entry ptr
-        movl    DIRENTRY_FILESIZE(%di), %ecx
+        call    find_file               # returns: di = dir entry ptr
+        movl    FILESIZE(%di), %ecx
         movl    %ecx, kernel_size      # store kernel size
-        call    CheckKernelSize
-
+        call    check_kernel_size
         movw    $KERNEL_SEGMENT, %ax
         movw    %ax, %es
-        movw    $KERNEL_OFFSET, %bx
-        call    LoadFile                # load the kernel into low memory
+        xorw    %bx, %bx
+        call    load_file                # load the kernel into low memory
 
-#ifdef TEST_BUILD
-LoadTest:
-        leaw    sz_TestFileName, %si
-        call    FindFile
-        movw    $TEST_SEGMENT, %ax
-        movw    %ax, %es
-        movw    $TEST_OFFSET, %bx
-        call    LoadFile
-#endif
+// #ifdef TEST_BUILD
+// LoadTest:
+//         leaw    sz_TestFileName, %si
+//         call    find_file
+//         movw    $TEST_SEGMENT, %ax
+//         movw    %ax, %es
+//         movw    $TEST_OFFSET, %bx
+//         call    load_file
+// #endif
 
 SwitchToProtectedMode:
         cli                             # make sure interrupts are off
@@ -123,11 +120,11 @@ EnterKernel:
 
 ##
 # -----------------------------------------------------------------------------
-# CollectBootParams
+# collect_boot_params
 # -----------------------------------------------------------------------------
 # Gets installed hardware flags using a BIOS routine.
 ##
-CollectBootParams:
+collect_boot_params:
         xorl    %eax, %eax
         int     $0x11
         movw    %ax, hwflags
@@ -140,7 +137,7 @@ CollectBootParams:
 
 ##
 # -----------------------------------------------------------------------------
-# CheckKernelSize
+# check_kernel_size
 # -----------------------------------------------------------------------------
 # Ensure the kernel will fit in low memory. To do this, we find the address of
 # the Extended BIOS Data Area, which is effectively the top of low memory. We
@@ -153,7 +150,7 @@ CollectBootParams:
 # would require a working floppy disk driver in Protected Mode (or make use of
 # the BIOS again in Unreal Mode).
 ##
-CheckKernelSize:
+check_kernel_size:
         movl    kernel_size, %ecx
         movl    $KERNEL_BASE, %eax
         cmpl    $0, m_pEbda
@@ -176,12 +173,12 @@ _KernelTooBig:
 
 ##
 # -----------------------------------------------------------------------------
-# InitConsole
+# init_console
 # -----------------------------------------------------------------------------
 # Sets the VGA mode using a BIOS routine and collects information about the
 # console.
 ##
-InitConsole:
+init_console:
         movb    $0x0F, %ah      # store video page
         int     $0x10
         jc      _VgaError
@@ -247,12 +244,12 @@ _m_CursorColumn: .long   0
 
 ##
 # -----------------------------------------------------------------------------
-# DetectMemory
+# detect_memory
 # -----------------------------------------------------------------------------
 # Gets memory capacity and physical memory map (if available) using BIOS
 # routines. If all methods fail, the system will display an error and halt.
 ##
-DetectMemory:
+detect_memory:
         call    DetectMemory_e820
         call    DetectMemory_e801
         call    DetectMemory_Legacy
@@ -371,12 +368,12 @@ _DetectMemory_Legacy_Error:
 
 ##
 # -----------------------------------------------------------------------------
-# EnableA20
+# enable_a20
 # -----------------------------------------------------------------------------
 # Attempts to enable the A20 gate. If unsuccessful, the system will halt;
 # otherwise there would be a very annoying non-contiguous memory hole.
 ###
-EnableA20:
+enable_a20:
         call    TestA20
         jnc     _EnableA20_Done
         call    _EnableA20_Bios

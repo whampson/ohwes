@@ -162,11 +162,11 @@
 
 #ifdef __ASSEMBLER__
 // Assembler-only defines
-.macro LOAD_SEGREG addr, reg
+.macro LOAD_SEGMENT addr, reg
         movw            \addr, %ax
         movw            %ax, \reg
 .endm
-.macro STORE_SEGREG reg, addr
+.macro STORE_SEGMENT reg, addr
         movw            \reg, %ax
         movw            %ax, \addr
 .endm

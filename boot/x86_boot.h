@@ -31,19 +31,20 @@
  * Memory
  *----------------------------------------------------------------------------*/
 
-#define SEG2FLAT(seg,off)   (((seg)<<4)+(off))
+// --- Real Mode Memory Map ---
+// 00000-004FF: reserved; IVT, BDA
+// 00500-0FFFF: (free)
+// 01000-02BFF: FAT root directory
+// 02C00-02FFF: ACPI memory map
+// 03000-07BFF: (free)
+// 07A00-07BFF: real mode stack
+// 07C00-07DFF: stage 1
+// 07E00-0FFFF: stage 2
+// 10000-9FBFF: kernel image
+// 9FC00-9FFFF: reserved; EBDA
+// A0000-FFFFF: reserved; ROM, hardware
 
-// --- Boot Loader Memory Map ---
-// 0x00000-0x004FF: reserved (Real Mode IVT, stack, and BIOS Data Area)
-// 0x00500-0x0FFFF: reserved
-// 0x01000-0x02BFF: FAT root directory
-// 0x02C00-0x02FFF: ACPI memory map
-// 0x03000-0x07BFF: (free)
-// 0x07C00-0x07DFF: stage 1
-// 0x07E00-0x0FFFF: stage 2
-// 0x10000-0x9FBFF: kernel
-// 0x9FC00-0x9FFFF: reserved (Extended BIOS Data Area)
-// 0xA0000-0xFFFFF: reserved (hardware)
+#define seg2flat(seg,off)   (((seg)<<4)+(off))
 
 #define SEGMENT_SHIFT       16
 #define SEGMENT_SIZE        (1 << SEGMENT_SHIFT)
@@ -51,8 +52,9 @@
 #define BDA_SEGMENT         0x0040
 #define KERNEL_SEGMENT      (KERNEL_BASE >> 4)
 
-#define ROOTDIR_BASE        0x1000
-#define MEMMAP_BASE         0x2C00
+#define FAT_ROOTDIR_BASE    0x1000
+#define ACPI_MEMMAP_BASE    0x2C00
+#define STACK_BASE          0x7C00  // grows toward 0
 #define STAGE2_BASE         0x7E00
 
 
@@ -118,7 +120,7 @@
 
 
 /*----------------------------------------------------------------------------*
- * Assembler Stuff
+ * Assembler-only Stuff
  *----------------------------------------------------------------------------*/
 
 #ifdef __ASSEMBLER__

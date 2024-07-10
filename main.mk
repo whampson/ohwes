@@ -1,7 +1,7 @@
 # debug build toggle and params
 DEBUG           := 1
 DEBUGOPT        := 1
-TEST_BUILD      := 1
+TEST_BUILD      := 0
 GLOBAL_FLAGS    := -Wall -Werror
 
 ifeq "${TEST_BUILD}" "1"
@@ -19,11 +19,12 @@ TARGET_DIR := bin
 BUILD_DIR  := obj
 SCRIPT_DIR := scripts
 
-BOOTIMG := ${TARGET_DIR}/bootsect.bin
+BOOTSECT := ${TARGET_DIR}/boot/head.bin
+DISKDRIVE := /a
 
 FILES   := \
-    ${TARGET_DIR}/boot.sys \
-    ${TARGET_DIR}/ohwes.sys \
+    ${TARGET_DIR}/boot/boot.sys \
+    ${TARGET_DIR}/ohwes.sys
 
 ifeq "${TEST_BUILD}" "1"
   FILES += ${TARGET_DIR}/test.exe
@@ -50,14 +51,15 @@ tools:
 img: tools ohwes
 	@mkdir -p $(dir ${DISKIMG})
 	fatfs create --force ${DISKIMG} 2880
-	dd if=${BOOTIMG} of=${DISKIMG} bs=512 count=1 conv=notrunc
+	dd if=${BOOTSECT} of=${DISKIMG} bs=512 count=1 conv=notrunc
 	$(foreach _file,${FILES},fatfs add ${DISKIMG} ${_file} $(notdir ${_file});\
 	    fatfs attr -s ${DISKIMG} $(notdir ${_file});)
 	fatfs list -Aa ${DISKIMG}
 
 floppy: ohwes
-	dd if=${BOOTIMG} of=/dev/fd0 bs=512 count=1 conv=notrunc
-	$(foreach file,${FILES},cp ${file} /a/;)
+	dd if=${BOOTSECT} of=/dev/fd0 bs=512 count=1 conv=notrunc
+	$(foreach file,${FILES},cp ${file} ${DISKDRIVE}/;)
+	ls -l ${DISKDRIVE}
 
 format-floppy:
 	mkdosfs -s 1 -S 512 /dev/fd0
