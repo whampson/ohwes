@@ -111,7 +111,7 @@ define add-target
         $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS} $${${1}_LDSCRIPT} $${MAKEFILE_TREE}
 	    @mkdir -p $$(dir $$@)
 	    $$(strip $${${1}_LINKER} -o $$@ $${${1}_OBJECTS} $${LDLIBS} \
-	        $${${1}_LDLIBS} $${LDFLAGS} $${${1}_LDFLAGS} $${${1}_LDSCRIPT})
+	        $${${1}_LDLIBS} $${LDFLAGS} $${${1}_LDFLAGS} $$(addprefix -T,$${${1}_LDSCRIPT}))
 	    $${${1}_POSTMAKE}
     endif
 endef

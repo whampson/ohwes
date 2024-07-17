@@ -2,11 +2,7 @@
 DEBUG           := 1
 DEBUGOPT        := 1
 TEST_BUILD      := 0
-<<<<<<< HEAD
-GLOBAL_FLAGS    := -Wall -Werror
-=======
 CFLAGS          := -Wall -Werror
->>>>>>> build-refactor
 
 ifeq "${TEST_BUILD}" "1"
   DEFINES += TEST_BUILD
