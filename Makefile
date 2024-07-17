@@ -30,6 +30,8 @@
 #  - Added TARGET_LDSCRIPT so targets can specify an optional linker script
 #    which is tracked by the build system and will thus trigger a relink if
 #    modified.
+#  - Rebuild the project when a Makefile or submakefile is modified.
+#    (TODO: rebuild only affected objects)
 #
 
 # ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
@@ -71,7 +73,7 @@ endef
 #   USE WITH EVAL
 #
 define add-object
-${1}/%.o: ${2}
+${1}/%.o: ${2} $${MAKEFILE_TREE}
 	${3}
 endef
 
@@ -85,7 +87,7 @@ endef
 define add-target
     ifeq "$$(suffix ${1})" ".a"
         # Add a target for creating a static library.
-        $${TARGET_DIR}/${1}: $${${1}_OBJECTS}
+        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${MAKEFILE_TREE}
 	    @mkdir -p $$(dir $$@)
 	    $$(strip $${AR} $${ARFLAGS} $${${1}_ARFLAGS} $$@ $${${1}_OBJECTS})
 	    $${${1}_POSTMAKE}
@@ -106,7 +108,7 @@ define add-target
             endif
         endif
 
-        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS} $${${1}_LDSCRIPT}
+        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS} $${${1}_LDSCRIPT} $${MAKEFILE_TREE}
 	    @mkdir -p $$(dir $$@)
 	    $$(strip $${${1}_LINKER} -o $$@ $${${1}_OBJECTS} $${LDLIBS} \
 	        $${${1}_LDLIBS} $${LDFLAGS} $${${1}_LDFLAGS} $${${1}_LDSCRIPT})
@@ -218,6 +220,11 @@ define include-submakefile
     DIR := $(call CANONICAL_PATH,$(dir ${1}))
     _DIR_STACK := $$(call PUSH,$${_DIR_STACK},$${DIR})
 
+    # Push the current "executing" Makefile onto the Makefile stack.
+    CURRENT_MAKEFILE := $(call CANONICAL_PATH,$(abspath $(lastword $(MAKEFILE_LIST))))
+    _MAKEFILE_STACK := $$(call PUSH,$${_MAKEFILE_STACK},$${CURRENT_MAKEFILE})
+    MAKEFILE_TREE := $$(subst :, ,$${_MAKEFILE_STACK})
+
     include ${1}
 
     # Initialize post-include local variables.
@@ -261,7 +268,7 @@ define include-submakefile
     else
         # The values defined by this makefile apply to the the "current" target
         # as determined by which target is at the top of the stack.
-        TARGET := $$(strip $$(call PEEK,$${_TGT_STACK}))
+        TARGET := $$(strip $$(call PEEK,$${_TARGET_STACK}))
         $${TARGET}_CFLAGS       += $${TARGET_CFLAGS}
         $${TARGET}_CXXFLAGS     += $${TARGET_CXXFLAGS}
         $${TARGET}_ASFLAGS      += $${TARGET_ASFLAGS}
@@ -277,7 +284,7 @@ define include-submakefile
     endif
 
     # Push the current target onto the target stack.
-    _TGT_STACK := $$(call PUSH,$${_TGT_STACK},$${TARGET})
+    _TARGET_STACK := $$(call PUSH,$${_TARGET_STACK},$${TARGET})
 
     ifneq "$$(strip $${SOURCES})" ""
         # This makefile builds one or more objects from source. Validate the
@@ -322,12 +329,15 @@ define include-submakefile
     endif
 
     # Reset the "current" target to it's previous value.
-    _TGT_STACK := $$(call POP,$${_TGT_STACK})
-    TARGET := $$(call PEEK,$${_TGT_STACK})
+    _TARGET_STACK := $$(call POP,$${_TARGET_STACK})
+    TARGET := $$(call PEEK,$${_TARGET_STACK})
 
     # Reset the "current" directory to it's previous value.
     _DIR_STACK := $$(call POP,$${_DIR_STACK})
     DIR := $$(call PEEK,$${_DIR_STACK})
+
+    _MAKEFILE_STACK := $${call POP,$${_MAKEFILE_STACK}}
+    CURRENT_MAKEFILE := $$(call PEEK,$${_MAKEFILE_STACK})
 endef
 
 # MIN - Parameterized "function" that results in the minimum lexical value of
@@ -395,7 +405,8 @@ DEFINES         :=
 INCLUDES        :=
 
 _DIR_STACK       :=
-_TGT_STACK       :=
+_TARGET_STACK    :=
+_MAKEFILE_STACK  :=
 
 # Include the main user-supplied submakefile. This also recursively includes
 # all other user-supplied submakefiles.

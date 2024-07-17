@@ -35,8 +35,6 @@ DISKIMG := ${TARGET_DIR}/ohwes.img
 SUBMAKEFILES := \
     ohwes.mk \
 
-MAKEFLAGS := --no-print-directory
-
 .PHONY: all ohwes tools test
 .PHONY: img floppy format-floppy
 .PHONY: run run-bochs debug debug-boot
