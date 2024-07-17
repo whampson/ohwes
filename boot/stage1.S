@@ -32,12 +32,12 @@
 #include <boot.h>
 #include "x86_boot.h"
 
-.code16
-
 # -----------------------------------------------------------------------------
 # --------------------------------- Stage 1 -----------------------------------
 # -----------------------------------------------------------------------------
 .section .stage1, "ax", @progbits
+
+.code16
 
 ##
 # Boot loader entry point. This is where the BIOS drops us off.
@@ -58,25 +58,25 @@ entry:
 ##
 .globl bios_param_block
 bios_param_block:
-  oem_name:                 .ascii          "WHAM!SON"
-  sector_size:              .short          512
-  sectors_per_cluster:      .byte           1
-  reserved_sectors:         .short          1
-  fat_count:                .byte           2
-  root_dir_capacity:        .short          224
-  sector_count:             .short          2880
-  media_type:               .byte           0xF0
-  sectors_per_fat:          .short          9
-  sectors_per_track:        .short          18
-  head_count:               .short          2
-  hidden_sectors:           .int            0
-  sector_count32:           .int            0
-  drive_number:             .byte           0
-  _reserved:                .byte           0
-  extended_boot_signature:  .byte           0x29
-  volume_id:                .int            0xCA55E77E
-  volume_label:             .ascii          "OH-WES     "
-  fs_type:                  .ascii          "FAT12   "
+  oem_name:             .ascii          "WHAM!SON"
+  sector_size:          .short          512
+  sectors_per_cluster:  .byte           1
+  reserved_sectors:     .short          1
+  fat_count:            .byte           2
+  root_dir_capacity:    .short          224
+  sector_count:         .short          2880
+  media_type:           .byte           0xF0
+  sectors_per_fat:      .short          9
+  sectors_per_track:    .short          18
+  head_count:           .short          2
+  hidden_sectors:       .int            0
+  sector_count32:       .int            0
+  drive_number:         .byte           0
+  _reserved:            .byte           0
+  extended_boot_sig:    .byte           0x29
+  volume_id:            .int            0xCA55E77E
+  volume_label:         .ascii          "OH-WES     "
+  fs_type:              .ascii          "FAT12   "
 
 ##
 # Initial boot loader code.
@@ -87,17 +87,18 @@ bios_param_block:
 # stage 2 far away at 0x90000 so it doesn't get overwritten by our kernel image.
 ##
 stage1:
-        cli
-        ljmp            $0, $_setup
+        ljmp            $0, $_setup             # set CS to a known value
 
 _setup:
         # setup segment registers and stack
         xorw            %ax, %ax
+        movw            %ax, %ss
         movw            %ax, %ds
         movw            %ax, %es
-        movw            %ax, %ss
-        movw            $STACK_BASE, %sp
+        movw            %ax, %fs
         LOAD_SEGMENT    $BDA_SEGMENT, %gs
+        movw            $STACK_BASE, %bp
+        movw            %bp, %sp
 
         # load the root directory
         movw            root_dir_capacity, %cx  # calculate root dir size:
@@ -110,7 +111,7 @@ _setup:
         shrw            $SECTOR_SHIFT, %cx      #  nsectors=((nbytes-1)/512)+1
         incw            %cx
         addw            %cx, first_cluster      # 1st cluster follows root dir
-        movw            $FAT_ROOTDIR_BASE, %bx
+        movw            $ROOTDIR_BASE, %bx
         call            load_sectors            # read root dir
 
         # load stage 2 binary
@@ -160,7 +161,7 @@ find_file:
         movw            %ds, %ax
         movw            %ax, %es                # ensure es == ds (for cmpsb)
 
-        movw            $FAT_ROOTDIR_BASE, %di  # start at top of root dir
+        movw            $ROOTDIR_BASE, %di      # start at top of root dir
         movw            root_dir_capacity, %bx  # loop count
         cld                                     # clear direction flag
 

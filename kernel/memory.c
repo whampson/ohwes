@@ -74,21 +74,25 @@ LOW MEMORY:
          |                            |
          |                            |
    10000 +----------------------------+ 64K
-         | Kernel Stack               |         <-- TODO: dynamically allocate
-    F000 +----------------------------+ 63K
+         |                            |
+         |                            |
+         | Stage 2 Boot Loader        |
+         |                            |
+         |                            |
+    7E00 +----------------------------+
+         | Stage 1 Boot Loader        |
+    7C00 +----------------------------+
          |                            |
          | (free)                     |
          |                            |
-    5000 +----------------------------+ 20K
-         | Kernel Page Table (0-4M)   |         <-- TODO: dynamically allocate
-    4000 +----------------------------+ 16K
-         | Memory Info                |
-    3000 +----------------------------+ 12K
+    4000 +----------------------------+ 12K
          | IDT/GDT/LDT/TSS            |
+    3000 +----------------------------+ 8K
+         | Kernel Page Table (0-4M)   |         <-- TODO: dynamically allocate
     2000 +----------------------------+ 8K
          | System Page Directory      |
     1000 +----------------------------+ 4K
-         | Zero Page                  |
+         | Null Page (BIOS stuff)     |
        0 +============================+ 0K
 
 
@@ -129,16 +133,13 @@ struct mem_info
     uint32_t total_physical_pages;
 };
 
-struct mem_info *g_mem_info;
+struct mem_info mem_info;
 
 static void print_meminfo(const struct boot_info *info);
 extern int init_paging(const struct boot_info *boot_info, uint32_t pgtbl);
 
 void init_memory(const struct boot_info *boot_info)
 {
-    zeromem((void *) SYSTEM_MEMORY_PAGE, PAGE_SIZE);
-    g_mem_info = (struct mem_info *) SYSTEM_MEMORY_PAGE;
-
     print_meminfo(boot_info);   // TODO: copy ACPI memory map to mem info page
     init_paging(boot_info, KERNEL_PAGE_TABLE);
 }

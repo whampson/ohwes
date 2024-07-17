@@ -73,19 +73,7 @@ struct boot_info g_boot;
 
 __fastcall void kmain(const struct boot_info *info)
 {
-    // --- Memory Map upon entry ---
-    // 0x00000-0x004FF: reserved for Real Mode IVT and BDA (do we still need this?)
-    // 0x00500-0x007FF: ACPI memory map table
-    // 0x00800-0x00FFF: CPU data area (GDT/IDT/LDT/TSS/etc.)
-    // 0x02400-0x0????: (<= 0xDC00 bytes of free space)
-    // 0x07C00-0x07DFF: stage 1 boot loader (potentially free; contains BPB)
-    // 0x07E00-0x0????: stage 2 boot loader (potentially free; contains boot_info)
-    // 0x0????-0x0FFFF: kernel stack (grows towards 0)
-    // 0x10000-(EBDA ): kernel and system
-
-    __cli();
     memcpy(&g_boot, info, sizeof(struct boot_info));
-    info = &g_boot;     // reassign ptr so we don't lose access to the data
 
     init_cpu(&g_boot);
     init_pic();
@@ -100,7 +88,6 @@ __fastcall void kmain(const struct boot_info *info)
     print_info(&g_boot);
 #endif
 
-
     init_ps2(&g_boot);
     init_kb();
     init_memory(&g_boot);
@@ -108,7 +95,8 @@ __fastcall void kmain(const struct boot_info *info)
     init_rtc();
 
     kprint("boot: entering ring3...\n");
-    enter_ring3((uint32_t) init, USER_STACK_PAGE + PAGE_SIZE);  // TODO: page privilege
+    uint32_t user_stack = 0xD000;
+    enter_ring3((uint32_t) init, user_stack);
 }
 
 int init(void)
@@ -280,20 +268,17 @@ static void print_info(const struct boot_info *info)
     int nparallel = info->hwflags.num_parallel_ports;
     bool gameport = info->hwflags.has_gameport;
     bool mouse = info->hwflags.has_ps2mouse;
+    uint32_t ebda_size = 0xA0000 - info->ebda_base;
 
-    kprint("boot: %d %s, %d serial %s, %d parallel %s\n",
+    kprint("bios: %d %s, %d serial %s, %d parallel %s\n",
         nfloppies, PLURAL2(nfloppies, "floppy", "floppies"),
         nserial, PLURAL(nserial, "port"),
         nparallel, PLURAL(nparallel, "port"));
-    kprint("boot: %s ps/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
-    kprint("boot: video mode is %02Xh\n", info->video_mode);
-    kprint("boot: stage2:\t\t%08X,%Xh\n", info->stage2, info->stage2_size);
-    kprint("boot: kernel:\t\t%08X,%Xh\n", info->kernel, info->kernel_size);
-    kprint("boot: init:\t\t%08X,%Xh\n", INIT_BASE, info->init_size);
-    kprint("boot: framebuf:\t%08X,%Xh\n", info->framebuffer, info->framebuffer_pages << PAGE_SHIFT);
-    kprint("boot: kernel stack:\t%08Xh\n", info->stack);
-    kprint("boot: user stack:\t%08Xh\n", USER_STACK_PAGE + PAGE_SIZE);
-    if (info->ebda) kprint("boot: EBDA\t\t%08Xh\n", info->ebda);
+    kprint("bios: %s ps/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
+    kprint("bios: video mode is %02Xh\n", info->vga_mode & 0x7F);
+    if (info->ebda_base) kprint("boot: EBDA:\t%08X,%Xh\n", info->ebda_base, ebda_size);
+    kprint("boot: stage2:\t%08X,%Xh\n", info->stage2_base, info->stage2_size);
+    kprint("boot: kernel:\t%08X,%Xh\n", info->kernel_base, info->kernel_size);
 }
 
 #ifdef DEBUG

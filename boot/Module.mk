@@ -6,7 +6,8 @@ TARGET_STAGE2 = boot/boot.sys
 
 SOURCES = \
 	stage1.S \
-	stage2.S
+	stage2.S \
+	entry32.S \
 
 TGT_LDFLAGS := -T boot/boot.ld
 

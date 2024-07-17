@@ -73,7 +73,7 @@ struct hwflags {
 static_assert(sizeof(struct hwflags) == 4, "sizeof(struct hwflags) == 4");
 
 /**
- * Known values for the "videoMode" field in HwFlags.
+ * Values for the "initial_video_mode" field in struct hwflags.
  */
 enum hwflags_video_mode {
     HWFLAGS_VIDEOMODE_INVALID       = 0,
@@ -88,7 +88,21 @@ enum hwflags_video_mode {
  *----------------------------------------------------------------------------*/
 
 /**
- * Entry for ACPI Memory Map, as returned by INT 15h,AX=E820h.
+ * ACPI Memory Types
+ */
+enum acpi_mmap_type {
+    ACPI_MMAP_TYPE_INVALID  = 0,    // (invalid table entry, ignore)
+    ACPI_MMAP_TYPE_USABLE   = 1,    // Available, free for use
+    ACPI_MMAP_TYPE_RESERVED = 2,    // Reserved, do not use
+    ACPI_MMAP_TYPE_ACPI     = 3,    // ACPI tables, can be reclaimed
+    ACPI_MMAP_TYPE_ACPI_NVS = 4,    // ACPI non-volatile storage, do not use
+    ACPI_MMAP_TYPE_BAD      = 5,    // Bad memory, do not use
+    // Other values are reserved or OEM-specific, do not use
+};
+
+
+/**
+ * ACPI Memory Map entry, as returned by INT 15h,AX=E820h.
  */
 struct acpi_mmap_entry {
     uint64_t base;
@@ -104,30 +118,10 @@ static_assert(sizeof(struct acpi_mmap_entry) == 24, "sizeof(struct acpi_mmap_ent
  */
 typedef struct acpi_mmap_entry acpi_mmap_t;
 
-/**
- * Values for the "type" field in an acpi_mmap_entry.
- */
-enum acpi_mmap_type {
-    ACPI_MMAP_TYPE_INVALID  = 0,    // (invalid table entry, ignore)
-    ACPI_MMAP_TYPE_USABLE   = 1,    // Available, free for use
-    ACPI_MMAP_TYPE_RESERVED = 2,    // Reserved, do not use
-    ACPI_MMAP_TYPE_ACPI     = 3,    // ACPI tables, can be reclaimed
-    ACPI_MMAP_TYPE_ACPI_NVS = 4,    // ACPI non-volatile storage, do not use
-    ACPI_MMAP_TYPE_BAD      = 5,    // Bad memory, do not use
-    // Other values are reserved or OEM-specific, do not use
-};
-
 
 /*----------------------------------------------------------------------------*
  * System Boot Info
  *----------------------------------------------------------------------------*/
-
-#define _BI_KERNEL_BASE         0x00
-#define _BI_KERNEL_SIZE         0x04
-#define _BI_STAGE2_BASE         0x08
-#define _BI_STAGE2_SIZE         0x0C
-#define _BI_STACK_BASE          0x10
-#define _BI_LOWMEM_LIMIT        0x14
 
 /**
  * System information collected during boot and passed onto the kernel.
@@ -140,35 +134,22 @@ struct boot_info {
     uint32_t kernel_size;           // kernel image size bytes
     intptr_t stage2_base;           // stage2 image base address
     uint32_t stage2_size;           // stage2 image size bytes
-    intptr_t stack_base;            // stack base upon leaving stage2
-    intptr_t lowmem_limit;          // highest general-purpose address in low memory (below 1M)
+    intptr_t ebda_base;             // Extended BIOS Data Area
+    const acpi_mmap_t *mem_map;     // ACPI Memory Map (INT 15h,AX=E820h)
 
     uint32_t kb_low;                // 1K blocks 0 to 640K (INT 12h)
     uint32_t kb_high;               // 1K blocks 1M to 16M (INT 15h,AX=88h)
     uint32_t kb_high_e801h;         // 1K blocks 1M to 16M (INT 15h,AX=E801h)
     uint32_t kb_extended;           // 64K blocks 16M to 4G (INT 15h,AX=E801h)
-    const acpi_mmap_t *mem_map;     // ACPI Memory Map (INT 15h,AX=E820h)
 
     struct hwflags hwflags;         // system hardware flags (INT 11h)
+
     uint32_t a20_method;            // method used to enable A20 line, one of A20_*
     uint32_t vga_mode;              // VGA video mode (INT 10h,AH=0Fh)
-    uint32_t vga_page;              // VGA active display page (INT 10h,AH=0Fh)
     uint32_t vga_cols;              // VGA column count (INT 10h,AH=0Fh)
-    uint32_t vga_cursor_start;      // VGA cursor scan line top
-    uint32_t vga_cursor_end;        // VGA cursor scan line bottom
-    intptr_t vga_framebuffer_base;  // memory-mapped VGA frame buffer
-    uint32_t vga_framebuffer_size;  // VGA frame buffer size bytes
+    uint32_t cursor_col;            // current cursor column (INT 10h,AH=03h)
+    uint32_t cursor_row;            // current cursor row (INT 10h,AH=03h)
 };
-static_assert(offsetof(struct boot_info, kernel_base) == _BI_KERNEL_BASE, "invalid offset!");
-static_assert(offsetof(struct boot_info, kernel_size) == _BI_KERNEL_SIZE, "invalid offset!");
-static_assert(offsetof(struct boot_info, stage2_base) == _BI_STAGE2_BASE, "invalid offset!");
-static_assert(offsetof(struct boot_info, stage2_size) == _BI_STAGE2_SIZE, "invalid offset!");
-static_assert(offsetof(struct boot_info, stack_base) == _BI_STACK_BASE, "invalid offset!");
-static_assert(offsetof(struct boot_info, lowmem_limit) == _BI_LOWMEM_LIMIT, "invalid offset!");
-static_assert(offsetof(struct boot_info, kernel_base) == _BI_KERNEL_BASE, "invalid offset!");
-static_assert(offsetof(struct boot_info, kernel_base) == _BI_KERNEL_BASE, "invalid offset!");
-static_assert(offsetof(struct boot_info, kernel_base) == _BI_KERNEL_BASE, "invalid offset!");
-static_assert(offsetof(struct boot_info, kernel_base) == _BI_KERNEL_BASE, "invalid offset!");
 
 #endif  // __ASSEMBLER__
 

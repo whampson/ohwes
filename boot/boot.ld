@@ -23,7 +23,7 @@ ENTRY(entry)
 
 MEMORY
 {
-    STAGE1 (rwx)      : ORIGIN = 0x7C00, LENGTH = 512
+    STAGE1 (rwx)    : ORIGIN = 0x7C00, LENGTH = 512
     STAGE2 (rwx)    : ORIGIN = 0x7E00, LENGTH = 0x8200
 }
 
@@ -37,5 +37,6 @@ SECTIONS
     .stage2 :
     {
         *(.stage2)
+        *(.text)    /* 32-bit code portion */
     } > STAGE2
 }

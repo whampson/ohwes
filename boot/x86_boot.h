@@ -36,7 +36,7 @@
 // 00500-0FFFF: (free)
 // 01000-02BFF: FAT root directory
 // 02C00-02FFF: ACPI memory map
-// 03000-07BFF: (free)
+// 03000-079FF: (free)
 // 07A00-07BFF: real mode stack
 // 07C00-07DFF: stage 1
 // 07E00-0FFFF: stage 2
@@ -52,9 +52,9 @@
 #define BDA_SEGMENT         0x0040
 #define KERNEL_SEGMENT      (KERNEL_BASE >> 4)
 
-#define FAT_ROOTDIR_BASE    0x1000
-#define ACPI_MEMMAP_BASE    0x2C00
 #define STACK_BASE          0x7C00  // grows toward 0
+#define ROOTDIR_BASE        0x1000
+#define MEMMAP_BASE         0x2C00
 #define STAGE2_BASE         0x7E00
 
 
@@ -104,12 +104,14 @@
  * VGA Stuff
  * See http://www.ctyme.com/intr/rb-0069.htm
  *----------------------------------------------------------------------------*/
-// TODO: allow other modes for fun
 // https://www.stanislavs.org/helppc/int_10-0.html
 
-#define VGA_MODE            0x03// 0x03=text,CGA/EGA,80x25,9x16,16fg/8bg,0xB8000
-#define VGA_CLEAR           0   // clear screen toggle
+// Text Modes
+#define MODE_02h          0x02        // 80x25,B8000,16gray
+#define MODE_03h          0x03        // 80x25,B8000,16
+#define MODE_07h          0x07        // 80x25,B0000,mono
 
+#define VGA_MODE          MODE_03h
 
 /*----------------------------------------------------------------------------*
  * GDT Segment Descriptors

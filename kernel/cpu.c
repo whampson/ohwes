@@ -28,9 +28,9 @@
 #include <irq.h>
 #include <paging.h>
 
-#if DEBUG
-#define CHATTY               0
-#endif
+// #if DEBUG
+// #define CHATTY               1
+// #endif
 
 //
 // x86 Descriptor table and TSS geometry.
@@ -270,18 +270,19 @@ void init_cpu(const struct boot_info * const info)
     init_ldt(info);
     init_tss(info);
 
-#ifdef CHATTY
-    struct cpuid cpuid;
-    if (get_cpuid(&cpuid)) {
-        kprint("cpuid: family=%d,model=%d,stepping=%d,type=%d,level=%d,ext_level=%02Xh\n"
-               "cpuid: index=%02Xh,ven=%s,name=%s\n"
-               "cpuid: fpu=%d,pse=%d,pge=%d,pat=%d,tsc=%d,msr=%d\n",
-            cpuid.family, cpuid.model, cpuid.stepping, cpuid.type,cpuid.level,
-            cpuid.level_extended, cpuid.brand_index, cpuid.vendor_id, cpuid.brand_name,
-            cpuid.fpu_support, cpuid.pse_support, cpuid.pge_support,
-            cpuid.pat_support, cpuid.tsc_support, cpuid.msr_support);
-    }
-#endif
+// TODO: cannot early print!!
+// #ifdef CHATTY
+//     struct cpuid cpuid;
+//     if (get_cpuid(&cpuid)) {
+//         kprint("cpuid: family=%d,model=%d,stepping=%d,type=%d,level=%d,ext_level=%02Xh\n"
+//                "cpuid: index=%02Xh,ven=%s,name=%s\n"
+//                "cpuid: fpu=%d,pse=%d,pge=%d,pat=%d,tsc=%d,msr=%d\n",
+//             cpuid.family, cpuid.model, cpuid.stepping, cpuid.type,cpuid.level,
+//             cpuid.level_extended, cpuid.brand_index, cpuid.vendor_id, cpuid.brand_name,
+//             cpuid.fpu_support, cpuid.pse_support, cpuid.pge_support,
+//             cpuid.pat_support, cpuid.tsc_support, cpuid.msr_support);
+//     }
+// #endif
 }
 
 static void init_gdt(const struct boot_info * const info)
@@ -380,7 +381,7 @@ static void init_ldt(const struct boot_info * const info)
     //
 
     // Zero LDT
-    memset((void *) LDT_BASE, 0, IDT_SIZE);
+    memset((void *) LDT_BASE, 0, LDT_SIZE);
 
     // Create LDT entry in GDT using predefined LDT segment selector.
     void *ldt_desc = get_desc(GDT_BASE, _GDT_LOCALDESC);
@@ -405,7 +406,7 @@ static void init_tss(const struct boot_info * const info)
     // Fill TSS with LDT segment selector, kernel stack pointer,
     // and kernel stack segment selector
     tss->ldt_segsel = _GDT_LOCALDESC;
-    tss->esp0 = info->stack;   // TODO: don't forget to modify this when task switching!
+    tss->esp0 = KERNEL_BASE;
     tss->ss0 = KERNEL_DS;
 
     // Add TSS entry to GDT

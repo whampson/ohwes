@@ -12,7 +12,7 @@ SECTIONS
      * image, but that is fine for right now as we have plenty of floppy disk
      * space :-)
      */
-    .text 0x20000 :         /* TODO: can we include base address from config.h? */
+    .text 0x10000 :         /* TODO: can we include base address from config.h? */
     {
         *entry.o(.text)     /* entry.o goes first so kentry first instruction */
         *(.text)

@@ -36,33 +36,20 @@ struct paging_info *g_paging_info = &_pginfo;
 static void init_page_mappings(const struct boot_info *boot_info, uint32_t pgtbl)
 {
     // map page table (addressability: 0-4M)
-    // TODO: USERMODE needed because we have some usermode pages in here for
-    // init.exe and we  haven't given init.exe it's own page table yet...
+    // TODO: USERMODE needed because we have some usermode pages in here
     map_page(0x0, get_pfn(pgtbl), MAP_PAGETABLE | MAP_USERMODE);
-    if (identity_map(pgtbl, 0) < 0) {
-        panic("failed to map kernel page table!");
-    }
 
-    // map system page directory
-    if (identity_map(SYSTEM_PAGE_DIRECTORY, 0) < 0) {
-        panic("failed to map page directory!");
-    }
-
-    // map GDT/IDT/LDT/TSS etc.
-    if (identity_map(SYSTEM_CPU_PAGE, 0) < 0) {
-        panic("failed to map CPU page!");
-    }
-
-    // map memory info area
-    if (identity_map(SYSTEM_MEMORY_PAGE, 0) < 0) {
-        panic("failed to map memory info page!");
+    for (int i = 0; i < ((0x10000 - 0x1000) >> PAGE_SHIFT); i++) {
+        uint32_t va = 0x1000 + (i << PAGE_SHIFT);
+        if (identity_map(va, 0 | MAP_USERMODE) < 0) {   // TODO: temp usermode
+            panic("failed to map first 64k!");
+        }
     }
 
     // map video frame buffer
-    uint32_t framebuf_pages = boot_info->framebuffer_pages;
-    assert(boot_info->framebuffer == SYSTEM_FRAME_BUFFER);
+    uint32_t framebuf_pages = (0xC0000 - 0xB8000) >> PAGE_SHIFT;
     for (int i = 0; i < framebuf_pages; i++) {
-        uint32_t va = boot_info->framebuffer + (i << PAGE_SHIFT);
+        uint32_t va = 0xB8000 + (i << PAGE_SHIFT);
         if (identity_map(va, 0) < 0) {
             panic("failed to map frame buffer page!");
         }
@@ -70,38 +57,13 @@ static void init_page_mappings(const struct boot_info *boot_info, uint32_t pgtbl
 
     // map kernel code
     uint32_t num_kernel_code_pages = div_ceil(boot_info->kernel_size, PAGE_SIZE);
-    assert(boot_info->kernel == KERNEL_BASE);
+    assert(boot_info->kernel_base == KERNEL_BASE);
     for (int i = 0; i < num_kernel_code_pages; i++) {
-        uint32_t va = boot_info->kernel + (i << PAGE_SHIFT);
+        uint32_t va = boot_info->kernel_base + (i << PAGE_SHIFT);
         if (identity_map(va, 0 | MAP_USERMODE) < 0) {   // TODO: temp usermode
             panic("failed to map kernel code page!");
         }
     }
-
-    // map kernel stack
-    uint32_t stack_page = boot_info->stack - PAGE_SIZE;
-    assert(stack_page == KERNEL_STACK_PAGE);
-    if (identity_map(stack_page, 0) < 0) {
-        panic("failed to map kernel stack page!");
-    }
-
-#if TEST_BUILD
-    // map test code
-    uint32_t num_test_code_pages = (2 << 16) >> PAGE_SHIFT;
-    for (int i = 0; i < num_test_code_pages; i++) {
-        uint32_t va = TEST_BASE + (i << PAGE_SHIFT);
-        if (identity_map(va, MAP_USERMODE) < 0) {
-            panic("failed to map test code pages!");
-        }
-    }
-#endif
-
-    // map user stack page
-    if (identity_map(USER_STACK_PAGE, MAP_USERMODE) < 0) {
-        panic("failed to map user stack page!");
-    }
-
-    // TODO: configure GDT to reflect kernel and user data/code/stack pages
 }
 
 void init_paging(const struct boot_info *boot_info, uint32_t pgtbl)

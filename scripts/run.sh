@@ -50,9 +50,11 @@ if [ "$1" = "qemu" ]; then
         "$QEMU_PATH" $QEMU_FLAGS &
         gdb \
             -ex 'target remote localhost:1234' \
-            -ex 'add-symbol-file bin/boot.elf' \
+            -ex 'add-symbol-file bin/boot/boot.elf' \
             -ex 'lay src' -ex 'lay reg' \
             -ex 'b entry' \
+            -ex 'b entry32' \
+            -ex 'b stage1' \
             -ex 'b stage2'
     elif [ $DEBUG_KERNEL = 1 ]; then
         "$QEMU_PATH" $QEMU_FLAGS &
