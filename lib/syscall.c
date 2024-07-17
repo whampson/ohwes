@@ -25,9 +25,14 @@
 //
 // system call linkage
 //
-_syscall1(exit, int,status)
 _syscall3(read, int,fd, void*,buf, size_t,count)
 _syscall3(write, int,fd, const void*,buf, size_t,count)
 _syscall2(open, const char*,name, int,flags)
 _syscall1(close, int,fd)
 _syscall3(ioctl, int,fd, unsigned int,cmd, void*,arg)
+
+void exit(int status)
+{
+    __asm__ volatile ("int $0x80" :: "a"(_sys_exit), "b"(status));
+    for (;;);
+}

@@ -64,11 +64,11 @@ void * memmove(void *dest, const void *src, size_t count)
     return memcpy(dest, src, count);
 }
 
-void * memset(void *dest, char c, size_t count)
+void * memset(void *dest, int c, size_t count)
 {
     char *d = dest;
     while (count--) {
-        *d++ = c;
+        *d++ = (char) c;
     }
 
     return dest;

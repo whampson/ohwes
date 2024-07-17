@@ -216,7 +216,7 @@ static void basic_shell(void)
         // get and print entire line
         size_t count = drain_queue(lineq, line, sizeof(line));
         if (strncmp(line, "\n", count) != 0) {
-            printf("%.*s", count, line);
+            printf("%.*s", (int) count, line);
         }
 
         //
@@ -286,14 +286,14 @@ static void print_info(const struct boot_info *info)
         nserial, PLURAL(nserial, "port"),
         nparallel, PLURAL(nparallel, "port"));
     kprint("boot: %s ps/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
-    kprint("boot: video mode is %02Xh\n", info->video_mode);
-    kprint("boot: stage2:\t\t%08X,%Xh\n", info->stage2, info->stage2_size);
-    kprint("boot: kernel:\t\t%08X,%Xh\n", info->kernel, info->kernel_size);
-    kprint("boot: init:\t\t%08X,%Xh\n", INIT_BASE, info->init_size);
-    kprint("boot: framebuf:\t%08X,%Xh\n", info->framebuffer, info->framebuffer_pages << PAGE_SHIFT);
-    kprint("boot: kernel stack:\t%08Xh\n", info->stack);
+    kprint("boot: video mode is %02lXh\n", info->video_mode);
+    kprint("boot: stage2:\t\t%08lX,%lXh\n", info->stage2, info->stage2_size);
+    kprint("boot: kernel:\t\t%08lX,%lXh\n", info->kernel, info->kernel_size);
+    kprint("boot: init:\t\t%08X,%lXh\n", INIT_BASE, info->init_size);
+    kprint("boot: framebuf:\t%08lX,%lXh\n", info->framebuffer, info->framebuffer_pages << PAGE_SHIFT);
+    kprint("boot: kernel stack:\t%08lXh\n", info->stack);
     kprint("boot: user stack:\t%08Xh\n", USER_STACK_PAGE + PAGE_SIZE);
-    if (info->ebda) kprint("boot: EBDA\t\t%08Xh\n", info->ebda);
+    if (info->ebda) kprint("boot: EBDA\t\t%08lXh\n", (intptr_t) info->ebda);
 }
 
 #ifdef DEBUG

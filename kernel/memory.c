@@ -176,17 +176,17 @@ static void print_meminfo(const struct boot_info *info)
             uint32_t base = (uint32_t) e->base;
             uint32_t limit = (uint32_t) e->length - 1;
 
-            kprint("mem: bios-e820: %08lX-%08lX ", base, base+limit, e->attributes, e->type);
+            kprint("mem: bios-e820: %08lX-%08lX ", base, base+limit);
             switch (e->type) {
                 case ACPI_MMAP_TYPE_USABLE: kprint("free"); break;
                 case ACPI_MMAP_TYPE_RESERVED: kprint("reserved"); break;
                 case ACPI_MMAP_TYPE_ACPI: kprint("reserved ACPI"); break;
                 case ACPI_MMAP_TYPE_ACPI_NVS: kprint("reserved ACPI non-volatile"); break;
                 case ACPI_MMAP_TYPE_BAD: kprint("bad"); break;
-                default: kprint("unknown (%d)", e->type); break;
+                default: kprint("unknown (%ld)", e->type); break;
             }
             if (e->attributes) {
-                kprint(" (attributes = %X)", e->attributes);
+                kprint(" (attributes = %lX)", e->attributes);
             }
             kprint("\n");
 #endif

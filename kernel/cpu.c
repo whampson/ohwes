@@ -148,7 +148,7 @@ bool get_cpuid(struct cpuid *info)
     uint32_t eax, ebx, ecx, edx;
     uint32_t char_buf[4];
 
-    zeromem(info, sizeof(info));
+    zeromem(info, sizeof(struct cpuid));
     zeromem(char_buf, sizeof(char_buf));
 
     if (!cpu_has_cpuid()) {
@@ -273,7 +273,7 @@ void init_cpu(const struct boot_info * const info)
 #ifdef CHATTY
     struct cpuid cpuid;
     if (get_cpuid(&cpuid)) {
-        kprint("cpuid: family=%d,model=%d,stepping=%d,type=%d,level=%d,ext_level=%02Xh\n"
+        kprint("cpuid: family=%d,model=%d,stepping=%d,type=%d,level=%d,ext_level=%02lXh\n"
                "cpuid: index=%02Xh,ven=%s,name=%s\n"
                "cpuid: fpu=%d,pse=%d,pge=%d,pat=%d,tsc=%d,msr=%d\n",
             cpuid.family, cpuid.model, cpuid.stepping, cpuid.type,cpuid.level,
