@@ -9,6 +9,6 @@ TARGET_LDLIBS := \
     lib.a \
 
 DEFINES := __USER_MODE__
-TARGET_LDFLAGS := -T test/test.ld
+TARGET_LDSCRIPT := test.ld
 
 $(eval $(call make-rawbin,test.exe))

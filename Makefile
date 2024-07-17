@@ -20,13 +20,16 @@
 # Modifications made by Wes Hampson.
 #
 # 29 Sep 23:
-#  - Added support for compiling ASM files
+#  - Added support for compiling ASM files.
 #
 # 17 Jul 24:
-#  - Cleaned up variable, macro, and function names
-#  - Items in TARGET_LDLIBS are now relative to TARGET_DIR
+#  - Cleaned up variable, macro, and function names.
+#  - Items in TARGET_LDLIBS are now relative to TARGET_DIR.
 #  - Added function `make-rawbin` to create raw executables with no relocation,
 #    symbol, or debugging information.
+#  - Added TARGET_LDSCRIPT so targets can specify an optional linker script
+#    which is tracked by the build system and will thus trigger a relink if
+#    modified.
 #
 
 # ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
@@ -103,10 +106,10 @@ define add-target
             endif
         endif
 
-        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS}
+        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS} $${${1}_LDSCRIPT}
 	    @mkdir -p $$(dir $$@)
 	    $$(strip $${${1}_LINKER} -o $$@ $${${1}_OBJECTS} $${LDLIBS} \
-	        $${${1}_LDLIBS} $${LDFLAGS} $${${1}_LDFLAGS})
+	        $${${1}_LDLIBS} $${LDFLAGS} $${${1}_LDFLAGS} $${${1}_LDSCRIPT})
 	    $${${1}_POSTMAKE}
     endif
 endef
@@ -192,6 +195,7 @@ define include-submakefile
     TARGET_INCLUDES     :=
     TARGET_LDFLAGS      :=
     TARGET_LDLIBS       :=
+    TARGET_LDSCRIPT     :=
     TARGET_LINKER       :=
     TARGET_POSTCLEAN    :=
     TARGET_POSTMAKE     :=
@@ -245,6 +249,9 @@ define include-submakefile
         $${TARGET}_INCLUDES     := $${TARGET_INCLUDES}
         $${TARGET}_LDFLAGS      := $${TARGET_LDFLAGS}
         $${TARGET}_LDLIBS       := $$(addprefix $${TARGET_DIR}/,$${TARGET_LDLIBS})
+        TARGET_LDSCRIPT         := $$(call QUALIFY_PATH,$${DIR},$${TARGET_LDSCRIPT})
+        TARGET_LDSCRIPT         := $$(call CANONICAL_PATH,$${TARGET_LDSCRIPT})
+        $${TARGET}_LDSCRIPT     := $${TARGET_LDSCRIPT}
         $${TARGET}_LINKER       := $${TARGET_LINKER}
         $${TARGET}_OBJECTS      :=
         $${TARGET}_POSTCLEAN    := $${TARGET_POSTCLEAN}

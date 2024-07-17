@@ -22,7 +22,7 @@ SOURCES := \
 
 TARGET_DEFINES := __KERNEL__
 TARGET_CFLAGS  := -nostdinc -ffreestanding -Wno-unused-function
-TARGET_LDFLAGS := -T kernel/kernel.ld
+TARGET_LDSCRIPT := kernel.ld
 
 TARGET_LDLIBS := \
     libc.a \
