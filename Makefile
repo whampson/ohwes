@@ -22,6 +22,12 @@
 # 29 Sep 23:
 #  - Added support for compiling ASM files
 #
+# 17 Jul 24:
+#  - Cleaned up variable, macro, and function names
+#  - Items in TARGET_LDLIBS are now relative to TARGET_DIR
+#  - Added function `make-rawbin` to create raw executables with no relocation,
+#    symbol, or debugging information.
+#
 
 # ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
 # Caution: Don't edit this Makefile! Create your own main.mk and other
@@ -37,21 +43,21 @@
 #       instances of "$" within them need to be escaped with a second "$" to
 #       accomodate the double expansion that occurs when eval is invoked.
 
-# ADD_CLEAN_RULE - Parameterized "function" that adds a new rule and phony
+# add-clean - Parameterized "function" that adds a new rule and phony
 #   target for cleaning the specified target (removing its build-generated
 #   files).
 #
 #   USE WITH EVAL
 #
-define ADD_CLEAN_RULE
+define add-clean
     clean: clean_${1}
     .PHONY: clean_${1}
     clean_${1}:
-	$$(strip rm -f ${TARGET_DIR}/${1} $${${1}_OBJS:%.o=%.[doP]})
+	$$(strip rm -f ${TARGET_DIR}/${1} $${${1}_OBJECTS:%.o=%.[doP]})
 	$${${1}_POSTCLEAN}
 endef
 
-# ADD_OBJECT_RULE - Parameterized "function" that adds a pattern rule for
+# add-object - Parameterized "function" that adds a pattern rule for
 #   building object files from source files with the filename extension
 #   specified in the second argument. The first argument must be the name of the
 #   base directory where the object files should reside (such that the portion
@@ -61,24 +67,24 @@ endef
 #
 #   USE WITH EVAL
 #
-define ADD_OBJECT_RULE
+define add-object
 ${1}/%.o: ${2}
 	${3}
 endef
 
-# ADD_TARGET_RULE - Parameterized "function" that adds a new target to the
+# add-target - Parameterized "function" that adds a new target to the
 #   Makefile. The target may be an executable or a library. The two allowable
 #   types of targets are distinguished based on the name: library targets must
 #   end with the traditional ".a" extension.
 #
 #   USE WITH EVAL
 #
-define ADD_TARGET_RULE
+define add-target
     ifeq "$$(suffix ${1})" ".a"
         # Add a target for creating a static library.
-        $${TARGET_DIR}/${1}: $${${1}_OBJS}
+        $${TARGET_DIR}/${1}: $${${1}_OBJECTS}
 	    @mkdir -p $$(dir $$@)
-	    $$(strip $${AR} $${ARFLAGS} $$@ $${${1}_OBJS})
+	    $$(strip $${AR} $${ARFLAGS} $${${1}_ARFLAGS} $$@ $${${1}_OBJECTS})
 	    $${${1}_POSTMAKE}
     else
         # Add a target for linking an executable. First, attempt to select the
@@ -97,10 +103,10 @@ define ADD_TARGET_RULE
             endif
         endif
 
-        $${TARGET_DIR}/${1}: $${${1}_OBJS} $${${1}_PREREQS}
+        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS}
 	    @mkdir -p $$(dir $$@)
 	    $$(strip $${${1}_LINKER} -o $$@ $${LDFLAGS} $${${1}_LDFLAGS} \
-	        $${${1}_OBJS} $${LDLIBS} $${${1}_LDLIBS})
+	        $${${1}_OBJECTS} $${LDLIBS} $${${1}_LDLIBS})
 	    $${${1}_POSTMAKE}
     endif
 endef
@@ -118,8 +124,8 @@ endef
 # COMPILE_C_CMDS - Commands for compiling C source code.
 define COMPILE_C_CMDS
 	@mkdir -p $(dir $@)
-	$(strip ${CC} -o $@ -c -MD ${CFLAGS} ${SRC_CFLAGS} ${INCDIRS} \
-	    ${SRC_INCDIRS} ${SRC_DEFS} ${DEFS} $<)
+	$(strip ${CC} -o $@ -c -MD ${CFLAGS} ${SOURCE_CFLAGS} ${DEFINES} \
+	    ${SOURCE_DEFINES} ${INCLUDES} ${SOURCE_INCLUDES} $<)
 	@cp ${@:%$(suffix $@)=%.d} ${@:%$(suffix $@)=%.P}; \
 	 sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
 	     -e '/^$$/ d' -e 's/$$/ :/' < ${@:%$(suffix $@)=%.d} \
@@ -130,8 +136,8 @@ endef
 # COMPILE_CXX_CMDS - Commands for compiling C++ source code.
 define COMPILE_CXX_CMDS
 	@mkdir -p $(dir $@)
-	$(strip ${CXX} -o $@ -c -MD ${CXXFLAGS} ${SRC_CXXFLAGS} ${INCDIRS} \
-	    ${SRC_INCDIRS} ${SRC_DEFS} ${DEFS} $<)
+	$(strip ${CXX} -o $@ -c -MD ${CXXFLAGS} ${SOURCE_CXXFLAGS} ${DEFINES} \
+	    ${SOURCE_DEFINES}${INCLUDES} ${SOURCE_INCLUDES} $<)
 	@cp ${@:%$(suffix $@)=%.d} ${@:%$(suffix $@)=%.P}; \
 	 sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
 	     -e '/^$$/ d' -e 's/$$/ :/' < ${@:%$(suffix $@)=%.d} \
@@ -142,8 +148,8 @@ endef
 # COMPILE_ASM_CMDS - Commands for compiling ASM source code.
 define COMPILE_ASM_CMDS
 	@mkdir -p $(dir $@)
-	$(strip ${AS} -o $@ -c -MD ${ASFLAGS} ${SRC_ASFLAGS} ${INCDIRS} \
-	    ${SRC_INCDIRS} ${SRC_DEFS} ${DEFS} $<)
+	$(strip ${AS} -o $@ -c -MD ${ASFLAGS} ${SOURCE_ASFLAGS} ${DEFINES} \
+	    ${SOURCE_DEFINES} ${INCLUDES} ${SOURCE_INCLUDES} $<)
 	@cp ${@:%$(suffix $@)=%.d} ${@:%$(suffix $@)=%.P}; \
 	 sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
 	     -e '/^$$/ d' -e 's/$$/ :/' < ${@:%$(suffix $@)=%.d} \
@@ -151,48 +157,67 @@ define COMPILE_ASM_CMDS
 	 rm -f ${@:%$(suffix $@)=%.d}
 endef
 
+# -----------------------------------------------------------------------------
 
-# INCLUDE_SUBMAKEFILE - Parameterized "function" that includes a new
+# make-rawbin - Create a raw binary executable using objcopy. Raw binary
+#   executables contain no relocation, symbol, or debugging information.
+#     1 - target stripped binary
+#     2 - flags to pass to objcopy
+#
+#   USE WITH EVAL
+#
+define make-rawbin
+all: $${TARGET_DIR}/${1}
+$${TARGET_DIR}/${1}: $${TARGET_DIR}/${TARGET}
+	@mkdir -p $$(dir $$@)
+	$$(strip $${OBJCOPY} -Obinary ${2} $$< $$@)
+        $$(eval $$(call add-clean,${1}))
+endef
+
+# -----------------------------------------------------------------------------
+
+# include-submakefile - Parameterized "function" that includes a new
 #   "submakefile" fragment into the overall Makefile. It also recursively
 #   includes all submakefiles of the specified submakefile fragment.
 #
 #   USE WITH EVAL
 #
-define INCLUDE_SUBMAKEFILE
-    # Initialize all variables that can be defined by a makefile fragment, then
-    # include the specified makefile fragment.
-    TARGET        :=
-    TGT_CFLAGS    :=
-    TGT_CXXFLAGS  :=
-    TGT_ASFLAGS   :=
-    TGT_DEFS      :=
-    TGT_INCDIRS   :=
-    TGT_LDFLAGS   :=
-    TGT_LDLIBS    :=
-    TGT_LINKER    :=
-    TGT_POSTCLEAN :=
-    TGT_POSTMAKE  :=
-    TGT_PREREQS   :=
+define include-submakefile
+    # Initialize variables that apply to the current target.
+    TARGET              :=
+    TARGET_CFLAGS       :=
+    TARGET_CXXFLAGS     :=
+    TARGET_ASFLAGS      :=
+    TARGET_DEFINES      :=
+    TARGET_INCLUDES     :=
+    TARGET_LDFLAGS      :=
+    TARGET_LDLIBS       :=
+    TARGET_LINKER       :=
+    TARGET_POSTCLEAN    :=
+    TARGET_POSTMAKE     :=
+    TARGET_PREREQS      :=
 
-    SOURCES       :=
-    SRC_CFLAGS    :=
-    SRC_CXXFLAGS  :=
-    SRC_ASFLAGS   :=
-    SRC_DEFS      :=
-    SRC_INCDIRS   :=
+    # Initialize variables that apply to the current set of source files.
+    SOURCES             :=
+    SOURCE_CFLAGS       :=
+    SOURCE_CXXFLAGS     :=
+    SOURCE_ASFLAGS      :=
+    SOURCE_DEFINES      :=
+    SOURCE_INCLUDES     :=
 
+    # Initialize other pre-include variables.
     SUBMAKEFILES  :=
 
     # A directory stack is maintained so that the correct paths are used as we
     # recursively include all submakefiles. Get the makefile's directory and
     # push it onto the stack.
     DIR := $(call CANONICAL_PATH,$(dir ${1}))
-    DIR_STACK := $$(call PUSH,$${DIR_STACK},$${DIR})
+    _DIR_STACK := $$(call PUSH,$${_DIR_STACK},$${DIR})
 
     include ${1}
 
-    # Initialize internal local variables.
-    OBJS :=
+    # Initialize post-include local variables.
+    OBJECTS :=
 
     # Ensure that valid values are set for BUILD_DIR and TARGET_DIR.
     ifeq "$$(strip $${BUILD_DIR})" ""
@@ -208,44 +233,44 @@ define INCLUDE_SUBMAKEFILE
     ifneq "$$(strip $${TARGET})" ""
         # This makefile defined a new target. Target variables defined by this
         # makefile apply to this new target. Initialize the target's variables.
-        TGT := $$(strip $${TARGET})
-        ALL_TGTS += $${TGT}
-        $${TGT}_CFLAGS    := $${TGT_CFLAGS}
-        $${TGT}_CXXFLAGS  := $${TGT_CXXFLAGS}
-        $${TGT}_ASFLAGS   := $${TGT_ASFLAGS}
-        $${TGT}_DEFS      := $${TGT_DEFS}
-        $${TGT}_DEPS      :=
-        TGT_INCDIRS       := $$(call QUALIFY_PATH,$${DIR},$${TGT_INCDIRS})
-        TGT_INCDIRS       := $$(call CANONICAL_PATH,$${TGT_INCDIRS})
-        $${TGT}_INCDIRS   := $${TGT_INCDIRS}
-        $${TGT}_LDFLAGS   := $${TGT_LDFLAGS}
-        $${TGT}_LDLIBS    := $${TGT_LDLIBS}
-        $${TGT}_LINKER    := $${TGT_LINKER}
-        $${TGT}_OBJS      :=
-        $${TGT}_POSTCLEAN := $${TGT_POSTCLEAN}
-        $${TGT}_POSTMAKE  := $${TGT_POSTMAKE}
-        $${TGT}_PREREQS   := $$(addprefix $${TARGET_DIR}/,$${TGT_PREREQS})
-        $${TGT}_SOURCES   :=
+        TARGET := $$(strip $${TARGET})
+        ALL_TARGETS += $${TARGET}
+        $${TARGET}_CFLAGS       := $${TARGET_CFLAGS}
+        $${TARGET}_CXXFLAGS     := $${TARGET_CXXFLAGS}
+        $${TARGET}_ASFLAGS      := $${TARGET_ASFLAGS}
+        $${TARGET}_DEFINES      := $${TARGET_DEFINES}
+        $${TARGET}_DEPENDS      :=
+        TARGET_INCLUDES         := $$(call QUALIFY_PATH,$${DIR},$${TARGET_INCLUDES})
+        TARGET_INCLUDES         := $$(call CANONICAL_PATH,$${TARGET_INCLUDES})
+        $${TARGET}_INCLUDES     := $${TARGET_INCLUDES}
+        $${TARGET}_LDFLAGS      := $${TARGET_LDFLAGS}
+        $${TARGET}_LDLIBS       := $$(addprefix $${TARGET_DIR}/,$${TARGET_LDLIBS})
+        $${TARGET}_LINKER       := $${TARGET_LINKER}
+        $${TARGET}_OBJECTS      :=
+        $${TARGET}_POSTCLEAN    := $${TARGET_POSTCLEAN}
+        $${TARGET}_POSTMAKE     := $${TARGET_POSTMAKE}
+        $${TARGET}_PREREQS      := $$(addprefix $${TARGET_DIR}/,$${TARGET_PREREQS})
+        $${TARGET}_SOURCES      :=
     else
         # The values defined by this makefile apply to the the "current" target
         # as determined by which target is at the top of the stack.
-        TGT := $$(strip $$(call PEEK,$${TGT_STACK}))
-        $${TGT}_CFLAGS    += $${TGT_CFLAGS}
-        $${TGT}_CXXFLAGS  += $${TGT_CXXFLAGS}
-        $${TGT}_ASFLAGS   += $${TGT_ASFLAGS}
-        $${TGT}_DEFS      += $${TGT_DEFS}
-        TGT_INCDIRS       := $$(call QUALIFY_PATH,$${DIR},$${TGT_INCDIRS})
-        TGT_INCDIRS       := $$(call CANONICAL_PATH,$${TGT_INCDIRS})
-        $${TGT}_INCDIRS   += $${TGT_INCDIRS}
-        $${TGT}_LDFLAGS   += $${TGT_LDFLAGS}
-        $${TGT}_LDLIBS    += $${TGT_LDLIBS}
-        $${TGT}_POSTCLEAN += $${TGT_POSTCLEAN}
-        $${TGT}_POSTMAKE  += $${TGT_POSTMAKE}
-        $${TGT}_PREREQS   += $${TGT_PREREQS}
+        TARGET := $$(strip $$(call PEEK,$${_TGT_STACK}))
+        $${TARGET}_CFLAGS       += $${TARGET_CFLAGS}
+        $${TARGET}_CXXFLAGS     += $${TARGET_CXXFLAGS}
+        $${TARGET}_ASFLAGS      += $${TARGET_ASFLAGS}
+        $${TARGET}_DEFINES      += $${TARGET_DEFINES}
+        TARGET_INCLUDES         := $$(call QUALIFY_PATH,$${DIR},$${TARGET_INCLUDES})
+        TARGET_INCLUDES         := $$(call CANONICAL_PATH,$${TARGET_INCLUDES})
+        $${TARGET}_INCLUDES     += $${TARGET_INCLUDES}
+        $${TARGET}_LDFLAGS      += $${TARGET_LDFLAGS}
+        $${TARGET}_LDLIBS       += $${TARGET_LDLIBS}
+        $${TARGET}_POSTCLEAN    += $${TARGET_POSTCLEAN}
+        $${TARGET}_POSTMAKE     += $${TARGET_POSTMAKE}
+        $${TARGET}_PREREQS      += $${TARGET_PREREQS}
     endif
 
     # Push the current target onto the target stack.
-    TGT_STACK := $$(call PUSH,$${TGT_STACK},$${TGT})
+    _TGT_STACK := $$(call PUSH,$${_TGT_STACK},$${TARGET})
 
     ifneq "$$(strip $${SOURCES})" ""
         # This makefile builds one or more objects from source. Validate the
@@ -256,47 +281,46 @@ define INCLUDE_SUBMAKEFILE
         endif
 
         # Qualify and canonicalize paths.
-        SOURCES     := $$(call QUALIFY_PATH,$${DIR},$${SOURCES})
-        SOURCES     := $$(call CANONICAL_PATH,$${SOURCES})
-        SRC_INCDIRS := $$(call QUALIFY_PATH,$${DIR},$${SRC_INCDIRS})
-        SRC_INCDIRS := $$(call CANONICAL_PATH,$${SRC_INCDIRS})
+        SOURCES         := $$(call QUALIFY_PATH,$${DIR},$${SOURCES})
+        SOURCES         := $$(call CANONICAL_PATH,$${SOURCES})
+        SOURCE_INCLUDES := $$(call QUALIFY_PATH,$${DIR},$${SOURCE_INCLUDES})
+        SOURCE_INCLUDES := $$(call CANONICAL_PATH,$${SOURCE_INCLUDES})
 
         # Save the list of source files for this target.
-        $${TGT}_SOURCES += $${SOURCES}
+        $${TARGET}_SOURCES += $${SOURCES}
 
         # Convert the source file names to their corresponding object file
         # names.
-        OBJS := $$(addprefix $${BUILD_DIR}/$$(call CANONICAL_PATH,$${TGT})/,\
+        OBJECTS := $$(addprefix $${BUILD_DIR}/$$(call CANONICAL_PATH,$${TARGET})/,\
                    $$(addsuffix .o,$$(basename $${SOURCES})))
 
         # Add the objects to the current target's list of objects, and create
         # target-specific variables for the objects based on any source
         # variables that were defined.
-        $${TGT}_OBJS += $${OBJS}
-        $${TGT}_DEPS += $${OBJS:%.o=%.P}
-        $${OBJS}: SRC_CFLAGS   := $${$${TGT}_CFLAGS} $${SRC_CFLAGS}
-        $${OBJS}: SRC_CXXFLAGS := $${$${TGT}_CXXFLAGS} $${SRC_CXXFLAGS}
-        $${OBJS}: SRC_ASFLAGS  := $${$${TGT}_ASFLAGS} $${SRC_ASFLAGS}
-        $${OBJS}: SRC_DEFS     := $$(addprefix -D,$${$${TGT}_DEFS} $${SRC_DEFS})
-        $${OBJS}: SRC_INCDIRS  := $$(addprefix -I,\
-                                     $${$${TGT}_INCDIRS} $${SRC_INCDIRS})
+        $${TARGET}_OBJECTS += $${OBJECTS}
+        $${TARGET}_DEPENDS += $${OBJECTS:%.o=%.P}
+        $${OBJECTS}: SOURCE_CFLAGS      := $${$${TARGET}_CFLAGS} $${SOURCE_CFLAGS}
+        $${OBJECTS}: SOURCE_CXXFLAGS    := $${$${TARGET}_CXXFLAGS} $${SOURCE_CXXFLAGS}
+        $${OBJECTS}: SOURCE_ASFLAGS     := $${$${TARGET}_ASFLAGS} $${SOURCE_ASFLAGS}
+        $${OBJECTS}: SOURCE_DEFINES     := $$(addprefix -D,$${$${TARGET}_DEFINES} $${SOURCE_DEFINES})
+        $${OBJECTS}: SOURCE_INCLUDES    := $$(addprefix -I,$${$${TARGET}_INCLUDES} $${SOURCE_INCLUDES})
     endif
 
     ifneq "$$(strip $${SUBMAKEFILES})" ""
         # This makefile has submakefiles. Recursively include them.
         $$(foreach MK,$${SUBMAKEFILES},\
-           $$(eval $$(call INCLUDE_SUBMAKEFILE,\
+           $$(eval $$(call include-submakefile,\
                       $$(call CANONICAL_PATH,\
                          $$(call QUALIFY_PATH,$${DIR},$${MK})))))
     endif
 
     # Reset the "current" target to it's previous value.
-    TGT_STACK := $$(call POP,$${TGT_STACK})
-    TGT := $$(call PEEK,$${TGT_STACK})
+    _TGT_STACK := $$(call POP,$${_TGT_STACK})
+    TARGET := $$(call PEEK,$${_TGT_STACK})
 
     # Reset the "current" directory to it's previous value.
-    DIR_STACK := $$(call POP,$${DIR_STACK})
-    DIR := $$(call PEEK,$${DIR_STACK})
+    _DIR_STACK := $$(call POP,$${_DIR_STACK})
+    DIR := $$(call PEEK,$${_DIR_STACK})
 endef
 
 # MIN - Parameterized "function" that results in the minimum lexical value of
@@ -359,52 +383,53 @@ ASM_SRC_EXTS := %.S
 ALL_SRC_EXTS := ${C_SRC_EXTS} ${CXX_SRC_EXTS} ${ASM_SRC_EXTS}
 
 # Initialize global variables.
-ALL_TGTS :=
-DEFS :=
-DIR_STACK :=
-INCDIRS :=
-TGT_STACK :=
+ALL_TARGETS     :=
+DEFINES         :=
+INCLUDES        :=
+
+_DIR_STACK       :=
+_TGT_STACK       :=
 
 # Include the main user-supplied submakefile. This also recursively includes
 # all other user-supplied submakefiles.
-$(eval $(call INCLUDE_SUBMAKEFILE,main.mk))
+$(eval $(call include-submakefile,main.mk))
 
 # Perform post-processing on global variables as needed.
-DEFS := $(addprefix -D,${DEFS})
-INCDIRS := $(addprefix -I,$(call CANONICAL_PATH,${INCDIRS}))
+DEFINES := $(addprefix -D,${DEFINES})
+INCLUDES := $(addprefix -I,$(call CANONICAL_PATH,${INCLUDES}))
 
 # Define the "all" target (which simply builds all user-defined targets) as the
 # default goal.
 .PHONY: all
-all: $(addprefix ${TARGET_DIR}/,${ALL_TGTS})
+all: $(addprefix ${TARGET_DIR}/,${ALL_TARGETS})
 
 # Add a new target rule for each user-defined target.
-$(foreach TGT,${ALL_TGTS},\
-  $(eval $(call ADD_TARGET_RULE,${TGT})))
+$(foreach TGT,${ALL_TARGETS},\
+  $(eval $(call add-target,${TGT})))
 
 # Add pattern rule(s) for creating compiled object code from C source.
-$(foreach TGT,${ALL_TGTS},\
+$(foreach TGT,${ALL_TARGETS},\
   $(foreach EXT,${C_SRC_EXTS},\
-    $(eval $(call ADD_OBJECT_RULE,${BUILD_DIR}/$(call CANONICAL_PATH,${TGT}),\
+    $(eval $(call add-object,${BUILD_DIR}/$(call CANONICAL_PATH,${TGT}),\
              ${EXT},$${COMPILE_C_CMDS}))))
 
 # Add pattern rule(s) for creating compiled object code from C++ source.
-$(foreach TGT,${ALL_TGTS},\
+$(foreach TGT,${ALL_TARGETS},\
   $(foreach EXT,${CXX_SRC_EXTS},\
-    $(eval $(call ADD_OBJECT_RULE,${BUILD_DIR}/$(call CANONICAL_PATH,${TGT}),\
+    $(eval $(call add-object,${BUILD_DIR}/$(call CANONICAL_PATH,${TGT}),\
              ${EXT},$${COMPILE_CXX_CMDS}))))
 
 # Add pattern rule(s) for creating compiled object code from ASM source.
-$(foreach TGT,${ALL_TGTS},\
+$(foreach TGT,${ALL_TARGETS},\
   $(foreach EXT,${ASM_SRC_EXTS},\
-    $(eval $(call ADD_OBJECT_RULE,${BUILD_DIR}/$(call CANONICAL_PATH,${TGT}),\
+    $(eval $(call add-object,${BUILD_DIR}/$(call CANONICAL_PATH,${TGT}),\
              ${EXT},$${COMPILE_ASM_CMDS}))))
 
 # Add "clean" rules to remove all build-generated files.
 .PHONY: clean
-$(foreach TGT,${ALL_TGTS},\
-  $(eval $(call ADD_CLEAN_RULE,${TGT})))
+$(foreach TGT,${ALL_TARGETS},\
+  $(eval $(call add-clean,${TGT})))
 
 # Include generated rules that define additional (header) dependencies.
-$(foreach TGT,${ALL_TGTS},\
-  $(eval -include ${${TGT}_DEPS}))
+$(foreach TGT,${ALL_TARGETS},\
+  $(eval -include ${${TGT}_DEPENDS}))
