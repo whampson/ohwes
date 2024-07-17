@@ -1,17 +1,18 @@
 # debug build toggle and params
 DEBUG           := 1
 DEBUGOPT        := 1
-TEST_BUILD      := 1
-GLOBAL_FLAGS    := -Wall -Werror
+TEST_BUILD      := 0
+CFLAGS          := -Wall -Werror
 
 ifeq "${TEST_BUILD}" "1"
-  GLOBAL_FLAGS += -DTEST_BUILD
+  DEFINES += TEST_BUILD
 endif
 ifeq "${DEBUG}" "1"
-  GLOBAL_FLAGS += -DDEBUG -g
+  CFLAGS += -g
+  DEFINES += DEBUG
 endif
 ifeq "${DEBUGOPT}" "1"
-  GLOBAL_FLAGS += -Og
+  CFLAGS += -Og
 endif
 
 # important dirs
@@ -19,7 +20,7 @@ TARGET_DIR := bin
 BUILD_DIR  := obj
 SCRIPT_DIR := scripts
 
-BOOTIMG := ${TARGET_DIR}/bootsect.bin
+BOOT_SECTOR := ${TARGET_DIR}/bsect.bin
 
 FILES   := \
     ${TARGET_DIR}/boot.sys \
@@ -39,7 +40,7 @@ MAKEFLAGS := --no-print-directory
 .PHONY: all ohwes tools test
 .PHONY: img floppy format-floppy
 .PHONY: run run-bochs debug debug-boot
-.PHONY: clean nuke relink
+.PHONY: clean clean-tools nuke
 
 all:
 ohwes: all
@@ -50,13 +51,13 @@ tools:
 img: tools ohwes
 	@mkdir -p $(dir ${DISKIMG})
 	fatfs create --force ${DISKIMG} 2880
-	dd if=${BOOTIMG} of=${DISKIMG} bs=512 count=1 conv=notrunc
+	dd if=${BOOT_SECTOR} of=${DISKIMG} bs=512 count=1 conv=notrunc
 	$(foreach _file,${FILES},fatfs add ${DISKIMG} ${_file} $(notdir ${_file});\
 	    fatfs attr -s ${DISKIMG} $(notdir ${_file});)
 	fatfs list -Aa ${DISKIMG}
 
 floppy: ohwes
-	dd if=${BOOTIMG} of=/dev/fd0 bs=512 count=1 conv=notrunc
+	dd if=${BOOT_SECTOR} of=/dev/fd0 bs=512 count=1 conv=notrunc
 	$(foreach file,${FILES},cp ${file} /a/;)
 
 format-floppy:
@@ -76,6 +77,11 @@ debug-boot: img
 
 clean:
 	${RM} ${DISKIMG}
+
+clean-tools:
+	${MAKE} -C tools clean
+
+clean-all: clean clean-tools
 
 nuke:
 	${RM} -r ${TARGET_DIR} ${BUILD_DIR}
