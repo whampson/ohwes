@@ -1,7 +1,7 @@
 # boilermake: A reusable, but flexible, boilerplate Makefile.
 #
 # Copyright 2008, 2009, 2010 Dan Moulding, Alan T. DeKok
-# Copyright 2023 Wes Hampson
+# Copyright 2023, 2024 Wes Hampson
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -30,8 +30,9 @@
 #  - Added TARGET_LDSCRIPT so targets can specify an optional linker script
 #    which is tracked by the build system and will thus trigger a relink if
 #    modified.
-#  - Rebuild the project when a Makefile or submakefile is modified.
-#    (TODO: rebuild only affected objects)
+#  - Build system is now aware of Makefile changes. If this file or a
+#    submakefile are modified, the affected objects and targets will be rebuilt
+#    to ensure the Makefile changes are applied properly.
 #
 
 # ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
@@ -73,7 +74,7 @@ endef
 #   USE WITH EVAL
 #
 define add-object
-${1}/%.o: ${2} $${MAKEFILE_TREE}
+$${BUILD_DIR}/$$(call CANONICAL_PATH,${1})/%.o: ${2} $${${1}_MAKEFILES}
 	${3}
 endef
 
@@ -87,7 +88,7 @@ endef
 define add-target
     ifeq "$$(suffix ${1})" ".a"
         # Add a target for creating a static library.
-        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${MAKEFILE_TREE}
+        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_MAKEFILES}
 	    @mkdir -p $$(dir $$@)
 	    $$(strip $${AR} $${ARFLAGS} $${${1}_ARFLAGS} $$@ $${${1}_OBJECTS})
 	    $${${1}_POSTMAKE}
@@ -108,7 +109,7 @@ define add-target
             endif
         endif
 
-        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS} $${${1}_LDSCRIPT} $${MAKEFILE_TREE}
+        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS} $${${1}_LDSCRIPT} $${${1}_MAKEFILES}
 	    @mkdir -p $$(dir $$@)
 	    $$(strip $${${1}_LINKER} -o $$@ $${${1}_OBJECTS} $${LDLIBS} \
 	        $${${1}_LDLIBS} $${LDFLAGS} $${${1}_LDFLAGS} $$(addprefix -T,$${${1}_LDSCRIPT}))
@@ -220,12 +221,11 @@ define include-submakefile
     DIR := $(call CANONICAL_PATH,$(dir ${1}))
     _DIR_STACK := $$(call PUSH,$${_DIR_STACK},$${DIR})
 
-    # Push the current "executing" Makefile onto the Makefile stack.
-    CURRENT_MAKEFILE := $(call CANONICAL_PATH,$(abspath $(lastword $(MAKEFILE_LIST))))
-    _MAKEFILE_STACK := $$(call PUSH,$${_MAKEFILE_STACK},$${CURRENT_MAKEFILE})
-    MAKEFILE_TREE := $$(subst :, ,$${_MAKEFILE_STACK})
-
     include ${1}
+
+    # Push the current "executing" Makefile onto the Makefile stack.
+    CURRENT_MAKEFILE := $$(call CANONICAL_PATH,$$(abspath $$(lastword $${MAKEFILE_LIST})))
+    _MAKEFILE_STACK := $$(call PUSH,$${_MAKEFILE_STACK},$${CURRENT_MAKEFILE})
 
     # Initialize post-include local variables.
     OBJECTS :=
@@ -265,6 +265,7 @@ define include-submakefile
         $${TARGET}_POSTMAKE     := $${TARGET_POSTMAKE}
         $${TARGET}_PREREQS      := $$(addprefix $${TARGET_DIR}/,$${TARGET_PREREQS})
         $${TARGET}_SOURCES      :=
+        $${TARGET}_MAKEFILES    := $$(subst :, ,$${_MAKEFILE_STACK})
     else
         # The values defined by this makefile apply to the the "current" target
         # as determined by which target is at the top of the stack.
@@ -336,7 +337,8 @@ define include-submakefile
     _DIR_STACK := $$(call POP,$${_DIR_STACK})
     DIR := $$(call PEEK,$${_DIR_STACK})
 
-    _MAKEFILE_STACK := $${call POP,$${_MAKEFILE_STACK}}
+    # Reset the "current" Makefile to it's previous value.
+    _MAKEFILE_STACK := $$(call POP,$${_MAKEFILE_STACK})
     CURRENT_MAKEFILE := $$(call PEEK,$${_MAKEFILE_STACK})
 endef
 
@@ -406,7 +408,7 @@ INCLUDES        :=
 
 _DIR_STACK       :=
 _TARGET_STACK    :=
-_MAKEFILE_STACK  :=
+_MAKEFILE_STACK  := Makefile    # Initialize stack with this file
 
 # Include the main user-supplied submakefile. This also recursively includes
 # all other user-supplied submakefiles.
@@ -425,23 +427,19 @@ all: $(addprefix ${TARGET_DIR}/,${ALL_TARGETS})
 $(foreach TGT,${ALL_TARGETS},\
   $(eval $(call add-target,${TGT})))
 
-# Add pattern rule(s) for creating compiled object code from C source.
 $(foreach TGT,${ALL_TARGETS},\
   $(foreach EXT,${C_SRC_EXTS},\
-    $(eval $(call add-object,${BUILD_DIR}/$(call CANONICAL_PATH,${TGT}),\
-             ${EXT},$${COMPILE_C_CMDS}))))
+    $(eval $(call add-object,${TGT},${EXT},$${COMPILE_C_CMDS}))))
 
 # Add pattern rule(s) for creating compiled object code from C++ source.
 $(foreach TGT,${ALL_TARGETS},\
   $(foreach EXT,${CXX_SRC_EXTS},\
-    $(eval $(call add-object,${BUILD_DIR}/$(call CANONICAL_PATH,${TGT}),\
-             ${EXT},$${COMPILE_CXX_CMDS}))))
+    $(eval $(call add-object,${TGT},${EXT},$${COMPILE_CXX_CMDS}))))
 
 # Add pattern rule(s) for creating compiled object code from ASM source.
 $(foreach TGT,${ALL_TARGETS},\
   $(foreach EXT,${ASM_SRC_EXTS},\
-    $(eval $(call add-object,${BUILD_DIR}/$(call CANONICAL_PATH,${TGT}),\
-             ${EXT},$${COMPILE_ASM_CMDS}))))
+    $(eval $(call add-object,${TGT},${EXT},$${COMPILE_ASM_CMDS}))))
 
 # Add "clean" rules to remove all build-generated files.
 .PHONY: clean
