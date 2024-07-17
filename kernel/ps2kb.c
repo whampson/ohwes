@@ -660,7 +660,7 @@ bool kb_sendcmd(uint8_t cmd)
         }
         if (resp != 0) {
             kprint("ps2kb: cmd 0x%X returned 0x%X, trying again...\n",
-                cmd, resp, retries);
+                cmd, resp);
         }
     } while (resp != 0 && retries);
 

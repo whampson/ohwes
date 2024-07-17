@@ -15,7 +15,7 @@ CC  := gcc
 CXX := g++
 LD  := g++
 
-CXXFLAGS   := -Wall -Werror
+CXXFLAGS   :=# -Wall -Werror
 CFLAGS     := ${CXXFLAGS}
 
 ifeq "${DEBUG}" "1"

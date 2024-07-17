@@ -308,7 +308,7 @@ static void print_page_info(uint32_t vaddr, const struct page *page)
     }
 
     //            vaddr-vlimit -> paddr-plimit k/M/T rw u/s a/d g wt nc
-    printf("page: v(%08X-%08X) -> p(%08X-%08X) %c %-2s %c %c %c %s%s\n",
+    printf("page: v(%08lX-%08lX) -> p(%08lX-%08lX) %c %-2s %c %c %c %s%s\n",
         vaddr, vlimit, paddr, plimit,
         page->pte ? 'k' : (page->pspat ? 'M' : 'T'),    // (k) small page, (M) large page, (T) page table
         page->rw ? "rw" : "r",                          // read/write

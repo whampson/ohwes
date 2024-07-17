@@ -43,7 +43,7 @@
 // syscall C function prototypes
 // symbol names must match the above _sys_* defines
 //
-extern int exit(int);
+extern void exit(int);
 extern int read(int, void *, size_t);
 extern int write(int, const void *, size_t);
 extern int open(const char *, int);

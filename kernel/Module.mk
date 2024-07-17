@@ -1,5 +1,5 @@
 TARGET := kernel.elf
-TARGETEXE := ohwes.sys
+TARGET_EXE := ohwes.sys
 
 SOURCES := \
     console.c \
@@ -20,16 +20,13 @@ SOURCES := \
     vga.c \
     sys/open.c \
 
-TGT_ASFLAGS := -D__KERNEL__
-TGT_CFLAGS  := -D__KERNEL__ -Wno-unused-function
-TGT_LDFLAGS := -T kernel/kernel.ld
+TARGET_DEFINES := __KERNEL__
+TARGET_CFLAGS  := -nostdinc -ffreestanding -Wno-unused-function
+TARGET_LDSCRIPT := kernel.ld
+
+TARGET_LDLIBS := \
+    libc.a \
+
 # we only want the .text section right now for our hacky kernel image
-OBJCOPYFLAGS := --only-section=.text
-
-LINKLIBS := \
-    lib.a \
-
-$(eval $(call add-linklibs,${LINKLIBS}))
-# TODO: do this automatically when LINKLIBS set?
-TGT_POSTMAKE := $(call make-exe,${TARGETEXE},${OBJCOPYFLAGS})
-# TODO: do this automatically when TARGETEXE is set?
+RAWBIN_FLAGS := --only-section=.text
+$(eval $(call make-rawbin,ohwes.sys,${RAWBIN_FLAGS}))

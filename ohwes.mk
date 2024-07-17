@@ -1,5 +1,5 @@
 # includes
-INCDIRS    := include
+INCLUDES    := include
 
 # OS modules
 MODULES := \
@@ -23,39 +23,7 @@ OBJCOPY    := $(PREFIX)objcopy
 
 # flags, etc.
 ARFLAGS    := -rcsv
-ASFLAGS    := ${GLOBAL_FLAGS}
 ASFLAGS    += -include config.h
-CFLAGS     := ${GLOBAL_FLAGS} -nostdinc -ffreestanding -std=c11
+CFLAGS     += -std=c11
 CFLAGS     += -include config.h
-LDFLAGS    := ${GLOBAL_FLAGS} -nostdlib
-
-ifeq "${DEBUG}" "1"
-  ASFLAGS += ${DEBUGFLAGS}
-  CFLAGS += ${DEBUGFLAGS}
-else
-  CFLAGS += -O1
-endif
-
-# Create a raw binary executable, no symbols or anything
-#   1 - input ELF
-#   2 - output file
-#   3 - additional objcopy arguments
-define raw-bin
-	@mkdir -p $(dir $2)
-	${OBJCOPY} -Obinary $3 $1 $2
-endef
-
-# Create an executable (.exe) file from the current TARGET file.
-#   1 - system file target path
-#   2 - additional objcopy arguments
-define make-exe
-  $(call raw-bin,${TARGET_DIR}/${TARGET},${TARGET_DIR}/$1,$2)
-  $(eval TGT_POSTCLEAN += ${RM} ${TARGET_DIR}/$1)
-endef
-
-# Add libraries to link against for the current module.
-#   1 - list of objects to link against, relative to TARGET_DIR
-define add-linklibs
-  $(eval TGT_PREREQS += $1)
-  $(eval TGT_LDLIBS  += $(addprefix ${TARGET_DIR}/,$1))
-endef
+LDFLAGS    += -nostdlib -lgcc

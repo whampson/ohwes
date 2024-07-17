@@ -204,7 +204,7 @@ static void basic_shell(void)
         // get and print entire line
         size_t count = drain_queue(lineq, line, sizeof(line));
         if (strncmp(line, "\n", count) != 0) {
-            printf("%.*s", count, line);
+            printf("%.*s", (int) count, line);
         }
 
         //

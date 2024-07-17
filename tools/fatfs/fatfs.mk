@@ -17,8 +17,8 @@ SOURCES = \
   fat.c \
   main.cpp
 
-TGT_CXXFLAGS += -Wno-address-of-packed-member -Wno-format-zero-length
-TGT_CFLAGS   += ${TGT_CXXFLAGS}
+TARGET_CXXFLAGS += -Wno-address-of-packed-member -Wno-format-zero-length
+TARGET_CFLAGS   += ${TARGET_CXXFLAGS}
 
 # ifeq ($(OSX),1)
 #   CFLAGS   += -fsanitize=address

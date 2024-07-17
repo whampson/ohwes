@@ -2,16 +2,21 @@
 DEBUG           := 1
 DEBUGOPT        := 1
 TEST_BUILD      := 0
+<<<<<<< HEAD
 GLOBAL_FLAGS    := -Wall -Werror
+=======
+CFLAGS          := -Wall -Werror
+>>>>>>> build-refactor
 
 ifeq "${TEST_BUILD}" "1"
-  GLOBAL_FLAGS += -DTEST_BUILD
+  DEFINES += TEST_BUILD
 endif
 ifeq "${DEBUG}" "1"
-  GLOBAL_FLAGS += -DDEBUG -g
+  CFLAGS += -g
+  DEFINES += DEBUG
 endif
 ifeq "${DEBUGOPT}" "1"
-  GLOBAL_FLAGS += -Og
+  CFLAGS += -Og
 endif
 
 # important dirs
@@ -35,12 +40,10 @@ DISKIMG := ${TARGET_DIR}/ohwes.img
 SUBMAKEFILES := \
     ohwes.mk \
 
-MAKEFLAGS := --no-print-directory
-
 .PHONY: all ohwes tools test
 .PHONY: img floppy format-floppy
 .PHONY: run run-bochs debug debug-boot
-.PHONY: clean nuke relink
+.PHONY: clean clean-tools nuke
 
 all:
 ohwes: all
@@ -78,6 +81,11 @@ debug-boot: img
 
 clean:
 	${RM} ${DISKIMG}
+
+clean-tools:
+	${MAKE} -C tools clean
+
+clean-all: clean clean-tools
 
 nuke:
 	${RM} -r ${TARGET_DIR} ${BUILD_DIR}

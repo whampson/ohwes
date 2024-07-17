@@ -88,10 +88,6 @@ int sprintf(char *buffer, const char *format, ...)
     va_list args;
     struct printf_state state = { };
 
-    if (buffer == NULL || format == NULL) {
-        return -EINVAL;
-    }
-
     va_start(args, format);
 
     state.args = args;
@@ -118,10 +114,6 @@ int snprintf(char *buffer, size_t bufsz, const char *format, ...)
     va_list args;
     struct printf_state state = { };
 
-    if (buffer == NULL || format == NULL) {
-        return -EINVAL;
-    }
-
     va_start(args, format);
 
     state.args = args;
@@ -139,10 +131,6 @@ int vprintf(const char *format, va_list args)
 {
     struct printf_state state = { };
 
-    if (format == NULL || args == NULL) {
-        return -EINVAL;
-    }
-
     state.args = args;
     return _doprintf(format, &state, _console_putc);
 }
@@ -150,10 +138,6 @@ int vprintf(const char *format, va_list args)
 int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args)
 {
     struct printf_state state = { };
-
-    if (buffer == NULL || format == NULL || args == NULL) {
-        return -EINVAL;
-    }
 
     state.args = args;
     state.buffer = buffer;
