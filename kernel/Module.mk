@@ -21,11 +21,11 @@ SOURCES := \
     sys/open.c \
 
 TARGET_DEFINES := __KERNEL__
-TARGET_CFLAGS  := -Wno-unused-function
+TARGET_CFLAGS  := -nostdinc -ffreestanding -Wno-unused-function
 TARGET_LDFLAGS := -T kernel/kernel.ld
 
 TARGET_LDLIBS := \
-    lib.a \
+    libc.a \
 
 # we only want the .text section right now for our hacky kernel image
 RAWBIN_FLAGS := --only-section=.text
