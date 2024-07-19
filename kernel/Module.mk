@@ -2,10 +2,11 @@ TARGET := kernel.elf
 TARGET_EXE := ohwes.sys
 
 SOURCES := \
+    setup.S \
+    entry.S \
     console.c \
     cpu.c \
     crash.c \
-    entry.S \
     i8042.c \
     irq.c \
     main.c \

@@ -51,11 +51,6 @@ extern int g_test_crash_kernel;
     __asm__ volatile ("int $3");                    \
 })
 
-#define testint()                                   \
-({                                                  \
-    __asm__ volatile ("int $69");                   \
-})
-
 #endif // DEBUG
 
 #endif // __DEBUG_H

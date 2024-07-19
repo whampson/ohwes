@@ -52,11 +52,10 @@
 #define BDA_SEGMENT         0x0040
 #define KERNEL_SEGMENT      (KERNEL_BASE >> 4)
 
-#define STACK_BASE          0x7C00  // grows toward 0
-#define ROOTDIR_BASE        0x1000
-#define MEMMAP_BASE         0x2C00
-#define STAGE2_BASE         0x7E00
+#define BOOT_CS             0x08
+#define BOOT_DS             0x10
 
+#define ROOTDIR_BASE        0x1000
 
 /*----------------------------------------------------------------------------*
  * BIOS Data Area
@@ -112,14 +111,6 @@
 #define MODE_07h          0x07        // 80x25,B0000,mono
 
 #define VGA_MODE          MODE_03h
-
-/*----------------------------------------------------------------------------*
- * GDT Segment Descriptors
- *----------------------------------------------------------------------------*/
-
-#define BOOT_CS             0x08    // code segment in early GDT
-#define BOOT_DS             0x10    // data segment in early GDT
-
 
 /*----------------------------------------------------------------------------*
  * Assembler-only Stuff

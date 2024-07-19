@@ -8,6 +8,7 @@ ifeq "${TEST_BUILD}" "1"
   DEFINES += TEST_BUILD
 endif
 ifeq "${DEBUG}" "1"
+  ASFLAGS += -g
   CFLAGS += -g
   DEFINES += DEBUG
 endif
@@ -20,7 +21,7 @@ TARGET_DIR := bin
 BUILD_DIR  := obj
 SCRIPT_DIR := scripts
 
-BOOTSECT := ${TARGET_DIR}/boot/head.bin
+BOOTSECT := ${TARGET_DIR}/boot/boot.bin
 DISKDRIVE := /a
 
 FILES   := \

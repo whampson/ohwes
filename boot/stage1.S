@@ -32,12 +32,12 @@
 #include <boot.h>
 #include "x86_boot.h"
 
+.code16
+
 # -----------------------------------------------------------------------------
 # --------------------------------- Stage 1 -----------------------------------
 # -----------------------------------------------------------------------------
 .section .stage1, "ax", @progbits
-
-.code16
 
 ##
 # Boot loader entry point. This is where the BIOS drops us off.
@@ -49,7 +49,7 @@
 ##
 .globl entry
 entry:
-        jmp     stage1
+        jmp             _startup
         nop
 
 ##
@@ -79,17 +79,19 @@ bios_param_block:
   fs_type:              .ascii          "FAT12   "
 
 ##
-# Initial boot loader code.
-# Gotta be tight; file must assemble to no more than 512 bytes!
+# Initial boot loader code (stage 1).
+# Gotta be tight; file must assemble to exactly 512 bytes in order to fit in the
+# boot sector!
 #
 # We start off executing at 0x7C00 in 16-bit Real Mode. We disable interrupts,
 # set up our segment registers, then locate BOOT.SYS (stage 2) on disk. We load
-# stage 2 far away at 0x90000 so it doesn't get overwritten by our kernel image.
+# stage 2 immediately after stage1 at 0x7E00. It should be small enough to not
+# bump into the kernel at 0x10000. :-)
 ##
-stage1:
-        ljmp            $0, $_setup             # set CS to a known value
+_startup:
+        ljmp            $0, $stage1             # set CS to a known value
 
-_setup:
+stage1:
         # setup segment registers and stack
         xorw            %ax, %ax
         movw            %ax, %ss
@@ -123,7 +125,7 @@ _setup:
         call            load_file               # load stage 2!
 
         # continue...
-        jmp             stage2                  # enter stage 2!
+        jmp             stage2                  # jump to stage 2!
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------

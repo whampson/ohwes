@@ -120,7 +120,7 @@ bool large_page_support(void)
 
 void * get_page_directory(void)
 {
-    return (void *) SYSTEM_PAGE_DIRECTORY;
+    return (void *) PGDIR_BASE;
 }
 
 void * get_pde(uint32_t addr)

@@ -22,50 +22,26 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
-//
-// kernel config
-//
-
 #define MIN_KB_REQUIRED                 639     // let's see how long this lasts!
 #define PRINT_MEMORY_MAP                1
 #define PRINT_IOCTL                     0
 #define PRINT_PAGE_MAP                  1
 #define E9_HACK                         1
 
-//
-// static memory
-//
-#define NULL_PAGE                       0x0000      //  0x0000 - 0x0FFF
-#define SYSTEM_PAGE_DIRECTORY           0x1000      //  0x1000 - 0x1FFF
-#define KERNEL_PAGE_TABLE               0x2000      //  0x2000 - 0x2FFF
-#define SYSTEM_CPU_PAGE                 0x3000      //  0x3000 - 0x3FFF
+#define IDT_BASE                        0x0800
+#define PGDIR_BASE                      0x1000      //  0x1000 - 0x1FFF
+#define PGTBL_BASE                      0x2000      //  0x2000 - 0x2FFF
+#define MEMMAP_BASE                     0x3000      //  0x3000 - 0x3FFF
+#define STACK_BASE                      0x7C00      // grows toward 0
+#define STAGE2_BASE                     0x7E00
 
 #define KERNEL_BASE                     0x10000     // 0x10000 - 0x9FBFF
 #define KERNEL_ENTRY                    KERNEL_BASE
 
-// TODO: map null page physical contents elsewhere (for reboot param, etc.)
-
-
-//
-// x86 descriptors
-//
-
-// GDT
-#define _GDT_NULL                       0
-#define _GDT_LOCALDESC                  (0x08|KERNEL_PL)
-#define _GDT_KERNEL_CS                  (0x10|KERNEL_PL)
-#define _GDT_KERNEL_DS                  (0x18|KERNEL_PL)
-#define _GDT_USER_CS                    (0x20|USER_PL)
-#define _GDT_USER_DS                    (0x28|USER_PL)
-#define _GDT_TASKSTATE                  (0x30|KERNEL_PL)
-
-// GDT segment selectors
-#define KERNEL_CS                       _GDT_KERNEL_CS
-#define KERNEL_DS                       _GDT_KERNEL_DS
-#define KERNEL_SS                       KERNEL_DS
-#define USER_CS                         _GDT_USER_CS
-#define USER_DS                         _GDT_USER_DS
-#define USER_SS                         USER_DS
+#define KERNEL_CS                       0x10
+#define KERNEL_DS                       0x18
+#define USER_CS                         0x23
+#define USER_DS                         0x2B
 
 //
 // compiler stuff

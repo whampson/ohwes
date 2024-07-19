@@ -29,12 +29,12 @@
 #include <boot.h>
 #include "x86_boot.h"
 
+.code16
+
 # -----------------------------------------------------------------------------
 # --------------------------------- Stage 2 -----------------------------------
 # -----------------------------------------------------------------------------
 .section .stage2, "ax", @progbits
-
-.code16
 
 ##
 # Stage 2 entry point. We land here after jumping from stage 1.
@@ -75,13 +75,19 @@ stage2:
 
         # load GDT and switch to Protected Mode
         cli                                     # no more interrupts!
-        lgdtl           gdt_ptr                 # load the GDT
+        lgdt            early_gdt_ptr           # load temp GDT
         movl            %cr0, %eax
-        orl             $CR0_PE, %eax           # set ProtectionEnable bit
+        orl             $CR0_PE, %eax           # enable Protected Mode
         movl            %eax, %cr0
 
-        # continue to 32-bit code...
-        ljmpl           $BOOT_CS, $entry32      # reload CS
+        # set up boot segment selectors
+        movw            $BOOT_DS, %ax
+        movw            %ax, %ds
+        movw            %ax, %es
+
+        # long jump to the kernel setup
+        leal            boot_info, %ecx         # pass bootparams ptr to kernel
+        ljmpl           $BOOT_CS, $KERNEL_ENTRY # reload CS, jump to 32-bit code
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
@@ -457,19 +463,18 @@ boot_info:
 
 # -----------------------------------------------------------------------------
 
+# Temporary GDT
 .align 8
-early_gdt:
-        .quad           0x0                     # (not used)
-        .quad           0x00CF9A000000FFFF      # cs = 0x08
-        .quad           0x00CF92000000FFFF      # ds = 0x10
+_early_gdt:
+        .quad           0                       # (must be 0)
+        .quad           0x00CF9A000000FFFF      # [0x08] BOOT_CS
+        .quad           0x00CF92000000FFFF      # [0x10] BOOT_DS
 _early_gdt_end:
 
         .word           0                       # align
-gdt_ptr:
-gdt_limit:
-        .word           _early_gdt_end - early_gdt - 1
-gdt_base:
-        .long           early_gdt
+early_gdt_ptr:
+        .word           _early_gdt_end - _early_gdt - 1
+        .long           _early_gdt
 
 # -----------------------------------------------------------------------------
 

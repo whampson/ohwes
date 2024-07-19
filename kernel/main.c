@@ -94,6 +94,11 @@ __fastcall void kmain(const struct boot_info *info)
     init_timer();
     init_rtc();
 
+#ifdef DEBUG
+    // CTRL+ALT+FN to crash kernel
+    irq_register(IRQ_TIMER, debug_interrupt);
+#endif
+
     kprint("boot: entering ring3...\n");
     uint32_t user_stack = 0xD000;
     enter_ring3((uint32_t) init, user_stack);
@@ -245,7 +250,7 @@ static void enter_ring3(uint32_t entry, uint32_t stack)
     // ring 3 initial register context
     struct iregs regs = {};
     regs.cs = USER_CS;
-    regs.ss = USER_SS;
+    regs.ss = USER_DS;
     regs.ds = USER_DS;
     regs.es = USER_DS;
     regs.ebp = stack;
@@ -285,37 +290,41 @@ static void print_info(const struct boot_info *info)
 static void debug_interrupt(void)
 {
     switch (g_test_crash_kernel) {
-        case 1:
+        case 1:     // F1 - divide by zero
             divzero();
             break;
-        case 2:
+        case 2:     // F2 -nmi
             softnmi();
             break;
-        case 3:
+        case 3:     // F3 - debug break
             dbgbrk();
             break;
-        case 4:
-            assert(true == false);
-            break;
-        case 5:
-            testint();
-            break;
-        case 6:
+        case 4:     // F4 - panic()
             panic("you fucked up!!");
             break;
-        case 7:
+        case 5:     // F5 - assert()
+            assert(true == false);
+            break;
+        case 6:     // F6 - invalid interrupt
+            __asm__ volatile ("int $69");
+            break;
+        case 7:     // F7 - unexpected device interrupt vector
             __asm__ volatile ("int $0x2D");
             break;
-        case 8: {
-            volatile uint32_t *badptr = (uint32_t *) 0xCA55E77E;
-            *badptr = 0xBADC0DE;
-            break;
-        }
-        case 9: {
+        case 8: {   // F8 - nullptr read
             volatile uint32_t *badptr = NULL;
             const int bad  = *badptr;
             (void) bad;
             break;
+        }
+        case 9: {   // F9 - nullptr write
+            volatile uint32_t *badptr = (uint32_t *) 0xCA55E77E;
+            *badptr = 0xBADC0DE;
+            break;
+        }
+        case 12: {  // F12 - triple fault
+            struct pseudo_desc idt_desc = { .limit = 0, .base = 0 };
+            __lidt(idt_desc);
         }
     }
 

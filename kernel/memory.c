@@ -141,7 +141,7 @@ extern int init_paging(const struct boot_info *boot_info, uint32_t pgtbl);
 void init_memory(const struct boot_info *boot_info)
 {
     print_meminfo(boot_info);   // TODO: copy ACPI memory map to mem info page
-    init_paging(boot_info, KERNEL_PAGE_TABLE);
+    init_paging(boot_info, PGTBL_BASE);
 }
 
 static void print_meminfo(const struct boot_info *info)
