@@ -32,7 +32,6 @@
 #include <stddef.h>
 #include <string.h>
 #include <panic.h>
-#include <debug.h>
 #include <fs.h>
 
 //

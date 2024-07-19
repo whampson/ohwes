@@ -29,13 +29,13 @@
 
 #include <ctype.h>
 #include <ohwes.h>
+#include <kernel.h>
 #include <input.h>
 #include <io.h>
 #include <irq.h>
 #include <ps2.h>
 #include <queue.h>
 #include <string.h>
-#include <debug.h>
 
 #define SCANCODE_SET    1       // using scancode set 1
 #define TYPEMATIC_BYTE  0x22    // repeat rate = 24cps, delay = 500ms

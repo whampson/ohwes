@@ -43,4 +43,12 @@
 #define USER_CS                         0x23
 #define USER_DS                         0x2B
 
+#ifndef __ASSEMBLER__
+
+#ifdef DEBUG
+extern int g_test_crash_kernel;
+#endif
+
+#endif  // __ASSEMBLER__
+
 #endif  // __KERNEL_H

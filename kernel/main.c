@@ -35,8 +35,6 @@
 #include <x86.h>
 #include <syscall.h>
 
-#include <debug.h>
-
 #define CHATTY 1
 
 extern void init_vga(void);
@@ -292,13 +290,13 @@ static void debug_interrupt(void)
 {
     switch (g_test_crash_kernel) {
         case 1:     // F1 - divide by zero
-            divzero();
+            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
             break;
-        case 2:     // F2 -nmi
-            softnmi();
+        case 2:     // F2 - simulate nmi (TODO: real NMI)
+            __asm__ volatile ("int $2");
             break;
         case 3:     // F3 - debug break
-            dbgbrk();
+            __asm__ volatile ("int $3");
             break;
         case 4:     // F4 - panic()
             panic("you fucked up!!");
