@@ -24,6 +24,7 @@
 #include <ohwes.h>
 #include <errno.h>
 #include <paging.h>
+#include <kernel.h>
 
 /*
  Physical Address Map:

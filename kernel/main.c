@@ -28,6 +28,7 @@
 #include <interrupt.h>
 #include <io.h>
 #include <irq.h>
+#include <kernel.h>
 #include <paging.h>
 #include <pic.h>
 #include <ps2.h>

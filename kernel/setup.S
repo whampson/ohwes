@@ -19,7 +19,7 @@
 #  Environment: 32-bit Protected Mode
 # =============================================================================
 
-#include <boot.h>
+#include <kernel.h>
 
 .code32
 .section .setup, "ax", @progbits

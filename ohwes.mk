@@ -23,7 +23,5 @@ OBJCOPY    := $(PREFIX)objcopy
 
 # flags, etc.
 ARFLAGS    := -rcsv
-ASFLAGS    += -include config.h
-CFLAGS     += -std=c11
-CFLAGS     += -include config.h
+CFLAGS     += -std=c11 -include compiler.h
 LDFLAGS    += -nostdlib -lgcc

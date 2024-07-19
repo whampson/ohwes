@@ -25,6 +25,7 @@
 #include <ohwes.h>
 #include <paging.h>
 #include <errno.h>
+#include <kernel.h>
 
 struct paging_info
 {

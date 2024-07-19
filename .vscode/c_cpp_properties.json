@@ -18,7 +18,7 @@
                 "TEST_BUILD"
             ],
             "forcedInclude": [
-                "${workspaceFolder}/include/config.h"
+                "${workspaceFolder}/include/compiler.h"
             ],
             "compilerPath": "${workspaceFolder}/build/i686-elf-tools/bin/i686-elf-gcc",
             "cStandard": "c11",
