@@ -30,6 +30,7 @@ if [ "$1" = "qemu" ]; then
     QEMU_FLAGS+=" -boot a"
     QEMU_FLAGS+=" -fda $2"
     QEMU_FLAGS+=" -monitor stdio"
+    QEMU_FLAGS+=" -d cpu_reset"
 
     DEBUG_BOOT=0
     DEBUG_KERNEL=0
@@ -52,8 +53,6 @@ if [ "$1" = "qemu" ]; then
             -ex 'target remote localhost:1234' \
             -ex 'add-symbol-file bin/boot/boot.elf' \
             -ex 'lay src' -ex 'lay reg' \
-            -ex 'b entry' \
-            -ex 'b entry32' \
             -ex 'b stage1' \
             -ex 'b stage2'
     elif [ $DEBUG_KERNEL = 1 ]; then
@@ -63,7 +62,7 @@ if [ "$1" = "qemu" ]; then
             -ex 'add-symbol-file bin/kernel.elf' \
             -ex 'set confirm off' \
             -ex 'lay src' -ex 'lay reg' \
-            -ex 'b kmain'
+            -ex 'b start_kernel'
     else
         "$QEMU_PATH" $QEMU_FLAGS
     fi
