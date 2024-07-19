@@ -62,7 +62,8 @@ if [ "$1" = "qemu" ]; then
             -ex 'add-symbol-file bin/kernel.elf' \
             -ex 'set confirm off' \
             -ex 'lay src' -ex 'lay reg' \
-            -ex 'b start_kernel'
+            -ex 'b setup_kernel' \
+            -ex 'b kmain'
     else
         "$QEMU_PATH" $QEMU_FLAGS
     fi

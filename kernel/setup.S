@@ -26,6 +26,7 @@
 
 .globl setup_kernel
 setup_kernel:
+        movw            $0x0C53, 0xB8000
         movl            %ecx, boot_params_ptr   # store boot params
         lgdt            gdt_ptr                 # load the real GDT
         ljmp            $KERNEL_CS, $_setup
@@ -38,9 +39,11 @@ _setup:
         xorw            %ax, %ax
         movw            %ax, %fs                # fs = (not used)
         movw            %ax, %gs                # gs = (not used)
-        lldt            %ax                     # LDT not used
-        ltr             %ax                     # TSS not used
         lidt            idt_ptr                 # IDT to be filled later...
+        movw            $_LDT_SEGMENT, %ax
+        lldt            %ax                     # LDT not used
+        movw            $_TSS_SEGMENT, %ax
+        ltr             %ax                     # TSS not used
 
         # reset the stack
         movl            $STACK_BASE, %ebp
@@ -48,16 +51,13 @@ _setup:
 
         # TODO: init paging
 
-        movw            $0x0C53, 0xB8000
-        movw            $0x0B54, 0xB0000
 
-
-
+        movl            boot_params_ptr, %ecx
         // call            kmain
 
-
-_loop:
-        jmp             _loop
+_idle:
+        hlt
+        jmp             _idle
 
 # -----------------------------------------------------------------------------
 # ----------------------------------- Data ------------------------------------
@@ -73,6 +73,8 @@ gdt:
         .quad           0x00CF92000000FFFF      # [0x18] KERNEL_DS  rw  ring0
         .quad           0x00CFFA000000FFFF      # [0x23] USER_CS    rx  ring3
         .quad           0x00CFF2000000FFFF      # [0x2B] USER_DS    rw  ring3
+        .quad           0x00C0820000000000      # [0x30] _LDT_SEGMENT
+        .quad           0x00C0890000000000      # [0x38] _TSS_SEGMENT
 _gdt_end:
 
 # -----------------------------------------------------------------------------

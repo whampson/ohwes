@@ -42,6 +42,8 @@
 #define KERNEL_DS                       0x18
 #define USER_CS                         0x23
 #define USER_DS                         0x2B
+#define _LDT_SEGMENT                    0x30
+#define _TSS_SEGMENT                    0x38
 
 #ifndef __ASSEMBLER__
 
