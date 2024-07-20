@@ -22,6 +22,7 @@
 #include <assert.h>
 #include <boot.h>
 #include <cpu.h>
+#include <kernel.h>
 #include <mm.h>
 #include <errno.h>
 #include <ohwes.h>
@@ -37,90 +38,90 @@ struct mm_info kernel_mm;
 
 void init_mm(const struct boot_info *boot_info)
 {
-    bool large_page_support;
-    struct cpuid cpuid;
-    struct mm_info *kmm;
-    pde_t *pde;
-    pte_t *pte;
-    pgflags_t flags;
-    uint32_t addr;
+    // bool large_page_support;
+    // struct cpuid cpuid;
+    // struct mm_info *kmm;
+    // pde_t *pde;
+    // pte_t *pte;
+    // pgflags_t flags;
+    // uint32_t addr;
 
-    print_memory_map(boot_info);
+    // print_memory_map(boot_info);
 
-    kmm = &kernel_mm;
+    // kmm = &kernel_mm;
 
-    zeromem((void *) SYSTEM_PAGE_DIRECTORY, PAGE_SIZE); // TODO: get from boot info
-    zeromem((void *) KERNEL_PAGE_TABLE, PAGE_SIZE);
+    // zeromem((void *) SYSTEM_PAGE_DIRECTORY, PAGE_SIZE); // TODO: get from boot info
+    // zeromem((void *) KERNEL_PAGE_TABLE, PAGE_SIZE);
 
-    zeromem(kmm, sizeof(struct mm_info));
-    kmm->pgdir = (pde_t *) SYSTEM_PAGE_DIRECTORY;
+    // zeromem(kmm, sizeof(struct mm_info));
+    // kmm->pgdir = (pde_t *) SYSTEM_PAGE_DIRECTORY;
 
-    flags = _PAGE_USER | _PAGE_RW;
+    // flags = _PAGE_USER | _PAGE_RW;
 
-    // create kernel page directory entry
-    pde = pde_offset(kmm, KERNEL_PAGE_TABLE);
-    *pde = __mkpde(KERNEL_PAGE_TABLE, flags);
+    // // create kernel page directory entry
+    // pde = pde_offset(kmm, KERNEL_PAGE_TABLE);
+    // *pde = __mkpde(KERNEL_PAGE_TABLE, flags);
 
-    // map cpu structs
-    pte = pte_offset(pde, SYSTEM_CPU_PAGE);
-    *pte = __mkpte(SYSTEM_CPU_PAGE, flags);
+    // // map cpu structs
+    // pte = pte_offset(pde, SYSTEM_CPU_PAGE);
+    // *pte = __mkpte(SYSTEM_CPU_PAGE, flags);
 
-    // map frame buffer
-    for (int i = 0; i < boot_info->framebuffer_pages; i++) {
-        addr = boot_info->framebuffer + (i << PAGE_SHIFT);
-        pte = pte_offset(pde, addr);
-        *pte = __mkpte(addr, flags);
-    }
+    // // map frame buffer
+    // for (int i = 0; i < boot_info->framebuffer_pages; i++) {
+    //     addr = boot_info->framebuffer + (i << PAGE_SHIFT);
+    //     pte = pte_offset(pde, addr);
+    //     *pte = __mkpte(addr, flags);
+    // }
 
-    // map kernel code
-    uint32_t num_kernel_code_pages = div_ceil(boot_info->kernel_size, PAGE_SIZE);
-    for (int i = 0; i <  num_kernel_code_pages; i++) {
-        addr = boot_info->kernel + (i << PAGE_SHIFT);
-        pte = pte_offset(pde, addr);
-        *pte = __mkpte(addr, flags);
-    }
+    // // map kernel code
+    // uint32_t num_kernel_code_pages = div_ceil(boot_info->kernel_size, PAGE_SIZE);
+    // for (int i = 0; i <  num_kernel_code_pages; i++) {
+    //     addr = boot_info->kernel + (i << PAGE_SHIFT);
+    //     pte = pte_offset(pde, addr);
+    //     *pte = __mkpte(addr, flags);
+    // }
 
-    // map kernel stack
-    addr = boot_info->stack - PAGE_SIZE;
-    pte = pte_offset(pde, addr);
-    *pte = __mkpte(addr, flags);
+    // // map kernel stack
+    // addr = boot_info->stack - PAGE_SIZE;
+    // pte = pte_offset(pde, addr);
+    // *pte = __mkpte(addr, flags);
 
-    // map user stack
-    addr = USER_STACK_PAGE;
-    pte = pte_offset(pde, addr);
-    *pte = __mkpte(addr, flags);
+    // // map user stack
+    // addr = USER_STACK_PAGE;
+    // pte = pte_offset(pde, addr);
+    // *pte = __mkpte(addr, flags);
 
-    (void) pde;
-    (void) pte;
-    (void) flags;
-    (void) addr;
+    // (void) pde;
+    // (void) pte;
+    // (void) flags;
+    // (void) addr;
 
-    // check large page support
-    get_cpuid(&cpuid);
-    large_page_support = cpuid.pse_support;
+    // // check large page support
+    // get_cpuid(&cpuid);
+    // large_page_support = cpuid.pse_support;
 
-    // configure CR4
-    if (large_page_support) {
-        uint32_t cr4 = 0;
-        read_cr4(cr4);
-        cr4 |= CR4_PSE; // allow 4M pages
-        write_cr4(cr4);
-    }
-    else {
-        kprint("\e[1;31mno large page support!\e[0m\n");    // TODO: deal with this
-    }
+    // // configure CR4
+    // if (large_page_support) {
+    //     uint32_t cr4 = 0;
+    //     read_cr4(cr4);
+    //     cr4 |= CR4_PSE; // allow 4M pages
+    //     write_cr4(cr4);
+    // }
+    // else {
+    //     kprint("\e[1;31mno large page support!\e[0m\n");    // TODO: deal with this
+    // }
 
-    // configure CR3
-    uint32_t cr3 = 0;
-    cr3 |= SYSTEM_PAGE_DIRECTORY;
-    write_cr3(cr3);
+    // // configure CR3
+    // uint32_t cr3 = 0;
+    // cr3 |= SYSTEM_PAGE_DIRECTORY;
+    // write_cr3(cr3);
 
-    // configure CR0
-    uint32_t cr0 = 0;
-    read_cr0(cr0);
-    cr0 |= CR0_PG;      // enable paging
-    cr0 |= CR0_WP;      // enable write-protection for supervisor
-    write_cr0(cr0);     //   to prevent kernel from writing read-only page
+    // // configure CR0
+    // uint32_t cr0 = 0;
+    // read_cr0(cr0);
+    // cr0 |= CR0_PG;      // enable paging
+    // cr0 |= CR0_WP;      // enable write-protection for supervisor
+    // write_cr0(cr0);     //   to prevent kernel from writing read-only page
 }
 
 static void print_memory_map(const struct boot_info *info)
