@@ -29,5 +29,4 @@ TARGET_LDLIBS := \
     libc.a \
 
 # we only want the .text section right now for our hacky kernel image
-RAWBIN_FLAGS := --only-section=.text
-$(eval $(call make-rawbin,ohwes.sys,${RAWBIN_FLAGS}))
+$(eval $(call make-rawbin,ohwes.sys))

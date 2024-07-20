@@ -20,6 +20,8 @@
 # =============================================================================
 
 #include <kernel.h>
+#include <paging.h>
+#include <x86.h>
 
 .code32
 .section .setup, "ax", @progbits
@@ -31,7 +33,9 @@ setup_kernel:
         lgdt            gdt_ptr                 # load the real GDT
         ljmp            $KERNEL_CS, $_setup
 _setup:
-        # set up Protected Mode registers
+        # reset the stack and set up Protected Mode registers
+        movl            $STACK_BASE, %ebp
+        movl            %ebp, %esp
         movw            $KERNEL_DS, %ax
         movw            %ax, %ds                # ds = KERNEL_DS
         movw            %ax, %es                # es = KERNEL_DS
@@ -45,19 +49,59 @@ _setup:
         movw            $_TSS_SEGMENT, %ax
         ltr             %ax                     # TSS not used
 
-        # reset the stack
-        movl            $STACK_BASE, %ebp
-        movl            %ebp, %esp
-
-        # TODO: init paging
-
+        call            setup_paging
 
         movl            boot_params_ptr, %ecx
-        // call            kmain
+        call            start_kernel
 
 _idle:
         hlt
         jmp             _idle
+
+setup_paging:
+        # zero the page directory
+        xorl            %eax, %eax
+        movl            $1024, %ecx
+        movl            $PGDIR_BASE, %edi
+    rep stosl
+
+        # zero the 0-4M page table
+        movl            $1024, %ecx
+        movl            $PGTBL_BASE, %edi
+    rep stosl
+
+        # make low 1M of memory available
+        xorl            %ecx, %ecx
+        movl            $PGTBL_BASE, %edi
+_open_1M_loop:
+        movl            %ecx, %eax
+        shll            $PAGE_SHIFT, %eax
+        orl             $0x03, %eax
+        movl            %eax, 0(%edi, %ecx, 4)
+        incl            %ecx
+        cmpl            $0x100, %ecx
+        jb              _open_1M_loop
+
+        # map phys:00000000-00010000 to virt:00000000 and virt:C0000000
+        movl            $PGDIR_BASE, %edi
+        movl            $PGTBL_BASE, %eax
+        orl             $0x03, %eax
+        movl            %eax, 0(%edi)
+        movl            %eax, 0xC00(%edi)
+
+        # TODO: map phys:00000000-0000FFFF at virt:FFFE0000-FFFEFFFF  (boot)
+        # TODO: map phys:00010000          at virt:C0000000           (kernel)
+        # TODO: map kernel stack           at virt:FFFF0000
+
+        # enable paging
+        movl            $PGDIR_BASE, %eax
+        movl            %eax, %cr3
+        movl            %cr0, %eax
+        orl             $CR0_PG, %eax
+        movl            %eax, %cr0
+
+_setup_paging_done:
+        ret
 
 # -----------------------------------------------------------------------------
 # ----------------------------------- Data ------------------------------------

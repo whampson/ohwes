@@ -32,8 +32,8 @@
 #define PGDIR_BASE                      0x1000      //  0x1000 - 0x1FFF
 #define PGTBL_BASE                      0x2000      //  0x2000 - 0x2FFF
 #define MEMMAP_BASE                     0x3000      //  0x3000 - 0x3FFF
-#define STACK_BASE                      0x7C00      // grows toward 0
 #define STAGE2_BASE                     0x7E00
+#define STACK_BASE                      0x10000     // grows toward 0
 
 #define KERNEL_BASE                     0x10000     // 0x10000 - 0x9FBFF
 #define KERNEL_ENTRY                    KERNEL_BASE

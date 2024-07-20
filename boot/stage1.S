@@ -99,7 +99,7 @@ stage1:
         movw            %ax, %es
         movw            %ax, %fs
         LOAD_SEGMENT    $BDA_SEGMENT, %gs
-        movw            $STACK_BASE, %bp
+        xorw            %bp, %bp
         movw            %bp, %sp
 
         # load the root directory

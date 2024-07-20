@@ -70,37 +70,39 @@ static void debug_interrupt(void);
 
 struct boot_info g_boot;
 
-__fastcall void kmain(const struct boot_info *info)
+__fastcall void start_kernel(const struct boot_info *info)
 {
-    memcpy(&g_boot, info, sizeof(struct boot_info));
+    ((uint16_t *) 0xB8000)[1] = 0x0A00|'e';
 
-    init_cpu(&g_boot);
-    init_pic();
-    init_irq();
-    init_vga();
-    init_tasks();
-    init_console();     // safe to print now
+//     memcpy(&g_boot, info, sizeof(struct boot_info));
 
-    kprint("\n" OS_NAME " " OS_VERSION ", build " OS_BUILDDATE "\n");
-    kprint("\n");
-#if CHATTY
-    print_info(&g_boot);
-#endif
+//     init_cpu(&g_boot);
+//     init_pic();
+//     init_irq();
+//     init_vga();
+//     init_tasks();
+//     init_console();     // safe to print now
 
-    init_ps2(&g_boot);
-    init_kb();
-    init_memory(&g_boot);
-    init_timer();
-    init_rtc();
+//     kprint("\n" OS_NAME " " OS_VERSION ", build " OS_BUILDDATE "\n");
+//     kprint("\n");
+// #if CHATTY
+//     print_info(&g_boot);
+// #endif
 
-#ifdef DEBUG
-    // CTRL+ALT+FN to crash kernel
-    irq_register(IRQ_TIMER, debug_interrupt);
-#endif
+//     init_ps2(&g_boot);
+//     init_kb();
+//     init_memory(&g_boot);
+//     init_timer();
+//     init_rtc();
 
-    kprint("boot: entering ring3...\n");
-    uint32_t user_stack = 0xD000;
-    enter_ring3((uint32_t) init, user_stack);
+// #ifdef DEBUG
+//     // CTRL+ALT+FN to crash kernel
+//     irq_register(IRQ_TIMER, debug_interrupt);
+// #endif
+
+//     kprint("boot: entering ring3...\n");
+//     uint32_t user_stack = 0xD000;
+//     enter_ring3((uint32_t) init, user_stack);
 }
 
 int init(void)

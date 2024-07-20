@@ -63,7 +63,7 @@ if [ "$1" = "qemu" ]; then
             -ex 'set confirm off' \
             -ex 'lay src' -ex 'lay reg' \
             -ex 'b setup_kernel' \
-            -ex 'b kmain'
+            -ex 'b start_kernel'
     else
         "$QEMU_PATH" $QEMU_FLAGS
     fi
