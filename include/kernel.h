@@ -28,11 +28,12 @@
 #define PRINT_PAGE_MAP                  1
 #define E9_HACK                         1
 
+// physical memory addresses used during kernel setup and initialization
 #define BOOT_MEMMAP                     0x1000
 #define KERNEL_PGDIR                    0x2000
 #define KERNEL_PGTBL                    0x3000
-#define STACK_BASE                      0x10000     // grows toward 0
-#define KERNEL_LMA                      0x10000
+#define KERNEL_LMA                      0x10000     // physical load address
+#define KERNEL_INIT_STACK               KERNEL_LMA  // grows toward 0
 
 #define KERNEL_CS                       0x10
 #define KERNEL_DS                       0x18
