@@ -22,6 +22,7 @@
 
 #include <assert.h>
 #include <ohwes.h>
+#include <kernel.h>
 #include <errno.h>
 #include <io.h>
 #include <x86.h>

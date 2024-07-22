@@ -24,6 +24,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <irq.h>
+#include <kernel.h>
 #include <ps2.h>
 #include <vga.h>
 #include <fs.h>

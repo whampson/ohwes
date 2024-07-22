@@ -27,6 +27,7 @@
 #include <task.h>
 #include <syscall.h>
 #include <paging.h>
+#include <kernel.h>
 
 // !!!!!!!
 // TODO: All of these need to safely access the current task struct, to prevent

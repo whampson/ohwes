@@ -30,11 +30,12 @@
 
 #ifdef __KERNEL__
 
-#include <panic.h>
+#include <kernel.h>
 #define assert(x) \
 do { \
     if (!(x)) { \
-        panic("%s:%d assertion failed: " #x "\n", __FILE__, __LINE__); \
+        kprint("%s:%d assertion failed: " #x "\n", __FILE__, __LINE__); \
+        for (;;); \
     } \
 } while (0)
 

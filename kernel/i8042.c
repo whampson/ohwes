@@ -29,6 +29,7 @@
 #include <ps2.h>
 #include <io.h>
 #include <ohwes.h>
+#include <kernel.h>
 
 static void wait_for_read(void);
 static void wait_for_write(void);
