@@ -130,10 +130,6 @@ struct boot_info {
     //
     // !!! KEEP OFFSETS IN-LINE WITH src/boot/stage2.h !!!
     //
-    intptr_t kernel_base;           // kernel image base address
-    uint32_t kernel_size;           // kernel image size bytes
-    intptr_t stage2_base;           // stage2 image base address
-    uint32_t stage2_size;           // stage2 image size bytes
     intptr_t ebda_base;             // Extended BIOS Data Area
     const acpi_mmap_t *mem_map;     // ACPI Memory Map (INT 15h,AX=E820h)
 

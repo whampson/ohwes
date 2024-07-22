@@ -40,6 +40,8 @@
 #define PDE_COUNT               1024                // PDEs per page directory
 #define PTE_COUNT               1024                // PTEs per page table
 
+#define PAGE_OFFSET             0xC0000000
+
 //   10987654321098765432109876543210
 //  +---------+---------+-----------+
 //  |   PDN   |   PTN   |  OFFSET   | Linear Address

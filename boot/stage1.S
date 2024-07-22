@@ -119,8 +119,6 @@ stage1:
         # load stage 2 binary
         leaw            sz_stage2_filename, %si
         call            find_file               # returns: di = dir entry ptr
-        movl            FILESIZE(%di), %ecx
-        pushl           %ecx                    # put stage2 size on stack
         movw            $STAGE2_BASE, %bx
         call            load_file               # load stage 2!
 

@@ -22,13 +22,14 @@
 #ifndef __CONSOLE_H
 #define __CONSOLE_H
 
+#include <paging.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <queue.h>
 
 #define VGA_COLS            80
 #define VGA_ROWS            25
-#define VGA_FRAMEBUF        0xB8000
+#define VGA_FRAMEBUF        PAGE_OFFSET + 0xB8000
 
 #define ERASE_DOWN          0
 #define ERASE_UP            1

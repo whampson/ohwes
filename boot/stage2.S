@@ -41,11 +41,6 @@
 ##
 .globl stage2
 stage2:
-        # grab stage2 size from stack
-        popl            %ecx
-        movl            %ecx, stage2_size
-        movl            $STAGE2_BASE, stage2_base
-
         # collect some hardware info
         xorl            %eax, %eax
         int             $0x11
@@ -62,10 +57,7 @@ stage2:
         leaw            sz_kernel_filename, %si
         call            find_file               # returns: di = dir entry ptr
         movl            FILESIZE(%di), %ecx
-        movl            %ecx, kernel_size       # store kernel size
         call            check_kernel_size       # make sure it fits in low mem
-        movl            $KERNEL_BASE, %ebx
-        movl            %ebx, kernel_base       # store kernel base
         LOAD_SEGMENT    $KERNEL_SEGMENT, %es
         xorl            %ebx, %ebx
         call            load_file               # load it!
@@ -75,7 +67,7 @@ stage2:
 
         # load GDT and switch to Protected Mode
         cli                                     # no more interrupts!
-        lgdt            early_gdt_ptr           # load temp GDT
+        lgdt            early_gdt_desc           # load temp GDT
         movl            %cr0, %eax
         orl             $CR0_PE, %eax           # enable Protected Mode
         movl            %eax, %cr0
@@ -87,7 +79,7 @@ stage2:
 
         # long jump to the kernel setup
         leal            boot_info, %ecx         # pass bootparams ptr to kernel
-        ljmpl           $BOOT_CS, $KERNEL_ENTRY # reload CS, jump to 32-bit code
+        ljmpl           $BOOT_CS, $KERNEL_LMA   # reload CS, jump to 32-bit code
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
@@ -411,10 +403,12 @@ _kbin_wait_done:
 # this size (hopefully not), we'll have to load the kernel in stages, which
 # would require a working floppy disk driver in Protected Mode (or make use of
 # the BIOS again in Unreal Mode).
+#
+# Inputs:
+#       ecx - kernel image size
 ##
 check_kernel_size:
-        movl            kernel_size, %ecx
-        movl            $KERNEL_BASE, %eax
+        movl            $KERNEL_LMA, %eax
         cmpl            $0, ebda_base
         jz              _no_ebda_info
         movl            ebda_base, %ebx # EBDA = effective top of low memory
@@ -444,10 +438,6 @@ _kernel_too_big:
 # keep this in-line with struct boot_info in include/boot.h!
 .globl boot_info
 boot_info:
-  kernel_base:          .long   0
-  kernel_size:          .long   0
-  stage2_base:          .long   0
-  stage2_size:          .long   0
   ebda_base:            .long   0
   mem_map:              .long   0
   kb_low:               .long   0
@@ -472,7 +462,7 @@ _early_gdt:
 _early_gdt_end:
 
         .word           0                       # align
-early_gdt_ptr:
+early_gdt_desc:
         .word           _early_gdt_end - _early_gdt - 1
         .long           _early_gdt
 

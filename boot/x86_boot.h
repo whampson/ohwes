@@ -34,9 +34,9 @@
 // --- Real Mode Memory Map ---
 // 00000-004FF: reserved; IVT, BDA
 // 00500-0FFFF: (free)
-// 01000-02BFF: FAT root directory
-// 02C00-02FFF: ACPI memory map
-// 03000-079FF: (free)
+// 01000-01FFF: ACPI memory map
+// 02000-03BFF: FAT root directory
+// 03C00-079FF: (free)
 // 07A00-07BFF: real mode stack
 // 07C00-07DFF: stage 1
 // 07E00-0FFFF: stage 2
@@ -50,12 +50,14 @@
 #define SEGMENT_SIZE        (1 << SEGMENT_SHIFT)
 
 #define BDA_SEGMENT         0x0040
-#define KERNEL_SEGMENT      (KERNEL_BASE >> 4)
+#define KERNEL_SEGMENT      (KERNEL_LMA >> 4)
 
 #define BOOT_CS             0x08
 #define BOOT_DS             0x10
 
-#define ROOTDIR_BASE        0x1000
+#define MEMMAP_BASE         BOOT_MEMMAP
+#define ROOTDIR_BASE        0x2000
+#define STAGE2_BASE         0x7E00
 
 /*----------------------------------------------------------------------------*
  * BIOS Data Area

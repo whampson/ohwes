@@ -19,6 +19,7 @@
 * =============================================================================
 */
 
+#include <stdarg.h>
 #include <ohwes.h>
 #include <boot.h>
 #include <console.h>
@@ -68,11 +69,50 @@ int g_test_crash_kernel;
 static void debug_interrupt(void);
 #endif
 
+int _kprint(const char *fmt, ...)
+{
+    char buf[1024];
+
+    va_list args;
+    va_start(args, fmt);
+
+    int nchars = vsnprintf(buf, sizeof(buf), fmt, args);
+    int retval = console_write(NULL, buf, nchars);
+
+    va_end(args);
+    return retval;
+}
+
 struct boot_info g_boot;
+
+// defined in linker script; access value using addressof
+extern uint32_t __page_shift;
+extern uint32_t __page_size;
+extern uint32_t __page_offset;
+extern intptr_t __kernel_base;
+extern uint32_t __kernel_pages;
 
 __fastcall void start_kernel(const struct boot_info *info)
 {
-    ((uint16_t *) 0xB8000)[1] = 0x0A00|'e';
+    init_console();
+
+    assert((uint32_t) &__page_size == PAGE_SIZE);
+    assert((uint32_t) &__page_shift == PAGE_SHIFT);
+    assert((uint32_t) &__page_offset == PAGE_OFFSET);
+
+    ((uint16_t *) 0xC00B8000)[1] = 0x0A00|'e';
+    kprint("__page_shift = 0x%X\n", &__page_shift);
+    kprint("__page_size = 0x%X\n", &__page_size);
+    kprint("__page_offset = 0x%X\n", &__page_offset);
+    kprint("__kernel_base = 0x%X\n", &__kernel_base);
+    kprint("__kernel_pages = 0x%X\n", &__kernel_pages);
+    kprint("&info = 0x%X\n", &info);
+    kprint("kb_low = %d\n", info->kb_low);
+    kprint("kb_high = %d\n", info->kb_high);
+    kprint("kb_high_e801h = %d\n", info->kb_high_e801h);
+    kprint("kb_extended = %d\n", info->kb_extended);
+
+    // for (;;);
 
 //     memcpy(&g_boot, info, sizeof(struct boot_info));
 
@@ -283,8 +323,8 @@ static void print_info(const struct boot_info *info)
     kprint("bios: %s ps/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
     kprint("bios: video mode is %02Xh\n", info->vga_mode & 0x7F);
     if (info->ebda_base) kprint("boot: EBDA:\t%08X,%Xh\n", info->ebda_base, ebda_size);
-    kprint("boot: stage2:\t%08X,%Xh\n", info->stage2_base, info->stage2_size);
-    kprint("boot: kernel:\t%08X,%Xh\n", info->kernel_base, info->kernel_size);
+    // kprint("boot: stage2:\t%08X,%Xh\n", info->stage2_base, info->stage2_size);
+    // kprint("boot: kernel:\t%08X,%Xh\n", info->kernel_base, info->kernel_size);
 }
 
 #ifdef DEBUG

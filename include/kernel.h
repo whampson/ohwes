@@ -28,15 +28,11 @@
 #define PRINT_PAGE_MAP                  1
 #define E9_HACK                         1
 
-#define IDT_BASE                        0x0800
-#define PGDIR_BASE                      0x1000      //  0x1000 - 0x1FFF
-#define PGTBL_BASE                      0x2000      //  0x2000 - 0x2FFF
-#define MEMMAP_BASE                     0x3000      //  0x3000 - 0x3FFF
-#define STAGE2_BASE                     0x7E00
+#define BOOT_MEMMAP                     0x1000
+#define KERNEL_PGDIR                    0x2000
+#define KERNEL_PGTBL                    0x3000
 #define STACK_BASE                      0x10000     // grows toward 0
-
-#define KERNEL_BASE                     0x10000     // 0x10000 - 0x9FBFF
-#define KERNEL_ENTRY                    KERNEL_BASE
+#define KERNEL_LMA                      0x10000
 
 #define KERNEL_CS                       0x10
 #define KERNEL_DS                       0x18
@@ -46,6 +42,9 @@
 #define _TSS_SEGMENT                    0x38
 
 #ifndef __ASSEMBLER__
+
+#define kprint(...) _kprint(__VA_ARGS__)
+extern int _kprint(const char *fmt, ...);
 
 #ifdef DEBUG
 extern int g_test_crash_kernel;
