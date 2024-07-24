@@ -97,7 +97,6 @@ __fastcall void start_kernel(const struct boot_info *info)
     ((uint16_t *) (PAGE_OFFSET+0xB8000))[1] = 0x0A00|'e';
     kprint("__kernel_base = 0x%X\n", &__kernel_base);
     kprint("__kernel_pages = 0x%X\n", &__kernel_pages);
-    kprint("&info = 0x%X\n", &info);
     kprint("kb_low = %d\n", info->kb_low);
     kprint("kb_high = %d\n", info->kb_high);
     kprint("kb_high_e801h = %d\n", info->kb_high_e801h);
