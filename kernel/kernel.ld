@@ -1,23 +1,43 @@
+/* =============================================================================
+* Copyright (C) 2020-2024 Wes Hampson. All Rights Reserved.
+*
+* This file is part of the OH-WES Operating System.
+* OH-WES is free software; you may redistribute it and/or modify it under the
+* terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+* -----------------------------------------------------------------------------
+*         File: kernel/kernel.ld
+*      Created: June 3, 2024
+*       Author: Wes Hampson
+* =============================================================================
+*/
+
+#include <config.h>
+#include <paging.h>
+
 OUTPUT_FORMAT("elf32-i386")
-OUTPUT_ARCH(i386)
+OUTPUT_ARCH("i386")
 
 SECTIONS
 {
-    __page_shift = 12;
-    __page_size = (1 << __page_shift);
-    __page_offset = 0xC0000000;
+    __kernel_base = PAGE_OFFSET;
+    __setup_lma = KERNEL_LMA;
 
-    __kernel_base = __page_offset;
-
-    __setup_lma = 0x10000;
     .setup __setup_lma :
     {
         *(.setup)
     }
-    . = ALIGN(__page_size);
+    . = ALIGN(PAGE_SIZE);
 
     __text_lma = .;
-    .text __page_offset + __text_lma : AT (__text_lma)
+    .text PAGE_OFFSET + __text_lma : AT (__text_lma)
     {
         *(.text*)
     }
@@ -42,6 +62,6 @@ SECTIONS
         *(.eh_frame*)
     }
 
-    . = ALIGN(__page_size);
-    __kernel_pages = (. - __kernel_base) >> __page_shift;
+    . = ALIGN(PAGE_SIZE);
+    __kernel_pages = (. - __kernel_base) >> PAGE_SHIFT;
 }

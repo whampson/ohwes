@@ -73,7 +73,7 @@
 #define _PAGE_PDE               (1 << 9)        // this is a PDE
 #define _PAGE_LARGE             (_PAGE_PS)
 
-#ifndef __ASSEMBLER__
+#if !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)
 
 #include <assert.h>
 #include <stdbool.h>

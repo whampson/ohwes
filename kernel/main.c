@@ -87,9 +87,6 @@ int _kprint(const char *fmt, ...)
 struct boot_info g_boot;
 
 // defined in linker script; access value using addressof
-extern uint32_t __page_shift;
-extern uint32_t __page_size;
-extern uint32_t __page_offset;
 extern intptr_t __kernel_base;
 extern uint32_t __kernel_pages;
 
@@ -97,14 +94,7 @@ __fastcall void start_kernel(const struct boot_info *info)
 {
     init_console();
 
-    assert((uint32_t) &__page_size == PAGE_SIZE);
-    assert((uint32_t) &__page_shift == PAGE_SHIFT);
-    assert((uint32_t) &__page_offset == PAGE_OFFSET);
-
     ((uint16_t *) (PAGE_OFFSET+0xB8000))[1] = 0x0A00|'e';
-    kprint("__page_shift = 0x%X\n", &__page_shift);
-    kprint("__page_size = 0x%X\n", &__page_size);
-    kprint("__page_offset = 0x%X\n", &__page_offset);
     kprint("__kernel_base = 0x%X\n", &__kernel_base);
     kprint("__kernel_pages = 0x%X\n", &__kernel_pages);
     kprint("&info = 0x%X\n", &info);

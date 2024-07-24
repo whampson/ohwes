@@ -34,6 +34,13 @@
 #    submakefile are modified, the affected objects and targets will be rebuilt
 #    to ensure the Makefile changes are applied properly.
 #
+# 24 Jul 24:
+#   - Added the ability to "preprocess" linker scripts, allowing developers to
+#     #include headers containing defines shared with C source code.
+#     Preprocessed linker scripts are run through the C preprocessor with
+#     __LDSCRIPT__ defined and are stored with the '-gen' suffix in the target's
+#     intermediate object directory.
+#
 
 # ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
 # Caution: Don't edit this Makefile! Create your own main.mk and other
@@ -59,7 +66,7 @@ define add-clean
     clean: clean_${1}
     .PHONY: clean_${1}
     clean_${1}:
-	$$(strip rm -f ${TARGET_DIR}/${1} $${${1}_OBJECTS:%.o=%.[doP]})
+	$$(strip rm -f ${TARGET_DIR}/${1} $${${1}_OBJECTS:%.o=%.[doP]}) $${${1}_GENLDSCRIPT}
 	$${${1}_POSTCLEAN}
 endef
 
@@ -109,11 +116,17 @@ define add-target
             endif
         endif
 
-        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS} $${${1}_LDSCRIPT} $${${1}_MAKEFILES}
+        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS} \
+                $${${1}_GENLDSCRIPT} $${${1}_MAKEFILES}
 	    @mkdir -p $$(dir $$@)
 	    $$(strip $${${1}_LINKER} -o $$@ $${${1}_OBJECTS} $${LDLIBS} \
-	        $${${1}_LDLIBS} $${LDFLAGS} $${${1}_LDFLAGS} $$(addprefix -T,$${${1}_LDSCRIPT}))
+	        $${${1}_LDLIBS} $${LDFLAGS} $${${1}_LDFLAGS} $$(addprefix -T,$${${1}_GENLDSCRIPT}))
 	    $${${1}_POSTMAKE}
+
+        $${${1}_GENLDSCRIPT}: $${${1}_LDSCRIPT} $${${1}_OBJECTS}
+	    @mkdir -p $$(dir $$@)
+	    @echo -e '/*\n * THIS FILE WAS AUTO-GENERATED. DO NOT EDIT!\n * Source: $${${1}_LDSCRIPT}\n */\n' > $$@
+	    $$(strip ${CC} -E -P -x c -D__LDSCRIPT__ $${INCLUDES} $$< >> $$@)
     endif
 endef
 
@@ -143,7 +156,7 @@ endef
 define COMPILE_CXX_CMDS
 	@mkdir -p $(dir $@)
 	$(strip ${CXX} -o $@ -c -MD ${CXXFLAGS} ${SOURCE_CXXFLAGS} ${DEFINES} \
-	    ${SOURCE_DEFINES}${INCLUDES} ${SOURCE_INCLUDES} $<)
+	    ${SOURCE_DEFINES} ${INCLUDES} ${SOURCE_INCLUDES} $<)
 	@cp ${@:%$(suffix $@)=%.d} ${@:%$(suffix $@)=%.P}; \
 	 sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
 	     -e '/^$$/ d' -e 's/$$/ :/' < ${@:%$(suffix $@)=%.d} \
@@ -259,6 +272,10 @@ define include-submakefile
         TARGET_LDSCRIPT         := $$(call QUALIFY_PATH,$${DIR},$${TARGET_LDSCRIPT})
         TARGET_LDSCRIPT         := $$(call CANONICAL_PATH,$${TARGET_LDSCRIPT})
         $${TARGET}_LDSCRIPT     := $${TARGET_LDSCRIPT}
+        ifneq "$$(strip $${TARGET_LDSCRIPT})" ""
+            $${TARGET}_GENLDSCRIPT  := $$(addprefix $${BUILD_DIR}/$$(call CANONICAL_PATH,$${TARGET})/,\
+                                       $$(basename $${TARGET_LDSCRIPT})-gen.ld)
+        endif
         $${TARGET}_LINKER       := $${TARGET_LINKER}
         $${TARGET}_OBJECTS      :=
         $${TARGET}_POSTCLEAN    := $${TARGET_POSTCLEAN}
