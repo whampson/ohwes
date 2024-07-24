@@ -24,7 +24,7 @@
 #ifndef __X86_BOOT
 #define __X86_BOOT
 
-#include <kernel.h>
+#include <config.h>
 #include <x86.h>
 
 /*----------------------------------------------------------------------------*

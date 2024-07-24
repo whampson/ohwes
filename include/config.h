@@ -13,31 +13,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/kernel.h
- *      Created: April 15, 2024
+ *         File: include/config.h
+ *      Created: July 24, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __KERNEL_H
-#define __KERNEL_H
+#ifndef __CONFIG_H
+#define __CONFIG_H
 
-#define KERNEL_CS                       0x10
-#define KERNEL_DS                       0x18
-#define USER_CS                         0x23
-#define USER_DS                         0x2B
-#define _LDT_SEGMENT                    0x30
-#define _TSS_SEGMENT                    0x38
+#define MIN_KB_REQUIRED         639     // let's see how long this lasts!
+#define PRINT_MEMORY_MAP        1
+#define PRINT_IOCTL             0
+#define PRINT_PAGE_MAP          1
+#define E9_HACK                 1
 
-#ifndef __ASSEMBLER__
+#define BOOT_MEMMAP             0x1000
+#define KERNEL_PGDIR            0x2000
+#define KERNEL_PGTBL            0x3000
+#define STACK_BASE              0x10000     // grows toward 0
+#define KERNEL_LMA              0x10000
 
-#define kprint(...) _kprint(__VA_ARGS__)
-extern int _kprint(const char *fmt, ...);
+#define PAGE_OFFSET             0xC0000000
 
-#ifdef DEBUG
-extern int g_test_crash_kernel;
-#endif
-
-#endif  // __ASSEMBLER__
-
-#endif  // __KERNEL_H
+#endif // __CONFIG_H

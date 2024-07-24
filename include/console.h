@@ -22,7 +22,7 @@
 #ifndef __CONSOLE_H
 #define __CONSOLE_H
 
-#include <paging.h>
+#include <config.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <queue.h>

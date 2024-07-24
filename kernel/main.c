@@ -23,6 +23,7 @@
 #include <ohwes.h>
 #include <boot.h>
 #include <console.h>
+#include <config.h>
 #include <ctype.h>
 #include <cpu.h>
 #include <errno.h>
@@ -100,7 +101,7 @@ __fastcall void start_kernel(const struct boot_info *info)
     assert((uint32_t) &__page_shift == PAGE_SHIFT);
     assert((uint32_t) &__page_offset == PAGE_OFFSET);
 
-    ((uint16_t *) 0xC00B8000)[1] = 0x0A00|'e';
+    ((uint16_t *) (PAGE_OFFSET+0xB8000))[1] = 0x0A00|'e';
     kprint("__page_shift = 0x%X\n", &__page_shift);
     kprint("__page_size = 0x%X\n", &__page_size);
     kprint("__page_offset = 0x%X\n", &__page_offset);
@@ -110,7 +111,7 @@ __fastcall void start_kernel(const struct boot_info *info)
     kprint("kb_low = %d\n", info->kb_low);
     kprint("kb_high = %d\n", info->kb_high);
     kprint("kb_high_e801h = %d\n", info->kb_high_e801h);
-    kprint("kb_extended = %d\n", info->kb_extended);
+    kprint("kb_extended = %d\n", info->kb_extended << 6);
 
     // for (;;);
 

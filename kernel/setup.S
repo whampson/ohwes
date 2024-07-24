@@ -19,6 +19,7 @@
 #  Environment: 32-bit Protected Mode
 # =============================================================================
 
+#include <config.h>
 #include <kernel.h>
 #include <paging.h>
 #include <x86.h>

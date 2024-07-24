@@ -22,7 +22,7 @@
 #include <assert.h>
 #include <boot.h>
 #include <cpu.h>
-#include <kernel.h>
+#include <config.h>
 #include <mm.h>
 #include <errno.h>
 #include <ohwes.h>
