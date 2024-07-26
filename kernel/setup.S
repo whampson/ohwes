@@ -210,8 +210,8 @@ gdt:
         .quad           0x00CF92000000FFFF      # [0x18] KERNEL_DS  rw  ring0
         .quad           0x00CFFA000000FFFF      # [0x23] USER_CS    rx  ring3
         .quad           0x00CFF2000000FFFF      # [0x2B] USER_DS    rw  ring3
-        .quad           0x00C0820000000000      # [0x30] _LDT_SEGMENT
-        .quad           0x00C0890000000000      # [0x38] _TSS_SEGMENT
+        .quad           0x0080820000000000      # [0x30] _LDT_SEGMENT
+        .quad           0x0080890000000000      # [0x38] _TSS_SEGMENT
 _gdt_end:
 
         .word           0                       # align
