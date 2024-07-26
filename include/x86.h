@@ -254,7 +254,7 @@ struct x86_desc {
             uint64_t limitlo    : 16;   // TSS limit[15:0]
             uint64_t baselo     : 24;   // TSS base[bits 23:0]
             uint64_t type       : 4;    // descriptor type; set to one of DESCTYPE_TSS*
-            uint64_t            : 1;    // reserved; set to 0
+            uint64_t            : 1;    // system flag; set to 0
             uint64_t dpl        : 2;    // descriptor privilege level
             uint64_t p          : 1;    // segment present in memory
             uint64_t limithi    : 4;    // TSS limit[19:16]
@@ -270,7 +270,7 @@ struct x86_desc {
             uint64_t            : 8;    // reserved; set to 0
             uint64_t type       : 4;    // descriptor Type; set to DESCTYPE_TASK
             uint64_t dpl        : 2;    // descriptor privilege level
-            uint64_t p          : 1;    // segment present in memory
+            uint64_t p          : 1;    // gate present in memory
             uint64_t            : 16;   // reserved; set to 0
         } task;
         struct call_gate {       // Call Gate Descriptor (GDT/LDT)
@@ -281,7 +281,7 @@ struct x86_desc {
             uint64_t type       : 4;    // descriptor type; set to one of DESCTYPE_CALL*
             uint64_t            : 1;    // reserved; set to 0
             uint64_t dpl        : 2;    // descriptor privilege level
-            uint64_t p          : 1;    // segment present in memory
+            uint64_t p          : 1;    // gate present in memory
             uint64_t offsethi   : 16;   // code entrypoint[31:16]
         } call;
         struct intr_gate {       // Interrupt Gate Descriptor (IDT)
@@ -291,7 +291,7 @@ struct x86_desc {
             uint64_t type       : 4;    // descriptor type; set to one of DESCTYPE_INTR*
             uint64_t            : 1;    // reserved; set to 0
             uint64_t dpl        : 2;    // descriptor privilege level
-            uint64_t p          : 1;    // present in memory
+            uint64_t p          : 1;    // gate present in memory
             uint64_t offsethi   : 16;   // code entrypoint[31:16]
         } intr;
         struct trap_gate {       // Trap Gate Descriptor (IDT)
@@ -301,7 +301,7 @@ struct x86_desc {
             uint64_t type       : 4;    // descriptor type; set to one of DESCTYPE_TRAP*
             uint64_t            : 1;    // reserved; set to 0
             uint64_t dpl        : 2;    // descriptor privilege level
-            uint64_t p          : 1;    // segment present in memory
+            uint64_t p          : 1;    // gate present in memory
             uint64_t offsethi   : 16;   // code entrypoint[31:16]
         } trap;
         uint64_t _value;        // Descriptor bits represented as an integer
