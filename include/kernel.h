@@ -31,12 +31,21 @@
 
 #ifndef __ASSEMBLER__
 
+#include <panic.h>
+#include <task.h>
+
 #define kprint(...) _kprint(__VA_ARGS__)
 extern int _kprint(const char *fmt, ...);
+
+#define kernel_task() get_task(0)
 
 #ifdef DEBUG
 extern int g_test_crash_kernel;
 #endif
+
+
+#define _IOC_CONSOLE    'c'     // VGA Console IOCTL code
+#define _IOC_RTC        'r'     // RTC IOCTL code
 
 #endif  // __ASSEMBLER__
 

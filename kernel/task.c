@@ -14,38 +14,37 @@
  * SOFTWARE.
  * -----------------------------------------------------------------------------
  *         File: kernel/task.c
- *      Created: March 25, 2024
+ *      Created: July 31, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
 #include <task.h>
 
-extern int console_read(struct file *file, char *buf, size_t count);
-extern int console_write(struct file *file, const char *buf, size_t count);
-
-static struct task task_list[MAX_TASKS];
-struct task *g_task;
+int _current_pid;
+struct task _task_list[MAX_TASKS];
 
 void init_tasks(void)
 {
-    struct task *t0;
-    zeromem(task_list, sizeof(task_list));
+    _current_pid = 0;
+    zeromem(_task_list, sizeof(_task_list));
+}
 
-    // TODO: completely redo this
+struct task * current_task(void)
+{
+    return get_task(get_pid());
+}
 
-    t0 = &task_list[0];
+struct task * get_task(int pid)
+{
+    if (pid < 0 || pid >= MAX_TASKS) {
+        return NULL;
+    }
 
-    t0->pid = 0;
-    t0->errno = 0;
+    return &_task_list[pid];
+}
 
-    t0->open_files[stdin_fd] = &t0->_files[stdin_fd];
-    t0->open_files[stdin_fd]->fops = &t0->_fops[stdin_fd];
-    t0->open_files[stdin_fd]->fops->read = console_read;
-
-    t0->open_files[stdout_fd] = &t0->_files[stdout_fd];
-    t0->open_files[stdout_fd]->fops = &t0->_fops[stdout_fd];
-    t0->open_files[stdout_fd]->fops->write = console_write;
-
-    g_task = t0;
+int get_pid(void)
+{
+    return _current_pid;
 }

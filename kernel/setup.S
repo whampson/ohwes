@@ -67,8 +67,8 @@ _setup:
         movl            $PAGE_OFFSET+KERNEL_INIT_STACK, %ebp
         movl            %ebp, %esp
         addl            $PAGE_OFFSET, boot_params_ptr
-        addl            $PAGE_OFFSET, _gdt_ptr
-        addl            $PAGE_OFFSET, _idt_ptr
+        addl            $PAGE_OFFSET, gdt_ptr
+        addl            $PAGE_OFFSET, idt_ptr
         lgdt            gdt_desc
         lidt            idt_desc
         ljmp            $KERNEL_CS, $PAGE_OFFSET+_kernel_trampoline
@@ -188,22 +188,22 @@ boot_params_ptr:
 
 # Interrupt Descriptor Table
 .align PAGE_SIZE, 0
-idt:
-        .fill           256, 4, 0
+_idt:
+        .fill           IDT_COUNT, 4, 0
 _idt_end:
 
         .word           0                       # align
 idt_desc:
-        .word           _idt_end - idt - 1
-_idt_ptr:
-        .long           idt
+        .word           _idt_end - _idt - 1
+idt_ptr:
+        .long           _idt
 
 # -----------------------------------------------------------------------------
 
 # Global Descriptor Table
 # We load the real GDT here and not in stage2 so we can keep it in kernel space.
 .align 8
-gdt:
+_gdt:
         .quad           0                       # (must be 0)
         .quad           0                       # (not used)
         .quad           0x00CF9A000000FFFF      # [0x10] KERNEL_CS  rx  ring0
@@ -216,6 +216,6 @@ _gdt_end:
 
         .word           0                       # align
 gdt_desc:
-        .word           _gdt_end - gdt - 1
-_gdt_ptr:
-        .long           gdt
+        .word           _gdt_end - _gdt - 1
+gdt_ptr:
+        .long           _gdt

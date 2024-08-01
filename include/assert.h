@@ -26,15 +26,19 @@
 
 #define static_assert _Static_assert
 
+#define _ASSERT_STRING_FORMAT(x) \
+    "%s(%d): assertion failed:\n    " #x, __FILE__, __LINE__
+
 #ifdef DEBUG
 
 #ifdef __KERNEL__
 
-#include <kernel.h>
+extern int _kprint(const char *fmt, ...);
+
 #define assert(x) \
 do { \
     if (!(x)) { \
-        kprint("%s:%d assertion failed: " #x "\n", __FILE__, __LINE__); \
+        _kprint(_ASSERT_STRING_FORMAT(x)); \
         for (;;); \
     } \
 } while (0)
@@ -46,7 +50,7 @@ do { \
 #define assert(x) \
 do { \
     if (!(x)) { \
-        printf("%s:%d assertion failed: " #x "\n", __FILE__, __LINE__); \
+        printf(_ASSERT_STRING_FORMAT(x)); \
         exit(1); \
     } \
 } while (0)

@@ -34,6 +34,27 @@
 #define KERNEL_LMA              0x10000     // physical load address
 #define KERNEL_INIT_STACK       KERNEL_LMA  // grows toward 0
 
+#define IDT_COUNT               256
+
 #define PAGE_OFFSET             0xC0000000
+
+/*----------------------------------------------------------------------------*
+ * VGA Stuff
+ *----------------------------------------------------------------------------*/
+// http://www.ctyme.com/intr/rb-0069.htm
+// https://www.stanislavs.org/helppc/int_10-0.html
+
+// text mode enum
+#define MODE_02h                0x02        // 80x25,B8000,16gray
+#define MODE_03h                0x03        // 80x25,B8000,16
+#define MODE_07h                0x07        // 80x25,B0000,mono
+
+// font enum
+#define VGA_FONT_80x28          1           // INT 10h,AX=1111h
+#define VGA_FONT_80x50          2           // INT 10h,AX=1112h
+#define VGA_FONT_80x25          4           // INT 10h,AX=1114h
+
+#define VGA_MODE                MODE_03h
+#define VGA_FONT                VGA_FONT_80x28
 
 #endif // __CONFIG_H

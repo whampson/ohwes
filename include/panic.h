@@ -29,8 +29,18 @@
 
 #else // __KERNEL_MODE__
 
+#include <assert.h>
+
 extern void _kpanic(const char *, ...);
 #define panic(...) _kpanic(__VA_ARGS__)
+
+#define panic_assert(x) \
+do { \
+    if (!(x)) { \
+        panic(_ASSERT_STRING_FORMAT(x)); \
+        for (;;); \
+    } \
+} while (0)
 
 #endif
 

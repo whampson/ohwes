@@ -333,22 +333,30 @@ struct segsel {
 static_assert(sizeof(struct segsel) == SEGSEL_SIZE, "sizeof(struct segsel) == SEGSEL_SIZE");
 
 /**
- * Pseudo-Descriptor
+ * Gets a Segment Descriptor from a descriptor table.
  *
- * A Pseudo-Descriptor represents the data structure supplied in the LGDT and
- * LIDT instructions and stored in the SGDT and SIDT instructions.
+ * @param table a pointer to the descriptor table (GDT, LDT, or IDT)
+ * @param segsel the segment selector used to index the table
+ * @return a pointer to the segment descriptor specified by the segment selector
+ */
+#define x86_get_desc(table,segsel) \
+    (&(((struct x86_desc *)(table))[(segsel)>>3]))
+
+/**
+ * Table Descriptor
  *
- * The manual recommends aligning the "limit" field to an odd word address (that
- * is, address MOD 4 is equal to 2) in order to avoid an alignment check fault.
+ * A Table Descriptor represents the data structure supplied in the LGDT and
+ * LIDT instructions and stored in the SGDT and SIDT instructions used to
+ * specify the base and limit of a descriptor table.
  *
  * See Intel Software Developer's Manual, Volume 3A, section 7.2.
  */
-struct pseudo_desc
+struct table_desc
 {
     uint16_t limit;     // GDT or IDT base address
     uint32_t base;      // GDT or IDT limit
-} __pack __align(2);
-static_assert(sizeof(struct pseudo_desc) == 6, "sizeof(struct pseudo_desc) == 6");
+} __pack __align(2);    // pack to ensure limit and base are contiguous 48 bits
+static_assert(sizeof(struct table_desc) == 6, "sizeof(struct table_desc) == 6");
 
 /**
  * Task State Segment
@@ -563,110 +571,34 @@ static inline void make_trap_gate(struct x86_desc *desc, int segsel, int dpl, vo
     desc->trap.p = (handler != NULL);
 }
 
-/**
- * Loads the Global Descriptor Table Register (GDTR).
- *
- * @param desc a pointer to the "pseudo-descriptor" that contains the limit and
- *              base address of the LDT; the alignment on desc structure is
- *              tricky; the limit field should be aligned to an odd-word address
- *              (address MOD 4 equals 2)
- */
-#define __lgdt(desc)        \
-__asm__ volatile (          \
-    "lgdt %0"               \
-    :                       \
-    : "m"(desc)             \
-)
+#define __cli() __asm__ volatile ("cli" ::: "cc")
+#define __sti() __asm__ volatile ("sti" ::: "cc")
 
-/**
- * Loads the Interrupt Descriptor Table Register (IDTR).
- *
- * @param desc a pointer to the "pseudo-descriptor" that contains the limit and
- *              base address of the IDT; the alignment on desc structure is
- *              tricky; the limit field should be aligned to an odd-word address
- *              (address MOD 4 equals 2)
- */
-#define __lidt(desc)        \
-__asm__ volatile (          \
-    "lidt %0"               \
-    :                       \
-    : "m"(desc)             \
-)
+#define __lgdt(table_desc) __asm__ volatile ("lgdt %0" :: "m"(table_desc))
+#define __sgdt(table_desc) __asm__ volatile ("sgdt %0" :: "m"(table_desc))
+#define __lidt(table_desc) __asm__ volatile ("lidt %0" :: "m"(table_desc))
+#define __sidt(table_desc) __asm__ volatile ("sidt %0" :: "m"(table_desc))
 
-/**
- * Loads the Local Descriptor Table Register (LDTR).
- *
- * @param segsel segment selector for the LDT
- */
-#define __lldt(segsel)      \
-__asm__ volatile (          \
-    "lldt %w0"              \
-    :                       \
-    : "r"(segsel)           \
-)
+#define __lldt(segsel) __asm__ volatile ("lldt %w0" :: "r"(segsel))
+#define __sldt(segsel) __asm__ volatile ("sldt %w0" :: "r"(segsel))
+#define __ltr(segsel)  __asm__ volatile ("ltr %w0"  :: "r"(segsel))
+#define __str(segsel)  __asm__ volatile ("str %w0"  :: "r"(segsel))
 
-/**
- * Loads the Task Register (TR).
- *
- * @param segsel segment selector for the TSS
- */
-#define __ltr(segsel)       \
-__asm__ volatile (          \
-    "ltr %w0"               \
-    :                       \
-    : "r"(segsel)           \
-)
+#define __cpuid(fn,eax,ebx,ecx,edx) \
+    __asm__ volatile ("cpuid":"=a"(eax),"=b"(ebx),"=c"(ecx),"=d"(edx):"a"(fn))
 
-/**
- * Clears the interrupt flag, disabling interrupts.
- */
-#define __cli()                                                             \
-__asm__ volatile (                                                          \
-    "cli"                                                                   \
-    :                                                                       \
-    :                                                                       \
-    : "cc"                                                                  \
-)
-
-/**
- * Sets the interrupt flag, enabling interrupts.
- */
-#define __sti()                                                             \
-__asm__ volatile (                                                          \
-    "sti"                                                                   \
-    :                                                                       \
-    :                                                                       \
-    : "cc"                                                                  \
-)
-
-/**
- * Executes the CPUID instruction.
- *
- * @param eax CPUID command
- * @param param0 EAX returned by CPUID
- * @param param1 EBX returned by CPUID
- * @param param2 ECX returned by CPUID
- * @param param3 EDX returned by CPUID
- */
-#define __cpuid(eax,param0,param1,param2,param3)                            \
-__asm__ volatile (                                                          \
-    "cpuid"                                                                 \
-    : "=a"(param0), "=b"(param1), "=c"(param2), "=d"(param3)                \
-    : "a"(eax)                                                              \
-)
-
-#define  read_cs(cs) __asm__ volatile ("movw %%cs, %%ax"      : "=a"(cs):)
-#define  read_ds(cs) __asm__ volatile ("movw %%ds, %%ax"      : "=a"(ds):)
-#define  read_es(cs) __asm__ volatile ("movw %%es, %%ax"      : "=a"(es):)
-#define  read_fs(cs) __asm__ volatile ("movw %%fs, %%ax"      : "=a"(fs):)
-#define  read_gs(cs) __asm__ volatile ("movw %%gs, %%ax"      : "=a"(gs):)
-#define  read_ss(cs) __asm__ volatile ("movw %%ss, %%ax"      : "=a"(ss):)
-#define write_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" : : "I"(cs))
-#define write_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      : : "a"(ds))
-#define write_es(es) __asm__ volatile ("movw %%ax, %%es"      : : "a"(es))
-#define write_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      : : "a"(fs))
-#define write_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      : : "a"(gs))
-#define write_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      : : "a"(ss))
+#define  read_cs(cs) __asm__ volatile ("movw %%cs, %%ax"      : "=a"(cs))
+#define  read_ds(cs) __asm__ volatile ("movw %%ds, %%ax"      : "=a"(ds))
+#define  read_es(cs) __asm__ volatile ("movw %%es, %%ax"      : "=a"(es))
+#define  read_fs(cs) __asm__ volatile ("movw %%fs, %%ax"      : "=a"(fs))
+#define  read_gs(cs) __asm__ volatile ("movw %%gs, %%ax"      : "=a"(gs))
+#define  read_ss(cs) __asm__ volatile ("movw %%ss, %%ax"      : "=a"(ss))
+#define write_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" :: "I"(cs))
+#define write_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      :: "a"(ds))
+#define write_es(es) __asm__ volatile ("movw %%ax, %%es"      :: "a"(es))
+#define write_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      :: "a"(fs))
+#define write_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      :: "a"(gs))
+#define write_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      :: "a"(ss))
 
 #define  read_eax(eax) __asm__ volatile ("" : "=a"(eax):)
 #define  read_ebx(ebx) __asm__ volatile ("" : "=b"(ebx):)
@@ -674,21 +606,24 @@ __asm__ volatile (                                                          \
 #define  read_edx(edx) __asm__ volatile ("" : "=d"(edx):)
 #define  read_esi(esi) __asm__ volatile ("" : "=S"(esi):)
 #define  read_edi(edi) __asm__ volatile ("" : "=D"(edi):)
-#define write_eax(eax) __asm__ volatile ("" : : "a"(eax))
-#define write_ebx(ebx) __asm__ volatile ("" : : "b"(ebx))
-#define write_ecx(ecx) __asm__ volatile ("" : : "c"(ecx))
-#define write_edx(edx) __asm__ volatile ("" : : "d"(edx))
-#define write_esi(esi) __asm__ volatile ("" : : "S"(esi))
-#define write_edi(edi) __asm__ volatile ("" : : "D"(edi))
+#define write_eax(eax) __asm__ volatile ("" :: "a"(eax))
+#define write_ebx(ebx) __asm__ volatile ("" :: "b"(ebx))
+#define write_ecx(ecx) __asm__ volatile ("" :: "c"(ecx))
+#define write_edx(edx) __asm__ volatile ("" :: "d"(edx))
+#define write_esi(esi) __asm__ volatile ("" :: "S"(esi))
+#define write_edi(edi) __asm__ volatile ("" :: "D"(edi))
 
-#define  read_cr0(cr0) __asm__ volatile ("movl %%cr0, %%eax" : "=a"(cr0):)
-#define  read_cr2(cr2) __asm__ volatile ("movl %%cr2, %%eax" : "=a"(cr2):)
-#define  read_cr3(cr3) __asm__ volatile ("movl %%cr3, %%eax" : "=a"(cr3):)
-#define  read_cr4(cr4) __asm__ volatile ("movl %%cr4, %%eax" : "=a"(cr4):)
-#define write_cr0(cr0) __asm__ volatile ("movl %%eax, %%cr0" : : "a"(cr0))
-#define write_cr2(cr2) __asm__ volatile ("movl %%eax, %%cr2" : : "a"(cr2))
-#define write_cr3(cr3) __asm__ volatile ("movl %%eax, %%cr3" : : "a"(cr3))
-#define write_cr4(cr4) __asm__ volatile ("movl %%eax, %%cr4" : : "a"(cr4))
+#define  read_cr0(cr0) __asm__ volatile ("movl %%cr0, %%eax" : "=a"(cr0))
+#define  read_cr2(cr2) __asm__ volatile ("movl %%cr2, %%eax" : "=a"(cr2))
+#define  read_cr3(cr3) __asm__ volatile ("movl %%cr3, %%eax" : "=a"(cr3))
+#define  read_cr4(cr4) __asm__ volatile ("movl %%cr4, %%eax" : "=a"(cr4))
+#define write_cr0(cr0) __asm__ volatile ("movl %%eax, %%cr0" :: "a"(cr0))
+#define write_cr2(cr2) __asm__ volatile ("movl %%eax, %%cr2" :: "a"(cr2))
+#define write_cr3(cr3) __asm__ volatile ("movl %%eax, %%cr3" :: "a"(cr3))
+#define write_cr4(cr4) __asm__ volatile ("movl %%eax, %%cr4" :: "a"(cr4))
+
+#define flush_tlb() \
+    __asm__ volatile ("movl %%cr3, %%eax; movl %%eax, %%cr3" ::: "eax")
 
 /**
  * Page Directory Entry for 32-bit Paging

@@ -54,7 +54,7 @@ __syscall int sys_read(int fd, void *buf, size_t count)
 
     assert(getpl() == KERNEL_PL);
 
-    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_task->open_files[fd])) {
+    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = current_task()->files[fd])) {
         return -EBADF;
     }
     if (!f->fops || !f->fops->read) {
@@ -74,7 +74,7 @@ __syscall int sys_write(int fd, const void *buf, size_t count)
 
     assert(getpl() == KERNEL_PL);
 
-    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_task->open_files[fd])) {
+    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = current_task()->files[fd])) {
         return -EBADF;
     }
     if (!f->fops || !f->fops->write) {
@@ -95,7 +95,7 @@ __syscall int sys_close(int fd)
 
     assert(getpl() == KERNEL_PL);
 
-    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_task->open_files[fd])) {
+    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = current_task()->files[fd])) {
         return -EBADF;
     }
     if (!f->fops) {
@@ -108,7 +108,7 @@ __syscall int sys_close(int fd)
     }
     // TODO: if ret < 0, do we return and NOT close out the fd?
 
-    g_task->open_files[fd] = NULL;
+    current_task()->files[fd] = NULL;
     return ret;
 }
 
@@ -122,7 +122,7 @@ __syscall int sys_ioctl(int fd, unsigned int num, void *arg)
 
     assert(getpl() == KERNEL_PL);
 
-    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = g_task->open_files[fd])) {
+    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = current_task()->files[fd])) {
         return -EBADF;
     }
     if (!f->fops || !f->fops->ioctl) {

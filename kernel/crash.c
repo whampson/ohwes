@@ -36,11 +36,11 @@
 #include <cpu.h>
 #include <fs.h>
 
-#define CRASH_COLOR     CONSOLE_BLUE
-#define PANIC_COLOR     CONSOLE_BLUE
-#define IRQ_COLOR       CONSOLE_RED
-#define NMI_COLOR       CONSOLE_RED
-#define BANNER_COLOR    CONSOLE_BLUE
+#define CRASH_COLOR     VGA_CONSOLE_BLUE
+#define PANIC_COLOR     VGA_CONSOLE_BLUE
+#define IRQ_COLOR       VGA_CONSOLE_RED
+#define NMI_COLOR       VGA_CONSOLE_RED
+#define BANNER_COLOR    VGA_CONSOLE_BLUE
 #define CRASH_BANNER    " " OS_NAME " "
 #define CRASH_WIDTH     80
 #define CRASH_BUFSIZ    256
@@ -59,6 +59,8 @@ static void interrupt_crash(struct iregs *regs);
 __fastcall
 void crash(struct iregs *regs)
 {
+    // TODO: print line-by-line
+
     uint16_t _cs;
     struct segsel *curr_cs;
     struct segsel *fault_cs;
@@ -70,6 +72,10 @@ void crash(struct iregs *regs)
     bool irq;
     bool nmi;
     bool pf;
+    uint16_t vga_rows, vga_cols;
+
+    vga_rows = kernel_task()->cons->rows;
+    vga_cols = kernel_task()->cons->cols;
 
     // grab the control registers
     cr4 = 0;
@@ -126,7 +132,7 @@ void crash(struct iregs *regs)
     const int seg_regs_col = 26;
     const int stack_num_lines = 8;
     const int stack_width_dwords = 2;
-    const int stack_left_col = VGA_COLS - (9 + (stack_width_dwords * 9));
+    const int stack_left_col = vga_cols - (9 + (stack_width_dwords * 9));
 
     // was it a device interrupt?
     irq = (regs->vec_num < 0);
@@ -238,7 +244,7 @@ void crash(struct iregs *regs)
     // dump stack
     for (int l = 0; l < stack_num_lines; l++) {
         crash_print("\e[%d;%dH",
-            VGA_ROWS - stack_num_lines + l + 1, stack_left_col);
+            vga_rows - stack_num_lines + l + 1, stack_left_col);
         crash_print("%08X:", stack_ptr - 1);
         for (int w = 0; w < stack_width_dwords; w++, stack_ptr--) {
             crash_print(" %08X", *(stack_ptr - 1));
@@ -265,7 +271,7 @@ void _kpanic(const char *fmt, ...)
 
     va_start(args, fmt);
     vsnprintf(buf, sizeof(buf), fmt, args);
-    kprint("panic: %s", buf);
+    kprint("\n\e[1;31mpanic: %s\e[0m\n", buf);
     va_end(args);
 
     for (;;);

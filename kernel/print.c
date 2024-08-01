@@ -13,31 +13,28 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/task.h
+ *         File: kernel/print.c
  *      Created: July 31, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __TASK_H
-#define __TASK_H
-
+#include <stdarg.h>
+#include <stdio.h>
 #include <fs.h>
-#include <ohwes.h>
-#include <console.h>
 
-#define MAX_OPEN_FILES              8
-#define MAX_TASKS                   64
+extern int console_write(struct file *file, const char *buf, size_t count);
 
-struct task {
-    int pid;
-    int errno;
-    struct vga_console *cons;
-    struct file *files[MAX_OPEN_FILES];
-};
+int _kprint(const char *fmt, ...)
+{
+    char buf[1024];
 
-struct task * current_task(void);
-struct task * get_task(int pid);
-int get_pid(void);
+    va_list args;
+    va_start(args, fmt);
 
-#endif // __TASK_H
+    int nchars = vsnprintf(buf, sizeof(buf), fmt, args);
+    int retval = console_write(NULL, buf, nchars);
+
+    va_end(args);
+    return retval;
+}

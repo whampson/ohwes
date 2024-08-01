@@ -84,7 +84,7 @@ __syscall int sys_open(const char *name, int flags)
     // find next available file descriptor slot in current task struct
     fd = -1;
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
-        if (g_task->open_files[i] == NULL) {
+        if (current_task()->files[i] == NULL) {
             fd = i;
             break;
         }
@@ -109,7 +109,7 @@ __syscall int sys_open(const char *name, int flags)
         goto done;
     }
 
-    ret = open(&g_task->open_files[fd], flags);
+    ret = open(&current_task()->files[fd], flags);
     if (ret < 0) {
         goto done;
     }

@@ -93,8 +93,8 @@ stage2:
 # console.
 ##
 init_early_console:
-        # store cursor position (bh=page)
-        xorb            %bh, %bh
+        # store cursor position
+        xorb            %bh, %bh                # bh = page
         movb            $0x03, %ah
         int             $0x10
         jc              _vga_error
@@ -106,13 +106,7 @@ init_early_console:
         orb             $0x80, %al              # don't clear screen
         movb            $0x00, %ah
         int             $0x10
-        jc              _vga_error
-
-        # set video page
-        xorb            %al, %al                # page 0
-        movb            $0x05, %ah
-        int             $0x10
-        jc              _vga_error
+        jc              _vga_error_bad_mode
 
         # restore cursor position
         xorw            %ax, %ax
@@ -122,18 +116,56 @@ init_early_console:
         int             $0x10
         jc              _vga_error
 
-        # gather and store video params
+        # set video page
+        xorb            %al, %al                # page 0
+        movb            $0x05, %ah
+        int             $0x10
+        jc              _vga_error
+
+        # set font size
+        movw            $VGA_FONT, %ax
+_font0: cmpw            $VGA_FONT_80x25, %ax    # 8x16, 80x25
+        jne             _font1
+        movl            $25, vga_rows
+        jmp             _dofont
+_font1: cmpw            $VGA_FONT_80x28, %ax    # 8x14, 80x28
+        jne             _font2
+        movl            $28, vga_rows
+        jmp             _dofont
+_font2: cmpw            $VGA_FONT_80x50, %ax    # 8x8, 80x50
+        jne             _vga_error_bad_font
+        movl            $50, vga_rows
+_dofont:addw            $0x1110, %ax
+        xorb            %bl, %bl
+        int             $0x10
+        jc              _vga_error_bad_font
+
+        # gather and store video params for kernel
         movb            $0x0F, %ah
         int             $0x10
         jc              _vga_error
         movb            %al, vga_mode
         movb            %ah, vga_cols
+        xorb            %bh, %bh
+        movb            $0x03, %ah
+        int             $0x10
+        jc              _vga_error
+        movb            %dh, cursor_row
+        movb            %dl, cursor_col
 
 _vga_done:
         ret
 
+_vga_error_bad_mode:
+        PRINT           sz_video_error_bad_mode
+        jmp             readkey_then_reset
+
+_vga_error_bad_font:
+        PRINT           sz_video_error_bad_font
+        jmp             readkey_then_reset
+
 _vga_error:
-        PRINT           sz_VideoError
+        PRINT           sz_video_error
         jmp             readkey_then_reset
 
 ##
@@ -259,7 +291,7 @@ _detectmem_legacy_lo:
         ret
 
 _detectmem_legacy_error:
-        PRINT           sz_MemError
+        PRINT           sz_memory_error
         jmp             readkey_then_reset
 
 ##
@@ -447,6 +479,7 @@ boot_info:
   hwflags:              .long   0
   a20_method:           .long   A20_NONE
   vga_mode:             .long   0
+  vga_rows:             .long   0
   vga_cols:             .long   0
   cursor_row:           .long   0
   cursor_col:           .long   0
@@ -470,10 +503,14 @@ early_gdt_desc:
 
 sz_kernel_filename:
         .asciz          "OHWES   SYS"
-sz_MemError:
+sz_memory_error:
         .asciz          "\r\nMemory error!"
-sz_VideoError:
-        .asciz          "\r\nVideo error!"
+sz_video_error_bad_mode:
+        .asciz          "\r\nInvalid VGA mode!"
+sz_video_error_bad_font:
+        .asciz          "\r\nInvalid VGA font!"
+sz_video_error:
+        .asciz          "\r\nVGA initialization error!"
 sz_a20_error:
         .asciz          "\r\Could not enable A20!"
 sz_kernel_too_big:

@@ -136,10 +136,10 @@ recv_interrupt:
         movl            %edi, IREGS_EDI(%esp)
         movl            %ebp, IREGS_EBP(%esp)
         movl            %eax, IREGS_EAX(%esp)
-        STORE_SEGMENT    %ds, IREGS_DS(%esp)
-        STORE_SEGMENT    %es, IREGS_ES(%esp)
-        STORE_SEGMENT    %fs, IREGS_FS(%esp)
-        STORE_SEGMENT    %gs, IREGS_GS(%esp)
+        STORE_SEGMENT   %ds, IREGS_DS(%esp)
+        STORE_SEGMENT   %es, IREGS_ES(%esp)
+        STORE_SEGMENT   %fs, IREGS_FS(%esp)
+        STORE_SEGMENT   %gs, IREGS_GS(%esp)
         movl            %esp, %ecx                      # ecx = fastcall param
         movl            IREGS_VEC_NUM(%esp), %eax
         test            %eax, %eax
@@ -152,7 +152,7 @@ exception_trampoline:
         pushl           $end_exception
         cmpl            $NUM_EXCEPTIONS, %eax
         ja              _noint
-        jmp             *exception_table(, %eax, 4)     # handle exception
+        jmp             *exception_handlers(, %eax, 4)  # handle exception
 _noint:
         jmp             crash
 
@@ -166,7 +166,7 @@ syscall_trampoline:
         ja              _nosys
         sti                             # allow interrupts for syscalls
         pushl           $end_syscall
-        jmp             *syscall_table(, %eax, 4)
+        jmp             *syscall_handlers(, %eax, 4)
 _nosys:
         movl            $-ENOSYS, %eax
         ret
@@ -193,10 +193,10 @@ end_syscall:
         movl            IREGS_ECX(%esp), %ecx
         movl            IREGS_EBX(%esp), %ebx
         movl            %eax, IREGS_ERR_CODE(%esp) # reuse error code slot to
-        LOAD_SEGMENT     IREGS_DS(%esp), %ds        #  temporarily store eax,
-        LOAD_SEGMENT     IREGS_ES(%esp), %es        #  used by these macros to
-        LOAD_SEGMENT     IREGS_FS(%esp), %fs        #  restore segment registers
-        LOAD_SEGMENT     IREGS_GS(%esp), %gs
+        LOAD_SEGMENT    IREGS_DS(%esp), %ds        #  temporarily store eax,
+        LOAD_SEGMENT    IREGS_ES(%esp), %es        #  used by these macros to
+        LOAD_SEGMENT    IREGS_FS(%esp), %fs        #  restore segment registers
+        LOAD_SEGMENT    IREGS_GS(%esp), %gs
         movl            IREGS_ERR_CODE(%esp), %eax # restore eax
         addl            $IREGS_EIP, %esp
         iret
@@ -204,13 +204,13 @@ end_syscall:
 # ----------------------------------------------------------------------------
 # tables, etc.
 
-exception_table:
+exception_handlers:
         .long           crash, crash, crash, crash, crash, crash, crash, crash
         .long           crash, crash, crash, crash, crash, crash, crash, crash
         .long           crash, crash, crash, crash, crash, crash, crash, crash
         .long           crash, crash, crash, crash, crash, crash, crash, crash
 
-syscall_table:
+syscall_handlers:
         .long           init, sys_exit, sys_read, sys_write, sys_open, sys_close
         .long           sys_ioctl
 
@@ -262,60 +262,80 @@ thunk_name:                                                                     
 #     abort - severe error, interrupted program cannot be resumed
 
 # 0-31                  processor exceptions               classification
-EXCEPTION_THUNK         (_thunk_except00h, EXCEPTION_DE)    # fault
-EXCEPTION_THUNK         (_thunk_except01h, EXCEPTION_DB)    # fault or trap
-EXCEPTION_THUNK         (_thunk_except02h, EXCEPTION_NMI)   # n/a
-EXCEPTION_THUNK         (_thunk_except03h, EXCEPTION_BP)    # trap
-EXCEPTION_THUNK         (_thunk_except04h, EXCEPTION_OF)    # trap
-EXCEPTION_THUNK         (_thunk_except05h, EXCEPTION_BR)    # fault
-EXCEPTION_THUNK         (_thunk_except06h, EXCEPTION_UD)    # fault
-EXCEPTION_THUNK         (_thunk_except07h, EXCEPTION_NM)    # fault
-EXCEPTION_THUNK_ERRCODE (_thunk_except08h, EXCEPTION_DF)    # abort; error code is 0
-EXCEPTION_THUNK         (_thunk_except09h, 9)               # abort; not used, was Coprocessor Segment Overrun
-EXCEPTION_THUNK_ERRCODE (_thunk_except0Ah, EXCEPTION_TS)    # fault
-EXCEPTION_THUNK_ERRCODE (_thunk_except0Bh, EXCEPTION_NP)    # fault
-EXCEPTION_THUNK_ERRCODE (_thunk_except0Ch, EXCEPTION_SS)    # fault
-EXCEPTION_THUNK_ERRCODE (_thunk_except0Dh, EXCEPTION_GP)    # fault
-EXCEPTION_THUNK_ERRCODE (_thunk_except0Eh, EXCEPTION_PF)    # fault
-EXCEPTION_THUNK         (_thunk_except0Fh, 15)              # (Intel reserved)
-EXCEPTION_THUNK         (_thunk_except10h, EXCEPTION_MF)    # fault
-EXCEPTION_THUNK_ERRCODE (_thunk_except11h, EXCEPTION_AC)    # fault
-EXCEPTION_THUNK         (_thunk_except12h, EXCEPTION_MC)    # abort
-EXCEPTION_THUNK         (_thunk_except13h, EXCEPTION_XM)    # fault
-EXCEPTION_THUNK         (_thunk_except14h, EXCEPTION_VE)    # fault
-EXCEPTION_THUNK_ERRCODE (_thunk_except15h, EXCEPTION_CP)    # fault
-EXCEPTION_THUNK         (_thunk_except16h, 22)              # (Intel reserved)
-EXCEPTION_THUNK         (_thunk_except17h, 23)              # (Intel reserved)
-EXCEPTION_THUNK         (_thunk_except18h, 24)              # (Intel reserved)
-EXCEPTION_THUNK         (_thunk_except19h, 25)              # (Intel reserved)
-EXCEPTION_THUNK         (_thunk_except1Ah, 26)              # (Intel reserved)
-EXCEPTION_THUNK         (_thunk_except1Bh, 27)              # (Intel reserved)
-EXCEPTION_THUNK         (_thunk_except1Ch, 28)              # (Intel reserved)
-EXCEPTION_THUNK         (_thunk_except1Dh, 29)              # (Intel reserved)
-EXCEPTION_THUNK         (_thunk_except1Eh, 30)              # (Intel reserved)
-EXCEPTION_THUNK         (_thunk_except1Fh, 31)              # (Intel reserved)
+EXCEPTION_THUNK         (_except_00h, EXCEPTION_DE)    # fault
+EXCEPTION_THUNK         (_except_01h, EXCEPTION_DB)    # fault or trap
+EXCEPTION_THUNK         (_except_02h, EXCEPTION_NMI)   # n/a
+EXCEPTION_THUNK         (_except_03h, EXCEPTION_BP)    # trap
+EXCEPTION_THUNK         (_except_04h, EXCEPTION_OF)    # trap
+EXCEPTION_THUNK         (_except_05h, EXCEPTION_BR)    # fault
+EXCEPTION_THUNK         (_except_06h, EXCEPTION_UD)    # fault
+EXCEPTION_THUNK         (_except_07h, EXCEPTION_NM)    # fault
+EXCEPTION_THUNK_ERRCODE (_except_08h, EXCEPTION_DF)    # abort; error code is 0
+EXCEPTION_THUNK         (_except_09h, 9)               # abort; not used, was Coprocessor Segment Overrun
+EXCEPTION_THUNK_ERRCODE (_except_0Ah, EXCEPTION_TS)    # fault
+EXCEPTION_THUNK_ERRCODE (_except_0Bh, EXCEPTION_NP)    # fault
+EXCEPTION_THUNK_ERRCODE (_except_0Ch, EXCEPTION_SS)    # fault
+EXCEPTION_THUNK_ERRCODE (_except_0Dh, EXCEPTION_GP)    # fault
+EXCEPTION_THUNK_ERRCODE (_except_0Eh, EXCEPTION_PF)    # fault
+EXCEPTION_THUNK         (_except_0Fh, 15)              # (Intel reserved)
+EXCEPTION_THUNK         (_except_10h, EXCEPTION_MF)    # fault
+EXCEPTION_THUNK_ERRCODE (_except_11h, EXCEPTION_AC)    # fault
+EXCEPTION_THUNK         (_except_12h, EXCEPTION_MC)    # abort
+EXCEPTION_THUNK         (_except_13h, EXCEPTION_XM)    # fault
+EXCEPTION_THUNK         (_except_14h, EXCEPTION_VE)    # fault
+EXCEPTION_THUNK_ERRCODE (_except_15h, EXCEPTION_CP)    # fault
+EXCEPTION_THUNK         (_except_16h, 22)              # (Intel reserved)
+EXCEPTION_THUNK         (_except_17h, 23)              # (Intel reserved)
+EXCEPTION_THUNK         (_except_18h, 24)              # (Intel reserved)
+EXCEPTION_THUNK         (_except_19h, 25)              # (Intel reserved)
+EXCEPTION_THUNK         (_except_1Ah, 26)              # (Intel reserved)
+EXCEPTION_THUNK         (_except_1Bh, 27)              # (Intel reserved)
+EXCEPTION_THUNK         (_except_1Ch, 28)              # (Intel reserved)
+EXCEPTION_THUNK         (_except_1Dh, 29)              # (Intel reserved)
+EXCEPTION_THUNK         (_except_1Eh, 30)              # (Intel reserved)
+EXCEPTION_THUNK         (_except_1Fh, 31)              # (Intel reserved)
 
 # 32-47                 device IRQs
-IRQ_THUNK               (_thunk_irq00h, IRQ_TIMER)
-IRQ_THUNK               (_thunk_irq01h, IRQ_KEYBOARD)
-IRQ_THUNK               (_thunk_irq02h, IRQ_SLAVE)
-IRQ_THUNK               (_thunk_irq03h, IRQ_COM2)
-IRQ_THUNK               (_thunk_irq04h, IRQ_COM1)
-IRQ_THUNK               (_thunk_irq05h, IRQ_LPT2)
-IRQ_THUNK               (_thunk_irq06h, IRQ_FLOPPY)
-IRQ_THUNK               (_thunk_irq07h, IRQ_LPT1)
-IRQ_THUNK               (_thunk_irq08h, IRQ_RTC)
-IRQ_THUNK               (_thunk_irq09h, IRQ_ACPI)
-IRQ_THUNK               (_thunk_irq0Ah, IRQ_MISC1)
-IRQ_THUNK               (_thunk_irq0Bh, IRQ_MISC2)
-IRQ_THUNK               (_thunk_irq0Ch, IRQ_MOUSE)
-IRQ_THUNK               (_thunk_irq0Dh, IRQ_COPOCESSOR)
-IRQ_THUNK               (_thunk_irq0Eh, IRQ_ATA1)
-IRQ_THUNK               (_thunk_irq0Fh, IRQ_ATA2)
+IRQ_THUNK               (_irq_00h, IRQ_TIMER)
+IRQ_THUNK               (_irq_01h, IRQ_KEYBOARD)
+IRQ_THUNK               (_irq_02h, IRQ_SLAVE)
+IRQ_THUNK               (_irq_03h, IRQ_COM2)
+IRQ_THUNK               (_irq_04h, IRQ_COM1)
+IRQ_THUNK               (_irq_05h, IRQ_LPT2)
+IRQ_THUNK               (_irq_06h, IRQ_FLOPPY)
+IRQ_THUNK               (_irq_07h, IRQ_LPT1)
+IRQ_THUNK               (_irq_08h, IRQ_RTC)
+IRQ_THUNK               (_irq_09h, IRQ_ACPI)
+IRQ_THUNK               (_irq_0Ah, IRQ_MISC1)
+IRQ_THUNK               (_irq_0Bh, IRQ_MISC2)
+IRQ_THUNK               (_irq_0Ch, IRQ_MOUSE)
+IRQ_THUNK               (_irq_0Dh, IRQ_COPOCESSOR)
+IRQ_THUNK               (_irq_0Eh, IRQ_ATA1)
+IRQ_THUNK               (_irq_0Fh, IRQ_ATA2)
 
 # 48-79                 reserved
 
 # 80                    system call
-EXCEPTION_THUNK         (_thunk_syscall, VEC_SYSCALL)
+EXCEPTION_THUNK         (_syscall, VEC_SYSCALL)
 
 # 81-255                reserved
+
+# -----------------------------------------------------------------------------
+
+.globl exception_thunks
+exception_thunks:
+        .long           _except_00h, _except_01h, _except_02h, _except_03h
+        .long           _except_04h, _except_05h, _except_06h, _except_07h
+        .long           _except_08h, _except_09h, _except_0Ah, _except_0Bh
+        .long           _except_0Ch, _except_0Dh, _except_0Eh, _except_0Fh
+        .long           _except_10h, _except_11h, _except_12h, _except_13h
+        .long           _except_14h, _except_15h, _except_16h, _except_17h
+        .long           _except_18h, _except_19h, _except_1Ah, _except_19h
+        .long           _except_1Ch, _except_1Ch, _except_1Eh, _except_1Fh
+
+.globl irq_thunks
+irq_thunks:
+        .long           _irq_00h, _irq_01h, _irq_02h, _irq_03h
+        .long           _irq_04h, _irq_05h, _irq_06h, _irq_07h
+        .long           _irq_08h, _irq_09h, _irq_0Ah, _irq_0Bh
+        .long           _irq_0Ch, _irq_0Dh, _irq_0Eh, _irq_0Fh

@@ -229,65 +229,6 @@ struct vga_cell {
 static_assert(sizeof(struct vga_cell) == 2, "sizeof(struct vga_cell)");
 
 /**
- * Disables the cursor blink effect.
- */
-void vga_disable_blink(void);
-
-/**
- * Enables the cursor blink effect.
- */
-void vga_enable_blink(void);
-
-/**
- * Disables the cursor.
- */
-void vga_hide_cursor(void);
-
-/**
- * Enables the cursor.
- */
-void vga_show_cursor(void);
-
-/**
- * Gets the current linear cursor position.
- * A value of 0 represents the top left corner of the display area.
- *
- * @return the cursor position
- */
-uint16_t vga_get_cursor_pos(void);
-
-/**
- * Sets the current linear cursor position.
- * A value of 0 represents the top left corner of the display area.
- *
- * @param pos the new linear cursor position
- */
-void vga_set_cursor_pos(uint16_t pos);
-
-/**
- * Gets the current cursor shape.
- * The cursor shape is defined as the area between two scan lines. A scan line
- * value of 0 represents the top of the current row. The maximum scan line is
- * determined by the character height (usually 15).
- *
- * @return the cursor shape, represented as a packed scan line tuple where the
- *         low byte contains the starting scan line and the high byte contains
- *         the ending scan line
- */
-uint16_t vga_get_cursor_shape(void);
-
-/**
- * Sets the cursor shape.
- * The cursor shape is defined as the area between two scan lines. A scan line
- * value of 0 represents the top of the current row. The maximum scan line is
- * determined by the character height (usually 15).
- *
- * @param start the scan line at which to begin drawing the cursor
- * @param end the scan line at which to stop drawing the cursor
- */
-void vga_set_cursor_shape(uint8_t start, uint8_t end);
-
-/**
  * Reads a CRT Controller register.
  *
  * @param reg one of VGA_CRTC_REG_*
@@ -350,21 +291,5 @@ uint8_t vga_attr_read(uint8_t reg);
  * @param data the value to write
  */
 void vga_attr_write(uint8_t reg, uint8_t data);
-
-/**
- * Reads an External register.
- *
- * @param port one of VGA_EXTL_PORT_*
- * @return the register value
- */
-uint8_t vga_extl_read(uint16_t port);
-
-/**
- * Writes an External register.
- *
- * @param port one of VGA_EXTL_PORT_*
- * @param data the value to write
- */
-void vga_extl_write(uint16_t port, uint8_t data);
 
 #endif /* __VGA_H */

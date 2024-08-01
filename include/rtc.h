@@ -64,11 +64,6 @@ struct rtc_time {
 #define rate2hz(r)      (32768 >> ((r) - 1))
 
 //
-// RTC IOCTL code
-//
-#define _IOC_RTC        'r'
-
-//
 // RTC IOCTL functions
 //
 #define RTC_IRQP_ENABLE     _IOCTL  (_IOC_RTC,0x01)                   // Periodic Interrupt Enable

@@ -20,6 +20,7 @@
  */
 
 #include <ohwes.h>
+#include <boot.h>
 #include <console.h>
 #include <ctype.h>
 #include <errno.h>
@@ -32,13 +33,28 @@
 
 #define NUM_CONSOLES    1
 
+#define BLANK_CHAR      ' '
+#define EMPTY_CSIPARAM  (-1)
+
+#define ERASE_DOWN      0
+#define ERASE_UP        1
+#define ERASE_ALL       2
+
+// TODO: set via ioctl
 #define BEEP_FREQUENCY  750     // Hz
 #define BEEP_DURATION   50      // ms
+#define CURSOR_ULINE    0x0E0D  // scan line start = 13, end = 14
+#define CURSOR_BLOCK    0x0F00  // scan line start = 0,  end = 15
 
-static struct console consoles[NUM_CONSOLES] = { };
-static int active_cons = 0;
+struct vga_display {
+    int active_console;
+    int rows, cols;
+    void *framebuf;
+};
 
-static char _input_buffers[NUM_CONSOLES][INPUT_BUFFER_SIZE];
+// global vars
+struct vga_display _display;
+struct vga_console _consoles[NUM_CONSOLES];
 
 //
 // This is totally something I yoinked from Linux. It allows for n consoles and
@@ -46,32 +62,35 @@ static char _input_buffers[NUM_CONSOLES][INPUT_BUFFER_SIZE];
 // console in the console array. I don't know if I'll keep it but for now it'll
 // do.
 //
-#define m_initialized   (consoles[active_cons].initialized)
-#define m_cols          (consoles[active_cons].cols)
-#define m_rows          (consoles[active_cons].rows)
-#define m_framebuf      (consoles[active_cons].framebuf)
-#define m_inputq        (&consoles[active_cons].inputq)
-#define m_tabstop       (consoles[active_cons].tabstop)
-#define m_csiparam      (consoles[active_cons].csiparam)
-#define m_paramidx      (consoles[active_cons].paramidx)
-#define m_currparam     (m_csiparam[m_paramidx])
-#define m_disp          (consoles[active_cons].disp)
-#define m_attr          (consoles[active_cons].attr)
-#define m_attr_default  (consoles[active_cons].attr_default)
-#define m_cursor        (consoles[active_cons].cursor)
-#define m_saved         (consoles[active_cons].saved)
-#define m_defaults      (consoles[active_cons].defaults)
-#define m_state         (consoles[active_cons].state)
+#define current_console()   (&_consoles[_display.active_console])
+#define m_initialized       (current_console()->initialized)
+#define m_state             (current_console()->state)
+#define m_cols              (current_console()->cols)
+#define m_rows              (current_console()->rows)
+#define m_framebuf          (current_console()->framebuf)
+#define m_inputq            (&current_console()->inputq)
+#define m_tabstops          (current_console()->tabstops)
+#define m_csiparam          (current_console()->csiparam)
+#define m_paramidx          (current_console()->paramidx)
+#define m_currparam         (m_csiparam[m_paramidx])
+#define m_blink_on          (current_console()->blink_on)
+#define m_attr              (current_console()->attr)
+#define m_cursor            (current_console()->cursor)
+#define m_saved_state       (current_console()->saved_state)
+#define m_csi_defaults      (current_console()->csi_defaults)
 
-#define CURSOR_SHAPE_UNDERLINE  0x0E0D
-#define CURSOR_SHAPE_BLOCK      0x0F00
-#define BLANK                   ' '
-#define DEFAULT_CSIPARAM        (-1)
+// console state saving/restoring
+static void defaults(struct vga_console *cons);
+static void reset(void);                    // ESC c
+static void save_state(void);               // ESC 7
+static void restore_state(void);            // ESC 8
+static void cursor_save(void);              // ESC [s
+static void cursor_restore(void);           // ESC [u
+static void read_cursor(void);
+static void write_cursor(void);
 
-static void defaults(struct console *cons);
-static void save_state(void);
-static void restore_state(void);
-static void reset(void);
+// character handling
+static void _writechar(char c);
 static void esc(char c);
 static void csi(char c);
 static void csi_m(char p);
@@ -87,44 +106,93 @@ static void cursor_up(int n);
 static void cursor_down(int n);
 static void cursor_left(int n);
 static void cursor_right(int n);
-static void cursor_save(void);
-static void cursor_restore(void);
-static void read_cursor(void);
-static void write_cursor(void);
-static void pos2xy(int pos, int *x, int *y);
-static int  xy2pos(int x, int y);
-static void set_vga_char(int pos, char c);
-static void set_vga_attr(int pos, const struct char_attr *attr);
-static void _writestr(char *str);
-static void _dowrite(char c);
 static void drain_kb(void);
 
+// screen manipulation
+static void pos2xy(uint16_t pos, uint16_t *x, uint16_t *y);
+static uint16_t xy2pos(uint16_t x, uint16_t y);
+static void set_vga_char(uint16_t pos, char c);
+static void set_vga_attr(uint16_t pos, const struct console_char_attr *attr);
+static void disable_char_blink(void);       // ESC 3
+static void enable_char_blink(void);        // ESC 4
+static void hide_cursor(void);              // ESC 5
+static void show_cursor(void);              // ESC 6
+static uint16_t get_cursor_pos(void);
+static void set_cursor_pos(uint16_t pos);
+static uint16_t get_cursor_shape(void);
+static void set_cursor_shape(uint8_t start, uint8_t end);
 
-void init_console(void)
+// ----------------------------------------------------------------------------
+
+extern void init_kb(const struct boot_info *info);
+extern int kb_read(void);   // tODO: remove and place char directly in console buffer
+
+struct file_ops console_fops =
 {
-    zeromem(_input_buffers, sizeof(_input_buffers));
-    zeromem(consoles, sizeof(consoles));
+    .read = console_read,
+    .write = console_write,
+    .open = NULL,
+    .close = NULL,
+    .ioctl = NULL   // TODO?
+};
 
-    for (int i = 0; i < NUM_CONSOLES; i++) {
-        defaults(&consoles[i]);
-        char_queue_init(&consoles[i].inputq, _input_buffers[i], INPUT_BUFFER_SIZE);
+struct file console_file =
+{
+    .fops = &console_fops,
+    .ioctl_code = _IOC_CONSOLE
+};
+
+void init_console(const struct boot_info *info)
+{
+    zeromem(&_display, sizeof(struct vga_display));
+    zeromem(_consoles, sizeof(struct vga_console) * NUM_CONSOLES);
+
+    _display.active_console = 0;
+    _display.rows = info->vga_rows;
+    _display.cols = info->vga_cols;
+
+    // determine frame buffer address
+    uint8_t gfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
+    uint8_t ram_select = (gfx_misc & 0x0C) >> 2;
+    switch (ram_select) {
+        case 0: _display.framebuf = (void *) 0xA0000; break; // A0000-BFFFF (128K)
+        case 1: _display.framebuf = (void *) 0xA0000; break; // A0000-AFFFF (64K)
+        case 2: _display.framebuf = (void *) 0xB0000; break; // B0000-B7FFF (32K)
+        case 3: _display.framebuf = (void *) 0xB8000; break; // B8000-BFFFF (32K)
     }
 
-    irq_register(IRQ_TIMER, drain_kb);
+    for (int i = 0; i < NUM_CONSOLES; i++) {
+        defaults(&_consoles[i]);
+    }
 
-    active_cons = 0;
-    read_cursor();
-    save_state();
-    _writestr("\r\n");
+    read_cursor();  // read cursor attributes leftover from BIOS
+    save_state();   // create a valid save state
+
+    // safe to print now
+    kprint("\r\n\e4\e6");
+    kprint("\e[1m" OS_NAME " " OS_VERSION ", build: " OS_BUILDDATE " ]]\e[0m\n");
+
+    // get the keyboard working
+    init_kb(info);
+
+    // initialize the kernel task
+    // TODO: call open() on console to do this?
+    kernel_task()->cons = current_console();
+    kernel_task()->files[stdin_fd] = &console_file;
+    kernel_task()->files[stdout_fd] = &console_file;
+
+    irq_register(IRQ_TIMER, drain_kb);      // TODO: remove
     m_initialized = true;
 }
 
-static void defaults(struct console *cons)
+// ----------------------------------------------------------------------------
+
+static void defaults(struct vga_console *cons)
 {
-    cons->cols = VGA_COLS;
-    cons->rows = VGA_ROWS;
-    cons->framebuf = (void *) VGA_FRAMEBUF;
-    cons->disp.blink_on = false;
+    cons->cols = _display.cols;
+    cons->rows = _display.rows;
+    cons->framebuf = PAGE_OFFSET + _display.framebuf;
+    cons->blink_on = false;
     cons->attr.bg = VGA_BLACK;
     cons->attr.fg = VGA_WHITE;
     cons->attr.bright = false;
@@ -135,17 +203,66 @@ static void defaults(struct console *cons)
     cons->attr.invert = false;
     cons->cursor.x = 0;
     cons->cursor.y = 0;
-    cons->cursor.shape = CURSOR_SHAPE_UNDERLINE;
-    cons->cursor.hidden = false;
-    cons->defaults.attr = cons->attr;
-    cons->defaults.cursor = cons->cursor;
+    cons->cursor.shape = CURSOR_ULINE   ;
+    cons->cursor.hidden = false;   cons->csi_defaults.attr = cons->attr;
+    cons->csi_defaults.cursor = cons->cursor;
     cons->state = S_NORM;
     cons->paramidx = 0;
-    memset(cons->csiparam, DEFAULT_CSIPARAM, MAX_CSIPARAMS);
+    memset(cons->csiparam, EMPTY_CSIPARAM, MAX_CSIPARAMS);
     for (int i = 0; i < MAX_TABSTOPS; i++) {
-        m_tabstop[i] = (((i + 1) % TABSTOP_WIDTH) == 0);
+        m_tabstops[i] = (((i + 1) % TABSTOP_WIDTH) == 0);
+    }
+    char_queue_init(&cons->inputq, cons->input_buf, INPUT_BUFFER_SIZE);
+}
+
+static void reset(void)
+{
+    defaults(current_console());
+    write_cursor();
+    erase(ERASE_ALL);
+}
+
+static void save_state(void)
+{
+    memcpy(&m_saved_state.tabstops, &m_tabstops, MAX_TABSTOPS);
+    m_saved_state.blink_on = m_blink_on;
+    m_saved_state.attr = m_attr;
+    cursor_save();
+}
+
+static void restore_state(void)
+{
+    memcpy(&m_tabstops, &m_saved_state.tabstops, MAX_TABSTOPS);
+    m_blink_on = m_saved_state.blink_on;
+    m_attr = m_saved_state.attr;
+    cursor_restore();
+}
+
+static void cursor_save(void)
+{
+    m_saved_state.cursor = m_cursor;
+}
+
+static void cursor_restore(void)
+{
+    m_cursor = m_saved_state.cursor;
+}
+
+static void read_cursor(void)
+{
+    m_cursor.shape = get_cursor_shape();
+    pos2xy(get_cursor_pos(), &m_cursor.x, &m_cursor.y);
+}
+
+static void write_cursor(void)
+{
+    set_cursor_pos(xy2pos(m_cursor.x, m_cursor.y));
+    if (!m_cursor.hidden) {
+        set_cursor_shape(m_cursor.shape & 0xFF, m_cursor.shape >> 8);
     }
 }
+
+// ----------------------------------------------------------------------------
 
 int console_read(struct file *file, char *buf, size_t count)
 {
@@ -181,7 +298,7 @@ int console_write(struct file *file, const char *buf, size_t count)
     }
 
     for (int i = 0; i < count; i++) {
-        _dowrite(buf[i]);
+        _writechar(buf[i]);
 #if E9_HACK
         outb(0xE9, buf[i]);
 #endif
@@ -192,6 +309,10 @@ int console_write(struct file *file, const char *buf, size_t count)
 
 static void drain_kb(void)
 {
+    // this function is sort of unnecessary, honestly. it fires every timer
+    // interrupt and drains the keyboard input buffer into a "console" input
+    // buffer. it's meant to simulate an input buffer coming over a line,
+    // like a remote TTY
     int c;
 
     while ((c = kb_read()) != -1) {
@@ -205,7 +326,7 @@ static void drain_kb(void)
     }
 }
 
-static void _dowrite(char c)
+static void _writechar(char c)
 {
     uint32_t flags;
     cli_save(flags);
@@ -248,7 +369,7 @@ static void _dowrite(char c)
             bs();
             __fallthrough;
         case ASCII_DEL: // ^? - DEL - delete
-            c = BLANK;
+            c = BLANK_CHAR;
             update_char = true;
             update_attr = true;
             break;
@@ -278,12 +399,13 @@ static void _dowrite(char c)
             update_char = true;
             update_attr = true;
             if (++m_cursor.x >= m_cols) {
-                need_crlf = true;
+                    need_crlf = true;
             }
             break;
     }
 
 update:
+    // TOOD: adapt this to work over serial
     if (update_char) {
         set_vga_char(pos, c);
     }
@@ -323,13 +445,13 @@ static void esc(char c)
             cr(); lf();
             break;
         case 'H':       // ESC H - HTS - set tab stop
-            m_tabstop[m_cursor.x] = 1;
+            m_tabstops[m_cursor.x] = 1;
             break;
         case 'M':       // ESC M - RI - reverse line feed
             r_lf();
             break;
         case '[':       // ESC [ - CSI - control sequence introducer
-            memset(m_csiparam, DEFAULT_CSIPARAM, MAX_CSIPARAMS);
+            memset(m_csiparam, EMPTY_CSIPARAM, MAX_CSIPARAMS);
             m_paramidx = 0;
             m_state = S_CSI;
             return;
@@ -338,20 +460,20 @@ static void esc(char c)
         // "Custom" console-related sequences
         //
         case '3':       // ESC 3    disable blink
-            m_disp.blink_on = false;
-            vga_disable_blink();
+            m_blink_on = false;
+            disable_char_blink();
             break;
         case '4':       // ESC 4    enable blink
-            m_disp.blink_on = true;
-            vga_enable_blink();
+            m_blink_on = true;
+            enable_char_blink();
             break;
         case '5':       // ESC 5    hide cursor
             m_cursor.hidden = true;
-            vga_hide_cursor();
+            hide_cursor();
             break;
         case '6':       // ESC 6    show cursor
             m_cursor.hidden = false;
-            vga_show_cursor();
+            show_cursor();
             break;
         case '7':       // ESC 7    save console
             save_state();
@@ -363,7 +485,7 @@ static void esc(char c)
             reset();
             break;
         case 'h':       // ESC h    clear tab stop
-            m_tabstop[m_cursor.x] = 0;
+            m_tabstops[m_cursor.x] = 0;
             break;
         default:
             break;
@@ -474,7 +596,7 @@ static void csi(char c)
             return;
         default:        // (parameter)
             if (isdigit(c)) {
-                if (m_currparam == DEFAULT_CSIPARAM) {
+                if (m_currparam == EMPTY_CSIPARAM) {
                     m_currparam = 0;
                 }
                 m_currparam *= 10;
@@ -513,7 +635,7 @@ static void csi_m(char p)
 
     switch (p) {
         case 0:     // reset to defaults
-            m_attr = m_defaults.attr;
+            m_attr = m_csi_defaults.attr;
             break;
         case 1:     // set bright (bold)
             m_attr.bright = true;
@@ -553,8 +675,8 @@ static void csi_m(char p)
             // colors
             if (p >= 30 && p <= 37) m_attr.fg = CSI_COLORS[p - 30];     // yeah yeah this is ugly but it works for now
             if (p >= 40 && p <= 47) m_attr.bg = CSI_COLORS[p - 40];
-            if (p == 39) m_attr.fg = m_defaults.attr.fg;
-            if (p == 49) m_attr.bg = m_defaults.attr.bg;
+            if (p == 39) m_attr.fg = m_csi_defaults.attr.fg;
+            if (p == 49) m_attr.bg = m_csi_defaults.attr.bg;
             if (p >= 90 && p <= 97) {
                 m_attr.fg = CSI_COLORS[p - 90];
                 m_attr.bright = 1;
@@ -565,29 +687,6 @@ static void csi_m(char p)
             }
             break;
     }
-}
-
-static void save_state(void)
-{
-    m_saved.disp = m_disp;
-    m_saved.attr = m_attr;
-    cursor_save();
-    memcpy(&m_saved.tabstop, &m_tabstop, MAX_TABSTOPS);
-}
-
-static void restore_state(void)
-{
-    m_disp = m_saved.disp;
-    m_attr = m_saved.attr;
-    cursor_restore();
-    memcpy(&m_tabstop, &m_saved.tabstop, MAX_TABSTOPS);
-}
-
-static void reset(void)
-{
-    defaults(&consoles[active_cons]);
-    write_cursor();
-    erase(ERASE_ALL);
 }
 
 static void bs(void)
@@ -621,7 +720,7 @@ static void r_lf(void)
 static void tab(void)
 {
     while (m_cursor.x < m_cols) {
-        if (m_tabstop[++m_cursor.x]) {
+        if (m_tabstops[++m_cursor.x]) {
             break;
         }
     }
@@ -664,7 +763,7 @@ static void scroll(int n)
 
     for (i = 0; i < n_blank; i++) {
         int pos = (reverse) ? i : n_cells + i;
-        set_vga_char(pos, BLANK);
+        set_vga_char(pos, BLANK_CHAR);
         set_vga_attr(pos, &m_attr);
     }
 }
@@ -693,7 +792,7 @@ static void erase(int mode)
     }
 
     for (int i = 0; i < count; i++) {
-        set_vga_char(start + i, BLANK);
+        set_vga_char(start + i, BLANK_CHAR);
         set_vga_attr(start + i, &m_attr);
     }
 }
@@ -720,7 +819,7 @@ static void erase_ln(int mode)
     }
 
     for (int i = 0; i < count; i++) {
-        set_vga_char(start + i, BLANK);
+        set_vga_char(start + i, BLANK_CHAR);
         set_vga_attr(start + i, &m_attr);
     }
 }
@@ -757,42 +856,20 @@ static void cursor_right(int n)
     }
 }
 
-static void cursor_save(void)
-{
-    m_saved.cursor = m_cursor;
-}
-
-static void cursor_restore(void)
-{
-    m_cursor = m_saved.cursor;
-}
-
-static void read_cursor(void)
-{
-    m_cursor.shape = vga_get_cursor_shape();
-    pos2xy(vga_get_cursor_pos(), &m_cursor.x, &m_cursor.y);
-}
-
-static void write_cursor(void)
-{
-    vga_set_cursor_pos(xy2pos(m_cursor.x, m_cursor.y));
-    if (!m_cursor.hidden) {
-        vga_set_cursor_shape(m_cursor.shape & 0xFF, m_cursor.shape >> 8);
-    }
-}
-
-static inline void pos2xy(int pos, int *x, int *y)
+static inline void pos2xy(uint16_t pos, uint16_t *x, uint16_t *y)
 {
     *x = pos % m_cols;
     *y = pos / m_cols;
 }
 
-static inline int xy2pos(int x, int y)
+static inline uint16_t xy2pos(uint16_t x, uint16_t y)
 {
     return y * m_cols + x;
 }
 
-static void set_vga_char(int pos, char c)
+// ----------------------------------------------------------------------------
+
+static void set_vga_char(uint16_t pos, char c)
 {
     struct vga_cell *cell;
     cell = (struct vga_cell *) m_framebuf;
@@ -800,7 +877,7 @@ static void set_vga_char(int pos, char c)
     cell[pos].ch = c;
 }
 
-static void set_vga_attr(int pos, const struct char_attr *attr)
+static void set_vga_attr(uint16_t pos, const struct console_char_attr *attr)
 {
     struct vga_attr *vga_attr;
     vga_attr = &((struct vga_cell *) m_framebuf)[pos].attr;
@@ -831,9 +908,62 @@ static void set_vga_attr(int pos, const struct char_attr *attr)
     }
 }
 
-static void _writestr(char *str)
+static void enable_char_blink(void)
 {
-    while (*str != '\0') {
-        _dowrite(*str++);
-    }
+    uint8_t modectl;
+    modectl = vga_attr_read(VGA_ATTR_REG_MODE);
+    modectl |= VGA_ATTR_FLD_MODE_BLINK;         // set blink bit
+    vga_attr_write(VGA_ATTR_REG_MODE, modectl);
+}
+
+static void disable_char_blink(void)
+{
+    uint8_t modectl;
+    modectl = vga_attr_read(VGA_ATTR_REG_MODE);
+    modectl &= ~VGA_ATTR_FLD_MODE_BLINK;        // clear blink bit
+    vga_attr_write(VGA_ATTR_REG_MODE, modectl);
+}
+
+static void show_cursor(void)
+{
+    uint8_t css;
+    css = vga_crtc_read(VGA_CRTC_REG_CSS);
+    css &= ~VGA_CRTC_FLD_CSS_CD_MASK;
+    vga_crtc_write(VGA_CRTC_REG_CSS, css);
+}
+
+static void hide_cursor(void)
+{
+    uint8_t css;
+    css = vga_crtc_read(VGA_CRTC_REG_CSS);  // CSS = cursor scan line
+    css |= VGA_CRTC_FLD_CSS_CD_MASK;        // CD = cursor disable
+    vga_crtc_write(VGA_CRTC_REG_CSS, css);
+}
+
+static uint16_t get_cursor_pos(void)
+{
+    uint8_t poshi, poslo;
+    poshi = vga_crtc_read(VGA_CRTC_REG_CL_HI);  // CL = cursor location
+    poslo = vga_crtc_read(VGA_CRTC_REG_CL_LO);
+    return (poshi << 8) | poslo;
+}
+
+static void set_cursor_pos(uint16_t pos)
+{
+    vga_crtc_write(VGA_CRTC_REG_CL_HI, pos >> 8);
+    vga_crtc_write(VGA_CRTC_REG_CL_LO, pos & 0xFF);
+}
+
+static uint16_t get_cursor_shape(void)
+{
+    uint8_t shapehi, shapelo;
+    shapelo = vga_crtc_read(VGA_CRTC_REG_CSS) & VGA_CRTC_FLD_CSS_CSS_MASK;
+    shapehi = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
+    return (shapehi << 8) | shapelo;
+}
+
+static void set_cursor_shape(uint8_t start, uint8_t end)
+{
+    vga_crtc_write(VGA_CRTC_REG_CSS, start & VGA_CRTC_FLD_CSS_CSS_MASK);
+    vga_crtc_write(VGA_CRTC_REG_CSE, end   & VGA_CRTC_FLD_CSE_CSE_MASK);
 }

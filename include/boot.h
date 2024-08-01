@@ -39,7 +39,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <kernel.h>
 
+#define boot_kprint(...)    kprint("boot: " __VA_ARGS__)
 
 /*----------------------------------------------------------------------------*
  * Hardware Flags
@@ -142,6 +144,7 @@ struct boot_info {
 
     uint32_t a20_method;            // method used to enable A20 line, one of A20_*
     uint32_t vga_mode;              // VGA video mode (INT 10h,AH=0Fh)
+    uint32_t vga_rows;              // VGA row count
     uint32_t vga_cols;              // VGA column count (INT 10h,AH=0Fh)
     uint32_t cursor_col;            // current cursor column (INT 10h,AH=03h)
     uint32_t cursor_row;            // current cursor row (INT 10h,AH=03h)

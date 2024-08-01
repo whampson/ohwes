@@ -12,6 +12,7 @@ SOURCES := \
     main.c \
     mm.c \
     pic.c \
+    print.c \
     ps2kb.c \
     rtc.c \
     syscall.c \

@@ -28,6 +28,7 @@
 // https://www.win.tue.nl/~aeb/linux/kbd/scancodes-1.html
 
 #include <ctype.h>
+#include <boot.h>
 #include <ohwes.h>
 #include <kernel.h>
 #include <input.h>
@@ -113,11 +114,15 @@ static void kb_wrport(uint8_t data);
 #define RIF(x)  if (!(x)) { return; }
 #define RIF_FALSE(x)  if (!(x)) { return false; }
 
-void init_kb(void)
+extern void init_ps2(const struct boot_info *info);
+
+void init_kb(const struct boot_info *info)
 {
     uint8_t ps2cfg;
     uint32_t flags;
     cli_save(flags);
+
+    init_ps2(info);
 
     zeromem(g_kb, sizeof(struct kb));
     char_queue_init(&g_kb->inputq, g_kb->ibuf, KB_BUFFER_SIZE);
@@ -165,12 +170,12 @@ void init_kb(void)
     irq_register(IRQ_KEYBOARD, kb_interrupt);
     irq_unmask(IRQ_KEYBOARD);
 
-    kprint("ps2kb: ident = 0x%X 0x%X, translation = %s\n",
+    boot_kprint("ps2kb: ident=%02Xh,%02Xh translation=%s\n",
         g_kb->ident[0], g_kb->ident[1], ONOFF(ps2cfg & PS2_CFG_TRANSLATE));
-    kprint("ps2kb: scancode_set = %d, sc2_support = %s, sc3_support = %s\n",
+    boot_kprint("ps2kb: leds=%02Xh typematic=%02Xh\n",
+        g_kb->leds, g_kb->typematic_byte);
+    boot_kprint("ps2kb: scancode_set=%d sc2_support=%s sc3_support=%s\n",
         g_kb->scancode_set,  YN(g_kb->sc2_support), YN(g_kb->sc3_support));
-    kprint("ps2kb: leds = 0x%X, typematic = %s, typematic_byte = 0x%X\n",
-        g_kb->leds, YN(g_kb->typematic), g_kb->typematic_byte);
 
     restore_flags(flags);
 }
@@ -556,11 +561,11 @@ static bool kb_selftest(void)
             continue;
         }
         else if (data == 0xFC || data == 0xFD) {
-            kprint("ps2kb: self-test failed!\n");
+            boot_kprint("ps2kb: self-test failed!\n");
             return false;
         }
         else {
-            kprint("ps2kb: self-test failed! (got 0x%X)\n", data);
+            boot_kprint("ps2kb: self-test failed! (got 0x%X)\n", data);
             return false;
         }
     }
@@ -569,7 +574,7 @@ static bool kb_selftest(void)
         // 0 means we timed out reading... on some machines, the command acks
         // but the result byte never comes... not sure why this is, let's
         // consider it a command support bug and thus vacuous
-        kprint("ps2kb: self-test did not respond!\n");
+        boot_kprint("ps2kb: self-test did not respond!\n");
         return true;
     }
 

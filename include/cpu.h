@@ -49,18 +49,6 @@ struct cpuid
 bool cpu_has_cr4(void);
 bool cpu_has_cpuid(void);
 
-bool get_cpuid(struct cpuid *cpuid_info);
-
-struct x86_desc * cpu_get_desc(uint16_t segsel);
-struct tss * cpu_get_tss(void);
-
-#define flush_tlb()     \
-__asm__ volatile (      \
-    "                   \n\
-    movl %%cr3, %%eax   \n\
-    movl %%eax, %%cr3   \n\
-    "                   \
-    : : : "eax"         \
-)
+bool get_cpu_info(struct cpuid *cpuid_info);
 
 #endif // __CPU_H

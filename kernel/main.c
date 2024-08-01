@@ -39,17 +39,16 @@
 
 #define CHATTY 1
 
-extern void init_vga(void);
-extern void init_console(void);
-extern void init_cpu(const struct boot_info *info);
+extern void init_irq(void);
+extern void init_tasks(void);
+extern void init_console(const struct boot_info *info);
+
 extern void init_mm(const struct boot_info *info);
 extern void init_pic(void);
-extern void init_irq(void);
-extern void init_ps2(const struct boot_info *info);
-extern void init_kb(void);
+
 extern void init_timer(void);
 extern void init_rtc(void);
-extern void init_tasks(void);
+
 #ifdef TEST_BUILD
 typedef int (*test_main)(void);
 extern void tmain(void);
@@ -67,42 +66,115 @@ static void print_info(const struct boot_info *info);
 
 #ifdef DEBUG
 int g_test_crash_kernel;
-static void debug_interrupt(void);
+void debug_interrupt(void);
 #endif
 
-int _kprint(const char *fmt, ...)
+void verify_gdt(void)
 {
-    char buf[1024];
+    boot_kprint("checking GDT...\n");
 
-    va_list args;
-    va_start(args, fmt);
+    volatile struct table_desc gdt_desc = { };
+    __sgdt(gdt_desc);
 
-    int nchars = vsnprintf(buf, sizeof(buf), fmt, args);
-    int retval = console_write(NULL, buf, nchars);
+    struct x86_desc *kernel_cs = x86_get_desc(gdt_desc.base, KERNEL_CS);
+    panic_assert(kernel_cs->seg.type == DESCTYPE_CODE_XR || kernel_cs->seg.type == DESCTYPE_CODE_XRA);
+    panic_assert(kernel_cs->seg.dpl == KERNEL_PL);
+    panic_assert(kernel_cs->seg.db == 1);
+    panic_assert(kernel_cs->seg.s == 1);
+    panic_assert(kernel_cs->seg.p == 1);
 
-    va_end(args);
-    return retval;
+    struct x86_desc *kernel_ds = x86_get_desc(gdt_desc.base, KERNEL_DS);
+    panic_assert(kernel_ds->seg.type == DESCTYPE_DATA_RW || kernel_ds->seg.type == DESCTYPE_DATA_RWA);
+    panic_assert(kernel_ds->seg.dpl == KERNEL_PL);
+    panic_assert(kernel_ds->seg.db == 1);
+    panic_assert(kernel_ds->seg.s == 1);
+    panic_assert(kernel_ds->seg.p == 1);
+
+    struct x86_desc *user_cs = x86_get_desc(gdt_desc.base, USER_CS);
+    panic_assert(user_cs->seg.type == DESCTYPE_CODE_XR);
+    panic_assert(user_cs->seg.dpl == USER_PL);
+    panic_assert(user_cs->seg.db == 1);
+    panic_assert(user_cs->seg.s == 1);
+    panic_assert(user_cs->seg.p == 1);
+
+    struct x86_desc *user_ds = x86_get_desc(gdt_desc.base, USER_DS);
+    panic_assert(user_ds->seg.type == DESCTYPE_DATA_RW);
+    panic_assert(user_ds->seg.dpl == USER_PL);
+    panic_assert(user_ds->seg.db == 1);
+    panic_assert(user_ds->seg.s == 1);
+    panic_assert(user_ds->seg.p == 1);
 }
 
-struct boot_info g_boot;
+void init_idt(void)
+{
+    extern idt_thunk exception_thunks[NUM_EXCEPTIONS];
+    extern idt_thunk irq_thunks[NUM_IRQS];
+    extern idt_thunk _syscall;
 
-// defined in linker script; access value using addressof
-extern intptr_t __kernel_base;
-extern uint32_t __kernel_pages;
+    struct x86_desc *idt;
+    volatile struct table_desc idt_desc = { };
+
+    __sidt(idt_desc);
+    idt = (struct x86_desc *) idt_desc.base;
+
+    for (int i = 0; i < NUM_EXCEPTIONS; i++) {
+        int vec = VEC_INTEL + i;
+        make_trap_gate(&idt[vec], KERNEL_CS, KERNEL_PL, exception_thunks[i]);
+    }
+
+    for (int i = 0; i < NUM_IRQS; i++) {
+        int vec = VEC_DEVICEIRQ + i;
+        make_intr_gate(&idt[vec], KERNEL_CS, KERNEL_PL, irq_thunks[i]);
+    }
+
+    make_trap_gate(&idt[VEC_SYSCALL], KERNEL_CS, USER_PL, _syscall);
+}
+
+extern __syscall int sys_read(int fd, void *buf, size_t count);
+extern __syscall int sys_write(int fd, const void *buf, size_t count);
 
 __fastcall void start_kernel(const struct boot_info *info)
 {
-    init_console();
+    struct boot_info boot_info;
 
-    ((uint16_t *) (PAGE_OFFSET+0xB8000))[1] = 0x0A00|'e';
-    kprint("__kernel_base = 0x%X\n", &__kernel_base);
-    kprint("__kernel_pages = 0x%X\n", &__kernel_pages);
-    kprint("kb_low = %d\n", info->kb_low);
-    kprint("kb_high = %d\n", info->kb_high);
-    kprint("kb_high_e801h = %d\n", info->kb_high_e801h);
-    kprint("kb_extended = %d\n", info->kb_extended << 6);
+    // copy the boot info onto the stack so we don't accidentally overwrite it
+    memcpy(&boot_info, info, sizeof(struct boot_info));
+    info = &boot_info;  // for convenience ;)
 
-    // for (;;);
+    // initialize system components
+    init_idt();
+    init_pic();
+    init_irq();
+    init_tasks();
+
+    // initialize console
+    init_console(info);
+    // safe to print now
+
+    // ensure GDT wasn't mucked with
+    verify_gdt();
+
+    // initialize devices
+    init_timer();
+    init_rtc();
+
+#ifdef DEBUG
+    // CTRL+ALT+FN to crash kernel
+    irq_register(IRQ_TIMER, debug_interrupt);
+#endif
+
+    boot_kprint("enabling interrupts...\n");
+    __sti();
+
+    char c;
+    do {
+        sys_read(stdin_fd, &c, 1);
+        sys_write(stdout_fd, &c, 1);
+    } while (c != 3);   // CTRL+C
+
+    basic_shell();
+    kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
+    for (;;);
 
 //     memcpy(&g_boot, info, sizeof(struct boot_info));
 
@@ -137,7 +209,6 @@ __fastcall void start_kernel(const struct boot_info *info)
 
 int init(void)
 {
-
     //
     // Runs in ring 3.
     //
@@ -145,8 +216,8 @@ int init(void)
 
     // TODO: load shell program from disk
 
-    printf("\e4\e[5;33mHello, world!\e[m\n");
-    basic_shell();
+    // printf("\e4\e[5;33mHello, world!\e[m\n");
+    // basic_shell();
 
     return 0;
 }
@@ -318,7 +389,7 @@ static void print_info(const struct boot_info *info)
 }
 
 #ifdef DEBUG
-static void debug_interrupt(void)
+void debug_interrupt(void)
 {
     switch (g_test_crash_kernel) {
         case 1:     // F1 - divide by zero
@@ -354,7 +425,7 @@ static void debug_interrupt(void)
             break;
         }
         case 12: {  // F12 - triple fault
-            struct pseudo_desc idt_desc = { .limit = 0, .base = 0 };
+            struct table_desc idt_desc = { .limit = 0, .base = 0 };
             __lidt(idt_desc);
         }
     }

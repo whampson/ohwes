@@ -25,34 +25,34 @@
 /**
  * Important interrupt vector table numbers.
  */
-#define VEC_INTEL           0x00    // Base interrupt vector for Intel exceptions.
-#define VEC_DEVICEIRQ       0x20    // Base interrupt vector for device IRQs.
-#define VEC_SYSCALL         0x80    // Interrupt vector for syscalls.
+#define VEC_INTEL                   0x00    // Base vector for Intel exceptions.
+#define VEC_DEVICEIRQ               0x20    // Base vector for device IRQs.
+#define VEC_SYSCALL                 0x80    // Interrupt vector for syscalls.
 
 /**
  * Intel exception vector numbers.
  */
-#define EXCEPTION_DE        0x00    // Divide Error
-#define EXCEPTION_DB        0x01    // Debug Exception
-#define EXCEPTION_NMI       0x02    // Non-Maskable Interrupt
-#define EXCEPTION_BP        0x03    // Breakpoint
-#define EXCEPTION_OF        0x04    // Overflow
-#define EXCEPTION_BR        0x05    // BOUND Range Exceeded
-#define EXCEPTION_UD        0x06    // Invalid Opcode
-#define EXCEPTION_NM        0x07    // Device Not Available
-#define EXCEPTION_DF        0x08    // Double Fault
-#define EXCEPTION_TS        0x0A    // Invalid TSS
-#define EXCEPTION_NP        0x0B    // Segment Not Present
-#define EXCEPTION_SS        0x0C    // Stack Fault
-#define EXCEPTION_GP        0x0D    // General Protection Fault
-#define EXCEPTION_PF        0x0E    // Page Fault
-#define EXCEPTION_MF        0x10    // Math Fault (x87 FPU Floating-Point Error)
-#define EXCEPTION_AC        0x11    // Alignment Check
-#define EXCEPTION_MC        0x12    // Machine Check
-#define EXCEPTION_XM        0x13    // SIMD Floating-Point Exception
-#define EXCEPTION_VE        0x14    // Virtualization Exception
-#define EXCEPTION_CP        0x15    // Control Protection Exception
-#define NUM_EXCEPTIONS      32
+#define EXCEPTION_DE                0x00    // Divide Error
+#define EXCEPTION_DB                0x01    // Debug Exception
+#define EXCEPTION_NMI               0x02    // Non-Maskable Interrupt
+#define EXCEPTION_BP                0x03    // Breakpoint
+#define EXCEPTION_OF                0x04    // Overflow
+#define EXCEPTION_BR                0x05    // BOUND Range Exceeded
+#define EXCEPTION_UD                0x06    // Invalid Opcode
+#define EXCEPTION_NM                0x07    // Device Not Available
+#define EXCEPTION_DF                0x08    // Double Fault
+#define EXCEPTION_TS                0x0A    // Invalid TSS
+#define EXCEPTION_NP                0x0B    // Segment Not Present
+#define EXCEPTION_SS                0x0C    // Stack Fault
+#define EXCEPTION_GP                0x0D    // General Protection Fault
+#define EXCEPTION_PF                0x0E    // Page Fault
+#define EXCEPTION_MF                0x10    // Math Fault (x87 FPU Error)
+#define EXCEPTION_AC                0x11    // Alignment Check
+#define EXCEPTION_MC                0x12    // Machine Check
+#define EXCEPTION_XM                0x13    // SIMD Floating-Point Exception
+#define EXCEPTION_VE                0x14    // Virtualization Exception
+#define EXCEPTION_CP                0x15    // Control Protection Exception
+#define NUM_EXCEPTIONS              32
 
 /**
  * Interrupt register frame offsets.

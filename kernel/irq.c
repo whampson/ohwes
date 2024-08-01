@@ -21,22 +21,19 @@
 
 #include <stddef.h>
 #include <stdio.h>
-#include <interrupt.h>
 #include <irq.h>
 #include <ohwes.h>
 #include <pic.h>
 
-extern __fastcall void crash(struct iregs *regs);
+#define MAX_ISRS    8
 
-#define valid_irq(n)    ((n) >= 0 && (n) < NUM_IRQS)
+#define valid_irq(n) ((n) >= 0 && (n) < NUM_IRQS)
 
-#define MAX_HANDLERS    8
-
-irq_handler handler_map[NUM_IRQS][MAX_HANDLERS] = { };
+irq_handler isr_map[NUM_IRQS][MAX_ISRS];
 
 void init_irq(void)
 {
-    zeromem(handler_map, sizeof(handler_map));
+    zeromem(isr_map, sizeof(isr_map));
 }
 
 void irq_mask(int irq_num)
@@ -64,9 +61,9 @@ void irq_register(int irq_num, irq_handler func)
     assert(valid_irq(irq_num));
 
     bool registered = false;
-    for (int i = 0; i < MAX_HANDLERS; i++) {
-        if (handler_map[irq_num][i] == NULL) {
-            handler_map[irq_num][i] = func;
+    for (int i = 0; i < MAX_ISRS; i++) {
+        if (isr_map[irq_num][i] == NULL) {
+            isr_map[irq_num][i] = func;
             registered = true;
             break;
         }
@@ -82,9 +79,9 @@ void irq_unregister(int irq_num, irq_handler func)
     assert(valid_irq(irq_num));
 
     bool unregistered = false;
-    for (int i = 0; i < MAX_HANDLERS; i++) {
-        if (handler_map[irq_num][i] == func) {
-            handler_map[irq_num][i] = NULL;
+    for (int i = 0; i < MAX_ISRS; i++) {
+        if (isr_map[irq_num][i] == func) {
+            isr_map[irq_num][i] = NULL;
             unregistered = true;
             break;
         }
@@ -95,7 +92,7 @@ void irq_unregister(int irq_num, irq_handler func)
     }
 }
 
-void __fastcall handle_irq(struct iregs *regs)
+__fastcall void handle_irq(struct iregs *regs)
 {
     int irq_num;
     irq_handler handler;
@@ -107,8 +104,8 @@ void __fastcall handle_irq(struct iregs *regs)
     }
 
     handled = false;
-    for (int i = 0; i < MAX_HANDLERS; i++) {
-        handler = handler_map[irq_num][i];
+    for (int i = 0; i < MAX_ISRS; i++) {
+        handler = isr_map[irq_num][i];
         if (handler != NULL) {
             handler();
             handled = true;
@@ -116,7 +113,7 @@ void __fastcall handle_irq(struct iregs *regs)
     }
 
     if (!handled) {
-        crash(regs);
+        panic("unhandled IRQ: %d", irq_num);
     }
 
     pic_eoi(irq_num);

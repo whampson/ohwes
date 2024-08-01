@@ -27,72 +27,74 @@
 #include <stdint.h>
 #include <queue.h>
 
-#define VGA_COLS            80
-#define VGA_ROWS            25
-#define VGA_FRAMEBUF        PAGE_OFFSET + 0xB8000
-
-#define ERASE_DOWN          0
-#define ERASE_UP            1
-#define ERASE_ALL           2
-
 #define MAX_CSIPARAMS       8
-#define MAX_TABSTOPS        VGA_COLS
+#define MAX_TABSTOPS        /*VGA_COLS*/ 80     // TODO: make this not depend on console width
 #define TABSTOP_WIDTH       8
 
 #define INPUT_BUFFER_SIZE   256
 
-struct console
-{
-    bool initialized;               // console initalized?
-    int cols, rows;                 // screen dimensions
-    void *framebuf;                 // frame buffer
-    struct char_queue inputq;       // input queue
-    char tabstop[MAX_TABSTOPS];     // tab stops
-    char csiparam[MAX_CSIPARAMS];   // control sequence parameters
-    int paramidx;                   // control sequence parameter index
-    struct disp_attr {              // display attributes
-        bool blink_on;              //   character blinking enabled
-    } disp;
-    struct char_attr {              // character attributes
-        int bg, fg;                 //   background, foreground colors
-        bool bright;                //   use bright foreground
-        bool faint;                 //   use dim foreground
-        bool italic;                //   italicize (simulated with color
-        bool underline;             //   underline (simulated with color)
-        bool blink;                 //   blink character (if enabled)
-        bool invert;                //   swap background and foreground colors
-    } attr;
-    struct cursor {                 // cursor parameters
-        int x, y;                   //   position
-        int shape;                  //   shape
-        bool hidden;                //   visibility
-    } cursor;
-    struct save_state {             // saved parameters
-        struct disp_attr disp;
-        struct char_attr attr;
-        struct cursor cursor;
-        char tabstop[MAX_TABSTOPS];
-    } saved;
-    struct default_state {          // default parameters
-        struct char_attr attr;
-        struct cursor cursor;
-    } defaults;
-    enum console_state {            // console control state
-        S_NORM,                     //   normal
-        S_ESC,                      //   escape sequence (ESC)
-        S_CSI                       //   control sequence (ESC[)
-    } state;
+enum vga_console_state {
+    S_NORM,
+    S_ESC,
+    S_CSI
 };
 
-enum console_color {
-    CONSOLE_BLACK,
-    CONSOLE_RED,
-    CONSOLE_GREEN,
-    CONSOLE_YELLOW,
-    CONSOLE_BLUE,
-    CONSOLE_MAGENTA,
-    CONSOLE_CYAN,
-    CONSOLE_WHITE
+enum vga_console_color {
+    VGA_CONSOLE_BLACK,
+    VGA_CONSOLE_RED,
+    VGA_CONSOLE_GREEN,
+    VGA_CONSOLE_YELLOW,
+    VGA_CONSOLE_BLUE,
+    VGA_CONSOLE_MAGENTA,
+    VGA_CONSOLE_CYAN,
+    VGA_CONSOLE_WHITE
+};
+
+struct vga_console
+{
+    bool initialized;                   // console initalized?
+    int state;                          // current control state
+
+    uint16_t cols, rows;                // screen dimensions
+    void *framebuf;                     // frame buffer
+
+    struct char_queue inputq;           // input queue
+    char input_buf[INPUT_BUFFER_SIZE];  // raw input ring buffer
+
+    char tabstops[MAX_TABSTOPS];        // tab stops
+
+    char csiparam[MAX_CSIPARAMS];       // control sequence parameters
+    int paramidx;                       // control sequence parameter index
+
+    bool blink_on;                      // character blinking enabled
+
+    struct console_char_attr {          // character attributes
+        uint8_t bg, fg;                 //   background, foreground colors
+        bool bright;                    //   use bright foreground
+        bool faint;                     //   use dim foreground
+        bool italic;                    //   italicize (simulated with color
+        bool underline;                 //   underline (simulated with color)
+        bool blink;                     //   blink character (if enabled)
+        bool invert;                    //   swap background and foreground colors
+    } attr;
+
+    struct console_cursor {             // cursor parameters
+        uint16_t x, y;                  //   position
+        int shape;                      //   shape
+        bool hidden;                    //   visibility
+    } cursor;
+
+    struct console_csi_defaults {       // CSI defaults (ESC [0m)
+        struct console_char_attr attr;
+        struct console_cursor cursor;
+    } csi_defaults;
+
+    struct console_save_state {         // saved parameters
+        bool blink_on;
+        char tabstops[MAX_TABSTOPS];
+        struct console_char_attr attr;
+        struct console_cursor cursor;
+    } saved_state;
 };
 
 /**
