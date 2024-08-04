@@ -43,7 +43,7 @@
 // TODO: set via ioctl
 #define BEEP_FREQUENCY  750     // Hz
 #define BEEP_DURATION   50      // ms
-#define CURSOR_ULINE    0x0E0D  // scan line start = 13, end = 14
+#define CURSOR_ULINE    0x0E0C  // scan line start = 12, end = 14
 #define CURSOR_BLOCK    0x0F00  // scan line start = 0,  end = 15
 
 struct vga_display {
@@ -73,6 +73,7 @@ struct vga_console _consoles[NUM_CONSOLES];
 #define m_csiparam          (current_console()->csiparam)
 #define m_paramidx          (current_console()->paramidx)
 #define m_currparam         (m_csiparam[m_paramidx])
+#define m_need_newline      (current_console()->need_newline)
 #define m_blink_on          (current_console()->blink_on)
 #define m_attr              (current_console()->attr)
 #define m_cursor            (current_console()->cursor)
@@ -193,6 +194,7 @@ static void defaults(struct vga_console *cons)
     cons->rows = _display.rows;
     cons->framebuf = PAGE_OFFSET + _display.framebuf;
     cons->blink_on = false;
+    cons->need_newline = false;
     cons->attr.bg = VGA_BLACK;
     cons->attr.fg = VGA_WHITE;
     cons->attr.bright = false;
@@ -203,7 +205,7 @@ static void defaults(struct vga_console *cons)
     cons->attr.invert = false;
     cons->cursor.x = 0;
     cons->cursor.y = 0;
-    cons->cursor.shape = CURSOR_ULINE   ;
+    cons->cursor.shape = CURSOR_ULINE;
     cons->cursor.hidden = false;   cons->csi_defaults.attr = cons->attr;
     cons->csi_defaults.cursor = cons->cursor;
     cons->state = S_NORM;
@@ -218,8 +220,8 @@ static void defaults(struct vga_console *cons)
 static void reset(void)
 {
     defaults(current_console());
-    write_cursor();
     erase(ERASE_ALL);
+    write_cursor();
 }
 
 static void save_state(void)
@@ -331,16 +333,16 @@ static void _writechar(char c)
     uint32_t flags;
     cli_save(flags);
 
-    read_cursor();
-    int pos = xy2pos(m_cursor.x, m_cursor.y);
-
     bool update_char = false;
     bool update_attr = false;
     bool update_cursor = true;
-    bool need_crlf = false;
+    uint16_t char_pos;
 
-    // ONLCR conversion (newline to carriage return-newline)
-    if (c == '\n') cr();
+    // ONLCR conversion (NL to CRNL)
+    // TODO: configure this with something like termios
+    if (c == '\n') {
+        cr();
+    }
 
     // handle escape sequences if not a control character
     if (!iscntrl(c)) {
@@ -365,13 +367,7 @@ static void _writechar(char c)
             beep(BEEP_FREQUENCY, BEEP_DURATION);
             break;
         case '\b':      // ^H - BS - backspace
-            if (m_cursor.x > 0) pos--;
             bs();
-            __fallthrough;
-        case ASCII_DEL: // ^? - DEL - delete
-            c = BLANK_CHAR;
-            update_char = true;
-            update_attr = true;
             break;
         case '\t':      // ^I - HT - horizontal tab
             tab();
@@ -391,32 +387,44 @@ static void _writechar(char c)
             m_state = S_ESC;
             goto done;
 
-    // everything else
-        default:
+        default:        // everything else
             if (iscntrl(c)) {
                 goto done;
             }
+
+            if (m_need_newline) {
+                // handle deferred newline
+                cr(); lf();     // TODO: line formatting config
+            }
+
+            char_pos = xy2pos(m_cursor.x, m_cursor.y);
+
             update_char = true;
             update_attr = true;
-            if (++m_cursor.x >= m_cols) {
-                    need_crlf = true;
+
+            m_cursor.x++;
+            if (m_cursor.x >= m_cols) {
+                // if the cursor is at the end of the line, prevent
+                // the display from scrolling one line until the next
+                // character is received so we aren't left with an
+                // unnecessary blank line
+                m_need_newline = true;
+                update_cursor = false;
+                m_cursor.x--;
             }
             break;
     }
 
 update:
-    // TOOD: adapt this to work over serial
+    // TODO: adapt this to work over serial
     if (update_char) {
-        set_vga_char(pos, c);
+        set_vga_char(char_pos, c);
     }
     if (update_attr) {
         if (m_attr.bright && m_attr.faint) {
             m_attr.bright = false;
         }
-        set_vga_attr(pos, &m_attr);
-    }
-    if (need_crlf) {
-        cr(); lf();
+        set_vga_attr(char_pos, &m_attr);
     }
     if (update_cursor) {
         write_cursor();
@@ -491,6 +499,7 @@ static void esc(char c)
             break;
     }
 
+    m_need_newline = false;
     m_state = S_NORM;
 }
 
@@ -606,6 +615,7 @@ static void csi(char c)
             break;
     }
 
+    m_need_newline = false;
     m_state = S_NORM;
 
     #undef param_minimum
@@ -691,14 +701,14 @@ static void csi_m(char p)
 
 static void bs(void)
 {
-    if (--m_cursor.x < 0) {
-        m_cursor.x = 0;
-    }
+    cursor_left(1);
+    m_need_newline = false;
 }
 
 static void cr(void)
 {
     m_cursor.x = 0;
+    m_need_newline = false;
 }
 
 static void lf(void)
@@ -707,14 +717,16 @@ static void lf(void)
         scroll(1);
         m_cursor.y--;
     }
+    m_need_newline = false;
 }
 
 static void r_lf(void)
 {
-    if (--m_cursor.y < 0) {
+    if (--m_cursor.y < 0) {     // TODO: fix so it doesn't wrap
         scroll(-1);
         m_cursor.y++;
     }
+    m_need_newline = false;
 }
 
 static void tab(void)
@@ -826,32 +838,40 @@ static void erase_ln(int mode)
 
 static void cursor_up(int n)
 {
-    m_cursor.y -= n;
-    if (m_cursor.y < 0) {
+    if (m_cursor.y - n > 0) {
+        m_cursor.y -= n;
+    }
+    else {
         m_cursor.y = 0;
     }
 }
 
 static void cursor_down(int n)
 {
-    m_cursor.y += n;
-    if (m_cursor.y >= m_rows) {
+    if (m_cursor.y + n < m_rows - 1) {
+        m_cursor.y += n;
+    }
+    else {
         m_cursor.y = m_rows - 1;
     }
 }
 
 static void cursor_left(int n)
 {
-    m_cursor.x -= n;
-    if (m_cursor.x < 0) {
+    if (m_cursor.x - n > 0) {
+        m_cursor.x -= n;
+    }
+    else {
         m_cursor.x = 0;
     }
 }
 
 static void cursor_right(int n)
 {
-    m_cursor.x += n;
-    if (m_cursor.x >= m_cols) {
+    if (m_cursor.x + n < m_cols - 1) {
+        m_cursor.x += n;
+    }
+    else {
         m_cursor.x = m_cols - 1;
     }
 }
@@ -871,10 +891,7 @@ static inline uint16_t xy2pos(uint16_t x, uint16_t y)
 
 static void set_vga_char(uint16_t pos, char c)
 {
-    struct vga_cell *cell;
-    cell = (struct vga_cell *) m_framebuf;
-
-    cell[pos].ch = c;
+    ((struct vga_cell *) m_framebuf)[pos].ch = c;
 }
 
 static void set_vga_attr(uint16_t pos, const struct console_char_attr *attr)

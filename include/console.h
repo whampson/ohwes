@@ -61,12 +61,13 @@ struct vga_console
     struct char_queue inputq;           // input queue
     char input_buf[INPUT_BUFFER_SIZE];  // raw input ring buffer
 
-    char tabstops[MAX_TABSTOPS];        // tab stops
+    char tabstops[MAX_TABSTOPS];        // tab stops    // TODO: make indexing independent of console width
 
     char csiparam[MAX_CSIPARAMS];       // control sequence parameters
     int paramidx;                       // control sequence parameter index
 
     bool blink_on;                      // character blinking enabled
+    bool need_newline;                  // emit newline on next character
 
     struct console_char_attr {          // character attributes
         uint8_t bg, fg;                 //   background, foreground colors
