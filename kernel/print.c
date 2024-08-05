@@ -21,9 +21,10 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <console.h>
 #include <fs.h>
 
-extern int console_write(struct file *file, const char *buf, size_t count);
+#define KPRINT_BUFSIZ   1024
 
 int _kprint(const char *fmt, ...)
 {
@@ -33,7 +34,7 @@ int _kprint(const char *fmt, ...)
     va_start(args, fmt);
 
     int nchars = vsnprintf(buf, sizeof(buf), fmt, args);
-    int retval = console_write(NULL, buf, nchars);
+    int retval = console_write(get_console(0), buf, nchars);
 
     va_end(args);
     return retval;

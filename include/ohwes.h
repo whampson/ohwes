@@ -64,9 +64,6 @@ extern void pcspk_beep(int freq, int millis);  // see timer.c
 #define align(x, n)                     (((x) + (n) - 1) & ~((n) - 1))
 #define aligned(x,n)                    ((x) == align(x,n))
 
-extern int console_read(struct file *file, char *buf, size_t count);
-extern int console_write(struct file *file, const char *buf, size_t count);
-
 #define kbflush()                       ({ char __c; while (console_read(NULL, &__c, 1) != 0) { } })
 #define kbhit()                         ({ char __c; while (console_read(NULL, &__c, 1) == 0) { } })
 #define kbwait()                        ({ kbflush(); kbhit(); })

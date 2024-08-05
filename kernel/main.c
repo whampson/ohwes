@@ -130,6 +130,40 @@ void init_idt(void)
     make_trap_gate(&idt[VEC_SYSCALL], KERNEL_CS, USER_PL, _syscall);
 }
 
+int dummy_read(struct file *file, char *buf, size_t count)
+{
+    return console_read(kernel_task()->cons, buf, count);
+}
+
+int dummy_write(struct file *file, const char *buf, size_t count)
+{
+    return console_write(kernel_task()->cons, buf, count);
+}
+
+struct file_ops console_fops =
+{
+    .read = dummy_read,
+    .write = dummy_write,
+    .open = NULL,
+    .close = NULL,
+    .ioctl = NULL   // TODO: ioctl
+};
+
+struct file console_file =
+{
+    .fops = &console_fops,
+    .ioctl_code = _IOC_CONSOLE
+};
+
+void init_kernel_task(void)
+{
+    // initialize the kernel task
+    // TODO: call open() on console to do this?
+    kernel_task()->cons = get_console(0);
+    kernel_task()->files[stdin_fd] = &console_file;
+    kernel_task()->files[stdout_fd] = &console_file;
+}
+
 extern __syscall int sys_read(int fd, void *buf, size_t count);
 extern __syscall int sys_write(int fd, const void *buf, size_t count);
 
@@ -141,11 +175,10 @@ __fastcall void start_kernel(const struct boot_info *info)
     memcpy(&boot_info, info, sizeof(struct boot_info));
     info = &boot_info;  // for convenience ;)
 
-    // initialize system components
+    // initialize core system components
     init_idt();
     init_pic();
     init_irq();
-    init_tasks();
 
     // initialize console
     init_console(info);
@@ -153,6 +186,10 @@ __fastcall void start_kernel(const struct boot_info *info)
 
     // ensure GDT wasn't mucked with
     verify_gdt();
+
+    // initialize tasks
+    init_tasks();
+    init_kernel_task();
 
     // initialize devices
     init_timer();
@@ -172,7 +209,7 @@ __fastcall void start_kernel(const struct boot_info *info)
         sys_write(stdout_fd, &c, 1);
     } while (c != 3);   // CTRL+C
 
-    basic_shell();
+    // basic_shell();
     kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
     for (;;);
 

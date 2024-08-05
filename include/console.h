@@ -22,6 +22,7 @@
 #ifndef __CONSOLE_H
 #define __CONSOLE_H
 
+#include <assert.h>
 #include <config.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -31,7 +32,7 @@
 #define MAX_TABSTOPS        80      // TODO: make this not depend on console width
 #define TABSTOP_WIDTH       8       // TOOD: make configurable
 
-#define INPUT_BUFFER_SIZE   256
+#define INPUT_BUFFER_SIZE   32
 
 #define DEFAULT_OFLAG       (OPOST|ONLCR)
 
@@ -106,6 +107,13 @@ struct console
         struct _cursor cursor;
     } saved_state;
 };
+
+struct console * current_console(void);
+struct console * get_console(int num);
+
+void console_defaults(struct console *cons);
+int console_read(struct console *cons, char *buf, size_t count);
+int console_write(struct console *cons, const char *buf, size_t count);
 
 /**
  * ASCII Control Characters
