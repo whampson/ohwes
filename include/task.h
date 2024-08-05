@@ -32,7 +32,7 @@
 struct task {
     int pid;
     int errno;
-    struct vga_console *cons;
+    struct console *cons;
     struct file *files[MAX_OPEN_FILES];
 };
 

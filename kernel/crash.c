@@ -36,11 +36,11 @@
 #include <cpu.h>
 #include <fs.h>
 
-#define CRASH_COLOR     VGA_CONSOLE_BLUE
-#define PANIC_COLOR     VGA_CONSOLE_BLUE
-#define IRQ_COLOR       VGA_CONSOLE_RED
-#define NMI_COLOR       VGA_CONSOLE_RED
-#define BANNER_COLOR    VGA_CONSOLE_BLUE
+#define CRASH_COLOR     CONSOLE_BLUE
+#define PANIC_COLOR     CONSOLE_BLUE
+#define IRQ_COLOR       CONSOLE_RED
+#define NMI_COLOR       CONSOLE_RED
+#define BANNER_COLOR    CONSOLE_BLUE
 #define CRASH_BANNER    " " OS_NAME " "
 #define CRASH_WIDTH     80
 #define CRASH_BUFSIZ    256

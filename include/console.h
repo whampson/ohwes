@@ -27,30 +27,36 @@
 #include <stdint.h>
 #include <queue.h>
 
-#define MAX_CSIPARAMS       8
-#define MAX_TABSTOPS        /*VGA_COLS*/ 80     // TODO: make this not depend on console width
-#define TABSTOP_WIDTH       8
+#define MAX_CSIPARAMS       16
+#define MAX_TABSTOPS        80      // TODO: make this not depend on console width
+#define TABSTOP_WIDTH       8       // TOOD: make configurable
 
 #define INPUT_BUFFER_SIZE   256
 
-enum vga_console_state {
-    S_NORM,
-    S_ESC,
-    S_CSI
+#define DEFAULT_OFLAG       (OPOST|ONLCR)
+
+enum console_color {
+    CONSOLE_BLACK,
+    CONSOLE_RED,
+    CONSOLE_GREEN,
+    CONSOLE_YELLOW,
+    CONSOLE_BLUE,
+    CONSOLE_MAGENTA,
+    CONSOLE_CYAN,
+    CONSOLE_WHITE
 };
 
-enum vga_console_color {
-    VGA_CONSOLE_BLACK,
-    VGA_CONSOLE_RED,
-    VGA_CONSOLE_GREEN,
-    VGA_CONSOLE_YELLOW,
-    VGA_CONSOLE_BLUE,
-    VGA_CONSOLE_MAGENTA,
-    VGA_CONSOLE_CYAN,
-    VGA_CONSOLE_WHITE
+enum oflags {
+    OPOST = 1 << 0,     // enable post processing
+    ONLCR = 1 << 1,     // convert NL to CRNL
+    OCRNL = 1 << 2,     // map CR to NL
 };
 
-struct vga_console
+struct termios {
+    uint32_t c_oflag;
+};
+
+struct console
 {
     bool initialized;                   // console initalized?
     int state;                          // current control state
@@ -59,7 +65,7 @@ struct vga_console
     void *framebuf;                     // frame buffer
 
     struct char_queue inputq;           // input queue
-    char input_buf[INPUT_BUFFER_SIZE];  // raw input ring buffer
+    char _ibuf[INPUT_BUFFER_SIZE];      // raw input ring buffer
 
     char tabstops[MAX_TABSTOPS];        // tab stops    // TODO: make indexing independent of console width
 
@@ -67,34 +73,37 @@ struct vga_console
     int paramidx;                       // control sequence parameter index
 
     bool blink_on;                      // character blinking enabled
-    bool need_newline;                  // emit newline on next character
+    bool need_wrap;                     // wrap output to next line on next character
 
-    struct console_char_attr {          // character attributes
+    struct termios termios;             // terminal input/output behavior
+
+    struct _char_attr {                 // character attributes
         uint8_t bg, fg;                 //   background, foreground colors
-        bool bright;                    //   use bright foreground
-        bool faint;                     //   use dim foreground
-        bool italic;                    //   italicize (simulated with color
-        bool underline;                 //   underline (simulated with color)
-        bool blink;                     //   blink character (if enabled)
-        bool invert;                    //   swap background and foreground colors
+        uint8_t bright    : 1;          //   use bright foreground
+        uint8_t faint     : 1;          //   use dim foreground
+        uint8_t italic    : 1;          //   italicize (simulated with color
+        uint8_t underline : 1;          //   underline (simulated with color)
+        uint8_t blink     : 1;          //   blink character (if enabled)
+        uint8_t invert    : 1;          //   swap background and foreground colors
     } attr;
+    static_assert(sizeof(struct _char_attr) <= 4, "_char_attr too large!");
 
-    struct console_cursor {             // cursor parameters
+    struct _cursor {                    // cursor parameters
         uint16_t x, y;                  //   position
         int shape;                      //   shape
         bool hidden;                    //   visibility
     } cursor;
 
-    struct console_csi_defaults {       // CSI defaults (ESC [0m)
-        struct console_char_attr attr;
-        struct console_cursor cursor;
+    struct _csi_defaults {              // CSI defaults (ESC [0m)
+        struct _char_attr attr;
+        struct _cursor cursor;
     } csi_defaults;
 
-    struct console_save_state {         // saved parameters
+    struct _save_state {                // saved parameters
         bool blink_on;
         char tabstops[MAX_TABSTOPS];
-        struct console_char_attr attr;
-        struct console_cursor cursor;
+        struct _char_attr attr;
+        struct _cursor cursor;
     } saved_state;
 };
 
