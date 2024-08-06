@@ -453,6 +453,7 @@ static void kb_interrupt(void)
             case KEY_RIGHTBRACKET: c = ']'; break;
             case KEY_MINUS: c = '_'; break;
             case KEY_SLASH: c = '?'; break;
+            case KEY_BACKSPACE: c = '\b'; break;
         }
         if (key >= KEY_A && key <= KEY_Z) {
             c = toupper(c);
@@ -729,7 +730,7 @@ void kb_wrport(uint8_t data)
 
 static const char g_keymap[256] =
 {
-/*00-0F*/  0,0,0,0,0,0,0,0,'\b','\t','\r',0xE0,0xE0,0xE0,0xE0,0xE0,
+/*00-0F*/  0,0,0,0,0,0,0,0,0x7F,'\t','\r',0xE0,0xE0,0xE0,0xE0,0xE0,
 /*10-1F*/  0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0,0,0,0,'\e',0,0,0,0,
 /*20-2F*/  ' ',0,0,0,0,0,0,'\'',0,0,'*','+',',','-','.','/',
 /*30-3F*/  '0','1','2','3','4','5','6','7','8','9',0,';',0,'=',0,0,
@@ -749,7 +750,7 @@ static const char g_keymap[256] =
 
 static const char g_keymap_shift[128] =
 {
-/*00-0F*/  0,0,0,0,0,0,0,0,'\b','\t','\r',0,0,0,0,0,
+/*00-0F*/  0,0,0,0,0,0,0,0,0x7F,'\t','\r',0,0,0,0,0,
 /*10-1F*/  0,0,0,0,0,0,0,0,0,0,0,'\e',0,0,0,0,
 /*20-2F*/  ' ',0,0,0,0,0,0,'"',0,0,'*','+','<','_','>','?',
 /*30-3F*/  ')','!','@','#','$','%','^','&','*','(',0,':',0,'+',0,0,
