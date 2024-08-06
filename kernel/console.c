@@ -259,7 +259,7 @@ int console_recv(struct console *cons, char c)  // called from ps2kb.c
     // echoing
     if (has_lflag(cons, ECHO)) {
         if (has_lflag(cons, ECHOCTL) && iscntrl(c)) {
-            if (c != '\t' && c != '\n') {
+            if (c != '\t') {
                 write_char(cons, '^');
                 count++;
                 if (c == 0x7F) {
@@ -824,8 +824,8 @@ static void scroll(struct console *cons, int n)   // n < 0 is reverse scroll
 
     for (i = 0; i < n_blank; i++) {
         int pos = (reverse) ? i : n_cells + i;
-        vga_set_char(cons, pos, BLANK_CHAR);
-        vga_set_attr(cons, pos, cons->attr);
+        vga_set_char(cons->framebuf, pos, BLANK_CHAR);
+        vga_set_attr(cons->framebuf, pos, cons->attr);
     }
 }
 

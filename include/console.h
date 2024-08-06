@@ -36,7 +36,7 @@
 
 #define DEFAULT_IFLAG       0
 #define DEFAULT_OFLAG       (OPOST|ONLCR)
-#define DEFAULT_LFLAG       ECHO | ECHOCTL
+#define DEFAULT_LFLAG       0
 
 enum console_color {
     CONSOLE_BLACK,
