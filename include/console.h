@@ -34,7 +34,9 @@
 
 #define INPUT_BUFFER_SIZE   32
 
+#define DEFAULT_IFLAG       0
 #define DEFAULT_OFLAG       (OPOST|ONLCR)
+#define DEFAULT_LFLAG       ECHO | ECHOCTL
 
 enum console_color {
     CONSOLE_BLACK,
@@ -47,14 +49,27 @@ enum console_color {
     CONSOLE_WHITE
 };
 
-enum oflags {
+enum iflag {
+    INLCR = 1 << 0,     // map NL to CR
+    IGNCR = 1 << 1,     // ignore carriage return
+    ICRNL = 1 << 2,     // map CR to NL (unless IGNCR is set)
+};
+
+enum oflag {
     OPOST = 1 << 0,     // enable post processing
     ONLCR = 1 << 1,     // convert NL to CRNL
     OCRNL = 1 << 2,     // map CR to NL
 };
 
+enum lflag {
+    ECHO = 1 << 0,      // echo input characters
+    ECHOCTL = 1 << 1,   // if ECHO is also set, echo control characters as ^X
+};
+
 struct termios {
+    uint32_t c_iflag;
     uint32_t c_oflag;
+    uint32_t c_lflag;
 };
 
 struct console
@@ -111,7 +126,6 @@ struct console
 struct console * current_console(void);
 struct console * get_console(int num);
 
-void console_defaults(struct console *cons);
 int console_read(struct console *cons, char *buf, size_t count);
 int console_write(struct console *cons, const char *buf, size_t count);
 
