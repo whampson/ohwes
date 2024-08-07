@@ -162,7 +162,7 @@ void init_kernel_task(void)
 {
     // initialize the kernel task
     // TODO: call open() on console to do this?
-    kernel_task()->cons = get_console(0);
+    kernel_task()->cons = get_console(1);
     kernel_task()->files[stdin_fd] = &console_file;
     kernel_task()->files[stdout_fd] = &console_file;
 }
@@ -185,9 +185,9 @@ __fastcall void start_kernel(const struct boot_info *info)
     init_console(info);
     // safe to print now
 
-    for (int i = 0; i < NUM_CONSOLES; i++) {
+    for (int i = 1; i <= NUM_CONSOLES; i++) {
         char buf[32];
-        sprintf(buf, "\e4\e6\e[5mtty%d\e[0m\n", i+1);
+        sprintf(buf, "\e4\e6\e[5mtty%d\e[0m\n", i);
         console_write(get_console(i), buf, strlen(buf));
     }
 

@@ -34,7 +34,7 @@ int _kprint(const char *fmt, ...)
     va_start(args, fmt);
 
     int nchars = vsnprintf(buf, sizeof(buf), fmt, args);
-    int retval = console_write(get_console(0), buf, nchars);
+    int retval = console_write(get_console(1), buf, nchars);
 
     va_end(args);
     return retval;

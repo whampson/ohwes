@@ -381,7 +381,7 @@ static void kb_interrupt(void)
 
     if (g_kb.alt) {
         if (isfnkey(key)) {
-            int cons = key - KEY_F1;
+            int cons = key - KEY_F1 + 1;
             switch_console(cons);
             goto done;
         }

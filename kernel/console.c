@@ -103,7 +103,7 @@ void init_console(const struct boot_info *info)
     zeromem(g_consoles, sizeof(struct console) * NUM_CONSOLES);
 
     // get VGA info from boot info
-    g_vga->active_console = 0;
+    g_vga->active_console = 1;
     g_vga->rows = info->vga_rows;
     g_vga->cols = info->vga_cols;
 
@@ -160,15 +160,15 @@ void init_console(const struct boot_info *info)
     }
 
     // initialize virtual consoles
-    for (int i = 0; i < NUM_CONSOLES; i++) {
-        struct console *cons = &g_consoles[i];
+    for (int i = 1; i <= NUM_CONSOLES; i++) {
+        struct console *cons = &g_consoles[i - 1];
         cons->framebuf = g_vga->fb;
-        cons->framebuf += ((i + 1) * PAGES_PER_CONSOLE_FB) << PAGE_SHIFT;
+        cons->framebuf += (i * PAGES_PER_CONSOLE_FB) << PAGE_SHIFT;
         cons->number = i;
         defaults(cons);
     }
 
-    struct console *cons = get_console(0);
+    struct console *cons = get_console(1);
     cons->cursor.x = cursor_x;
     cons->cursor.y = cursor_y;
 
@@ -176,7 +176,10 @@ void init_console(const struct boot_info *info)
     save_console(cons);
 
     // do a proper 'switch' to the initial console
-    switch_console(0);
+    int ret = switch_console(1);
+    if (ret != 0) {
+        panic("failed to initialize console!");
+    }
 
     // safe to print now
     kprint("\r\n\e4\e6");
@@ -191,7 +194,7 @@ void init_console(const struct boot_info *info)
 
 int switch_console(int num)
 {
-    if (num < 0 || num >= NUM_CONSOLES) {
+    if (num <= 0 || num > NUM_CONSOLES) {
         return -EINVAL;
     }
 
@@ -245,17 +248,21 @@ int switch_console(int num)
 
 struct console * current_console(void)
 {
-    panic_assert(g_vga->active_console < NUM_CONSOLES);
-    return &g_consoles[g_vga->active_console];
+    return get_console(0);
 }
 
 struct console * get_console(int num)
 {
-    if (num < 0 || num >= NUM_CONSOLES) {
+    if (num < 0 || num > NUM_CONSOLES) {
         return NULL;
     }
 
-    struct console *cons = &g_consoles[num];
+    if (num == 0) {
+        num = g_vga->active_console;
+    }
+    panic_assert(num > 0 && (num - 1) < NUM_CONSOLES);
+
+    struct console *cons = &g_consoles[num - 1];
     panic_assert(cons->number == num);
 
     return cons;
@@ -299,7 +306,7 @@ int console_write(struct console *cons, const char *buf, size_t count)
     for (int i = 0; i < count; i++) {
         write_char(cons, buf[i]);
 #if E9_HACK
-        if (cons == get_console(0)) {
+        if (cons == get_console(1)) {
             outb(0xE9, buf[i]);
         }
 #endif

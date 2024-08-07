@@ -133,7 +133,7 @@ struct console
 };
 
 struct console * current_console(void);
-struct console * get_console(int num);
+struct console * get_console(int num);      // indexed at 1, 0 = current console
 
 int switch_console(int num);
 

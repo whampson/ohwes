@@ -272,8 +272,15 @@ void _kpanic(const char *fmt, ...)
 
     va_start(args, fmt);
     vsnprintf(buf, sizeof(buf), fmt, args);
-    kprint("\n\e[1;31mpanic: %s\e[0m\n", buf);
     va_end(args);
+
+    if (!current_console()->initialized) {
+        early_crash_print("panic: ");
+        early_crash_print(buf);
+    }
+    else {
+        kprint("\n\e[1;31mpanic: %s\e[0m\n", buf);
+    }
 
     for (;;);
 }
