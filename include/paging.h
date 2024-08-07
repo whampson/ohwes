@@ -40,6 +40,9 @@
 #define PDE_COUNT               1024                // PDEs per page directory
 #define PTE_COUNT               1024                // PTEs per page table
 
+#define PAGE_OFFSET             0xC0000000
+#define LOW_MEMORY              0x00010000
+
 //   10987654321098765432109876543210
 //  +---------+---------+-----------+
 //  |   PDN   |   PTN   |  OFFSET   | Linear Address
@@ -119,6 +122,10 @@ static_assert(sizeof(struct pginfo) == sizeof(uint32_t), "bad size!");
 #define __mkpde_large(addr,flags)   __pde(LARGE_PAGE_ALIGN(addr) | __pgflags((flags)|_PAGE_PRESENT|_PAGE_PDE|_PAGE_LARGE))
 
 #define __mkpte(addr,flags)         __pte(PAGE_ALIGN(addr) | __pgflags((flags)|_PAGE_PRESENT))
+
+// TODO: verify/test these!!
+#define __virt_to_phys(v)   (((v) >= PAGE_OFFSET) ? ((v) - PAGE_OFFSET) : (v))
+#define __phys_to_virt(p)   (((p) >= -PAGE_OFFSET)  ? (p) : ((p) + PAGE_OFFSET))
 
 // Future-proofing a bit here...
 // Intel paging structures are always read/execute in kernel mode so long as the

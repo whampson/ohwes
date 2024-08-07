@@ -379,6 +379,14 @@ static void kb_interrupt(void)
     }
 #endif
 
+    if (g_kb.alt) {
+        if (isfnkey(key)) {
+            int cons = key - KEY_F1;
+            switch_console(cons);
+            goto done;
+        }
+    }
+
     // handle character code entry (<ALT>+<NUMPAD> if NumLk on)
     if (g_kb.alt && !release && iskpnum(key)) {
         g_kb.has_altcode = true;

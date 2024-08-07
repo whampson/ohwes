@@ -102,7 +102,7 @@ init_early_console:
         movb            %dl, cursor_col
 
         # set video mode
-        movb            $VGA_MODE, %al
+        movb            $VGA_MODE_SELECT, %al
         orb             $0x80, %al              # don't clear screen
         movb            $0x00, %ah
         int             $0x10
@@ -123,7 +123,7 @@ init_early_console:
         jc              _vga_error
 
         # set font size
-        movw            $VGA_FONT, %ax
+        movw            $VGA_FONT_SELECT, %ax
 _font0: cmpw            $VGA_FONT_80x25, %ax    # 8x16, 80x25
         jne             _font1
         movl            $25, vga_rows

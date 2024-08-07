@@ -155,6 +155,9 @@ struct file console_file =
     .ioctl_code = _IOC_CONSOLE
 };
 
+struct boot_info _boot;
+struct boot_info *g_boot = &_boot;
+
 void init_kernel_task(void)
 {
     // initialize the kernel task
@@ -169,11 +172,9 @@ extern __syscall int sys_write(int fd, const void *buf, size_t count);
 
 __fastcall void start_kernel(const struct boot_info *info)
 {
-    struct boot_info boot_info;
-
     // copy the boot info onto the stack so we don't accidentally overwrite it
-    memcpy(&boot_info, info, sizeof(struct boot_info));
-    info = &boot_info;  // for convenience ;)
+    memcpy(g_boot, info, sizeof(struct boot_info));
+    info = g_boot;  // for convenience ;)
 
     // initialize core system components
     init_idt();
@@ -183,6 +184,12 @@ __fastcall void start_kernel(const struct boot_info *info)
     // initialize console
     init_console(info);
     // safe to print now
+
+    for (int i = 0; i < NUM_CONSOLES; i++) {
+        char buf[32];
+        sprintf(buf, "\e4\e6\e[5mtty%d\e[0m\n", i+1);
+        console_write(get_console(i), buf, strlen(buf));
+    }
 
     // ensure GDT wasn't mucked with
     verify_gdt();

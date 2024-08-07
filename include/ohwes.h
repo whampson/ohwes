@@ -112,6 +112,10 @@ do {                                    \
 #define div_round(n,d)                  (((n)<0)==((d)<0)?(((n)+(d)/2)/(d)):(((n)-(d)/2)/(d)))
 #define div_ceil(n,d)                   (((n)+(d)-1)/(d))
 
+#define KB      (1 << 10)
+#define MB      (1 << 20)
+#define GB      (1 << 30)
+
 #endif // __ASSEMBLER__
 
 #endif // __OHWES_H

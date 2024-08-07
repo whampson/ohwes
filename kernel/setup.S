@@ -85,10 +85,7 @@ _kernel_trampoline:
         movl            %eax, %cr3                  # flush TLB
         lcall           $KERNEL_CS, $start_kernel   # far call into the kernel
 
-        # we should never end up here... but in case we do, make sure we do
-        # something predictable! print an X in the corner of the screen and spin
-        # forever
-        movw            $0x4758, PAGE_OFFSET+0xB8000
+        # we should never end up here... but in case we do, spin forever
 _idle:
         jmp             _idle
 
@@ -163,7 +160,7 @@ _map_low_1M_loop:
         movl            $KERNEL_PGDIR, %edi
         movl            $KERNEL_PGTBL, %eax
         orl             $PAGE_FLAGS, %eax
-        movl            %eax, KERNEL_PDN(%edi)
+        movl            %eax, KERNEL_PDN(%edi)      # "high" map
         movl            %eax, 0(%edi)               # identity map
 
         # enable paging

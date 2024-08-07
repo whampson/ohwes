@@ -32,11 +32,11 @@
 #define MAX_TABSTOPS        80      // TODO: make this not depend on console width
 #define TABSTOP_WIDTH       8       // TOOD: make configurable
 
-#define INPUT_BUFFER_SIZE   32
+#define INPUT_BUFFER_SIZE   128
 
 #define DEFAULT_IFLAG       0
 #define DEFAULT_OFLAG       (OPOST|ONLCR)
-#define DEFAULT_LFLAG       0
+#define DEFAULT_LFLAG       ECHO
 
 enum console_color {
     CONSOLE_BLACK,
@@ -72,10 +72,19 @@ struct termios {
     uint32_t c_lflag;
 };
 
+struct vga {
+    uint32_t active_console;
+    uint32_t rows, cols;
+    uint32_t fb_size_pages;
+    uint16_t orig_cursor_shape;
+    void *fb;
+};
+
 struct console
 {
-    bool initialized;                   // console initalized?
+    int number;                         // console I/O line number
     int state;                          // current control state
+    bool initialized;                   // console can be used
 
     uint16_t cols, rows;                // screen dimensions
     void *framebuf;                     // frame buffer
@@ -125,6 +134,8 @@ struct console
 
 struct console * current_console(void);
 struct console * get_console(int num);
+
+int switch_console(int num);
 
 int console_read(struct console *cons, char *buf, size_t count);
 int console_write(struct console *cons, const char *buf, size_t count);

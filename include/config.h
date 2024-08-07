@@ -34,9 +34,9 @@
 #define KERNEL_LMA              0x10000     // physical load address
 #define KERNEL_INIT_STACK       KERNEL_LMA  // grows toward 0
 
-#define IDT_COUNT               256
+#define NUM_CONSOLES            7
 
-#define PAGE_OFFSET             0xC0000000
+#define IDT_COUNT               256
 
 /*----------------------------------------------------------------------------*
  * VGA Stuff
@@ -54,7 +54,17 @@
 #define VGA_FONT_80x50          2           // INT 10h,AX=1112h
 #define VGA_FONT_80x25          4           // INT 10h,AX=1114h
 
-#define VGA_MODE                MODE_03h
-#define VGA_FONT                VGA_FONT_80x28
+// frame buffer select enum
+#define VGA_FB_128K             0           // A0000-BFFFF
+#define VGA_FB_64K              1           // A0000-AFFFF
+#define VGA_FB_32K_LO           2           // B0000-B7FFF
+#define VGA_FB_32K_HI           3           // B8000-BFFFF
+
+// --------------------------------------------------------------------------
+
+// VGA params
+#define VGA_MODE_SELECT         MODE_03h
+#define VGA_FONT_SELECT         VGA_FONT_80x28
+#define VGA_FB_SELECT           VGA_FB_64K
 
 #endif // __CONFIG_H
