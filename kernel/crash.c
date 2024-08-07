@@ -23,6 +23,7 @@
 // NOTE: assumes console and keyboard are in working order!
 //
 
+#include <boot.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -35,6 +36,7 @@
 #include <x86.h>
 #include <cpu.h>
 #include <fs.h>
+#include <paging.h>
 
 #define CRASH_COLOR     CONSOLE_BLUE
 #define PANIC_COLOR     CONSOLE_BLUE
@@ -47,12 +49,14 @@
 
 static const char *exception_names[NUM_EXCEPTIONS];
 
+extern struct vga *g_vga;
+
 static void center_text(const char *str, ...);
 static void print_flags(uint32_t eflags);
 static void print_segsel(int segsel);
 static void print_banner(const char *banner);
 static void crash_print(const char *fmt, ...);
-static void interrupt_crash(struct iregs *regs);
+static void early_crash_print(const char *fmt, ...);
 
 #define BRIGHT(s)   "\e[1m" s "\e[22m"
 
@@ -68,14 +72,10 @@ void crash(struct iregs *regs)
     bool pl_change;
     uint32_t cr0, cr2, cr3, cr4;
     uint32_t *stack_ptr;
-    uint16_t irq_mask;
+    // uint16_t irq_mask;
     bool irq;
     bool nmi;
     bool pf;
-    uint16_t vga_rows, vga_cols;
-
-    vga_rows = kernel_task()->cons->rows;
-    vga_cols = kernel_task()->cons->cols;
 
     // grab the control registers
     cr4 = 0;
@@ -99,15 +99,15 @@ void crash(struct iregs *regs)
         pl_change = true;
     }
 
-    // enable select interrupts
-    irq_mask = irq_getmask();
-    irq_setmask(0xFFFF);
-    irq_unmask(IRQ_KEYBOARD);
-    irq_unmask(IRQ_TIMER);
-    __sti();
-    // TODO: should probably check whether we crashed from the keyboard or timer
-    //    ISR before deciding to enable those interrupts. Also the console_write()
-    //    function, because if we crashed there we're SOL here...
+    // // enable select interrupts
+    // irq_mask = irq_getmask();
+    // irq_setmask(0xFFFF);
+    // irq_unmask(IRQ_KEYBOARD);
+    // irq_unmask(IRQ_TIMER);
+    // __sti();
+    // // TODO: should probably check whether we crashed from the keyboard or timer
+    // //    ISR before deciding to enable those interrupts. Also the console_write()
+    // //    function, because if we crashed there we're SOL here...
 
     // locate faulting stack
     if (pl_change) {
@@ -132,7 +132,7 @@ void crash(struct iregs *regs)
     const int seg_regs_col = 26;
     const int stack_num_lines = 8;
     const int stack_width_dwords = 2;
-    const int stack_left_col = vga_cols - (9 + (stack_width_dwords * 9));
+    const int stack_left_col = g_vga->cols - (9 + (stack_width_dwords * 9));
 
     // was it a device interrupt?
     irq = (regs->vec_num < 0);
@@ -244,7 +244,7 @@ void crash(struct iregs *regs)
     // dump stack
     for (int l = 0; l < stack_num_lines; l++) {
         crash_print("\e[%d;%dH",
-            vga_rows - stack_num_lines + l + 1, stack_left_col);
+            g_vga->rows - stack_num_lines + l + 1, stack_left_col);
         crash_print("%08X:", stack_ptr - 1);
         for (int w = 0; w < stack_width_dwords; w++, stack_ptr--) {
             crash_print(" %08X", *(stack_ptr - 1));
@@ -252,11 +252,12 @@ void crash(struct iregs *regs)
     }
 
 done:
-    kbwait();
-    crash_print("\e[0;0H\e[37;40m\e[2J\e5");    // restore console
-    __cli();
-    irq_setmask(irq_mask);
-    return;
+    // kbwait();
+    // crash_print("\e[0;0H\e[37;40m\e[2J\e5");    // restore console
+    // __cli();
+    // irq_setmask(irq_mask);
+    // return;
+    for(;;);
 }
 
 // __noreturn
@@ -370,6 +371,33 @@ static void print_banner(const char *banner)
     crash_print("\e[37;4%dm", BANNER_COLOR);
 }
 
+static void early_crash_print(const char *fmt, ...)
+{
+    static uint16_t pos = 0;
+
+    va_list args;
+    char buf[CRASH_BUFSIZ];
+    size_t count;
+
+    va_start(args, fmt);
+    count = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    for (int i = 0; i < count; i++) {
+        char c = buf[i];
+        uint16_t x = pos % g_vga->cols;
+        uint16_t y = pos / g_vga->cols;
+        if (c == '\n') {
+            x = 0; y++; // no scroll support!
+        }
+        else {
+            ((uint16_t *) g_vga->fb)[pos] = 0x4700 | c;
+            x++;
+        }
+        pos = y * g_vga->cols + x;
+    }
+}
+
 static void crash_print(const char *fmt, ...)
 {
     va_list args;
@@ -380,7 +408,12 @@ static void crash_print(const char *fmt, ...)
     count = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    console_write(NULL, buf, count);
+    if (!current_console()->initialized) {
+        early_crash_print(buf);
+    }
+    else {
+        console_write(current_console(), buf, count);
+    }
 }
 
 static const char *exception_names[NUM_EXCEPTIONS] =
