@@ -32,22 +32,34 @@ if [ "$1" = "qemu" ]; then
     QEMU_FLAGS+=" -monitor stdio"
     QEMU_FLAGS+=" -d cpu_reset"
 
-    DEBUG_BOOT=0
-    DEBUG_KERNEL=0
+    DEBUG_MODE=0
     if [ "$3" = "debug" ]; then
-        DEBUG_KERNEL=1
+        DEBUG_MODE=1        # 1 = kernel debug
     fi
     if [ "$3" = "debug-boot" ]; then
-        DEBUG_BOOT=1
+        DEBUG_MODE=2        # 2 = boot debug
+    fi
+    if [ "$3" = "debug-setup" ]; then
+        DEBUG_MODE=3        # 3 = kernel setup debug
     fi
 
-    if [ $DEBUG_BOOT = 1 ] || [ $DEBUG_KERNEL = 1 ]; then
+    if [ $DEBUG_MODE -ne 0 ]; then
         QEMU_FLAGS+=" -S -s"
     fi
 
     echo "$QEMU_PATH" "$QEMU_FLAGS"
 
-    if [ $DEBUG_BOOT = 1 ]; then
+    if [ $DEBUG_MODE = 1 ]; then
+        # kernel debug params
+        "$QEMU_PATH" $QEMU_FLAGS &
+        gdb \
+            -ex 'target remote localhost:1234' \
+            -ex 'add-symbol-file bin/kernel.elf' \
+            -ex 'set confirm off' \
+            -ex 'lay src' -ex 'lay reg' \
+            -ex 'b start_kernel'
+    elif [ $DEBUG_MODE = 2 ]; then
+        # boot debug params
         "$QEMU_PATH" $QEMU_FLAGS &
         gdb \
             -ex 'target remote localhost:1234' \
@@ -55,15 +67,15 @@ if [ "$1" = "qemu" ]; then
             -ex 'lay src' -ex 'lay reg' \
             -ex 'b stage1' \
             -ex 'b stage2'
-    elif [ $DEBUG_KERNEL = 1 ]; then
+    elif [ $DEBUG_MODE = 3 ]; then
+        # kernel setup debug params
         "$QEMU_PATH" $QEMU_FLAGS &
         gdb \
             -ex 'target remote localhost:1234' \
             -ex 'add-symbol-file bin/kernel.elf' \
             -ex 'set confirm off' \
             -ex 'lay src' -ex 'lay reg' \
-            -ex 'b setup_kernel' \
-            -ex 'b start_kernel'
+            -ex 'b setup_kernel'
     else
         "$QEMU_PATH" $QEMU_FLAGS
     fi

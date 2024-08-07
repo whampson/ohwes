@@ -39,7 +39,7 @@ SUBMAKEFILES := \
 
 .PHONY: all ohwes tools test
 .PHONY: img floppy format-floppy
-.PHONY: run run-bochs debug debug-boot
+.PHONY: run run-bochs debug debug-boot debug-setup
 .PHONY: clean clean-tools nuke
 
 all:
@@ -75,6 +75,9 @@ debug: img
 
 debug-boot: img
 	${SCRIPT_DIR}/run.sh qemu ${DISKIMG} debug-boot
+
+debug-setup: img
+	${SCRIPT_DIR}/run.sh qemu ${DISKIMG} debug-setup
 
 clean:
 	${RM} ${DISKIMG}
