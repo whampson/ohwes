@@ -30,7 +30,7 @@
 #include <paging.h>
 #include <x86.h>
 
-#define DEFAULT_FB              __phys_to_virt(0xB8000)
+#define DEFAULT_FB              ((void *) __phys_to_virt(0xB8000))
 #define PAGES_PER_CONSOLE_FB    2   // 8192 chars (enough for 80x50 in text mode)
 
 // TODO: set via ioctl
@@ -106,38 +106,42 @@ void init_console(const struct boot_info *info)
     g_vga->active_console = 1;
     g_vga->rows = info->vga_rows;
     g_vga->cols = info->vga_cols;
+    g_vga->fb = DEFAULT_FB; // TODO: gather this in stage 2 and pass it in boot_info
+
+    void *vga_fb = g_vga->fb;
+    int vga_fb_size_pages = 0;
 
     // select frame buffer based on config
     switch (VGA_FB_SELECT) {
         case VGA_FB_128K:
-            g_vga->fb = (void *) __phys_to_virt(0xA0000);
-            g_vga->fb_size_pages = 32;
+            vga_fb = (void *) __phys_to_virt(0xA0000);
+            vga_fb_size_pages = 32;
             break;
         case VGA_FB_64K:
-            g_vga->fb = (void *) __phys_to_virt(0xA0000);
-            g_vga->fb_size_pages = 16;
+            vga_fb = (void *) __phys_to_virt(0xA0000);
+            vga_fb_size_pages = 16;
             break;
         case VGA_FB_32K_LO:
-            g_vga->fb = (void *) __phys_to_virt(0xB0000);
-            g_vga->fb_size_pages = 8;
+            vga_fb = (void *) __phys_to_virt(0xB0000);
+            vga_fb_size_pages = 8;
             break;
         case VGA_FB_32K_HI:
-            g_vga->fb = (void *) __phys_to_virt(0xB8000);
-            g_vga->fb_size_pages = 8;
+            vga_fb = (void *) __phys_to_virt(0xB8000);
+            vga_fb_size_pages = 8;
             break;
         default:
-            ((uint16_t *) DEFAULT_FB)[0] = 0x4700|'X';
+            panic("Invalid frame buffer select! See config.h.");
             for (;;);
     }
 
     // make sure we have enough memory for the configured number of consoles
-    if (g_vga->fb_size_pages - PAGES_PER_CONSOLE_FB < NUM_CONSOLES * PAGES_PER_CONSOLE_FB) {
-        ((uint16_t *) DEFAULT_FB)[0] = 0x4700|'!';
+    if (vga_fb_size_pages - PAGES_PER_CONSOLE_FB < NUM_CONSOLES * PAGES_PER_CONSOLE_FB) {
+        panic("Not enough memory available for %d consoles! See config.h.", NUM_CONSOLES);
         for(;;);
     }
 
     // copy the existing frame buffer
-    memcpy(g_vga->fb, (void *) DEFAULT_FB, PAGES_PER_CONSOLE_FB);
+    memcpy(vga_fb, DEFAULT_FB, PAGES_PER_CONSOLE_FB);
 
     // program the VGA frame buffer select
     {
@@ -145,6 +149,8 @@ void init_console(const struct boot_info *info)
         uint8_t grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
         grfx_misc = (grfx_misc & 0xF3) | (ram_select << 2);
         vga_grfx_write(VGA_GRFX_REG_MISC, grfx_misc);
+        g_vga->fb_size_pages = vga_fb_size_pages;
+        g_vga->fb = vga_fb;
     }
 
     // read cursor attributes leftover from BIOS
@@ -178,7 +184,7 @@ void init_console(const struct boot_info *info)
     // do a proper 'switch' to the initial console
     int ret = switch_console(1);
     if (ret != 0) {
-        panic("failed to initialize console!");
+        panic("failed to initialize system console!");
     }
 
     // safe to print now
@@ -263,7 +269,7 @@ struct console * get_console(int num)
     panic_assert(num > 0 && (num - 1) < NUM_CONSOLES);
 
     struct console *cons = &g_consoles[num - 1];
-    panic_assert(cons->number == num);
+    // panic_assert(cons->number == num);
 
     return cons;
 }

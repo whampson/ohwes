@@ -56,7 +56,7 @@ static void print_flags(uint32_t eflags);
 static void print_segsel(int segsel);
 static void print_banner(const char *banner);
 static void crash_print(const char *fmt, ...);
-static void early_crash_print(const char *fmt, ...);
+static void early_crash_print(const char *buf, size_t count);
 
 #define BRIGHT(s)   "\e[1m" s "\e[22m"
 
@@ -269,19 +269,22 @@ void _kpanic(const char *fmt, ...)
 
     va_list args;
     char buf[CRASH_BUFSIZ];
+    char *prefix = "panic: ";
+    size_t count;
 
     va_start(args, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
 
     if (!current_console()->initialized) {
-        early_crash_print("panic: ");
-        early_crash_print(buf);
+        count = vsnprintf(buf, sizeof(buf), fmt, args);
+        early_crash_print(prefix, strlen(prefix));
+        early_crash_print(buf, count);
     }
     else {
-        kprint("\n\e[1;31mpanic: %s\e[0m\n", buf);
+        vsnprintf(buf, sizeof(buf), fmt, args);
+        kprint("\n\e[1;31m%s%s\e[0m", prefix, buf);
     }
 
+    va_end(args);
     for (;;);
 }
 
@@ -378,17 +381,17 @@ static void print_banner(const char *banner)
     crash_print("\e[37;4%dm", BANNER_COLOR);
 }
 
-static void early_crash_print(const char *fmt, ...)
+static void early_crash_print(const char *buf, size_t count)
 {
     static uint16_t pos = 0;
 
-    va_list args;
-    char buf[CRASH_BUFSIZ];
-    size_t count;
+    // va_list args;
+    // char buf[CRASH_BUFSIZ];
+    // size_t count;
 
-    va_start(args, fmt);
-    count = vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
+    // va_start(args, fmt);
+    // count = vsnprintf(buf, sizeof(buf), fmt, args);
+    // va_end(args);
 
     for (int i = 0; i < count; i++) {
         char c = buf[i];
@@ -416,7 +419,7 @@ static void crash_print(const char *fmt, ...)
     va_end(args);
 
     if (!current_console()->initialized) {
-        early_crash_print(buf);
+        early_crash_print(buf, count);
     }
     else {
         console_write(current_console(), buf, count);
