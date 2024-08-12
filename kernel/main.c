@@ -49,6 +49,8 @@ extern void init_pic(void);
 extern void init_timer(void);
 extern void init_rtc(void);
 
+extern void init_serial(void);
+
 #ifdef TEST_BUILD
 typedef int (*test_main)(void);
 extern void tmain(void);
@@ -71,8 +73,6 @@ void debug_interrupt(void);
 
 void verify_gdt(void)
 {
-    boot_kprint("checking GDT...\n");
-
     volatile struct table_desc gdt_desc = { };
     __sgdt(gdt_desc);
 
@@ -185,12 +185,6 @@ __fastcall void start_kernel(const struct boot_info *info)
     init_console(info);
     // safe to print now
 
-    for (int i = 1; i <= NUM_CONSOLES; i++) {
-        char buf[32];
-        sprintf(buf, "\e4\e6\e[5mtty%d\e[0m\n", i);
-        console_write(get_console(i), buf, strlen(buf));
-    }
-
     // ensure GDT wasn't mucked with
     verify_gdt();
 
@@ -201,6 +195,8 @@ __fastcall void start_kernel(const struct boot_info *info)
     // initialize devices
     init_timer();
     init_rtc();
+
+    init_serial();
 
 #ifdef DEBUG
     // CTRL+ALT+FN to crash kernel

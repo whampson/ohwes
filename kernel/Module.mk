@@ -15,6 +15,7 @@ SOURCES := \
     print.c \
     ps2kb.c \
     rtc.c \
+    serial.c \
     syscall.c \
     task.c \
     timer.c \
