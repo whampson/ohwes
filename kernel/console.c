@@ -581,7 +581,7 @@ static void esc(struct console *cons, char c)
             reverse_linefeed(cons);
             break;
         case '[':       // ESC [ - CSI - control sequence introducer
-            memset(cons->csiparam, -1, MAX_CSIPARAMS);
+            memset(cons->csiparam, 0xFF, sizeof(cons->csiparam));
             cons->paramidx = 0;
             cons->state = S_CSI;
             return;
