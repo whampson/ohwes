@@ -22,13 +22,18 @@
 #include <boot.h>
 #include <ohwes.h>
 #include <io.h>
+#include <irq.h>
 #include <kernel.h>
 #include <stdint.h>
+#include <queue.h>
+
+#define NUM_COM             8
+#define COM_BUFFER_SIZE     16
 
 //
 // Physical Serial Ports
 //
-enum com_port {
+enum {
     COM1 = 1,
     COM2,
     COM3,
@@ -38,6 +43,7 @@ enum com_port {
     COM7,
     COM8,
 };
+static_assert(COM8 == NUM_COM, "NUM_COM");
 
 //
 // COM (Serial) Base IO Ports
@@ -50,6 +56,40 @@ enum com_port {
 #define COM6_PORT           0x4F8
 #define COM7_PORT           0x5E8
 #define COM8_PORT           0x4E8
+
+//
+// COM Port Baud Rates
+//
+// The integer value of each enum value may be used to program the baud rate
+// divisor register.
+//
+enum baud_rate {
+    BAUD_115200 = 1,
+    BAUD_57600  = 2,
+    BAUD_38400  = 3,
+    BAUD_28800  = 4,    // nonstandard
+    BAUD_23040  = 5,    // nonstandard
+    BAUD_19200  = 6,
+    BAUD_14400  = 8,
+    BAUD_12800  = 9,    // nonstandard
+    BAUD_11520  = 10,   // nonstandard
+    BAUD_9600   = 12,
+    BAUD_7680   = 15,   // nonstandard
+    BAUD_7200   = 16,
+    BAUD_6400   = 18,   // nonstandard
+    BAUD_5760   = 20,   // nonstandard
+    BAUD_4800   = 24,
+    BAUD_2400   = 48,
+    BAUD_1800   = 64,
+    BAUD_1200   = 96,
+    BAUD_600    = 192,
+    BAUD_300    = 384,
+    BAUD_150    = 768,
+    BAUD_134_5  = 857,
+    BAUD_110    = 1047,
+    BAUD_75     = 1536,
+    BAUD_50     = 2304,
+};
 
 //
 // COM Port Register Offsets
@@ -77,6 +117,19 @@ enum com_port {
 #define IER_LSR             0x04    // Receiver Line Status
 #define IER_MSR             0x08    // Modem Status
 
+struct ier {
+    union {
+        struct {
+            uint8_t rx_ready     : 1;
+            uint8_t tx_ready     : 1;
+            uint8_t line_status  : 1;
+            uint8_t modem_status : 1;
+        };
+        uint8_t _value;
+    };
+};
+static_assert(sizeof(struct ier) == 1, "sizeof(struct ier)");
+
 //
 // Interrupt Identification Register Masks
 //
@@ -85,8 +138,22 @@ enum com_port {
 // in FIFO mode.
 //
 #define IIR_PENDING         0x01    // Interrupt Pending (0 = Pending)
-#define IIR_STATE           0x0E    // Interrupt Priority (0 = Lowest)
+#define IIR_PRIORITY        0x0E    // Interrupt Priority (0 = Lowest)
 #define IIR_FIFO            0xC0    // FIFOs Enabled
+
+struct iir {
+    union {
+        struct {
+            uint8_t pending       : 1;
+            uint8_t priority      : 2;
+            uint8_t timeout       : 1;
+            uint8_t               : 2;
+            uint8_t fifos_enabled : 2;
+        };
+        uint8_t _value;
+    };
+};
+static_assert(sizeof(struct iir) == 1, "sizeof(struct iir)");
 
 //
 // Interrupt Priority Levels
@@ -110,14 +177,30 @@ enum interrupt_priority {
 #define FCR_DMA             0x08    // DMA Mode Select
 #define FCR_TRIGGER         0xC0    // Receiver Trigger Select
 
+struct fcr {
+    union {
+        struct {
+            uint8_t enable   : 1;
+            uint8_t rx_reset : 1;
+            uint8_t tx_reset : 1;
+            uint8_t dma      : 1;
+            uint8_t          : 2;
+            uint8_t depth    : 2;
+        };
+        uint8_t _value;
+    };
+
+};
+static_assert(sizeof(struct fcr) == 1, "sizeof(struct fcr)");
+
 //
 // Receiver Interrupt Trigger Levels
 //
-enum trigger_level {
-    TRIGGER_1_BYTE,                 // 1 Byte Received
-    TRIGGER_4_BYTES,                // 4 Bytes Received
-    TRIGGER_8_BYTES,                // 8 Bytes Received
-    TRIGGER_14_BYTES,               // 14 Bytes Received
+enum fifo_depth {
+    FIFODEPTH_1,                    // 1 Byte Received
+    FIFODEPTH_4,                    // 4 Bytes Received
+    FIFODEPTH_8,                    // 8 Bytes Received
+    FIFODEPTH_14,                   // 14 Bytes Received
 };
 
 //
@@ -128,21 +211,40 @@ enum trigger_level {
 // rate to be set.
 //
 #define LCR_WLS             0x03    // Word Length Select
-#define LCR_STB             0x04    // Stop Bit
+#define LCR_STB             0x04    // Stop Bits
 #define LCR_PEN             0x08    // Parity Enable
 #define LCR_EPS             0x10    // Even Parity Select
 #define LCR_STP             0x20    // Stick Parity
 #define LCR_BRK             0x40    // Break
 #define LCR_DLA             0x80    // Divisor Line Access
 
+struct lcr {
+    union {
+        struct {
+            uint8_t word_length : 2;
+            uint8_t stop_bits   : 1;
+            uint8_t parity      : 3;
+            uint8_t brk         : 1;
+            uint8_t dla         : 1;
+        };
+        uint8_t _value;
+    };
+};
+static_assert(sizeof(struct lcr) == 1, "sizeof(struct lcr)");
+
 //
 // Data Word Lengths
 //
 enum word_length_select {
-    WLS_5_BITS,
-    WLS_6_BITS,
-    WLS_7_BITS,
-    WLS_8_BITS,
+    DATABITS_5,
+    DATABITS_6,
+    DATABITS_7,
+    DATABITS_8,
+};
+
+enum stop_bits {
+    STOPBITS_1,
+    STOPBITS_2, // 1.5 or 2 depending on word length
 };
 
 //
@@ -172,6 +274,22 @@ enum parity_select {
 #define LSR_TEMT            0x40    // Transmitter Empty
 #define LSR_FIFO            0x80    // Receiver FIFO Error
 
+struct lsr {
+    union {
+        struct {
+            uint8_t data_ready : 1;
+            uint8_t overrun_error : 1;
+            uint8_t parity_error : 1;
+            uint8_t framing_error : 1;
+            uint8_t break_interrupt : 1;
+            uint8_t tx_ready : 1;
+            uint8_t tx_idle : 1;
+            uint8_t fifo_error : 1;
+        };
+        uint8_t _value;
+    };
+};
+static_assert(sizeof(struct lsr) == 1, "sizeof(struct lsr)");
 //
 // Modem Control Register Masks
 //
@@ -183,6 +301,19 @@ enum parity_select {
 #define MCR_RTS             0x02    // Request to Send
 #define MCR_OUT             0x0C    // Auxiliary Output
 #define MCR_LOOP            0x10    // Loopback Enable
+
+struct mcr {
+    union {
+        struct {
+            uint8_t data_terminal_ready : 1;
+            uint8_t request_to_send     : 1;
+            uint8_t auxiliary_out       : 2;
+            uint8_t loop                : 1;
+        };
+        uint8_t _value;
+    };
+};
+static_assert(sizeof(struct mcr) == 1, "sizeof(struct mcr)");
 
 //
 // Modem Status Register Masks
@@ -199,16 +330,155 @@ enum parity_select {
 #define MSR_RI              0x40    // Ring Indicator
 #define MSR_DCD             0x80    // Data Carrier Detect
 
+struct msr {
+    union {
+        struct {
+            uint8_t delta_clear_to_send : 1;
+            uint8_t delta_data_set_ready : 1;
+            uint8_t trailing_edge_ring_indicator : 1;
+            uint8_t delta_carrier_detect : 1;
+            uint8_t clear_to_send : 1;
+            uint8_t data_set_ready : 1;
+            uint8_t ring_indicator : 1;
+            uint8_t carrier_detect : 1;
+        };
+        uint8_t _value;
+    };
+};
+static_assert(sizeof(struct msr) == 1, "sizeof(struct msr)");
+
 // ----------------------------------------------------------------------------
 
-struct serial_info {
-    uint8_t com_ports;      // bitmap, LSB = COM1
+static uint16_t s_comports[] = {
+    COM1, COM2, COM3, COM4,
+    COM5, COM6, COM7, COM8,
+};
+static_assert(countof(s_comports) == NUM_COM, "countof(s_comports)");
+
+struct com_port {
+    bool initialized;
+    uint8_t num;
+    uint16_t io_port;
+
+    struct char_queue iq;      // <-- from device
+    struct char_queue oq;       // --> to device
+    char _ibuf[COM_BUFFER_SIZE];
+    char _obuf[COM_BUFFER_SIZE];
+
+    // register shadows
+    struct ier ier;     // interrupt enable register
+    struct fcr fcr;     // fifo control register
+    struct lcr lcr;     // line control register
+    struct mcr mcr;     // modem control register
+    struct lsr lsr;     // line status register
+    struct msr msr;     // modem status register
+    uint16_t baud_divisor;
 };
 
-struct serial_info _serial;
-struct serial_info *g_serial = &_serial;
+struct com_port g_com[NUM_COM];
 
-static uint16_t get_io_port(enum com_port port)
+static uint16_t get_io_port(int port);
+static struct com_port * get_com(int port);
+static void com_open(int port);
+static uint8_t com_read(int port, uint8_t reg);
+static void com_write(int port, uint8_t reg, uint8_t data);
+static void com_interrupt(int port, struct iir iir);
+
+static void com1_interrupt(void);
+static void com2_interrupt(void);
+
+static void com_open(int port)
+{
+    struct com_port *com = get_com(port);
+
+    // disable all interrupts
+    com_write(port, COM_REG_IER, 0);
+
+    // set baud rate
+    com->baud_divisor = BAUD_9600;
+    com_write(port, COM_REG_LCR, LCR_DLA);
+    com_write(port, COM_REG_DLL, com->baud_divisor & 0xFF);
+    com_write(port, COM_REG_DLM, com->baud_divisor >> 8);
+    com->baud_divisor = com_read(port, COM_REG_DLL);
+    com->baud_divisor |= com_read(port, COM_REG_DLM) << 8;
+
+    if (com->baud_divisor == 0xFFFF) {
+        // invalid COM port! no use in doing the rest...
+        return;
+    }
+
+    // enable and clear FIFOs, trigger at 1 byte
+    com->fcr.enable = 1;
+    com->fcr.rx_reset = 1;
+    com->fcr.tx_reset = 1;
+    com->fcr.depth = FIFODEPTH_1;
+    com_write(port, COM_REG_FCR, com->fcr._value);
+    com->fcr._value = com_read(port, COM_REG_FCR);
+
+    // set word length, parity, and stop bits
+    com->lcr.word_length = DATABITS_8;
+    com->lcr.parity = PARITY_NONE;
+    com->lcr.stop_bits = STOPBITS_1;
+    com_write(port, COM_REG_LCR, com->lcr._value);
+    com->lcr._value = com_read(port, COM_REG_LCR);
+
+    // put the modem in ready mode
+    com->mcr.data_terminal_ready = 1;
+    com->mcr.request_to_send = 1;
+    com->mcr.auxiliary_out = 3;      // TODO: set based on COM#?
+    com_write(port, COM_REG_MCR, com->mcr._value);
+    com->mcr._value = com_read(port, COM_REG_MCR);
+
+    // enable interrupts
+    com->ier.tx_ready = 1;
+    com->ier.rx_ready = 1;
+    com->ier.line_status = 1;
+    com->ier.modem_status = 1;
+    com_write(port, COM_REG_IER, com->ier._value);
+    com->ier._value = com_read(port, COM_REG_IER);
+
+    com->initialized = true;
+    boot_kprint("com%d: port=%Xh div=%d fcr=%02Xh lcr=%02Xh mcr=%02Xh ier=%02Xh\n",
+        port, (int) com->io_port,
+        (int) com->baud_divisor, (int) com->fcr._value,
+        (int) com->lcr._value, (int) com->mcr._value,
+        (int) com->ier._value);
+}
+
+void init_com_port(int port)
+{
+    struct com_port *com = get_com(port);
+    zeromem(com, sizeof(struct com_port));
+
+    com->io_port = get_io_port(port);
+    com->num = port;
+
+    char_queue_init(&com->iq, com->_ibuf, COM_BUFFER_SIZE);
+    char_queue_init(&com->oq, com->_obuf, COM_BUFFER_SIZE);
+
+    com_open(port);
+}
+
+void init_serial(void)
+{
+    for (int i = 0; i < countof(s_comports); i++) {
+        init_com_port(s_comports[i]);
+    }
+
+    irq_register(IRQ_COM1, com1_interrupt);
+    irq_unmask(IRQ_COM1);
+
+    irq_register(IRQ_COM2, com2_interrupt);
+    irq_unmask(IRQ_COM2);
+}
+
+static struct com_port * get_com(int port)
+{
+    panic_assert(port > 0 && port <= NUM_COM);
+    return &g_com[port - 1];
+}
+
+static uint16_t get_io_port(int port)
 {
     uint16_t io_port = 0;
     switch (port) {
@@ -220,77 +490,122 @@ static uint16_t get_io_port(enum com_port port)
         case COM6: io_port = COM6_PORT; break;
         case COM7: io_port = COM7_PORT; break;
         case COM8: io_port = COM8_PORT; break;
-        default: panic("invalid COM port (COM%d)", port);
+        default: panic("COM%d invalid", port);
     }
 
     return io_port;
 }
 
-static uint8_t com_read(enum com_port port, uint8_t reg)
+static uint8_t com_read(int port, uint8_t reg)
 {
     if (reg > COM_REG_SCR) {
-        panic("invalid COM register (%d)", reg);
+        panic("COM register %d invalid", reg);
     }
 
     return inb(get_io_port(port) + reg);
 }
 
-static void com_write(enum com_port port, uint8_t reg, uint8_t data)
+static void com_write(int port, uint8_t reg, uint8_t data)
 {
     if (reg > COM_REG_SCR) {
-        panic("invalid COM register (%d)", reg);
+        panic("COM register %d invalid", reg);
     }
 
     outb(get_io_port(port) + reg, data);
 }
 
-void init_com_port(enum com_port port)
+static void com_interrupt(int port, struct iir iir)
 {
-    // disable all interrupts
-    com_write(port, COM_REG_IER, 0);
+    struct com_port *com;
+    char data;
 
-    // set baud rate (9600)
-    com_write(port, COM_REG_LCR, LCR_DLA);
-    com_write(port, COM_REG_DLL, 0x03);
-    com_write(port, COM_REG_DLM, 0x00);
-
-    // 8-N-1
-    com_write(port, COM_REG_LCR, 0x03);
-
-    // enable and clear FIFOs, trigger at 1 byte
-    com_write(port, COM_REG_FCR, 0xC7);
-
-    // put the UART into loopback mode
-    com_read(port, COM_REG_MCR);
-    com_write(port, COM_REG_MCR, MCR_LOOP);
-
-    // test UART
-    //      TODO: does not seem to work on bochs!!
-    com_write(port, COM_REG_RXTX, 0xA5);
-    if (com_read(port, COM_REG_RXTX) != 0xA5) {
-        return; // no COM port here!
+    com = get_com(port);
+    if (!com->initialized) {
+        panic("COM%d received interrupt while uninitialized", port);
     }
 
-    boot_kprint("COM%d at %Xh\n", port, get_io_port(port));
-    g_serial->com_ports |= (1 << (port - 1));
+    do {
+        com->lsr._value = com_read(port, COM_REG_LSR);
 
-    // disable loopback mode
-    com_write(port, COM_REG_MCR, 0x0F);
-
-    // write a byte to the COM port
-    com_write(port, COM_REG_RXTX, 'A');
+        switch (iir.priority) {
+            case PRIORITY_RXREADY:
+                while (com->lsr.data_ready) {
+                    data = com_read(port, COM_REG_RXTX);
+                    if (!char_queue_full(&com->iq)) {
+                        char_queue_put(&com->iq, data);
+                    }
+                    else {
+                        // TODO: lower clear to send?
+                        //       tell transmitter to stop for a bit...
+                    }
+                    // TODO: echo based on line discipline
+                    console_write(get_console(2), &data, 1);
+                    com->lsr._value = com_read(port, COM_REG_LSR);
+                }
+                break;
+            case PRIORITY_TXREADY:
+                assert(com->lsr.tx_ready);
+                while (com->lsr.tx_ready && !char_queue_empty(&com->oq)) {
+                    data = char_queue_get(&com->oq);
+                    com_write(port, COM_REG_RXTX, data);
+                    com->lsr._value = com_read(port, COM_REG_LSR);
+                }
+                break;
+            case PRIORITY_LINE:
+                if (com->lsr.overrun_error) {
+                    kprint("\e[1;31mCOM%d overrun!\e[0m\n", port);
+                }
+                if (com->lsr.parity_error) {
+                    kprint("\e[1;31mCOM%d parity error!\e[0m\n", port);
+                }
+                if (com->lsr.framing_error) {
+                    kprint("\e[1;31mCOM%d parity error!\e[0m\n", port);
+                }
+                if (com->lsr.fifo_error) {
+                    kprint("\e[1;31mCOM%d FIFO error!\e[0m\n", port);
+                }
+                if (com->lsr._value & (LSR_BI | LSR_DR | LSR_TEMT | LSR_THRE)) {
+                    kprint("COM%d line status:%s%s%s%s\n", port,
+                        com->lsr.break_interrupt ? " break" : "",
+                        com->lsr.data_ready ? " data_ready" : "",
+                        com->lsr.tx_ready ? " tx_ready" : "",
+                        com->lsr.tx_idle ? " tx_idle" : "");
+                }
+                break;
+            case PRIORITY_MODEM:
+                com->msr._value = com_read(port, COM_REG_MSR);
+                if (com->msr._value) {
+                    kprint("COM%d modem status:%s%s%s%s%s%s%s%s\n", port,
+                            com->msr.clear_to_send ? " cts" : "",
+                            com->msr.data_set_ready ? " dsr" : "",
+                            com->msr.ring_indicator ? " ri" : "",
+                            com->msr.carrier_detect ? " dcd" : "",
+                            com->msr.delta_clear_to_send ? " dcts" : "",
+                            com->msr.delta_data_set_ready ? " ddsr" : "",
+                            com->msr.trailing_edge_ring_indicator ? " teri" : "",
+                            com->msr.delta_carrier_detect ? " ddcd" : "");
+                }
+                break;
+        }
+        iir._value = com_read(port, COM_REG_IIR);
+    } while (iir.pending == 0);
 }
 
-void init_serial(void)
+static void com1_interrupt(void)
 {
-    zeromem(g_serial, sizeof(struct serial_info));
+    struct iir iir;
 
-    uint16_t com_ports[] = {
-        COM1, COM2, COM3, COM4,
-        COM5, COM6, COM7, COM8,
-    };
-
-    for (int i = 0; i < countof(com_ports); i++) {
-        init_com_port(com_ports[i]);
+    for (int i = 0; i < NUM_COM; i++) {
+        int port = s_comports[i];
+        iir._value = com_read(port, COM_REG_IIR);
+        if (iir.pending == 0) {     // active low
+            com_interrupt(port, iir);
+        }
     }
+}
+
+static void com2_interrupt(void)
+{
+    kprint("COM2 interrupt!\n");
+    com1_interrupt();
 }
