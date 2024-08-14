@@ -356,108 +356,36 @@ static uint16_t s_comports[] = {
 static_assert(countof(s_comports) == NUM_COM, "countof(s_comports)");
 
 struct com_port {
-    bool initialized;
-    uint8_t num;
-    uint16_t io_port;
+    bool active;                // port is usable
+    uint8_t num;                // port number
+    uint16_t io_port;           // I/O base port number
 
-    struct char_queue iq;      // <-- from device
+    struct char_queue iq;       // <-- from device
     struct char_queue oq;       // --> to device
     char _ibuf[COM_BUFFER_SIZE];
     char _obuf[COM_BUFFER_SIZE];
 
     // register shadows
-    struct ier ier;     // interrupt enable register
-    struct fcr fcr;     // fifo control register
-    struct lcr lcr;     // line control register
-    struct mcr mcr;     // modem control register
-    struct lsr lsr;     // line status register
-    struct msr msr;     // modem status register
-    uint16_t baud_divisor;
+    struct iir iir;             // interrupt indicator register
+    struct ier ier;             // interrupt enable register
+    struct fcr fcr;             // fifo control register
+    struct lcr lcr;             // line control register
+    struct mcr mcr;             // modem control register
+    struct lsr lsr;             // line status register
+    struct msr msr;             // modem status register
+    uint16_t baud_divisor;      // baud rate divisor
 };
 
 struct com_port g_com[NUM_COM];
 
-static uint16_t get_io_port(int port);
+static void init_com_port(int port);
 static struct com_port * get_com(int port);
-static void com_open(int port);
-static uint8_t com_read(int port, uint8_t reg);
-static void com_write(int port, uint8_t reg, uint8_t data);
-static void com_interrupt(int port, struct iir iir);
+static void com_open(struct com_port *com);
+static uint8_t com_read(struct com_port *com, uint8_t reg);
+static void com_write(struct com_port *com, uint8_t reg, uint8_t data);
+static void com_interrupt(struct com_port *com);
 
-static void com1_interrupt(void);
-static void com2_interrupt(void);
-
-static void com_open(int port)
-{
-    struct com_port *com = get_com(port);
-
-    // disable all interrupts
-    com_write(port, COM_REG_IER, 0);
-
-    // set baud rate
-    com->baud_divisor = BAUD_9600;
-    com_write(port, COM_REG_LCR, LCR_DLA);
-    com_write(port, COM_REG_DLL, com->baud_divisor & 0xFF);
-    com_write(port, COM_REG_DLM, com->baud_divisor >> 8);
-    com->baud_divisor = com_read(port, COM_REG_DLL);
-    com->baud_divisor |= com_read(port, COM_REG_DLM) << 8;
-
-    if (com->baud_divisor == 0xFFFF) {
-        // invalid COM port! no use in doing the rest...
-        return;
-    }
-
-    // enable and clear FIFOs, trigger at 1 byte
-    com->fcr.enable = 1;
-    com->fcr.rx_reset = 1;
-    com->fcr.tx_reset = 1;
-    com->fcr.depth = FIFODEPTH_1;
-    com_write(port, COM_REG_FCR, com->fcr._value);
-    com->fcr._value = com_read(port, COM_REG_FCR);
-
-    // set word length, parity, and stop bits
-    com->lcr.word_length = DATABITS_8;
-    com->lcr.parity = PARITY_NONE;
-    com->lcr.stop_bits = STOPBITS_1;
-    com_write(port, COM_REG_LCR, com->lcr._value);
-    com->lcr._value = com_read(port, COM_REG_LCR);
-
-    // put the modem in ready mode
-    com->mcr.data_terminal_ready = 1;
-    com->mcr.request_to_send = 1;
-    com->mcr.auxiliary_out = 3;      // TODO: set based on COM#?
-    com_write(port, COM_REG_MCR, com->mcr._value);
-    com->mcr._value = com_read(port, COM_REG_MCR);
-
-    // enable interrupts
-    com->ier.tx_ready = 1;
-    com->ier.rx_ready = 1;
-    com->ier.line_status = 1;
-    com->ier.modem_status = 1;
-    com_write(port, COM_REG_IER, com->ier._value);
-    com->ier._value = com_read(port, COM_REG_IER);
-
-    com->initialized = true;
-    boot_kprint("com%d: port=%Xh div=%d fcr=%02Xh lcr=%02Xh mcr=%02Xh ier=%02Xh\n",
-        port, (int) com->io_port,
-        (int) com->baud_divisor, (int) com->fcr._value,
-        (int) com->lcr._value, (int) com->mcr._value,
-        (int) com->ier._value);
-}
-
-void init_com_port(int port)
-{
-    struct com_port *com = get_com(port);
-    zeromem(com, sizeof(struct com_port));
-
-    com->io_port = get_io_port(port);
-    com->num = port;
-
-    char_queue_init(&com->iq, com->_ibuf, COM_BUFFER_SIZE);
-    char_queue_init(&com->oq, com->_obuf, COM_BUFFER_SIZE);
-
-    com_open(port);
-}
+static void serial_interrupt(int irq_num);
 
 void init_serial(void)
 {
@@ -465,11 +393,32 @@ void init_serial(void)
         init_com_port(s_comports[i]);
     }
 
-    irq_register(IRQ_COM1, com1_interrupt);
+    irq_register(IRQ_COM1, serial_interrupt);
     irq_unmask(IRQ_COM1);
 
-    irq_register(IRQ_COM2, com2_interrupt);
+    irq_register(IRQ_COM2, serial_interrupt);
     irq_unmask(IRQ_COM2);
+}
+
+static void init_com_port(int port)
+{
+    struct com_port *com = get_com(port);
+    zeromem(com, sizeof(struct com_port));
+
+    com->num = port;
+    switch (port) {
+        case COM1: com->io_port = COM1_PORT; break;
+        case COM2: com->io_port = COM2_PORT; break;
+        case COM3: com->io_port = COM3_PORT; break;
+        case COM4: com->io_port = COM4_PORT; break;
+        case COM5: com->io_port = COM5_PORT; break;
+        case COM6: com->io_port = COM6_PORT; break;
+        case COM7: com->io_port = COM7_PORT; break;
+        case COM8: com->io_port = COM8_PORT; break;
+        default: panic("invalid COM com%d", port);
+    }
+
+    com_open(com);
 }
 
 static struct com_port * get_com(int port)
@@ -478,59 +427,111 @@ static struct com_port * get_com(int port)
     return &g_com[port - 1];
 }
 
-static uint16_t get_io_port(int port)
+static void com_open(struct com_port *com)
 {
-    uint16_t io_port = 0;
-    switch (port) {
-        case COM1: io_port = COM1_PORT; break;
-        case COM2: io_port = COM2_PORT; break;
-        case COM3: io_port = COM3_PORT; break;
-        case COM4: io_port = COM4_PORT; break;
-        case COM5: io_port = COM5_PORT; break;
-        case COM6: io_port = COM6_PORT; break;
-        case COM7: io_port = COM7_PORT; break;
-        case COM8: io_port = COM8_PORT; break;
-        default: panic("COM%d invalid", port);
+    assert(com != NULL);
+
+    // check if port exists
+    com->ier._value = com_read(com, COM_REG_IER);
+    if (com->ier._value == 0xFF) {
+        return;
     }
 
-    return io_port;
+    // initialize i/o buffers
+    char_queue_init(&com->iq, com->_ibuf, COM_BUFFER_SIZE);
+    char_queue_init(&com->oq, com->_obuf, COM_BUFFER_SIZE);
+
+    // disable all interrupts
+    com_write(com, COM_REG_IER, 0);
+
+    // set baud rate
+    com->baud_divisor = BAUD_9600;
+    com_write(com, COM_REG_LCR, LCR_DLA);
+    com_write(com, COM_REG_DLL, com->baud_divisor & 0xFF);
+    com_write(com, COM_REG_DLM, com->baud_divisor >> 8);
+    com->baud_divisor = com_read(com, COM_REG_DLL);
+    com->baud_divisor |= com_read(com, COM_REG_DLM) << 8;
+
+    if (com->baud_divisor == 0 || com->baud_divisor == 0xFF) {
+        // invalid/bad COM port
+        return;
+    }
+
+    // enable and clear FIFOs, trigger at 1 byte
+    com->fcr.enable = 1;
+    com->fcr.rx_reset = 1;
+    com->fcr.tx_reset = 1;
+    com->fcr.depth = FIFODEPTH_1;
+    com_write(com, COM_REG_FCR, com->fcr._value);
+    com->fcr._value = com_read(com, COM_REG_FCR);
+
+    // set word length, parity, and stop bits
+    com->lcr.word_length = DATABITS_8;
+    com->lcr.parity = PARITY_NONE;
+    com->lcr.stop_bits = STOPBITS_1;
+    com_write(com, COM_REG_LCR, com->lcr._value);
+    com->lcr._value = com_read(com, COM_REG_LCR);
+
+    // put the modem in ready mode
+    com->mcr.data_terminal_ready = 1;
+    com->mcr.request_to_send = 1;
+    com->mcr.auxiliary_out = (com->num - 1) & 3;
+    com_write(com, COM_REG_MCR, com->mcr._value);
+    com->mcr._value = com_read(com, COM_REG_MCR);
+
+    // enable interrupts
+    com->ier.tx_ready = 1;
+    com->ier.rx_ready = 1;
+    com->ier.line_status = 1;
+    com->ier.modem_status = 1;
+    com_write(com, COM_REG_IER, com->ier._value);
+    com->ier._value = com_read(com, COM_REG_IER);
+
+    com->active = true;
+    boot_kprint("com%d: port=%Xh div=%d fcr=%02Xh lcr=%02Xh mcr=%02Xh ier=%02Xh\n",
+        com->num, (int) com->io_port,
+        (int) com->baud_divisor, (int) com->fcr._value,
+        (int) com->lcr._value, (int) com->mcr._value,
+        (int) com->ier._value);
 }
 
-static uint8_t com_read(int port, uint8_t reg)
+static uint8_t com_read(struct com_port *com, uint8_t reg)
 {
+    assert(com != NULL);
     if (reg > COM_REG_SCR) {
         panic("COM register %d invalid", reg);
     }
 
-    return inb(get_io_port(port) + reg);
+    return inb(com->io_port + reg);
 }
 
-static void com_write(int port, uint8_t reg, uint8_t data)
+static void com_write(struct com_port *com, uint8_t reg, uint8_t data)
 {
+    assert(com != NULL);
     if (reg > COM_REG_SCR) {
         panic("COM register %d invalid", reg);
     }
 
-    outb(get_io_port(port) + reg, data);
+    outb(com->io_port + reg, data);
 }
 
-static void com_interrupt(int port, struct iir iir)
+static void com_interrupt(struct com_port *com)
 {
-    struct com_port *com;
     char data;
 
-    com = get_com(port);
-    if (!com->initialized) {
-        panic("COM%d received interrupt while uninitialized", port);
+    assert(com != NULL);
+    if (!com->active) {
+        panic("received interrupt on inactive COM port com%d", com->num);
     }
 
     do {
-        com->lsr._value = com_read(port, COM_REG_LSR);
+        com->iir._value = com_read(com, COM_REG_IIR);
+        com->lsr._value = com_read(com, COM_REG_LSR);
 
-        switch (iir.priority) {
+        switch (com->iir.priority) {
             case PRIORITY_RXREADY:
                 while (com->lsr.data_ready) {
-                    data = com_read(port, COM_REG_RXTX);
+                    data = com_read(com, COM_REG_RXTX);
                     if (!char_queue_full(&com->iq)) {
                         char_queue_put(&com->iq, data);
                     }
@@ -540,32 +541,32 @@ static void com_interrupt(int port, struct iir iir)
                     }
                     // TODO: echo based on line discipline
                     console_write(get_console(2), &data, 1);
-                    com->lsr._value = com_read(port, COM_REG_LSR);
+                    com->lsr._value = com_read(com, COM_REG_LSR);
                 }
                 break;
             case PRIORITY_TXREADY:
                 assert(com->lsr.tx_ready);
                 while (com->lsr.tx_ready && !char_queue_empty(&com->oq)) {
                     data = char_queue_get(&com->oq);
-                    com_write(port, COM_REG_RXTX, data);
-                    com->lsr._value = com_read(port, COM_REG_LSR);
+                    com_write(com, COM_REG_RXTX, data);
+                    com->lsr._value = com_read(com, COM_REG_LSR);
                 }
                 break;
             case PRIORITY_LINE:
                 if (com->lsr.overrun_error) {
-                    kprint("\e[1;31mCOM%d overrun!\e[0m\n", port);
+                    kprint("\e[1;31mcom%d: overrun error\e[0m\n", com->num);
                 }
                 if (com->lsr.parity_error) {
-                    kprint("\e[1;31mCOM%d parity error!\e[0m\n", port);
+                    kprint("\e[1;31mcom%d: parity error\e[0m\n", com->num);
                 }
                 if (com->lsr.framing_error) {
-                    kprint("\e[1;31mCOM%d parity error!\e[0m\n", port);
+                    kprint("\e[1;31mcom%d: framing error\e[0m\n", com->num);
                 }
                 if (com->lsr.fifo_error) {
-                    kprint("\e[1;31mCOM%d FIFO error!\e[0m\n", port);
+                    kprint("\e[1;31mcom%d: fifo error\e[0m\n", com->num);
                 }
                 if (com->lsr._value & (LSR_BI | LSR_DR | LSR_TEMT | LSR_THRE)) {
-                    kprint("COM%d line status:%s%s%s%s\n", port,
+                    kprint("com%d: line status:%s%s%s%s\n", com->num,
                         com->lsr.break_interrupt ? " break" : "",
                         com->lsr.data_ready ? " data_ready" : "",
                         com->lsr.tx_ready ? " tx_ready" : "",
@@ -573,9 +574,9 @@ static void com_interrupt(int port, struct iir iir)
                 }
                 break;
             case PRIORITY_MODEM:
-                com->msr._value = com_read(port, COM_REG_MSR);
+                com->msr._value = com_read(com, COM_REG_MSR);
                 if (com->msr._value) {
-                    kprint("COM%d modem status:%s%s%s%s%s%s%s%s\n", port,
+                    kprint("com%d: modem status:%s%s%s%s%s%s%s%s\n", com->num,
                             com->msr.clear_to_send ? " cts" : "",
                             com->msr.data_set_ready ? " dsr" : "",
                             com->msr.ring_indicator ? " ri" : "",
@@ -587,25 +588,20 @@ static void com_interrupt(int port, struct iir iir)
                 }
                 break;
         }
-        iir._value = com_read(port, COM_REG_IIR);
-    } while (iir.pending == 0);
+        com->iir._value = com_read(com, COM_REG_IIR);
+    } while (com->iir.pending == 0);
 }
 
-static void com1_interrupt(void)
+static void serial_interrupt(int irq_num)
 {
-    struct iir iir;
+    assert(irq_num == IRQ_COM1 || irq_num == IRQ_COM2);
+    struct com_port *com;
 
     for (int i = 0; i < NUM_COM; i++) {
-        int port = s_comports[i];
-        iir._value = com_read(port, COM_REG_IIR);
-        if (iir.pending == 0) {     // active low
-            com_interrupt(port, iir);
+        com = get_com(s_comports[i]);
+        com->iir._value = com_read(com, COM_REG_IIR);
+        if (com->iir.pending == 0) {     // active low
+            com_interrupt(com);
         }
     }
-}
-
-static void com2_interrupt(void)
-{
-    kprint("COM2 interrupt!\n");
-    com1_interrupt();
 }
