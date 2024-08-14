@@ -91,7 +91,7 @@ static const char * g_keynames[122];
 #endif
 
 static void update_leds(void);
-static void kb_interrupt(void);
+static void kb_interrupt(int irq_num);
 static void kb_putq(char c);
 
 static bool kb_ident(void);
@@ -193,7 +193,7 @@ static void update_leds(void)
     }
 }
 
-static void kb_interrupt(void)
+static void kb_interrupt(int irq_num)
 {
     uint32_t flags;
     uint8_t status;
@@ -208,6 +208,8 @@ static void kb_interrupt(void)
 
     c = '\0';
     s = NULL;
+
+    assert(irq_num == IRQ_KEYBOARD);
 
     //
     // Scan Code to Key Code Mapping

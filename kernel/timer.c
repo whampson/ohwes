@@ -65,7 +65,7 @@ struct pit_state * get_pit(void)
 }
 
 static uint16_t calculate_divisor(int freq);
-static void timer_interrupt(void);
+static void timer_interrupt(int irq_num);
 static void pcspk_on(void);
 static void pcspk_off(void);
 
@@ -164,9 +164,10 @@ static void pcspk_off(void)
     outb(0x61, data);
 }
 
-static void timer_interrupt(void)
+static void timer_interrupt(int irq_num)
 {
     volatile struct pit_state *pit;
+    assert(irq_num == IRQ_TIMER);
 
     pit = get_pit();
     pit->ticks++;       // TODO: read tick count from PIT?

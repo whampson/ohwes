@@ -28,7 +28,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef void (*irq_handler)(void);
+typedef void (*irq_handler)(int irq_num);
 
 void irq_mask(int irq_num);
 void irq_unmask(int irq_num);

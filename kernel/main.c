@@ -68,7 +68,7 @@ static void print_info(const struct boot_info *info);
 
 #ifdef DEBUG
 int g_test_crash_kernel;
-void debug_interrupt(void);
+void debug_interrupt(int irq_num);
 #endif
 
 void verify_gdt(void)
@@ -429,7 +429,7 @@ static void print_info(const struct boot_info *info)
 }
 
 #ifdef DEBUG
-void debug_interrupt(void)
+void debug_interrupt(int irq_num)
 {
     switch (g_test_crash_kernel) {
         case 1:     // F1 - divide by zero

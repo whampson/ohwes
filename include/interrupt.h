@@ -124,8 +124,7 @@ __asm__ volatile (                                                          \
 /**
  * Register state upon receiving an interrupt.
  */
-struct iregs
-{
+struct iregs {
 // program context regs
     uint32_t ebx;
     uint32_t ecx;

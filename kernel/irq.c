@@ -107,7 +107,7 @@ __fastcall void handle_irq(struct iregs *regs)
     for (int i = 0; i < MAX_ISRS; i++) {
         handler = isr_map[irq_num][i];
         if (handler != NULL) {
-            handler();
+            handler(irq_num);
             handled = true;
         }
     }
