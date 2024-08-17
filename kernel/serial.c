@@ -27,7 +27,7 @@
 #include <stdint.h>
 #include <queue.h>
 
-#define NUM_COM             8
+#define NR_COMS             8
 #define COM_BUFFER_SIZE     16
 
 //
@@ -43,7 +43,7 @@ enum {
     COM7,
     COM8,
 };
-static_assert(COM8 == NUM_COM, "NUM_COM");
+static_assert(COM8 == NR_COMS, "NR_COMS");
 
 //
 // COM (Serial) Base IO Ports
@@ -353,7 +353,7 @@ static uint16_t s_comports[] = {
     COM1, COM2, COM3, COM4,
     COM5, COM6, COM7, COM8,
 };
-static_assert(countof(s_comports) == NUM_COM, "countof(s_comports)");
+static_assert(countof(s_comports) == NR_COMS, "countof(s_comports)");
 
 struct com_port {
     bool active;                // port is usable
@@ -376,7 +376,7 @@ struct com_port {
     uint16_t baud_divisor;      // baud rate divisor
 };
 
-struct com_port g_com[NUM_COM];
+struct com_port g_com[NR_COMS];
 
 static void init_com_port(int port);
 static struct com_port * get_com(int port);

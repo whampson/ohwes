@@ -27,9 +27,9 @@
 
 #define MAX_ISRS    8
 
-#define valid_irq(n) ((n) >= 0 && (n) < NUM_IRQS)
+#define valid_irq(n) ((n) >= 0 && (n) < NR_IRQS)
 
-irq_handler isr_map[NUM_IRQS][MAX_ISRS];
+irq_handler isr_map[NR_IRQS][MAX_ISRS];
 
 void init_irq(void)
 {

@@ -47,7 +47,7 @@
 #define CRASH_WIDTH     80
 #define CRASH_BUFSIZ    256
 
-static const char *exception_names[NUM_EXCEPTIONS];
+static const char *exception_names[NR_EXCEPTIONS];
 
 extern struct vga *g_vga;
 
@@ -426,7 +426,7 @@ static void crash_print(const char *fmt, ...)
     }
 }
 
-static const char *exception_names[NUM_EXCEPTIONS] =
+static const char *exception_names[NR_EXCEPTIONS] =
 {
     /*0x00*/ "DIVIDE_ERROR",
     /*0x01*/ "DEBUG_EXCEPTION",
@@ -461,4 +461,4 @@ static const char *exception_names[NUM_EXCEPTIONS] =
     /*0x1E*/ "EXCEPTION_1E",
     /*0x1F*/ "EXCEPTION_1F",
 };
-static_assert(countof(exception_names) == NUM_EXCEPTIONS, "Bad exception_names length");
+static_assert(countof(exception_names) == NR_EXCEPTIONS, "Bad exception_names length");

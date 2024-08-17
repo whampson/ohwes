@@ -52,7 +52,7 @@
 #define EXCEPTION_XM                0x13    // SIMD Floating-Point Exception
 #define EXCEPTION_VE                0x14    // Virtualization Exception
 #define EXCEPTION_CP                0x15    // Control Protection Exception
-#define NUM_EXCEPTIONS              32
+#define NR_EXCEPTIONS               32
 
 /**
  * Interrupt register frame offsets.

@@ -42,7 +42,7 @@
 // global vars
 struct vga _vga = { };
 struct vga *g_vga = &_vga;
-struct console g_consoles[NUM_CONSOLES];
+struct console g_consoles[NR_CONSOLES];
 
 #define has_iflag(cons,iflag)   (has_flag((cons)->termios.c_iflag, iflag))
 #define has_oflag(cons,oflag)   (has_flag((cons)->termios.c_oflag, oflag))
@@ -100,7 +100,7 @@ extern void init_kb(const struct boot_info *info);
 void init_console(const struct boot_info *info)
 {
     zeromem(g_vga, sizeof(struct vga));
-    zeromem(g_consoles, sizeof(struct console) * NUM_CONSOLES);
+    zeromem(g_consoles, sizeof(struct console) * NR_CONSOLES);
 
     // get VGA info from boot info
     g_vga->active_console = 1;
@@ -135,8 +135,8 @@ void init_console(const struct boot_info *info)
     }
 
     // make sure we have enough memory for the configured number of consoles
-    if (vga_fb_size_pages - PAGES_PER_CONSOLE_FB < NUM_CONSOLES * PAGES_PER_CONSOLE_FB) {
-        panic("Not enough memory available for %d consoles! See config.h.", NUM_CONSOLES);
+    if (vga_fb_size_pages - PAGES_PER_CONSOLE_FB < NR_CONSOLES * PAGES_PER_CONSOLE_FB) {
+        panic("Not enough memory available for %d consoles! See config.h.", NR_CONSOLES);
         for(;;);
     }
 
@@ -166,7 +166,7 @@ void init_console(const struct boot_info *info)
     }
 
     // initialize virtual consoles
-    for (int i = 1; i <= NUM_CONSOLES; i++) {
+    for (int i = 1; i <= NR_CONSOLES; i++) {
         struct console *cons = &g_consoles[i - 1];
         cons->framebuf = g_vga->fb;
         cons->framebuf += (i * PAGES_PER_CONSOLE_FB) << PAGE_SHIFT;
@@ -200,7 +200,7 @@ void init_console(const struct boot_info *info)
 
 int switch_console(int num)
 {
-    if (num <= 0 || num > NUM_CONSOLES) {
+    if (num <= 0 || num > NR_CONSOLES) {
         return -EINVAL;
     }
 
@@ -259,14 +259,14 @@ struct console * current_console(void)
 
 struct console * get_console(int num)
 {
-    if (num < 0 || num > NUM_CONSOLES) {
+    if (num < 0 || num > NR_CONSOLES) {
         return NULL;
     }
 
     if (num == 0) {
         num = g_vga->active_console;
     }
-    panic_assert(num > 0 && (num - 1) < NUM_CONSOLES);
+    panic_assert(num > 0 && (num - 1) < NR_CONSOLES);
 
     struct console *cons = &g_consoles[num - 1];
     panic_assert(cons->number == num);

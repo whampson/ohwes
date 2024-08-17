@@ -19,6 +19,10 @@
  * =============================================================================
  */
 
+// very Linux-inspired
+// The TTY demystified - https://www.linusakesson.net/programming/tty/
+// Serial Drivers - https://www.linux.it/~rubini/docs/serial/serial.html
+
 #ifndef __TTY_H
 #define __TTY_H
 
@@ -26,28 +30,10 @@
 #include <queue.h>
 #include <stddef.h>
 
-#define TTY_BUFFER_SIZE     128
+#define TTY_BUFFER_SIZE             128
 
-struct termios {
-    uint32_t c_iflag;
-    uint32_t c_oflag;
-    uint32_t c_lflag;
-};
-
-enum iflag {
-    INLCR = 1 << 0,             // map NL to CR
-    IGNCR = 1 << 1,             // ignore carriage return
-    ICRNL = 1 << 2,             // map CR to NL (unless IGNCR is set)
-};
-enum oflag {
-    OPOST = 1 << 0,             // enable post processing
-    ONLCR = 1 << 1,             // convert NL to CRNL
-    OCRNL = 1 << 2,             // map CR to NL
-};
-enum lflag {
-    ECHO    = 1 << 0,           // echo input characters
-    ECHOCTL = 1 << 1,           // if ECHO set, echo control characters as ^X
-};
+#define LDISC_TTY                   0
+#define NR_LDISCS                   1
 
 struct tty;
 struct tty_ldisc;
@@ -55,18 +41,18 @@ struct tty_driver;
 struct termios;
 
 //
-// TTY State
+// TTY - Teletype Emulation
 //
 struct tty {
     char *name;
 
-    struct termios termios;     // input/output behavior
-    struct tty_ldisc ldisc;     // line discipline
-    struct tty_driver *driver;  // low-level device
-    void *driver_data;          // private per-instance driver data
+    struct termios termios;         // input/output behavior
+    struct tty_ldisc ldisc;         // line discipline
+    struct tty_driver *driver;      // low-level device driver
+    void *driver_data;              // private per-instance driver data
 
-    struct ring oq;       // output queue (TODO: move to driver_data)
-    char _obuf[TTY_BUFFER_SIZE];
+    struct ring oring;              // output queue (TODO: move to driver_data)
+    char oring_buf[TTY_BUFFER_SIZE];// TODO: allocate
 };
 
 //
@@ -76,8 +62,8 @@ struct tty_ldisc {
     int     num;
     char    *name;
 
-    struct ring iq;       // input queue
-    char _ibuf[TTY_BUFFER_SIZE];// TODO: get from allocator
+    struct ring iring;
+    char iring_buf[TTY_BUFFER_SIZE];// TODO: allocate
 
     // called from above (user)
     int     (*open)(struct tty *);
@@ -108,5 +94,29 @@ struct tty_driver {
     // called from below (interrupt)
     size_t  (*write_room)(struct tty *);
 };
+
+struct termios {
+    uint32_t c_iflag;   // input mode flags
+    uint32_t c_oflag;   // output mode flags
+    uint32_t c_cflag;   // control flags
+    uint32_t c_lflag;   // local mode flags
+    uint32_t c_line;    // line discipline
+};
+
+enum iflag {
+    INLCR = 1 << 0,     // map NL to CR
+    IGNCR = 1 << 1,     // ignore carriage return
+    ICRNL = 1 << 2,     // map CR to NL (unless IGNCR is set)
+};
+enum oflag {
+    OPOST = 1 << 0,     // enable post processing
+    ONLCR = 1 << 1,     // convert NL to CRNL
+    OCRNL = 1 << 2,     // map CR to NL
+};
+enum lflag {
+    ECHO    = 1 << 0,   // echo input characters
+    ECHOCTL = 1 << 1,   // if ECHO set, echo control characters as ^X
+};
+
 
 #endif // __TTY_H

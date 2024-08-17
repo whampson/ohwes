@@ -39,7 +39,7 @@
 
 #define SCANCODE_SET    1       // using scancode set 1
 #define TYPEMATIC_BYTE  0x22    // repeat rate = 24cps, delay = 500ms
-#define NUM_RETRIES     3       // command resends before giving up
+#define RETRY_COUNT     3       // command resends before giving up
 #define WARN_INTERVAL   10      // warn every N times a stray packet shows up
 
 #define PRINT_EVENTS    0
@@ -525,7 +525,7 @@ static bool kb_selftest(void)
         return true;            // vacuous truth; can't fail if the test isn't supported! ;-)
     }
 
-    retries = NUM_RETRIES;
+    retries = RETRY_COUNT;
     while (retries-- > 0) {
         data = kb_rdport();
         kb_rdport();            // may or may not transmit an ack after pass/fail byte
@@ -629,7 +629,7 @@ bool kb_sendcmd(uint8_t cmd)
 
     cli_save(flags);
 
-    retries = NUM_RETRIES;
+    retries = RETRY_COUNT;
     ack = false;
 
     do {
@@ -648,7 +648,7 @@ bool kb_sendcmd(uint8_t cmd)
 
     if (!retries) {
         kprint("ps2kb: cmd 0x%X timed out after %d retries!\n",
-            cmd, NUM_RETRIES);
+            cmd, RETRY_COUNT);
     }
     else if (resp == 0) {
         kprint("ps2kb: cmd 0x%X not supported\n", cmd);

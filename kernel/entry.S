@@ -150,7 +150,7 @@ recv_interrupt:
 
 exception_trampoline:
         pushl           $end_exception
-        cmpl            $NUM_EXCEPTIONS, %eax
+        cmpl            $NR_EXCEPTIONS, %eax
         ja              _noint
         jmp             *exception_handlers(, %eax, 4)  # handle exception
 _noint:
@@ -162,7 +162,7 @@ irq_trampoline:
 
 syscall_trampoline:
         movl            IREGS_EAX(%ecx), %eax
-        cmpl            $NUM_SYSCALLS, %eax
+        cmpl            $NR_SYSCALLS, %eax
         ja              _nosys
         sti                             # allow interrupts for syscalls
         pushl           $end_syscall

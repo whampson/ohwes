@@ -107,8 +107,8 @@ void verify_gdt(void)
 
 void init_idt(void)
 {
-    extern idt_thunk exception_thunks[NUM_EXCEPTIONS];
-    extern idt_thunk irq_thunks[NUM_IRQS];
+    extern idt_thunk exception_thunks[NR_EXCEPTIONS];
+    extern idt_thunk irq_thunks[NR_IRQS];
     extern idt_thunk _syscall;
 
     struct x86_desc *idt;
@@ -117,12 +117,12 @@ void init_idt(void)
     __sidt(idt_desc);
     idt = (struct x86_desc *) idt_desc.base;
 
-    for (int i = 0; i < NUM_EXCEPTIONS; i++) {
+    for (int i = 0; i < NR_EXCEPTIONS; i++) {
         int vec = VEC_INTEL + i;
         make_trap_gate(&idt[vec], KERNEL_CS, KERNEL_PL, exception_thunks[i]);
     }
 
-    for (int i = 0; i < NUM_IRQS; i++) {
+    for (int i = 0; i < NR_IRQS; i++) {
         int vec = VEC_DEVICEIRQ + i;
         make_intr_gate(&idt[vec], KERNEL_CS, KERNEL_PL, irq_thunks[i]);
     }

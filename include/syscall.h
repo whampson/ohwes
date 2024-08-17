@@ -35,7 +35,7 @@
 #define _sys_open                       4
 #define _sys_close                      5
 #define _sys_ioctl                      6
-#define NUM_SYSCALLS                    7
+#define NR_SYSCALLS                     7
 
 #ifndef __ASSEMBLER__
 
