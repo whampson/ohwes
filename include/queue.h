@@ -28,7 +28,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-struct char_queue {
+struct ring {
     char *ring;         // character queue ring buffer pointer
     size_t length;      // total ring buffer size
     size_t count;       // number of characters in the queue
@@ -40,28 +40,28 @@ struct char_queue {
  * Initialize the character queue using the specified buffer.
  * TODO: allocate buffer internally so we don't need to supply our own.
  *
- * @param q     a pointer to the char_queue to to initialize
+ * @param q     a pointer to the ring to to initialize
  * @param buf   a pre-allocated character buffer used to store the characters in
  *              the queue
  * @param len   the size of the character buffer
  */
-void char_queue_init(struct char_queue *q, char *buf, size_t len);
+void ring_init(struct ring *q, char *buf, size_t len);
 
 /**
  * Check whether the character queue is empty.
  *
- * @param q     a pointer to the char_queue to check for emptiness
+ * @param q     a pointer to the ring to check for emptiness
  * @return      `true` if the queue is empty
  */
-bool char_queue_empty(const struct char_queue *q);
+bool ring_empty(const struct ring *q);
 
 /**
  * Check whether the character queue is full.
  *
- * @param q     a pointer to the char_queue to check for fullness
+ * @param q     a pointer to the ring to check for fullness
  * @return      `true` if the queue is full
  */
-bool char_queue_full(const struct char_queue *q);
+bool ring_full(const struct ring *q);
 
 /**
  * Pop a character from the front of the queue.
@@ -72,19 +72,19 @@ bool char_queue_full(const struct char_queue *q);
  * be a valid characters within the queue, thus one should not rely on a NUL
  * being returned as surefire indicator that the queue is empty.
  *
- * @param q     a pointer to the char_queue to pop from
+ * @param q     a pointer to the ring to pop from
  * @return      the popped character, or `\0` if the queue is empty
  */
-char char_queue_get(struct char_queue *q);
+char ring_get(struct ring *q);
 
 /**
  * Push a character into the back of the queue.
  *
- * @param q     a pointer to the char_queue to push to
+ * @param q     a pointer to the ring to push to
  * @param c     the character to put into the queue
  * @return      `true` if the character was added (queue not full)
  */
-bool char_queue_put(struct char_queue *q, char c);
+bool ring_put(struct ring *q, char c);
 
 /**
  * Pop a character from the back of the queue.
@@ -95,35 +95,35 @@ bool char_queue_put(struct char_queue *q, char c);
  * be a valid characters within the queue, thus one should not rely on a NUL
  * being returned as surefire indicator that the queue is empty.
  *
- * @param q     a pointer to the char_queue to pop from
+ * @param q     a pointer to the ring to pop from
  * @return      the popped character, or `\0` if the queue is empty
  */
-char char_queue_erase(struct char_queue *q);
+char ring_erase(struct ring *q);
 
 /**
  * Push a character into the front of the queue.
  *
- * @param q     a pointer to the char_queue to push to
+ * @param q     a pointer to the ring to push to
  * @param c     the character to put into the queue
  * @return      `true` if the character was added (queue not full)
 */
-bool char_queue_insert(struct char_queue *q, char c);
+bool ring_insert(struct ring *q, char c);
 
 /**
  * Get the total capacity of the queue, i.e. the size of the underlying
  * character buffer.
  *
- * @param q     a pointer to the char_queue
+ * @param q     a pointer to the ring
  * @return      the size of the underlying character buffer
  */
-size_t char_queue_length(struct char_queue *q);
+size_t ring_length(struct ring *q);
 
 /**
  * Get the number of characters currently in the queue.
  *
- * @param q     a pointer to the char_queue
+ * @param q     a pointer to the ring
  * @return      the number of characters in the queue
  */
-size_t char_queue_count(struct char_queue *q);
+size_t ring_count(struct ring *q);
 
 #endif  // __QUEUE_H

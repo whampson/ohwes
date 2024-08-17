@@ -65,7 +65,7 @@ struct tty {
     struct tty_driver *driver;  // low-level device
     void *driver_data;          // private per-instance driver data
 
-    struct char_queue oq;       // output queue (TODO: move to driver_data)
+    struct ring oq;       // output queue (TODO: move to driver_data)
     char _obuf[TTY_BUFFER_SIZE];
 };
 
@@ -76,7 +76,7 @@ struct tty_ldisc {
     int     num;
     char    *name;
 
-    struct char_queue iq;       // input queue
+    struct ring iq;       // input queue
     char _ibuf[TTY_BUFFER_SIZE];// TODO: get from allocator
 
     // called from above (user)

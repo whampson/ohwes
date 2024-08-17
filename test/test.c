@@ -1,12 +1,12 @@
 #include "test.h"
 
 extern void test_printf(void);
-extern void test_char_queue(void);
+extern void test_ring(void);
 
 int main(int argc, char *argv[])
 {
     test_printf();
-    test_char_queue();
+    test_ring();
     printf("\n*** TESTS PASSED ***\n");
     return TEST_PASSED;
 }

@@ -1,5 +1,5 @@
 #include "test.h"
-#include <char_queue.h>
+#include <ring.h>
 
 static queue_t _testq;
 static queue_t *testq = &_testq;
@@ -12,21 +12,21 @@ void test_queue(void)
 {
     char buf[Q_SIZE];
 
-    char_queue_init(testq, buf, Q_SIZE);
-    VERIFY_IS_TRUE(char_queue_empty(testq));
-    VERIFY_IS_TRUE(!char_queue_full(testq));
+    ring_init(testq, buf, Q_SIZE);
+    VERIFY_IS_TRUE(ring_empty(testq));
+    VERIFY_IS_TRUE(!ring_full(testq));
 
-    char_queue_put(testq, 1);
-    char_queue_put(testq, 2);
-    char_queue_put(testq, 3);
-    char_queue_put(testq, 4);
-    VERIFY_IS_TRUE(!char_queue_empty(testq));
-    VERIFY_IS_TRUE(char_queue_full(testq));
+    ring_put(testq, 1);
+    ring_put(testq, 2);
+    ring_put(testq, 3);
+    ring_put(testq, 4);
+    VERIFY_IS_TRUE(!ring_empty(testq));
+    VERIFY_IS_TRUE(ring_full(testq));
 
-    VERIFY_ARE_EQUAL(1, char_queue_get(testq));
-    VERIFY_ARE_EQUAL(2, char_queue_get(testq));
-    VERIFY_ARE_EQUAL(3, char_queue_get(testq));
-    VERIFY_ARE_EQUAL(4, char_queue_get(testq));
-    VERIFY_IS_TRUE(char_queue_empty(testq));
-    VERIFY_IS_TRUE(!char_queue_full(testq));
+    VERIFY_ARE_EQUAL(1, ring_get(testq));
+    VERIFY_ARE_EQUAL(2, ring_get(testq));
+    VERIFY_ARE_EQUAL(3, ring_get(testq));
+    VERIFY_ARE_EQUAL(4, ring_get(testq));
+    VERIFY_IS_TRUE(ring_empty(testq));
+    VERIFY_IS_TRUE(!ring_full(testq));
 }

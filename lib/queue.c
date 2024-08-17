@@ -23,26 +23,26 @@
 #include <string.h>
 #include <queue.h>
 
-void char_queue_init(struct char_queue *q, char *buf, size_t length)
+void ring_init(struct ring *q, char *buf, size_t length)
 {
-    memset(q, 0, sizeof(struct char_queue));
+    memset(q, 0, sizeof(struct ring));
     q->ring = buf;
     q->length = length;
 }
 
-bool char_queue_empty(const struct char_queue *q)
+bool ring_empty(const struct ring *q)
 {
     return q->count == 0;
 }
 
-bool char_queue_full(const struct char_queue *q)
+bool ring_full(const struct ring *q)
 {
     return q->count == q->length;
 }
 
-char char_queue_get(struct char_queue *q)
+char ring_get(struct ring *q)
 {
-    if (char_queue_empty(q)) {
+    if (ring_empty(q)) {
         return '\0';
     }
 
@@ -55,9 +55,9 @@ char char_queue_get(struct char_queue *q)
     return c;
 }
 
-bool char_queue_put(struct char_queue *q, char c)
+bool ring_put(struct ring *q, char c)
 {
-    if (char_queue_full(q)) {
+    if (ring_full(q)) {
         return false;
     }
 
@@ -70,9 +70,9 @@ bool char_queue_put(struct char_queue *q, char c)
     return true;
 }
 
-char char_queue_erase(struct char_queue *q)
+char ring_erase(struct ring *q)
 {
-    if (char_queue_empty(q)) {
+    if (ring_empty(q)) {
         return '\0';
     }
 
@@ -84,9 +84,9 @@ char char_queue_erase(struct char_queue *q)
     return q->ring[--q->tail];
 }
 
-bool char_queue_insert(struct char_queue *q, char c)
+bool ring_insert(struct ring *q, char c)
 {
-    if (char_queue_full(q)) {
+    if (ring_full(q)) {
         return false;
     }
 
@@ -99,12 +99,12 @@ bool char_queue_insert(struct char_queue *q, char c)
     return true;
 }
 
-size_t char_queue_length(struct char_queue *q)
+size_t ring_length(struct ring *q)
 {
     return q->length;
 }
 
-size_t char_queue_count(struct char_queue *q)
+size_t ring_count(struct ring *q)
 {
     return q->count;
 }

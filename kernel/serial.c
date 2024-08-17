@@ -360,8 +360,8 @@ struct com_port {
     uint8_t num;                // port number
     uint16_t io_port;           // I/O base port number
 
-    struct char_queue iq;       // <-- from device
-    struct char_queue oq;       // --> to device
+    struct ring iq;       // <-- from device
+    struct ring oq;       // --> to device
     char _ibuf[COM_BUFFER_SIZE];
     char _obuf[COM_BUFFER_SIZE];
 
@@ -438,8 +438,8 @@ static void com_open(struct com_port *com)
     }
 
     // initialize i/o buffers
-    char_queue_init(&com->iq, com->_ibuf, COM_BUFFER_SIZE);
-    char_queue_init(&com->oq, com->_obuf, COM_BUFFER_SIZE);
+    ring_init(&com->iq, com->_ibuf, COM_BUFFER_SIZE);
+    ring_init(&com->oq, com->_obuf, COM_BUFFER_SIZE);
 
     // disable all interrupts
     com_write(com, COM_REG_IER, 0);
@@ -532,8 +532,8 @@ static void com_interrupt(struct com_port *com)
             case PRIORITY_RXREADY:
                 while (com->lsr.data_ready) {
                     data = com_read(com, COM_REG_RXTX);
-                    if (!char_queue_full(&com->iq)) {
-                        char_queue_put(&com->iq, data);
+                    if (!ring_full(&com->iq)) {
+                        ring_put(&com->iq, data);
                     }
                     else {
                         // TODO: lower clear to send?
@@ -546,8 +546,8 @@ static void com_interrupt(struct com_port *com)
                 break;
             case PRIORITY_TXREADY:
                 assert(com->lsr.tx_ready);
-                while (com->lsr.tx_ready && !char_queue_empty(&com->oq)) {
-                    data = char_queue_get(&com->oq);
+                while (com->lsr.tx_ready && !ring_empty(&com->oq)) {
+                    data = ring_get(&com->oq);
                     com_write(com, COM_REG_RXTX, data);
                     com->lsr._value = com_read(com, COM_REG_LSR);
                 }

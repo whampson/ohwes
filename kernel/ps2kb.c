@@ -70,7 +70,7 @@ struct kb {
     bool has_altcode;
 
     // // key event buffer
-    // struct char_queue eventq;            // TODO: make queue w/ generic type
+    // struct ring eventq;            // TODO: make queue w/ generic type
     // struct key_event ebuf[KB_BUFFER_SIZE];
 
     // spurious scancode tracking

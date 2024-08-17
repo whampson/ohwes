@@ -288,11 +288,11 @@ int console_read(struct console *cons, char *buf, size_t count)
 
     nread = 0;
     while (count--) {
-        spin(char_queue_empty(&cons->inputq));    // block until a character appears
+        spin(ring_empty(&cons->inputq));    // block until a character appears
         // TODO: allow nonblocking input
 
         cli_save(flags);
-        *buf++ = char_queue_get(&cons->inputq);
+        *buf++ = ring_get(&cons->inputq);
         restore_flags(flags);
         nread++;
     }
@@ -329,7 +329,7 @@ int console_recv(struct console *cons, char c)  // called from ps2kb.c
         return -EINVAL;
     }
 
-    if (char_queue_full(&cons->inputq)) {
+    if (ring_full(&cons->inputq)) {
         beep(ALERT_FREQ, ALERT_TIME);
         return 0;
     }
@@ -348,7 +348,7 @@ int console_recv(struct console *cons, char c)  // called from ps2kb.c
     }
 
     // TODO: leave space for \n, etc.
-    char_queue_put(&cons->inputq, (char) c);
+    ring_put(&cons->inputq, (char) c);
     count = 1;
 
     // echoing
@@ -379,7 +379,7 @@ void defaults(struct console *cons)
     cons->state = S_NORM;
     cons->cols = g_vga->cols;
     cons->rows = g_vga->rows;
-    char_queue_init(&cons->inputq, cons->_ibuf, INPUT_BUFFER_SIZE);
+    ring_init(&cons->inputq, cons->_ibuf, INPUT_BUFFER_SIZE);
     for (int i = 0; i < MAX_TABSTOPS; i++) {
         cons->tabstops[i] = (((i + 1) % TABSTOP_WIDTH) == 0);
     }

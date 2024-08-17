@@ -61,7 +61,7 @@ int init(void);     // usermode entry point
 static void basic_shell(void);
 static size_t /*
     it is now my duty to completely
-*/  drain_queue(struct char_queue *q, char *buf, size_t bufsiz);
+*/  drain_queue(struct ring *q, char *buf, size_t bufsiz);
 
 static void enter_ring3(uint32_t entry, uint32_t stack);
 static void print_info(const struct boot_info *info);
@@ -267,8 +267,8 @@ static void basic_shell(void)
 #define INPUT_LEN 128
 
     char _lineq_buf[INPUT_LEN];   // TOOD: NEED AN ALLOCATOR
-    struct char_queue _lineq;
-    struct char_queue *lineq = &_lineq;
+    struct ring _lineq;
+    struct ring *lineq = &_lineq;
 
     char line[INPUT_LEN];
 
@@ -276,7 +276,7 @@ static void basic_shell(void)
     int count;
     const char *prompt = "&";
 
-    char_queue_init(lineq, _lineq_buf, sizeof(_lineq_buf));
+    ring_init(lineq, _lineq_buf, sizeof(_lineq_buf));
 
     while (true) {
         // read a line
@@ -310,15 +310,15 @@ static void basic_shell(void)
                 break;
         }
 
-        bool full = (char_queue_count(lineq) == char_queue_length(lineq) - 1);    // allow one space for newline
+        bool full = (ring_count(lineq) == ring_length(lineq) - 1);    // allow one space for newline
 
         // put translated character into queue
         if (c == '\b') {
-            if (char_queue_empty(lineq)) {
+            if (ring_empty(lineq)) {
                 printf("\a");       // beep!
                 goto read_char;
             }
-            c = char_queue_erase(lineq);
+            c = ring_erase(lineq);
             if (iscntrl(c)) {
                 printf("\b");
             }
@@ -326,14 +326,14 @@ static void basic_shell(void)
             goto read_char;
         }
         else if (c == '\n' || !full) {
-            char_queue_put(lineq, c);
+            ring_put(lineq, c);
         }
         else if (full) {
             printf("\a");       // beep!
             goto read_char;
         }
 
-        assert(!char_queue_full(lineq));
+        assert(!ring_full(lineq));
 
         // echo char
         if (iscntrl(c) && c != '\t' && c != '\n') {
@@ -366,11 +366,11 @@ static void basic_shell(void)
     }
 }
 
-static size_t drain_queue(struct char_queue *q, char *buf, size_t bufsiz)
+static size_t drain_queue(struct ring *q, char *buf, size_t bufsiz)
 {
     size_t count = 0;
-    while (!char_queue_empty(q) && bufsiz--) {
-        *buf++ = char_queue_get(q);
+    while (!ring_empty(q) && bufsiz--) {
+        *buf++ = ring_get(q);
         count++;
     }
 
