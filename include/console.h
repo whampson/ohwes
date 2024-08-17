@@ -49,28 +49,6 @@ enum console_color {
     CONSOLE_WHITE
 };
 
-enum iflag {
-    INLCR = 1 << 0,     // map NL to CR
-    IGNCR = 1 << 1,     // ignore carriage return
-    ICRNL = 1 << 2,     // map CR to NL (unless IGNCR is set)
-};
-
-enum oflag {
-    OPOST = 1 << 0,     // enable post processing
-    ONLCR = 1 << 1,     // convert NL to CRNL
-    OCRNL = 1 << 2,     // map CR to NL
-};
-
-enum lflag {
-    ECHO = 1 << 0,      // echo input characters
-    ECHOCTL = 1 << 1,   // if ECHO is also set, echo control characters as ^X
-};
-
-struct termios {
-    uint32_t c_iflag;
-    uint32_t c_oflag;
-    uint32_t c_lflag;
-};
 
 struct vga {
     uint32_t active_console;
@@ -89,9 +67,6 @@ struct console
     uint16_t cols, rows;                // screen dimensions
     void *framebuf;                     // frame buffer
 
-    struct char_queue inputq;           // input queue
-    char _ibuf[INPUT_BUFFER_SIZE];      // raw input ring buffer
-
     char tabstops[MAX_TABSTOPS];        // tab stops    // TODO: make indexing independent of console width
 
     int csiparam[MAX_CSIPARAMS];       // control sequence parameters
@@ -99,8 +74,6 @@ struct console
 
     bool blink_on;                      // character blinking enabled
     bool need_wrap;                     // wrap output to next line on next character
-
-    struct termios termios;             // terminal input/output behavior
 
     struct _char_attr {                 // character attributes
         uint8_t bg, fg;                 //   background, foreground colors

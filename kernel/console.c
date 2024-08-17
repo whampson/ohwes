@@ -269,7 +269,7 @@ struct console * get_console(int num)
     panic_assert(num > 0 && (num - 1) < NUM_CONSOLES);
 
     struct console *cons = &g_consoles[num - 1];
-    // panic_assert(cons->number == num);
+    panic_assert(cons->number == num);
 
     return cons;
 }

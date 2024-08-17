@@ -22,19 +22,20 @@
 #ifndef __FS_H
 #define __FS_H
 
+#include <ohwes.h>
 #include <stddef.h>
-#include <stdint.h>
 
+// TODO: remove these
 #define stdin_fd                        0
 #define stdout_fd                       1
 
 struct file;
 struct file_ops {
-    int (*read)(struct file *, char *, size_t); // TODO: char* or void* ?
-    int (*write)(struct file *, const char *, size_t);
-    int (*open)(struct file **, int);
-    int (*close)(struct file *);
-    int (*ioctl)(struct file *, unsigned int, void*);
+    int     (*open)(struct file **, int);   // TODO: rethink double ptr
+    int     (*close)(struct file *);
+    ssize_t (*read)(struct file *, char *, size_t);
+    ssize_t (*write)(struct file *, const char *, size_t);
+    int     (*ioctl)(struct file *, unsigned int, unsigned long);
 };
 
 struct file {

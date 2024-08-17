@@ -69,6 +69,11 @@ extern void pcspk_beep(int freq, int millis);  // see timer.c
 #define kbwait()                        ({ kbflush(); kbhit(); })
 
 //
+// Types
+//
+typedef long ssize_t;
+
+//
 // CPU Privilege
 //
 
