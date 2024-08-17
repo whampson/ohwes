@@ -203,7 +203,7 @@ __fastcall void start_kernel(const struct boot_info *info)
     irq_register(IRQ_TIMER, debug_interrupt);
 #endif
 
-    boot_kprint("enabling interrupts...\n");
+    kprint("enabling interrupts...\n");
     __sti();
 
     char c;

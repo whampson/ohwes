@@ -488,7 +488,7 @@ static void com_open(struct com_port *com)
     com->ier._value = com_read(com, COM_REG_IER);
 
     com->active = true;
-    boot_kprint("com%d: port=%Xh div=%d fcr=%02Xh lcr=%02Xh mcr=%02Xh ier=%02Xh\n",
+    kprint("com%d: port=%Xh div=%d fcr=%02Xh lcr=%02Xh mcr=%02Xh ier=%02Xh\n",
         com->num, (int) com->io_port,
         (int) com->baud_divisor, (int) com->fcr._value,
         (int) com->lcr._value, (int) com->mcr._value,
