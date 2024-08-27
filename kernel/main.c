@@ -49,6 +49,10 @@ extern void init_pic(void);
 extern void init_timer(void);
 extern void init_rtc(void);
 
+extern void init_tty(void);
+extern void init_fs(void);  // sys/open.c
+
+extern void init_chdev(void);
 extern void init_serial(void);
 
 #ifdef TEST_BUILD
@@ -130,45 +134,13 @@ void init_idt(void)
     make_trap_gate(&idt[VEC_SYSCALL], KERNEL_CS, USER_PL, _syscall);
 }
 
-int dummy_read(struct file *file, char *buf, size_t count)
-{
-    return console_read(kernel_task()->cons, buf, count);
-}
-
-int dummy_write(struct file *file, const char *buf, size_t count)
-{
-    return console_write(kernel_task()->cons, buf, count);
-}
-
-struct file_ops console_fops =
-{
-    .read = dummy_read,
-    .write = dummy_write,
-    .open = NULL,
-    .close = NULL,
-    .ioctl = NULL   // TODO: ioctl
-};
-
-struct file console_file =
-{
-    .fops = &console_fops,
-    .ioctl_code = _IOC_CONSOLE
-};
-
 struct boot_info _boot;
 struct boot_info *g_boot = &_boot;
 
-void init_kernel_task(void)
-{
-    // initialize the kernel task
-    // TODO: call open() on console to do this?
-    kernel_task()->cons = get_console(1);
-    kernel_task()->files[stdin_fd] = &console_file;
-    kernel_task()->files[stdout_fd] = &console_file;
-}
-
 extern __syscall int sys_read(int fd, void *buf, size_t count);
 extern __syscall int sys_write(int fd, const void *buf, size_t count);
+extern __syscall int sys_open(const char *name, int flags);
+extern __syscall int sys_close(int fd);
 
 __fastcall void start_kernel(const struct boot_info *info)
 {
@@ -176,27 +148,33 @@ __fastcall void start_kernel(const struct boot_info *info)
     memcpy(g_boot, info, sizeof(struct boot_info));
     info = g_boot;  // for convenience ;)
 
-    // initialize core system components
-    init_idt();
+    // initialize interrupts and timers
     init_pic();
     init_irq();
-
-    // initialize console
-    init_console(info);
-    // safe to print now
-
-    // ensure GDT wasn't mucked with
-    verify_gdt();
-
-    // initialize tasks
-    init_tasks();
-    init_kernel_task();
-
-    // initialize devices
+    init_idt();
     init_timer();
     init_rtc();
 
+    // get the console working
+    init_console(info);
+    // safe to print now using kprint, keyboard also works
+
+    // ensure the GDT wasn't mucked with
+    verify_gdt();
+    // TODO: basic tests
+
+    // initialize devices
+    init_chdev();
+    init_tty();
     init_serial();
+
+    init_fs();
+
+    // initialize tasks
+    init_tasks();
+    // init_kernel_task();
+
+    // screw around
 
 #ifdef DEBUG
     // CTRL+ALT+FN to crash kernel
@@ -206,45 +184,52 @@ __fastcall void start_kernel(const struct boot_info *info)
     kprint("enabling interrupts...\n");
     __sti();
 
-    char c;
-    do {
-        sys_read(stdin_fd, &c, 1);
-        sys_write(stdout_fd, &c, 1);
-    } while (c != 3);   // CTRL+C
+    int fd = sys_open("/dev/tty", 0);
+    if (fd < 0) {
+        panic("open(): failed with %d\n", fd);
+    }
+    kprint("open(): returned %d\n", fd);
 
-    // basic_shell();
+    const char *hello = "\e[33mHello from write()\e[0m\n";
+    ssize_t count = sys_write(fd, hello, strlen(hello));
+    if (count < 0) {
+        panic("write(): failed with %lld\n", count);
+    }
+    kprint("write(): returned %lld\n", count);
+
+    int ret = sys_close(fd);
+    // if (ret < 0) {
+    //     panic("close(): failed with %d\n", ret);
+    // }
+    kprint("close(): returned %d\n", ret);
+
+
+    fd = sys_open("/dev/ttyS", 0);
+    if (fd < 0) {
+        panic("open(): failed with %d\n", fd);
+    }
+    kprint("open(): returned %d\n", fd);
+
+    const char *hello_rs = "\e[35mOH-WES says hello!\e[0m\r\n";
+    count = sys_write(fd, hello_rs, strlen(hello_rs));
+    if (count < 0) {
+        panic("write(): failed with %lld\n", count);
+    }
+    kprint("write(): returned %lld\n", count);
+
+    ret = sys_close(fd);
+    // if (ret < 0) {
+    //     panic("close(): failed with %d\n", ret);
+    // }
+    kprint("close(): returned %d\n", ret);
+
+    // kprint("boot: entering ring3...\n");
+    // uint32_t user_stack = 0x80000;
+    // enter_ring3((uint32_t) init +  PAGE_OFFSET, user_stack);
+
     kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
     for (;;);
 
-//     memcpy(&g_boot, info, sizeof(struct boot_info));
-
-//     init_cpu(&g_boot);
-//     init_pic();
-//     init_irq();
-//     init_vga();
-//     init_tasks();
-//     init_console();     // safe to print now
-
-//     kprint("\n" OS_NAME " " OS_VERSION ", build " OS_BUILDDATE "\n");
-//     kprint("\n");
-// #if CHATTY
-//     print_info(&g_boot);
-// #endif
-
-//     init_ps2(&g_boot);
-//     init_kb();
-//     init_memory(&g_boot);
-//     init_timer();
-//     init_rtc();
-
-// #ifdef DEBUG
-//     // CTRL+ALT+FN to crash kernel
-//     irq_register(IRQ_TIMER, debug_interrupt);
-// #endif
-
-//     kprint("boot: entering ring3...\n");
-//     uint32_t user_stack = 0xD000;
-//     enter_ring3((uint32_t) init, user_stack);
 }
 
 int init(void)
@@ -256,115 +241,120 @@ int init(void)
 
     // TODO: load shell program from disk
 
+    int fd = open("/dev/console", 0);
+    if (fd < 0) {
+        panic("open(): failed with %d\n", errno);
+    }
+
     // printf("\e4\e[5;33mHello, world!\e[m\n");
     // basic_shell();
 
     return 0;
 }
 
-static void basic_shell(void)
-{
-#define INPUT_LEN 128
+// static void basic_shell(void)
+// {
+// #define INPUT_LEN 128
 
-    char _lineq_buf[INPUT_LEN];   // TOOD: NEED AN ALLOCATOR
-    struct ring _lineq;
-    struct ring *lineq = &_lineq;
+//     char _lineq_buf[INPUT_LEN];   // TOOD: NEED AN ALLOCATOR
+//     struct ring _lineq;
+//     struct ring *lineq = &_lineq;
 
-    char line[INPUT_LEN];
+//     char line[INPUT_LEN];
 
-    char c;
-    int count;
-    const char *prompt = "&";
+//     char c;
+//     int count;
+//     const char *prompt = "&";
 
-    ring_init(lineq, _lineq_buf, sizeof(_lineq_buf));
+//     ring_init(lineq, _lineq_buf, sizeof(_lineq_buf));
 
-    while (true) {
-        // read a line
-        printf(prompt);
-        line[0] = '\0';
+//     while (true) {
+//         // read a line
+//         printf(prompt);
+//         line[0] = '\0';
 
-    read_char:
-        // read a character
-        count = read(stdin_fd, &c, 1);
-        if (count == 0) {
-            panic("read returned 0!");
-        }
-        assert(count == 1);
+//     read_char:
+//         // read a character
+//         count = read(stdin_fd, &c, 1);
+//         if (count == 0) {
+//             panic("read returned 0!");
+//         }
+//         assert(count == 1);
 
-        //
-        // TODO: all this line processing stuff needs to go in the terminal line discipline
-        //
+//         //
+//         // TODO: all this line processing stuff needs to go in the terminal line discipline
+//         //
 
-        // handle special characters and translations
-        switch (c) {
-            case '\b':      // ECHOE
-                break;
-            case '\r':
-                c = '\n';   // ICRNL
-                break;
-            case 3:
-                exit(1);    // CTRL+C
-                break;
-            case 4:
-                exit(0);    // CTRL+D
-                break;
-        }
+//         // handle special characters and translations
+//         switch (c) {
+//             case '\b':      // ECHOE
+//                 break;
+//             case '\r':
+//                 c = '\n';   // ICRNL
+//                 break;
+//             case 3:
+//                 exit(1);    // CTRL+C
+//                 break;
+//             case 4:
+//                 exit(0);    // CTRL+D
+//                 break;
+//         }
 
-        bool full = (ring_count(lineq) == ring_length(lineq) - 1);    // allow one space for newline
+//         bool full = (ring_count(lineq) == ring_length(lineq) - 1);    // allow one space for newline
 
-        // put translated character into queue
-        if (c == '\b') {
-            if (ring_empty(lineq)) {
-                printf("\a");       // beep!
-                goto read_char;
-            }
-            c = ring_erase(lineq);
-            if (iscntrl(c)) {
-                printf("\b");
-            }
-            printf("\b");
-            goto read_char;
-        }
-        else if (c == '\n' || !full) {
-            ring_put(lineq, c);
-        }
-        else if (full) {
-            printf("\a");       // beep!
-            goto read_char;
-        }
+//         // put translated character into queue
+//         if (c == '\b') {
+//             if (ring_empty(lineq)) {
+//                 printf("\a");       // beep!
+//                 goto read_char;
+//             }
+//             c = ring_erase(lineq);
+//             if (iscntrl(c)) {
+//                 printf("\b");
+//             }
+//             printf("\b");
+//             goto read_char;
+//         }
+//         else if (c == '\n' || !full) {
+//             ring_put(lineq, c);
+//         }
+//         else if (full) {
+//             printf("\a");       // beep!
+//             goto read_char;
+//         }
 
-        assert(!ring_full(lineq));
+//         assert(!ring_full(lineq));
 
-        // echo char
-        if (iscntrl(c) && c != '\t' && c != '\n') {
-            printf("^%c", 0x40 ^ c);        // ECHOCTL
-        }
-        else {
-            printf("%c", c);                // ECHO
-        }
+//         // echo char
+//         if (iscntrl(c) && c != '\t' && c != '\n') {
+//             printf("^%c", 0x40 ^ c);        // ECHOCTL
+//         }
+//         else {
+//             printf("%c", c);                // ECHO
+//         }
 
-        // next char if not newline
-        if (c != '\n') {
-            goto read_char;
-        }
+//         // next char if not newline
+//         if (c != '\n') {
+//             goto read_char;
+//         }
 
-        // get and print entire line
-        size_t count = drain_queue(lineq, line, sizeof(line));
-        if (strncmp(line, "\n", count) != 0) {
-            printf("%.*s", (int) count, line);
-        }
+//         // get and print entire line
+//         size_t count = drain_queue(lineq, line, sizeof(line));
+//         if (strncmp(line, "\n", count) != 0) {
+//             printf("%.*s", (int) count, line);
+//         }
 
-        //
-        // process command line
-        //
-        if (strncmp(line, "cls\n", count) == 0) {
-            printf("\033[2J");
-        }
-        if (strncmp(line, "exit\n", count) == 0) {
-            exit(0);
-        }
-    }
-}
+//         //
+//         // process command line
+//         //
+//         if (strncmp(line, "cls\n", count) == 0) {
+//             printf("\033[2J");
+//         }
+//         if (strncmp(line, "exit\n", count) == 0) {
+//             exit(0);
+//         }
+//     }
+// }
 
 static size_t drain_queue(struct ring *q, char *buf, size_t bufsiz)
 {

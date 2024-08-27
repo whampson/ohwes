@@ -37,6 +37,10 @@ typedef __typeof__(sizeof(int)) size_t;
 typedef void *va_list;
 #endif
 
+// TODO: unistd.h?
+#define STDIN_FILENO    0
+#define STDOUT_FILENO   1
+
 int putchar(int c);
 int puts(const char *str);
 

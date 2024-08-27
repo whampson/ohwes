@@ -25,11 +25,11 @@
 #include <ohwes.h>
 #include <pic.h>
 
-#define MAX_ISRS    8
+#define MAX_ISR 8
 
 #define valid_irq(n) ((n) >= 0 && (n) < NR_IRQS)
 
-irq_handler isr_map[NR_IRQS][MAX_ISRS];
+irq_handler isr_map[NR_IRQS][MAX_ISR];
 
 void init_irq(void)
 {
@@ -61,7 +61,7 @@ void irq_register(int irq_num, irq_handler func)
     assert(valid_irq(irq_num));
 
     bool registered = false;
-    for (int i = 0; i < MAX_ISRS; i++) {
+    for (int i = 0; i < MAX_ISR; i++) {
         if (isr_map[irq_num][i] == NULL) {
             isr_map[irq_num][i] = func;
             registered = true;
@@ -79,7 +79,7 @@ void irq_unregister(int irq_num, irq_handler func)
     assert(valid_irq(irq_num));
 
     bool unregistered = false;
-    for (int i = 0; i < MAX_ISRS; i++) {
+    for (int i = 0; i < MAX_ISR; i++) {
         if (isr_map[irq_num][i] == func) {
             isr_map[irq_num][i] = NULL;
             unregistered = true;
@@ -104,7 +104,7 @@ __fastcall void handle_irq(struct iregs *regs)
     }
 
     handled = false;
-    for (int i = 0; i < MAX_ISRS; i++) {
+    for (int i = 0; i < MAX_ISR; i++) {
         handler = isr_map[irq_num][i];
         if (handler != NULL) {
             handler(irq_num);

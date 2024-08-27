@@ -13,34 +13,32 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/panic.h
- *      Created: April 10, 2024
+ *         File: include/chdev.h
+ *      Created: August 17, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifdef __USER_MODE__
+#ifndef __CHDEV_H
+#define __CHDEV_H
 
-#include <errno.h>
-#include <stdio.h>
-#include <syscall.h>
+#include <fs.h>
+#include <stdint.h>
 
-#define panic(...) ({ printf("panic: " __VA_ARGS__); exit(errno); })
 
-#else // __KERNEL_MODE__
+#define MAX_CHDEV       8
 
-#include <assert.h>
+#define TTY_DEVICE      1
+#define TTYS_DEVICE     2
+// #define KBD_MAJOR       3
+// #define RTC_MAJOR       4
+// #define PCSPK_MAJOR     5
 
-extern void _kpanic(const char *, ...);
-#define panic(...) _kpanic(__VA_ARGS__)
+struct file_ops * get_chdev(uint16_t major);
 
-#define panic_assert(x) \
-do { \
-    if (!(x)) { \
-        panic(_ASSERT_STRING_FORMAT(x)); \
-        for (;;); \
-    } \
-} while (0)
+int chdev_open(struct inode *inode, struct file *file);  // TEMP
 
-#endif
+int chdev_register(uint16_t major, const char *name, struct file_ops *fops);
+int chdev_unregister(uint16_t major, const char *name);
 
+#endif // __CHDEV_H

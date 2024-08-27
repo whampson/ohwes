@@ -31,9 +31,7 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <string.h>
-#include <panic.h>
-#include <fs.h>
-
+#include <kernel.h>
 //
 // OS Version Info
 //
@@ -67,11 +65,6 @@ extern void pcspk_beep(int freq, int millis);  // see timer.c
 #define kbflush()                       ({ char __c; while (console_read(NULL, &__c, 1) != 0) { } })
 #define kbhit()                         ({ char __c; while (console_read(NULL, &__c, 1) == 0) { } })
 #define kbwait()                        ({ kbflush(); kbhit(); })
-
-//
-// Types
-//
-typedef long ssize_t;
 
 //
 // CPU Privilege

@@ -24,9 +24,9 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
-#include <ohwes.h>
 #include <syscall.h>
 #include <fs.h>
 
@@ -151,7 +151,7 @@ static int _console_putc(struct printf_state *state, char c)
     (void) state;
 
     // TODO: send in chunks to minimize syscalls
-    return write(stdout_fd, &c, 1);
+    return write(STDOUT_FILENO, &c, 1);
 }
 
 static int _sprintf_putc(struct printf_state *state, char c)

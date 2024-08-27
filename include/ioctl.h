@@ -2,7 +2,6 @@
 #define __IOCTL_H
 
 #ifndef __USER_MODE__
-#include <panic.h>
 #include <string.h>
 
 #define validate_user_address(addr,count)       \

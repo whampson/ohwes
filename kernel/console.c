@@ -30,6 +30,13 @@
 #include <paging.h>
 #include <x86.h>
 
+// TODO: need to make a distinction between a 'console':
+//   a character device that can receive input, transmit output and is
+//   physically connected to the computer (e.g. keyboard+vga or a serial device)
+// and a 'vga terminal':
+//   a (PS/2) keyboard input and VGA output device that are connected to the
+//   system as a console
+
 #define DEFAULT_FB              ((void *) __phys_to_virt(0xB8000))
 #define PAGES_PER_CONSOLE_FB    2   // 8192 chars (enough for 80x50 in text mode)
 
@@ -43,10 +50,79 @@
 struct vga _vga = { };
 struct vga *g_vga = &_vga;
 struct console g_consoles[NR_CONSOLES];
+bool system_console_initialized = false;
 
-#define has_iflag(cons,iflag)   (has_flag((cons)->termios.c_iflag, iflag))
-#define has_oflag(cons,oflag)   (has_flag((cons)->termios.c_oflag, oflag))
-#define has_lflag(cons,lflag)   (has_flag((cons)->termios.c_lflag, lflag))
+static int console_open(struct tty *, struct file *);
+static int console_close(struct tty *, struct file *);
+static ssize_t console_write(struct tty *, struct file *, const char *buf, size_t count);
+static int console_ioctl(struct tty *, struct file *, unsigned int cmd, unsigned long arg);
+static size_t console_write_room(struct tty *);
+
+struct tty_driver console_driver = {
+    .name = "console",
+    .open = console_open,
+    .close = console_close,
+    .write = console_write,
+    .ioctl = console_ioctl,
+    ./* in the */write_room/* with black curtains*/ = console_write_room,
+};
+
+static int console_open(struct tty *tty, struct file *file)
+{
+    struct console *cons;
+
+    if (!tty || !file) {
+        return -EINVAL;
+    }
+    if (!tty->driver) {
+        return -ENXIO;
+    }
+
+    cons = &g_consoles[0]; // TODO: select based on device ID
+    cons->tty = tty;
+    tty->driver_data = cons;
+
+    return 0;
+}
+
+static int console_close(struct tty *tty, struct file *file)
+{
+    return -ENOSYS;
+}
+
+static ssize_t console_write(
+    struct tty *tty, struct file *file, const char *buf, size_t count)
+{
+    struct console *cons;
+
+    if (!tty || !file || !buf) {
+        return -EINVAL;
+    }
+
+    if (!tty->driver || !tty->driver_data) {
+        return -ENXIO;
+    }
+
+    // TODO: verify device driver data
+    cons = tty->driver_data;
+    return console_putbuf(cons, buf, count);
+}
+
+static int console_ioctl(
+    struct tty *tty, struct file *file, unsigned int cmd, unsigned long arg)
+{
+    return -ENOSYS;
+}
+
+static size_t console_write_room(struct tty *tty)
+{
+    return -ENOSYS;
+}
+
+// ----------------------------------------------------------------------------
+
+// TODO: most of this should be in a file named terminal.c - because it emulates
+// a VGA terminal screen
 
 enum console_state {
     S_NORM,
@@ -63,7 +139,6 @@ static void cursor_save(struct console *cons);          // ESC [s
 static void cursor_restore(struct console *cons);       // ESC [u
 
 // character handling
-static void write_char(struct console *cons, char c);
 static void esc(struct console *cons, char c);          // ^[ (ESC)
 static void csi(struct console *cons, char c);          // ESC [
 static void csi_m(struct console *cons, char p);        // ESC [<params>m
@@ -186,13 +261,40 @@ void init_console(const struct boot_info *info)
     if (ret != 0) {
         panic("failed to initialize system console!");
     }
+    system_console_initialized = true;
 
-    // safe to print now
+    // safe to print now, so let's print a bird lol
+    kprint("                                                                \n\
+                                                      ,::::.._              \n\
+                                                   ,':::::::::.             \n\
+                                               _,-'`:::,::(o)::`-,.._       \n\
+                                            _.', ', `:::::::::;'-..__`.     \n\
+                                       _.-'' ' ,' ,' ,\\:::,'::-`'''        \n\
+                                   _.-'' , ' , ,'  ' ,' `:::/               \n\
+                             _..-'' , ' , ' ,' , ,' ',' '/::                \n\
+                     _...:::'`-..'_, ' , ,'  , ' ,'' , ,'::|                \n\
+                  _`.:::::,':::::,'::`-:..'_',_'_,'..-'::,'|                \n\
+          _..-:::'::,':::::::,':::,':,'::,':::,'::::::,':::;                \n\
+            `':,'::::::,:,':::::::::::::::::':::,'::_:::,'/                 \n\
+            __..:'::,':::::::--''' `-:,':,':::'::-' ,':::/                  \n\
+       _.::::::,:::.-''-`-`..'_,'. ,',  , ' , ,'  ', `','                   \n\
+     ,::SSt:''''`                 \\:. . ,' '  ,',' '_,'                    \n\
+                                   ``::._,'_'_,',.-'                        \n\
+                                       \\\\ \\\\                            \n\
+                                        \\\\_\\\\                           \n\
+                                         \\\\`-`.-'_                        \n\
+                                      .`-.\\\\__`. ``                       \n\
+                                         ``-.-._                            \n\
+                                             `                              \n\
+    "); //https://ascii.co.uk/art/raven
     kprint("\r\n\e4\e6");
-    kprint("\e[0;1m" OS_NAME " " OS_VERSION ", build: " OS_BUILDDATE " ]]\e[0m\n");
+    kprint("\e[0;1m" OS_NAME " " OS_VERSION " '" OS_MONIKER "', build: " OS_BUILDDATE "\e[0m\n");
 
     // get the keyboard working
     init_kb(info);
+
+    // TODO:
+    // register_driver(DEV_TTY, &console_driver, "console");
 }
 
 // ----------------------------------------------------------------------------
@@ -288,11 +390,11 @@ int console_read(struct console *cons, char *buf, size_t count)
 
     nread = 0;
     while (count--) {
-        spin(ring_empty(&cons->inputq));    // block until a character appears
+        spin(ring_empty(&cons->tty->iring));    // block until a character appears
         // TODO: allow nonblocking input
 
         cli_save(flags);
-        *buf++ = ring_get(&cons->inputq);
+        *buf++ = ring_get(&cons->tty->iring);
         restore_flags(flags);
         nread++;
     }
@@ -300,7 +402,7 @@ int console_read(struct console *cons, char *buf, size_t count)
     return nread;
 }
 
-int console_write(struct console *cons, const char *buf, size_t count)
+int console_putbuf(struct console *cons, const char *buf, size_t count)
 {
     if (!cons || !buf) {
         return -EINVAL;
@@ -310,9 +412,9 @@ int console_write(struct console *cons, const char *buf, size_t count)
     // calling process!!
 
     for (int i = 0; i < count; i++) {
-        write_char(cons, buf[i]);
+        console_putchar(cons, buf[i]);
 #if E9_HACK
-        if (cons == get_console(1)) {
+        if (cons == get_console(SYSTEM_CONSOLE)) {
             outb(0xE9, buf[i]);
         }
 #endif
@@ -329,44 +431,45 @@ int console_recv(struct console *cons, char c)  // called from ps2kb.c
         return -EINVAL;
     }
 
-    if (ring_full(&cons->inputq)) {
+    if (ring_full(&cons->tty->iring)) {
         beep(ALERT_FREQ, ALERT_TIME);
         return 0;
     }
 
-    // input processing
-    if (c == '\r') {
-        if (has_iflag(cons, IGNCR)) {
-            return 0;
-        }
-        if (has_iflag(cons, ICRNL)) {
-            c = '\n';
-        }
-    }
-    else if (c == '\n' && has_iflag(cons, INLCR)) {
-        c = '\r';
-    }
+    // TODO: move to ldisc
+    // // input processing
+    // if (c == '\r') {
+    //     if (has_iflag(cons, IGNCR)) {
+    //         return 0;
+    //     }
+    //     if (has_iflag(cons, ICRNL)) {
+    //         c = '\n';
+    //     }
+    // }
+    // else if (c == '\n' && has_iflag(cons, INLCR)) {
+    //     c = '\r';
+    // }
 
     // TODO: leave space for \n, etc.
-    ring_put(&cons->inputq, (char) c);
+    ring_put(&cons->tty->iring, (char) c);
     count = 1;
 
-    // echoing
-    if (has_lflag(cons, ECHO)) {
-        if (has_lflag(cons, ECHOCTL) && iscntrl(c)) {
-            if (c != '\t') {
-                write_char(cons, '^');
-                count++;
-                if (c == 0x7F) {
-                    c -= 0x40;
-                }
-                else {
-                    c += 0x40;
-                }
-            }
-        }
-        write_char(cons, c);
-    }
+    // // echoing
+    // if (has_lflag(cons, ECHO)) {
+    //     if (has_lflag(cons, ECHOCTL) && iscntrl(c)) {
+    //         if (c != '\t') {
+    //             write_char(cons, '^');
+    //             count++;
+    //             if (c == 0x7F) {
+    //                 c -= 0x40;
+    //             }
+    //             else {
+    //                 c += 0x40;
+    //             }
+    //         }
+    //     }
+    //     write_char(cons, c);
+    // }
 
     return count;
 }
@@ -379,17 +482,13 @@ void defaults(struct console *cons)
     cons->state = S_NORM;
     cons->cols = g_vga->cols;
     cons->rows = g_vga->rows;
-    ring_init(&cons->inputq, cons->_ibuf, INPUT_BUFFER_SIZE);
-    for (int i = 0; i < MAX_TABSTOPS; i++) {
+    for (int i = 0; i < MAX_TABSTOP; i++) {
         cons->tabstops[i] = (((i + 1) % TABSTOP_WIDTH) == 0);
     }
-    memset(cons->csiparam, -1, MAX_CSIPARAMS);
+    memset(cons->csiparam, -1, sizeof(cons->csiparam));
     cons->paramidx = 0;
     cons->blink_on = false;
     cons->need_wrap = false;
-    cons->termios.c_iflag = DEFAULT_IFLAG;
-    cons->termios.c_oflag = DEFAULT_OFLAG;
-    cons->termios.c_lflag = DEFAULT_LFLAG;
     cons->attr.bg = VGA_BLACK;
     cons->attr.fg = VGA_WHITE;
     cons->attr.bright = false;
@@ -421,7 +520,7 @@ static void reset(struct console *cons)
 
 static void save_console(struct console *cons)
 {
-    memcpy(cons->saved_state.tabstops, cons->tabstops, MAX_TABSTOPS);
+    memcpy(cons->saved_state.tabstops, cons->tabstops, MAX_TABSTOP);
     cons->saved_state.blink_on = cons->blink_on;
     cons->saved_state.attr = cons->attr;
     cursor_save(cons);
@@ -429,7 +528,7 @@ static void save_console(struct console *cons)
 
 static void restore_console(struct console *cons)
 {
-    memcpy(cons->tabstops, cons->saved_state.tabstops, MAX_TABSTOPS);
+    memcpy(cons->tabstops, cons->saved_state.tabstops, MAX_TABSTOP);
     cons->blink_on = cons->saved_state.blink_on;
     cons->attr = cons->saved_state.attr;
     cursor_restore(cons);
@@ -445,12 +544,13 @@ static void cursor_restore(struct console *cons)
     cons->cursor = cons->saved_state.cursor;
 }
 
-static void write_char(struct console *cons, char c)
+int console_putchar(struct console *cons, char c)
 {
     bool update_char = false;
     bool update_attr = false;
     bool update_cursor_pos = true;
     uint16_t char_pos;
+    int nwritten = 0;
 
     // handle escape sequences if not a control character
     if (!iscntrl(c)) {
@@ -481,21 +581,22 @@ static void write_char(struct console *cons, char c)
             tab(cons);
             break;
         case '\n':      // ^J - LF - line feed
-            if (has_oflag(cons, OPOST) && has_oflag(cons, ONLCR)) {
-                carriage_return(cons);
-            }
+            // TODO: move to ldisc
+            // if (has_oflag(cons, OPOST) && has_oflag(cons, ONLCR)) {
+            //     carriage_return(cons);
+            // }
             __fallthrough;
         case '\v':      // ^K - VT - vertical tab
         case '\f':      // ^L - FF - form feed
             line_feed(cons);
             break;
         case '\r':      // ^M - CR -  carriage return
-            if (has_oflag(cons, OPOST) && has_oflag(cons, OCRNL)) {
-                line_feed(cons);
-            }
-            else {
+            // if (has_oflag(cons, OPOST) && has_oflag(cons, OCRNL)) {
+            //     line_feed(cons);
+            // }
+            // else {
                 carriage_return(cons);
-            }
+            // }
             break;
 
         case ASCII_CAN: // ^X - CAN - cancel escape sequence
@@ -540,6 +641,7 @@ static void write_char(struct console *cons, char c)
 write_vga:
     if (update_char) {
         set_vga_char(cons, char_pos, c);
+        nwritten = 1;
     }
     if (update_attr) {
         if (cons->attr.bright && cons->attr.faint) {
@@ -552,7 +654,7 @@ write_vga:
     }
 
 done:
-    return;
+    return nwritten;
 }
 
 static void esc(struct console *cons, char c)
@@ -738,7 +840,7 @@ static void csi(struct console *cons, char c)
         //
         case ';':   // parameter separator
             cons->paramidx++;
-            if (cons->paramidx >= MAX_CSIPARAMS) {
+            if (cons->paramidx >= MAX_CSIPARAM) {
                 goto csi_done;  // too many params! cancel
             }
             goto csi_next;

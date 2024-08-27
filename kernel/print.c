@@ -23,19 +23,76 @@
 #include <stdio.h>
 #include <console.h>
 #include <fs.h>
+#include <paging.h>
 
-#define KPRINT_BUFSIZ   1024
+#define KPRINT_BUFSIZ   4096
 
+uint8_t early_print_attr = 0x07;
+
+extern bool system_console_initialized;
+
+void early_print(const char *buf, size_t count)
+{
+    static int pos = 0; // always prints at top left!
+    const int cols = 80;
+
+    for (int i = 0; i < count; i++) {
+        char c = buf[i];
+        if (c == '\0') {
+            break;
+        }
+        uint16_t x = pos % cols;
+        uint16_t y = pos / cols;
+        if (c == '\n') {
+            x = 0; y++; // no scroll support!
+        }
+        else {
+            ((uint16_t *) __phys_to_virt(0xB8000))[pos] = (early_print_attr << 8) | c;
+            x++;
+        }
+        pos = y * cols + x;
+    }
+}
+
+void write_syscon(const char *buf, size_t count)
+{
+    if (!system_console_initialized) {
+        early_print(buf, count);
+        return;
+    }
+
+    write_console(get_console(SYSTEM_CONSOLE), buf, count);
+}
+
+void write_console(struct console *cons, const char *buf, size_t count)
+{
+    for (size_t i = 0; i < count; i++) {
+        char c = buf[i];
+        if (c == '\0') {
+            break;
+        }
+        if (c == '\n') {
+            // OPOST && ONLCR    TODO: kprint termios?
+            console_putchar(cons, '\r');
+        }
+        console_putchar(cons, c);
+    }
+}
+
+//
+// prints to the console, bypasses TTY subsystem
+//
 int _kprint(const char *fmt, ...)
 {
-    char buf[1024];
+    size_t nchars;
+    char buf[KPRINT_BUFSIZ];
 
     va_list args;
+
     va_start(args, fmt);
-
-    int nchars = vsnprintf(buf, sizeof(buf), fmt, args);
-    int retval = console_write(get_console(1), buf, nchars);
-
+    nchars = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    return retval;
+
+    write_syscon(buf, nchars);
+    return nchars;
 }

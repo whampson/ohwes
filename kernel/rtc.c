@@ -130,20 +130,20 @@ volatile struct rtc * get_rtc(void)
     return &_rtc;
 }
 
-static struct file_ops rtc_fops =
-{
-    .read = rtc_read,
-    .write = NULL,
-    .open = rtc_open,
-    .close = rtc_close,
-    .ioctl = rtc_ioctl
-};
+// static struct file_ops rtc_fops =
+// {
+//     .read = rtc_read,
+//     .write = NULL,
+//     .open = rtc_open,
+//     .close = rtc_close,
+//     .ioctl = rtc_ioctl
+// };
 
-static struct file rtc_file =
-{
-    .fops = &rtc_fops,
-    .ioctl_code = _IOC_RTC
-};
+// static struct file rtc_file =
+// {
+//     .fops = &rtc_fops,
+//     .ioctl_code = _IOC_RTC
+// };
 
 void init_rtc(void)
 {
@@ -495,13 +495,13 @@ int rtc_open(struct file **file, int flags)
 {
     (void) flags;
 
-    *file = &rtc_file;
-    return 0;
+    // *file = &rtc_file;
+    return -ENOSYS;
 }
 
 int rtc_close(struct file *file)
 {
-    return 0;
+    return -ENOSYS;
 }
 
 int rtc_read(struct file *file, char *buf, size_t count)

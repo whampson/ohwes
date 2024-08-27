@@ -22,16 +22,16 @@
 #ifndef __FS_H
 #define __FS_H
 
-#include <ohwes.h>
 #include <stddef.h>
+#include <stdint.h>
 
-// TODO: remove these
-#define stdin_fd                        0
-#define stdout_fd                       1
+struct inode {
+    uint16_t dev_id;
+};
 
 struct file;
 struct file_ops {
-    int     (*open)(struct file **, int);   // TODO: rethink double ptr
+    int     (*open)(struct inode *, struct file *);
     int     (*close)(struct file *);
     ssize_t (*read)(struct file *, char *, size_t);
     ssize_t (*write)(struct file *, const char *, size_t);
@@ -39,8 +39,8 @@ struct file_ops {
 };
 
 struct file {
-    int ioctl_code;
     struct file_ops *fops;
+    void *private_data;
 };
 
 #endif // __FS_H

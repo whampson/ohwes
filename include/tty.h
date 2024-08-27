@@ -19,9 +19,12 @@
  * =============================================================================
  */
 
-// very Linux-inspired
+//
+// Very Linux-like
+//
 // The TTY demystified - https://www.linusakesson.net/programming/tty/
 // Serial Drivers - https://www.linux.it/~rubini/docs/serial/serial.html
+//
 
 #ifndef __TTY_H
 #define __TTY_H
@@ -32,42 +35,49 @@
 
 #define TTY_BUFFER_SIZE             128
 
-#define LDISC_TTY                   0
+#define N_TTY                       0
 #define NR_LDISCS                   1
 
+// c_iflag
+#define INLCR   0x01                // map NL to CR
+#define IGNCR   0x02                // ignore carriage return
+#define ICRNL   0x04                // map CR to NL (unless IGNCR is set)
+
+// c_oflag
+#define OPOST   0x01                // enable post processing
+#define ONLCR   0x02                // convert NL to CRNL
+#define OCRNL   0x04                // map CR to NL
+
+// c_lflag
+#define ECHO    0x01                // echo input characters
+#define ECHOCTL 0x02                // if ECHO set, echo control characters as ^X
+
 struct tty;
-struct tty_ldisc;
-struct tty_driver;
-struct termios;
 
 //
-// TTY - Teletype Emulation
+// Line Discipline Behavior
 //
-struct tty {
-    char *name;
-
-    struct termios termios;         // input/output behavior
-    struct tty_ldisc ldisc;         // line discipline
-    struct tty_driver *driver;      // low-level device driver
-    void *driver_data;              // private per-instance driver data
-
-    struct ring oring;              // output queue (TODO: move to driver_data)
-    char oring_buf[TTY_BUFFER_SIZE];// TODO: allocate
+struct termios {
+    uint32_t c_iflag;               // input mode flags
+    uint32_t c_oflag;               // output mode flags
+    uint32_t c_cflag;               // control flags
+    uint32_t c_lflag;               // local mode flags
+    uint32_t c_line;                // line discipline
 };
 
 //
 // TTY Line Discipline
 //
+// The line discipline controls how data is written to and read from the
+// character device.
+//
 struct tty_ldisc {
-    int     num;
-    char    *name;
-
-    struct ring iring;
-    char iring_buf[TTY_BUFFER_SIZE];// TODO: allocate
+    int num;
+    char *name;
 
     // called from above (user)
     int     (*open)(struct tty *);
-    void    (*close)(struct tty *);
+    int     (*close)(struct tty *);
     ssize_t (*read)(struct tty *, struct file *, char *buf, size_t count);
     ssize_t (*write)(struct tty *, struct file *, const char *buf, size_t count);
     int     (*ioctl)(struct tty *, struct file *, unsigned int cmd, unsigned long arg);
@@ -79,44 +89,47 @@ struct tty_ldisc {
 };
 
 //
-// TTY Device Driver
+// TTY Driver
+//
+// This is the low level character device driver.
 //
 struct tty_driver {
-    char    *name;
+    char *name;
+    uint16_t major;
+    uint16_t minor;
 
-    // called from above (user)
-    int     (*open)(struct tty *);
-    void    (*close)(struct tty *);
+    // interface functions
+    int     (*open)(struct tty *, struct file *);
+    int     (*close)(struct tty *, struct file *);
     ssize_t (*write)(struct tty *, struct file *, const char *buf, size_t count);
     int     (*ioctl)(struct tty *, struct file *, unsigned int cmd, unsigned long arg);
+    size_t  (*write_room)(struct tty *);
     // TODO: flush?
 
-    // called from below (interrupt)
-    size_t  (*write_room)(struct tty *);
+    struct termios default_termios;
 };
 
-struct termios {
-    uint32_t c_iflag;   // input mode flags
-    uint32_t c_oflag;   // output mode flags
-    uint32_t c_cflag;   // control flags
-    uint32_t c_lflag;   // local mode flags
-    uint32_t c_line;    // line discipline
-};
+//
+// TTY - Teletype Emulation
+//
+// The TTY serves as the "portal" between a character device and a program (or
+// job or session).
+//
+struct tty {
+    char *name;
+    int index;
 
-enum iflag {
-    INLCR = 1 << 0,     // map NL to CR
-    IGNCR = 1 << 1,     // ignore carriage return
-    ICRNL = 1 << 2,     // map CR to NL (unless IGNCR is set)
-};
-enum oflag {
-    OPOST = 1 << 0,     // enable post processing
-    ONLCR = 1 << 1,     // convert NL to CRNL
-    OCRNL = 1 << 2,     // map CR to NL
-};
-enum lflag {
-    ECHO    = 1 << 0,   // echo input characters
-    ECHOCTL = 1 << 1,   // if ECHO set, echo control characters as ^X
-};
+    struct tty_ldisc *ldisc;        // line discipline
+    struct tty_driver *driver;      // low-level device driver
+    struct termios *termios;        // input/output behavior
 
+    // input buffer
+    struct ring iring;
+    char iring_buf[TTY_BUFFER_SIZE];// TODO: allocate
+
+    // private per-instance driver data
+    void *ldisc_data;
+    void *driver_data;
+};
 
 #endif // __TTY_H

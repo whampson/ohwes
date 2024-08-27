@@ -25,7 +25,7 @@
 
 void stdout_fn(char c)
 {
-    write(stdout_fd, &c, 1);
+    write(STDOUT_FILENO, &c, 1);
 }
 
 int putchar(int c)

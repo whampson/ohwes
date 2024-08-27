@@ -54,7 +54,7 @@ __syscall int sys_read(int fd, void *buf, size_t count)
 
     assert(getpl() == KERNEL_PL);
 
-    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = current_task()->files[fd])) {
+    if (fd < 0 || fd >= MAX_OPEN || !(f = current_task()->files[fd])) {
         return -EBADF;
     }
     if (!f->fops || !f->fops->read) {
@@ -74,7 +74,7 @@ __syscall int sys_write(int fd, const void *buf, size_t count)
 
     assert(getpl() == KERNEL_PL);
 
-    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = current_task()->files[fd])) {
+    if (fd < 0 || fd >= MAX_OPEN || !(f = current_task()->files[fd])) {
         return -EBADF;
     }
     if (!f->fops || !f->fops->write) {
@@ -88,31 +88,7 @@ __syscall int sys_write(int fd, const void *buf, size_t count)
     return f->fops->write(f, buf, count);
 }
 
-__syscall int sys_close(int fd)
-{
-    struct file *f;
-    int ret;
-
-    assert(getpl() == KERNEL_PL);
-
-    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = current_task()->files[fd])) {
-        return -EBADF;
-    }
-    if (!f->fops) {
-        return -ENOSYS;
-    }
-
-    ret = 0;
-    if (f->fops->close) {
-        ret = f->fops->close(f);
-    }
-    // TODO: if ret < 0, do we return and NOT close out the fd?
-
-    current_task()->files[fd] = NULL;
-    return ret;
-}
-
-__syscall int sys_ioctl(int fd, unsigned int num, void *arg)
+__syscall int sys_ioctl(int fd, unsigned int num, unsigned long arg)
 {
     uint32_t seq;
     uint32_t code;
@@ -122,7 +98,7 @@ __syscall int sys_ioctl(int fd, unsigned int num, void *arg)
 
     assert(getpl() == KERNEL_PL);
 
-    if (fd < 0 || fd >= MAX_OPEN_FILES || !(f = current_task()->files[fd])) {
+    if (fd < 0 || fd >= MAX_OPEN || !(f = current_task()->files[fd])) {
         return -EBADF;
     }
     if (!f->fops || !f->fops->ioctl) {
@@ -153,7 +129,7 @@ __syscall int sys_ioctl(int fd, unsigned int num, void *arg)
     }
 
     // ensure buffer is not null if I/O direction bits set
-    if (dir && arg == NULL) {
+    if (dir && !arg) {
         return -EINVAL;
     }
 
@@ -162,60 +138,4 @@ __syscall int sys_ioctl(int fd, unsigned int num, void *arg)
     // TODO: validate device number
 
     return f->fops->ioctl(f, num, arg);
-}
-
-//
-// Kernel mode analogs for user-accessible kernel functions.
-//
-
-int kexit(int status)
-{
-    (void) status;
-
-    assert(false);
-    return -1;
-}
-
-int kread(int fd, const void *buf, size_t count)
-{
-    (void) fd;
-    (void) buf;
-    (void) count;
-
-    assert(false);
-    return -1;
-}
-
-int kwrite(int fd, void *buf, size_t count)
-{
-    (void) fd;
-
-    return console_write(NULL, buf, count);
-}
-
-int kopen(const char *name, int flags)
-{
-    (void) name;
-    (void) flags;
-
-    assert(false);
-    return -1;
-}
-
-int kclose(int fd)
-{
-    (void) fd;
-
-    assert(false);
-    return -1;
-}
-
-int kioctl(int fd, unsigned int num, void *arg)
-{
-    (void) fd;
-    (void) num;
-    (void) arg;
-
-    assert(false);
-    return -1;
 }

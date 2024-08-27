@@ -24,10 +24,13 @@
 #include <io.h>
 #include <irq.h>
 #include <kernel.h>
+#include <console.h>
 #include <stdint.h>
+#include <errno.h>
 #include <queue.h>
+#include <tty.h>
 
-#define NR_COMS             8
+#define NR_COMS             4
 #define COM_BUFFER_SIZE     16
 
 //
@@ -38,12 +41,12 @@ enum {
     COM2,
     COM3,
     COM4,
-    COM5,
-    COM6,
-    COM7,
-    COM8,
+    // COM5,
+    // COM6,
+    // COM7,
+    // COM8,
 };
-static_assert(COM8 == NR_COMS, "NR_COMS");
+static_assert(COM4 == NR_COMS, "NR_COMS");
 
 //
 // COM (Serial) Base IO Ports
@@ -52,10 +55,10 @@ static_assert(COM8 == NR_COMS, "NR_COMS");
 #define COM2_PORT           0x2F8
 #define COM3_PORT           0x3E8
 #define COM4_PORT           0x2E8
-#define COM5_PORT           0x5F8
-#define COM6_PORT           0x4F8
-#define COM7_PORT           0x5E8
-#define COM8_PORT           0x4E8
+// #define COM5_PORT           0x5F8
+// #define COM6_PORT           0x4F8
+// #define COM7_PORT           0x5E8
+// #define COM8_PORT           0x4E8
 
 //
 // COM Port Baud Rates
@@ -351,7 +354,7 @@ static_assert(sizeof(struct msr) == 1, "sizeof(struct msr)");
 
 static uint16_t s_comports[] = {
     COM1, COM2, COM3, COM4,
-    COM5, COM6, COM7, COM8,
+    // COM5, COM6, COM7, COM8,
 };
 static_assert(countof(s_comports) == NR_COMS, "countof(s_comports)");
 
@@ -380,12 +383,68 @@ struct com_port g_com[NR_COMS];
 
 static void init_com_port(int port);
 static struct com_port * get_com(int port);
-static void com_open(struct com_port *com);
+static int com_open(struct com_port *com);
 static uint8_t com_read(struct com_port *com, uint8_t reg);
 static void com_write(struct com_port *com, uint8_t reg, uint8_t data);
 static void com_interrupt(struct com_port *com);
 
 static void serial_interrupt(int irq_num);
+
+static int serial_open(struct tty *, struct file *);
+static int serial_close(struct tty *, struct file *);
+static ssize_t serial_write(struct tty *, struct file *, const char *buf, size_t count);
+static int serial_ioctl(struct tty *, struct file *, unsigned int cmd, unsigned long arg);
+static size_t serial_write_room(struct tty *);
+
+struct tty_driver serial_driver = {
+    .name = "serial",
+    .open = serial_open,
+    .close = serial_close,
+    .write = serial_write,
+    .ioctl = serial_ioctl,
+    .write_room = serial_write_room,
+};
+
+static int serial_open(struct tty *tty, struct file *file)
+{
+    // return com_open(&g_com[0]);    // TODO: select based on some kind of index
+    return 0;
+}
+
+static int serial_close(struct tty *tty, struct file *file)
+{
+    return -ENOSYS;
+}
+
+static ssize_t serial_write(
+    struct tty *tty, struct file *file, const char *buf, size_t count)
+{
+    struct lsr lsr;
+    struct com_port *com = &g_com[0];
+
+    for (int i = 0; i < count; i++) {
+        do {
+            // make sure I can send
+            lsr._value = com_read(com, COM_REG_LSR);
+        } while (!lsr.tx_ready);    // TODO: timeout
+        com_write(com, COM_REG_RXTX, buf[i]);
+        // TODO: check error, etc.
+    }
+    return count;
+}
+
+static int serial_ioctl(
+    struct tty *tty, struct file *file, unsigned int cmd, unsigned long arg)
+{
+    return -ENOSYS;
+}
+
+static size_t serial_write_room(struct tty *tty)
+{
+    return -ENOSYS;
+}
+
+// ----------------------------------------------------------------------------
 
 void init_serial(void)
 {
@@ -411,10 +470,10 @@ static void init_com_port(int port)
         case COM2: com->io_port = COM2_PORT; break;
         case COM3: com->io_port = COM3_PORT; break;
         case COM4: com->io_port = COM4_PORT; break;
-        case COM5: com->io_port = COM5_PORT; break;
-        case COM6: com->io_port = COM6_PORT; break;
-        case COM7: com->io_port = COM7_PORT; break;
-        case COM8: com->io_port = COM8_PORT; break;
+        // case COM5: com->io_port = COM5_PORT; break;
+        // case COM6: com->io_port = COM6_PORT; break;
+        // case COM7: com->io_port = COM7_PORT; break;
+        // case COM8: com->io_port = COM8_PORT; break;
         default: panic("invalid COM com%d", port);
     }
 
@@ -423,18 +482,18 @@ static void init_com_port(int port)
 
 static struct com_port * get_com(int port)
 {
-    panic_assert(port > 0 && port <= NUM_COM);
+    panic_assert(port > 0 && port <= NR_COMS);
     return &g_com[port - 1];
 }
 
-static void com_open(struct com_port *com)
+static int com_open(struct com_port *com)
 {
     assert(com != NULL);
 
     // check if port exists
     com->ier._value = com_read(com, COM_REG_IER);
     if (com->ier._value == 0xFF) {
-        return;
+        return -EIO;
     }
 
     // initialize i/o buffers
@@ -454,7 +513,7 @@ static void com_open(struct com_port *com)
 
     if (com->baud_divisor == 0 || com->baud_divisor == 0xFF) {
         // invalid/bad COM port
-        return;
+        return -EIO;
     }
 
     // enable and clear FIFOs, trigger at 1 byte
@@ -493,6 +552,8 @@ static void com_open(struct com_port *com)
         (int) com->baud_divisor, (int) com->fcr._value,
         (int) com->lcr._value, (int) com->mcr._value,
         (int) com->ier._value);
+
+    return 0;
 }
 
 static uint8_t com_read(struct com_port *com, uint8_t reg)
@@ -530,21 +591,17 @@ static void com_interrupt(struct com_port *com)
 
         switch (com->iir.priority) {
             case PRIORITY_RXREADY:
+                kprint("com%d: rx_ready\n", com->num);
+                assert(com->lsr.data_ready);
                 while (com->lsr.data_ready) {
                     data = com_read(com, COM_REG_RXTX);
-                    if (!ring_full(&com->iq)) {
-                        ring_put(&com->iq, data);
-                    }
-                    else {
-                        // TODO: lower clear to send?
-                        //       tell transmitter to stop for a bit...
-                    }
-                    // TODO: echo based on line discipline
-                    console_write(get_console(2), &data, 1);
+                    // TODO: put into line discipline
+                    write_console(get_console(2), &data, 1);
                     com->lsr._value = com_read(com, COM_REG_LSR);
                 }
                 break;
             case PRIORITY_TXREADY:
+                kprint("com%d: tx_ready\n", com->num);
                 assert(com->lsr.tx_ready);
                 while (com->lsr.tx_ready && !ring_empty(&com->oq)) {
                     data = ring_get(&com->oq);
@@ -597,7 +654,7 @@ static void serial_interrupt(int irq_num)
     assert(irq_num == IRQ_COM1 || irq_num == IRQ_COM2);
     struct com_port *com;
 
-    for (int i = 0; i < NUM_COM; i++) {
+    for (int i = 0; i < NR_COMS; i++) {
         com = get_com(s_comports[i]);
         com->iir._value = com_read(com, COM_REG_IIR);
         if (com->iir.pending == 0) {     // active low

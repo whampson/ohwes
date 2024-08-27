@@ -29,15 +29,33 @@
 #define _LDT_SEGMENT                    0x30
 #define _TSS_SEGMENT                    0x38
 
+#ifndef __KERNEL__
+#error "Kernel-only defines live here!"
+#endif
+
 #ifndef __ASSEMBLER__
 
-#include <panic.h>
+#include <assert.h>
 #include <task.h>
 
-#define kprint(...) _kprint(__VA_ARGS__)
 extern int _kprint(const char *fmt, ...);
+#define kprint(...) _kprint(__VA_ARGS__);
 
-#define kernel_task() get_task(0)
+#define panic(...) \
+do { \
+    _kprint("\n\e[1;31mpanic: ");_kprint(__VA_ARGS__); _kprint("\e[0m"); \
+    for(;;); \
+} while (0)
+
+#define panic_assert(x) \
+do { \
+    if (!(x)) { \
+        panic(_ASSERT_STRING_FORMAT(x)); \
+        for (;;); \
+    } \
+} while (0)
+
+// #define kernel_task() get_task(0)
 
 #ifdef DEBUG
 extern int g_test_crash_kernel;

@@ -25,16 +25,21 @@
 //
 // Selected POSIX error numbers:
 //
+#define EBADF       1   // Bad file descriptor
+#define EBADRQC     2   // Invalid request descriptor
+#define EBUSY       3   // Device or resource busy
+#define EINVAL      4   // Invalid argument
+#define EIO         5   // Input/output error
+#define ENFILE      6   // Too many files open in system
+#define ENODEV      7   // No such device
+#define ENOENT      8   // No such file or directory
+#define ENOMEM      9   // Not enough memory
+#define ENOSYS      10  // Function not implemented
+#define ENOTTY      11  // Invalid I/O control operation
+#define ENXIO       12  // No such device or address
 
-#define EINVAL      1   // Invalid Argument
-#define ENOSYS      2   // System Call Not Valid
-#define EBADF       3   // Bad File Descriptor
-#define ENOTTY      4   // Invalid IOCTL
-#define EBADRQC     5   // Bad Request Code
-#define ENOMEM      6   // No Memory
 
-
-// TOOD: consider this instead...
+// TODO: consider this instead...? more descriptive
 // #define E_INVALID_ARGUMENT
 // #define E_INVALID_SYSTEM_CALL
 // #define E_INVALID_FUNCTION

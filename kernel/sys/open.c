@@ -23,93 +23,136 @@
 #include <errno.h>
 #include <syscall.h>
 #include <task.h>
+#include <chdev.h>
+#include <string.h>
 
-typedef int (*open_fn)(struct file **,int);
+#define MAX_PATH    256
 
-extern int rtc_open(struct file **,int);
-
-struct char_dev {
-    int id;
+struct dev_file {
+    uint16_t dev_id;
     const char *name;
 };
 
-#define MAX_PATH 256
-
-#define DEV_RTC     1
-#define DEV_PCSPK   2
-#define DEV_KBD     3
-#define DEV_CONSOLE 4
-
-struct char_dev cdevs[] =
-{
-    { DEV_RTC, "/dev/rtc", },
-    { DEV_PCSPK, "/dev/pcspk", },
-    { DEV_KBD, "/dev/kbd", },
-    { DEV_CONSOLE, "/dev/console", },
+struct file_ops chdev_ops = {
+    .open = chdev_open
 };
-// TODO: well-defined device IDs;
-// register them somehow during device init;
-// major/minor IDs? to distinguish block and char devices
 
-struct file _rtc;   // TODO: MOVE!!
+
+struct file fd_pool[64];    // TODO: dynamically alloc
+uint64_t fd_mask;
+
+void init_fs(void)
+{
+    fd_mask = 0;
+    zeromem(fd_pool, sizeof(fd_pool));
+}
+
+static struct file * find_next_file(void)
+{
+    struct file *file;
+    int index = -1;
+
+    if (fd_mask == 0) {
+        index = 0;
+    }
+    else {
+        // TODO: bit scan forward
+        uint64_t mask = fd_mask;
+        for (int i = 0; i < countof(fd_pool); i++, mask >>= 1) {
+            if (mask & 1) {
+                index = i;
+                break;
+            }
+        }
+    }
+
+    if (index < 0 || index >= countof(fd_pool)) {
+        return NULL;
+    }
+
+    file = &fd_pool[index];
+    zeromem(file, sizeof(struct file));
+
+    fd_mask |= (1ULL << index);
+    return file;
+}
+
+static void free_fd(struct file *file)
+{
+    // lol this is the worst
+    for (int i = 0; i < countof(fd_pool); i++) {
+        if (file == &fd_pool[i]) {
+            fd_mask &= (1ULL << i);
+            break;
+        }
+    }
+}
 
 __syscall int sys_open(const char *name, int flags)
 {
-    uint32_t cli_flags;
-    int devid;
     int fd;
     int ret;
-    open_fn open;
+    uint32_t cli_flags;
+    struct file *file;
+    struct task *task;
+    struct inode *inode;
 
     assert(getpl() == KERNEL_PL);
     cli_save(cli_flags); // prevent task switch
 
-    // TODO: user-mode buffer validation!!
-
-    // search device list for matching file name
-    devid = -1;
-    for (int i = 0; i < countof(cdevs); i++) {
-        if (strncmp(name, cdevs[i].name, MAX_PATH) == 0) {
-            devid = cdevs[i].id;
-            break;
-        }
-    }
-    // TOOD: search file system for matching file name
-
-    if (devid < 0) {
-        ret = -EINVAL;     // TODO: error for file not found?
-        goto done;
-    }
+    task = current_task();
 
     // find next available file descriptor slot in current task struct
     fd = -1;
-    for (int i = 0; i < MAX_OPEN_FILES; i++) {
-        if (current_task()->files[i] == NULL) {
+    for (int i = 0; i < MAX_OPEN; i++) {
+        if (task->files[i] == NULL) {
             fd = i;
             break;
         }
     }
 
     if (fd < 0) {
-        ret = -EBADF;    // TODO: error for no remaining file descriptors?
+        ret = -ENFILE;  // Too many open files in system
         goto done;
     }
 
-    switch (devid) {
-        case DEV_RTC:
-            open = rtc_open;
-            break;
-        default:
-            open = NULL;
-            break;
+    file = find_next_file();
+    if (file == NULL) {
+        ret = -ENOMEM;
+        goto done;
+    }
+    task->files[fd] = file;
+
+    // TODO: for now, just assume everything is a device...
+    //       and search our hardcoded list of files :)
+    // later: find device using inode device ID number
+    struct inode _inode;
+    inode = &_inode;
+
+    // TEMP get rid of this lol
+    if (strcmp(name, "/dev/tty") == 0) {
+        inode->dev_id = TTY_DEVICE; // TODO: do this in filesys
+        file->fops = get_chdev(TTY_DEVICE);
+    }
+    else if (strcmp(name, "/dev/ttyS") == 0) {
+        inode->dev_id = TTYS_DEVICE;
+        file->fops = get_chdev(TTYS_DEVICE);
+    }
+    else {
+        panic("unknown device or file - %s", name);
     }
 
-    if (!open) {
-        ret = -ENOSYS;
+    if (!file->fops) {
+        ret = -ENOENT;  // No such file or directory
         goto done;
     }
 
-    ret = open(&current_task()->files[fd], flags);
+    if (!file->fops->open) {
+        ret = -ENOSYS;  // Function not implemented
+        goto done;
+    }
+
+    ret = file->fops->open(inode, file);
     if (ret < 0) {
         goto done;
     }
@@ -117,5 +160,35 @@ __syscall int sys_open(const char *name, int flags)
 
 done:
     restore_flags(cli_flags);
+    return ret;
+}
+
+__syscall int sys_close(int fd)
+{
+    struct file *file;
+    int ret;
+
+    assert(getpl() == KERNEL_PL);
+
+    if (fd < 0 || fd >= MAX_OPEN) {
+        return -EBADF;
+    }
+
+    file = current_task()->files[fd];
+    if (!file) {
+        return -EBADF;
+    }
+
+    if (!file->fops || !file->fops->close) {
+        return -ENOSYS;
+    }
+
+    ret = file->fops->close(file);
+    if (ret < 0) {
+        return ret;
+    }
+
+    free_fd(file);
+    current_task()->files[fd] = NULL;
     return ret;
 }

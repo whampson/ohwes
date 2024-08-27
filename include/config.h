@@ -35,6 +35,7 @@
 #define KERNEL_INIT_STACK       KERNEL_LMA  // grows toward 0
 
 #define NR_CONSOLES             7
+#define NR_TTYS                 8
 
 #define IDT_COUNT               256
 
@@ -64,7 +65,7 @@
 
 // VGA params
 #define VGA_MODE_SELECT         MODE_03h
-#define VGA_FONT_SELECT         VGA_FONT_80x28
+#define VGA_FONT_SELECT         VGA_FONT_80x50
 #define VGA_FB_SELECT           VGA_FB_64K
 
 #endif // __CONFIG_H

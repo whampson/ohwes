@@ -23,17 +23,16 @@
 #define __TASK_H
 
 #include <fs.h>
-#include <ohwes.h>
-#include <console.h>
+#include <tty.h>
 
-#define MAX_OPEN_FILES              8
-#define MAX_TASKS                   64
+#define MAX_OPEN                    8
+#define MAX_TASK                    64
 
 struct task {
     int pid;
     int errno;
-    struct console *cons;
-    struct file *files[MAX_OPEN_FILES];
+    struct tty *tty;
+    struct file *files[MAX_OPEN];
 };
 
 struct task * current_task(void);

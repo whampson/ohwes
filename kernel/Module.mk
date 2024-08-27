@@ -4,6 +4,7 @@ TARGET_EXE := ohwes.sys
 SOURCES := \
     setup.S \
     entry.S \
+    chdev.c \
     console.c \
     cpu.c \
     crash.c \
@@ -19,6 +20,7 @@ SOURCES := \
     syscall.c \
     task.c \
     timer.c \
+    tty.c \
     vga.c \
     sys/open.c \
 

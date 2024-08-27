@@ -27,26 +27,23 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <queue.h>
+#include <tty.h>
 
-#define MAX_CSIPARAMS       16
-#define MAX_TABSTOPS        80      // TODO: make this not depend on console width
-#define TABSTOP_WIDTH       8       // TOOD: make configurable
+#define SYSTEM_CONSOLE      1
 
-#define INPUT_BUFFER_SIZE   128
+#define MAX_CSIPARAM        16
+#define MAX_TABSTOP         80      // TODO: make this not depend on console width
+#define TABSTOP_WIDTH       8       // TODO: make configurable
 
-#define DEFAULT_IFLAG       0
-#define DEFAULT_OFLAG       (OPOST|ONLCR)
-#define DEFAULT_LFLAG       ECHO
-
-enum console_color {
-    CONSOLE_BLACK,
-    CONSOLE_RED,
-    CONSOLE_GREEN,
-    CONSOLE_YELLOW,
-    CONSOLE_BLUE,
-    CONSOLE_MAGENTA,
-    CONSOLE_CYAN,
-    CONSOLE_WHITE
+enum csi_color {
+    CSI_BLACK,
+    CSI_RED,
+    CSI_GREEN,
+    CSI_YELLOW,
+    CSI_BLUE,
+    CSI_MAGENTA,
+    CSI_CYAN,
+    CSI_WHITE
 };
 
 
@@ -64,12 +61,14 @@ struct console
     int state;                          // current control state
     bool initialized;                   // console can be used
 
+    struct tty *tty;
+
     uint16_t cols, rows;                // screen dimensions
     void *framebuf;                     // frame buffer
 
-    char tabstops[MAX_TABSTOPS];        // tab stops    // TODO: make indexing independent of console width
+    char tabstops[MAX_TABSTOP];         // tab stops    // TODO: make indexing independent of console width
 
-    int csiparam[MAX_CSIPARAMS];       // control sequence parameters
+    int csiparam[MAX_CSIPARAM];         // control sequence parameters
     int paramidx;                       // control sequence parameter index
 
     bool blink_on;                      // character blinking enabled
@@ -99,7 +98,7 @@ struct console
 
     struct _save_state {                // saved parameters
         bool blink_on;
-        char tabstops[MAX_TABSTOPS];
+        char tabstops[MAX_TABSTOP];
         struct _char_attr attr;
         struct _cursor cursor;
     } saved_state;
@@ -108,10 +107,13 @@ struct console
 struct console * current_console(void);
 struct console * get_console(int num);      // indexed at 1, 0 = current console
 
+void write_console(struct console *cons, const char *buf, size_t count);
+
 int switch_console(int num);
 
 int console_read(struct console *cons, char *buf, size_t count);
-int console_write(struct console *cons, const char *buf, size_t count);
+int console_putbuf(struct console *cons, const char *buf, size_t count);
+int console_putchar(struct console *cons, char c);
 
 /**
  * ASCII Control Characters
@@ -152,4 +154,4 @@ enum ascii_cntl {
     ASCII_DEL = 0x7F    /* Delete */
 };
 
-#endif /* __CONSOLE_H */
+#endif // __CONSOLE_H

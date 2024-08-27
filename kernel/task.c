@@ -20,9 +20,10 @@
  */
 
 #include <task.h>
+#include <ohwes.h>
 
 int _current_pid;
-struct task _task_list[MAX_TASKS];
+struct task _task_list[MAX_TASK];
 
 void init_tasks(void)
 {
@@ -37,7 +38,7 @@ struct task * current_task(void)
 
 struct task * get_task(int pid)
 {
-    if (pid < 0 || pid >= MAX_TASKS) {
+    if (pid < 0 || pid >= MAX_TASK) {
         return NULL;
     }
 

@@ -30,7 +30,7 @@
 #include <ctype.h>
 #include <boot.h>
 #include <ohwes.h>
-#include <kernel.h>
+#include <console.h>
 #include <input.h>
 #include <io.h>
 #include <irq.h>

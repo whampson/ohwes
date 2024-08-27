@@ -38,32 +38,35 @@
 #include <fs.h>
 #include <paging.h>
 
-#define CRASH_COLOR     CONSOLE_BLUE
-#define PANIC_COLOR     CONSOLE_BLUE
-#define IRQ_COLOR       CONSOLE_RED
-#define NMI_COLOR       CONSOLE_RED
-#define BANNER_COLOR    CONSOLE_BLUE
+#define CRASH_COLOR     CSI_BLUE
+#define PANIC_COLOR     CSI_BLUE
+#define IRQ_COLOR       CSI_RED
+#define NMI_COLOR       CSI_RED
+#define BANNER_COLOR    CSI_BLUE
 #define CRASH_BANNER    " " OS_NAME " "
 #define CRASH_WIDTH     80
 #define CRASH_BUFSIZ    256
 
-static const char *exception_names[NR_EXCEPTIONS];
-
 extern struct vga *g_vga;
+
+static const char *exception_names[NR_EXCEPTIONS];
 
 static void center_text(const char *str, ...);
 static void print_flags(uint32_t eflags);
 static void print_segsel(int segsel);
 static void print_banner(const char *banner);
-static void crash_print(const char *fmt, ...);
-static void early_crash_print(const char *buf, size_t count);
 
-#define BRIGHT(s)   "\e[1m" s "\e[22m"
+#define BRIGHT(s)           "\e[1m" s "\e[22m"
+#define crash_print(...)    _kprint(__VA_ARGS__)
+
+extern uint8_t early_print_attr;
 
 __fastcall
 void crash(struct iregs *regs)
 {
     // TODO: print line-by-line
+
+    early_print_attr = 0x47;    // white on red
 
     uint16_t _cs;
     struct segsel *curr_cs;
@@ -260,34 +263,6 @@ done:
     for(;;);
 }
 
-// __noreturn
-void _kpanic(const char *fmt, ...)
-{
-    // TODO: this should be inline and should raise an exception
-    // so we can trigger the crash screen and dump register state.
-    // Need a way to store the message buffer without stomping state
-
-    va_list args;
-    char buf[CRASH_BUFSIZ];
-    char *prefix = "panic: ";
-    size_t count;
-
-    va_start(args, fmt);
-
-    if (!current_console()->initialized) {
-        count = vsnprintf(buf, sizeof(buf), fmt, args);
-        early_crash_print(prefix, strlen(prefix));
-        early_crash_print(buf, count);
-    }
-    else {
-        vsnprintf(buf, sizeof(buf), fmt, args);
-        kprint("\n\e[1;31m%s%s\e[0m", prefix, buf);
-    }
-
-    va_end(args);
-    for (;;);
-}
-
 static void center_text(const char *str, ...)
 {
     va_list args;
@@ -381,50 +356,7 @@ static void print_banner(const char *banner)
     crash_print("\e[37;4%dm", BANNER_COLOR);
 }
 
-static void early_crash_print(const char *buf, size_t count)
-{
-    static uint16_t pos = 0;
-
-    // va_list args;
-    // char buf[CRASH_BUFSIZ];
-    // size_t count;
-
-    // va_start(args, fmt);
-    // count = vsnprintf(buf, sizeof(buf), fmt, args);
-    // va_end(args);
-
-    for (int i = 0; i < count; i++) {
-        char c = buf[i];
-        uint16_t x = pos % g_vga->cols;
-        uint16_t y = pos / g_vga->cols;
-        if (c == '\n') {
-            x = 0; y++; // no scroll support!
-        }
-        else {
-            ((uint16_t *) g_vga->fb)[pos] = 0x4700 | c;
-            x++;
-        }
-        pos = y * g_vga->cols + x;
-    }
-}
-
-static void crash_print(const char *fmt, ...)
-{
-    va_list args;
-    char buf[CRASH_BUFSIZ];
-    size_t count;
-
-    va_start(args, fmt);
-    count = vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
-
-    if (!current_console()->initialized) {
-        early_crash_print(buf, count);
-    }
-    else {
-        console_write(current_console(), buf, count);
-    }
-}
+extern void write_syscon(const char *buf, size_t count);
 
 static const char *exception_names[NR_EXCEPTIONS] =
 {
