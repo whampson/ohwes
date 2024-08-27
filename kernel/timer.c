@@ -114,8 +114,10 @@ void timer_sleep(int millis)
     cli_save(flags);
 
     pit = get_pit();
-    pit->sleep_ticks = div_round(millis, pit->quantum_ms);
-    // kprint("timer: sleeping for %dms (%d ticks)\n", millis, pit.sleep_ticks);
+    if (pit->quantum_ms) {
+        pit->sleep_ticks = div_round(millis, pit->quantum_ms);
+        // kprint("timer: sleeping for %dms (%d ticks)\n", millis, pit.sleep_ticks);
+    }
 
     __sti();
     while (pit->sleep_ticks) { }
@@ -129,6 +131,7 @@ void pcspk_beep(int freq, int millis)
     uint32_t flags;
     uint8_t mode;
     uint16_t div;
+    struct pit_state *pit;
 
     cli_save(flags);
 
@@ -140,8 +143,11 @@ void pcspk_beep(int freq, int millis)
     outb(PIT_PORT_CHAN2, div & 0xFF);
     outb(PIT_PORT_CHAN2, (div >> 8) & 0xFF);
 
-    get_pit()->pcspk_ticks = div_round(millis, get_pit()->quantum_ms);
-    pcspk_on(); // turned off in interrupt handler
+    pit = get_pit();
+    if (pit->quantum_ms) {
+        pit->pcspk_ticks = div_round(millis, pit->quantum_ms);
+        pcspk_on(); // turned off in interrupt handler
+    }
 
     restore_flags(flags);
 }
