@@ -24,25 +24,51 @@
 #include <ohwes.h>
 
 struct chdev {
+    bool valid;
     uint16_t major;
     const char *name;
     struct file_ops *fops;
 };
 
-struct chdev chdevs[MAX_CHDEV];
+int chdev_open(struct inode *inode, struct file *file);
 
-void init_chdev(void)
-{
-    zeromem(chdevs, sizeof(struct chdev) * MAX_CHDEV);
-}
+struct file_ops chdev_ops = {
+    .open = chdev_open
+};
 
-struct file_ops * get_chdev(uint16_t major)
+extern struct file_ops tty_fops;
+
+struct chdev g_chdevs[MAX_CHDEV] =
 {
+    { .major = 0, },    // position-dependent; major must match index!
+    { .major = TTY_MAJOR,  .fops = &tty_fops, .name = "tty",  },
+    { .major = TTYS_MAJOR, .fops = &tty_fops, .name = "ttyS", },
+};
+
+struct inode g_chdev_inodes[MAX_CHDEV_INODES] =
+{
+    { .device = __mkdev(TTY_MAJOR, 1) },   // tty1
+    { .device = __mkdev(TTY_MAJOR, 2) },   // tty2
+    { .device = __mkdev(TTY_MAJOR, 3) },   // tty3
+    { .device = __mkdev(TTY_MAJOR, 4) },   // tty4
+    { .device = __mkdev(TTY_MAJOR, 5) },   // tty5
+    { .device = __mkdev(TTY_MAJOR, 6) },   // tty6
+    { .device = __mkdev(TTY_MAJOR, 7) },   // tty7
+    { .device = __mkdev(TTYS_MAJOR, 0) },  // ttyS0
+    { .device = __mkdev(TTYS_MAJOR, 1) },  // ttyS1
+    { .device = __mkdev(TTYS_MAJOR, 2) },  // ttyS2
+    { .device = __mkdev(TTYS_MAJOR, 3) },  // ttyS3
+    { .device = 0 },    // position-independent; end sentinel is device=0
+};
+
+struct file_ops * get_chdev_fops(dev_t device)
+{
+    uint16_t major = _DEV_MAJ(device);
     if (major >= MAX_CHDEV) {
         return NULL;
     }
 
-    struct chdev *chdev = &chdevs[major];
+    struct chdev *chdev = &g_chdevs[major];
     if (chdev->major != major) {
         return NULL;
     }
@@ -50,56 +76,48 @@ struct file_ops * get_chdev(uint16_t major)
     return chdev->fops;
 }
 
+struct inode * get_chdev_inode(uint16_t major, uint16_t minor)
+{
+    if (major >= MAX_CHDEV) {
+        return NULL;
+    }
+
+    struct inode *inode = &g_chdev_inodes[0];
+    while (inode->device) {
+        if (major == _DEV_MAJ(inode->device) &&
+            minor == _DEV_MIN(inode->device)) {
+            break;
+        }
+        inode++;
+    }
+
+    if (inode->device == 0) {
+        return NULL;    // not found
+    }
+
+    return inode;
+}
+
 int chdev_open(struct inode *inode, struct file *file)
 {
+    uint16_t major;
     struct chdev *chdev;
 
-    if (!inode || !file) {
+    if (!inode) {
         return -EINVAL;
     }
 
     // TODO: verify dev_id is a char dev
 
-    if (inode->dev_id >= MAX_CHDEV) {
-        return -ENODEV;
+    major = _DEV_MAJ(inode->device);
+    if (major >= MAX_CHDEV) {
+        return -ENODEV;     // not a char dev
     }
 
-    chdev = &chdevs[inode->dev_id];
+    chdev = &g_chdevs[major];
     if (!chdev->fops || !chdev->fops->open) {
-        return -ENODEV;
+        return -ENXIO;     // device not registered
     }
 
     return chdev->fops->open(inode, file);
-}
-
-int chdev_register(uint16_t major, const char *name, struct file_ops *fops)
-{
-    if (major >= MAX_CHDEV) {
-        return -EINVAL;
-    }
-    if (chdevs[major].fops && chdevs[major].fops != fops) {
-        return -EBUSY;
-    }
-
-    chdevs[major].major = major;
-    chdevs[major].name = name;
-    chdevs[major].fops = fops;
-    return 0;
-}
-
-int chdev_unregister(uint16_t major, const char *name)
-{
-    if (major >= MAX_CHDEV) {
-        return -EINVAL;
-    }
-    if (!chdevs[major].fops) {
-        return -EINVAL;
-    }
-    if (strcmp(chdevs[major].name, name) != 0) {
-        return -EINVAL;
-    }
-
-    chdevs[major].name = NULL;
-    chdevs[major].fops = NULL;
-    return 0;
 }

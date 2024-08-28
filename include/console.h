@@ -60,6 +60,7 @@ struct console
     int number;                         // console I/O line number
     int state;                          // current control state
     bool initialized;                   // console can be used
+    bool open;                          // console is currently attached
 
     struct tty *tty;
 

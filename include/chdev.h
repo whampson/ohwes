@@ -22,23 +22,15 @@
 #ifndef __CHDEV_H
 #define __CHDEV_H
 
+#include <device.h>
 #include <fs.h>
 #include <stdint.h>
 
 
-#define MAX_CHDEV       8
+#define MAX_CHDEV           8
+#define MAX_CHDEV_INODES    16
 
-#define TTY_DEVICE      1
-#define TTYS_DEVICE     2
-// #define KBD_MAJOR       3
-// #define RTC_MAJOR       4
-// #define PCSPK_MAJOR     5
-
-struct file_ops * get_chdev(uint16_t major);
-
-int chdev_open(struct inode *inode, struct file *file);  // TEMP
-
-int chdev_register(uint16_t major, const char *name, struct file_ops *fops);
-int chdev_unregister(uint16_t major, const char *name);
+struct file_ops * get_chdev_fops(dev_t device);
+struct inode * get_chdev_inode(uint16_t major, uint16_t minor); // TODO: dev_t or major/minor?
 
 #endif // __CHDEV_H

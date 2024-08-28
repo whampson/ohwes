@@ -149,13 +149,14 @@ __fastcall void start_kernel(const struct boot_info *info)
     info = g_boot;  // for convenience ;)
 
     // initialize interrupts and timers
+    init_idt();
     init_pic();
     init_irq();
-    init_idt();
     init_timer();
     init_rtc();
 
     // get the console working
+    init_tty();
     init_console(info);
     // safe to print now using kprint, keyboard also works
 
@@ -163,16 +164,9 @@ __fastcall void start_kernel(const struct boot_info *info)
     verify_gdt();
     // TODO: basic tests
 
-    // initialize devices
-    init_chdev();
-    init_tty();
     init_serial();
-
     init_fs();
-
-    // initialize tasks
     init_tasks();
-    // init_kernel_task();
 
     // screw around
 
@@ -184,44 +178,52 @@ __fastcall void start_kernel(const struct boot_info *info)
     kprint("enabling interrupts...\n");
     __sti();
 
-    int fd = sys_open("/dev/tty", 0);
-    if (fd < 0) {
-        panic("open(): failed with %d\n", fd);
+    // virtual console #1 (default, ALT+F1 on keyboard)
+    {
+        kprint(">> /dev/tty1\n");
+        int fd = sys_open("/dev/tty1", 0);
+        if (fd < 0) {
+            panic("open(): failed with %d\n", fd);
+        }
+        kprint("open(): returned %d\n", fd);
+
+        const char *hello = "\e[33mHello from write() syscall!\e[0m\n";
+        ssize_t count = sys_write(fd, hello, strlen(hello));
+        if (count < 0) {
+            panic("write(): failed with %lld\n", count);
+        }
+        kprint("write(): returned %lld\n", count);
+
+        int ret = sys_close(fd);
+        // if (ret < 0) {
+        //     panic("close(): failed with %d\n", ret);
+        // }
+        kprint("close(): returned %d\n", ret);
     }
-    kprint("open(): returned %d\n", fd);
 
-    const char *hello = "\e[33mHello from write()\e[0m\n";
-    ssize_t count = sys_write(fd, hello, strlen(hello));
-    if (count < 0) {
-        panic("write(): failed with %lld\n", count);
+
+    // serial port
+    {
+        kprint(">> /dev/ttyS0\n");
+        int fd = sys_open("/dev/ttyS0", 0);
+        if (fd < 0) {
+            panic("open(): failed with %d\n", fd);
+        }
+        kprint("open(): returned %d\n", fd);
+
+        const char *hello = "\e[36mOH-WES says hello over RS-232!\e[0m\r\n";
+        ssize_t count = sys_write(fd, hello, strlen(hello));
+        if (count < 0) {
+            panic("write(): failed with %lld\n", count);
+        }
+        kprint("write(): returned %lld\n", count);
+
+        int ret = sys_close(fd);
+        // if (ret < 0) {
+        //     panic("close(): failed with %d\n", ret);
+        // }
+        kprint("close(): returned %d\n", ret);
     }
-    kprint("write(): returned %lld\n", count);
-
-    int ret = sys_close(fd);
-    // if (ret < 0) {
-    //     panic("close(): failed with %d\n", ret);
-    // }
-    kprint("close(): returned %d\n", ret);
-
-
-    fd = sys_open("/dev/ttyS", 0);
-    if (fd < 0) {
-        panic("open(): failed with %d\n", fd);
-    }
-    kprint("open(): returned %d\n", fd);
-
-    const char *hello_rs = "\e[35mOH-WES says hello!\e[0m\r\n";
-    count = sys_write(fd, hello_rs, strlen(hello_rs));
-    if (count < 0) {
-        panic("write(): failed with %lld\n", count);
-    }
-    kprint("write(): returned %lld\n", count);
-
-    ret = sys_close(fd);
-    // if (ret < 0) {
-    //     panic("close(): failed with %d\n", ret);
-    // }
-    kprint("close(): returned %d\n", ret);
 
     // kprint("boot: entering ring3...\n");
     // uint32_t user_stack = 0x80000;
@@ -229,7 +231,6 @@ __fastcall void start_kernel(const struct boot_info *info)
 
     kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
     for (;;);
-
 }
 
 int init(void)

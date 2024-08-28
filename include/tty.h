@@ -36,7 +36,7 @@
 #define TTY_BUFFER_SIZE             128
 
 #define N_TTY                       0
-#define NR_LDISCS                   1
+#define NR_LDISC                    1
 
 // c_iflag
 #define INLCR   0x01                // map NL to CR
@@ -65,6 +65,15 @@ struct termios {
     uint32_t c_line;                // line discipline
 };
 
+#define _I_FLAG(tty,f)  ((tty)->termios->c_oflag & (f))
+#define _O_FLAG(tty,f)  ((tty)->termios->c_oflag & (f))
+#define _C_FLAG(tty,f)  ((tty)->termios->c_oflag & (f))
+#define _L_FLAG(tty,f)  ((tty)->termios->c_oflag & (f))
+
+#define O_OPOST(tty)    _O_FLAG(tty, OPOST)
+#define O_ONLCR(tty)    _O_FLAG(tty, ONLCR)
+#define O_OCRNL(tty)    _O_FLAG(tty, OCRNL)
+
 //
 // TTY Line Discipline
 //
@@ -78,9 +87,9 @@ struct tty_ldisc {
     // called from above (user)
     int     (*open)(struct tty *);
     int     (*close)(struct tty *);
-    ssize_t (*read)(struct tty *, struct file *, char *buf, size_t count);
-    ssize_t (*write)(struct tty *, struct file *, const char *buf, size_t count);
-    int     (*ioctl)(struct tty *, struct file *, unsigned int cmd, unsigned long arg);
+    ssize_t (*read)(struct tty *, char *buf, size_t count);
+    ssize_t (*write)(struct tty *, const char *buf, size_t count);
+    int     (*ioctl)(struct tty *, unsigned int cmd, unsigned long arg);
     // TODO: poll? flush? ICANON buffering
 
     // called from below (interrupt)
@@ -99,10 +108,10 @@ struct tty_driver {
     uint16_t minor;
 
     // interface functions
-    int     (*open)(struct tty *, struct file *);
-    int     (*close)(struct tty *, struct file *);
-    ssize_t (*write)(struct tty *, struct file *, const char *buf, size_t count);
-    int     (*ioctl)(struct tty *, struct file *, unsigned int cmd, unsigned long arg);
+    int     (*open)(struct tty *);
+    int     (*close)(struct tty *);
+    int     (*ioctl)(struct tty *, unsigned int cmd, unsigned long arg);
+    int     (*write_char)(struct tty *, char c);
     size_t  (*write_room)(struct tty *);
     // TODO: flush?
 
@@ -116,8 +125,10 @@ struct tty_driver {
 // job or session).
 //
 struct tty {
-    char *name;
+    char name[32];
+    uint16_t major;
     int index;
+    bool open;
 
     struct tty_ldisc *ldisc;        // line discipline
     struct tty_driver *driver;      // low-level device driver

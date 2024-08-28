@@ -34,8 +34,9 @@
 #define KERNEL_LMA              0x10000     // physical load address
 #define KERNEL_INIT_STACK       KERNEL_LMA  // grows toward 0
 
-#define NR_CONSOLES             7
-#define NR_TTYS                 8
+#define NR_CONSOLE              7
+#define NR_TTY                  NR_CONSOLE
+#define NR_SERIAL               4
 
 #define IDT_COUNT               256
 

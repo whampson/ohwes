@@ -45,7 +45,7 @@
 #define BANNER_COLOR    CSI_BLUE
 #define CRASH_BANNER    " " OS_NAME " "
 #define CRASH_WIDTH     80
-#define CRASH_BUFSIZ    256
+#define CRASH_BUFSIZ    1024
 
 extern struct vga *g_vga;
 
@@ -57,16 +57,26 @@ static void print_segsel(int segsel);
 static void print_banner(const char *banner);
 
 #define BRIGHT(s)           "\e[1m" s "\e[22m"
-#define crash_print(...)    _kprint(__VA_ARGS__)
+// #define crash_print(...)    _kprint(__VA_ARGS__)
 
-extern uint8_t early_print_attr;
+static void crash_print(const char *fmt, ...)
+{
+    size_t nchars;
+    char buf[CRASH_BUFSIZ];
+
+    va_list args;
+
+    va_start(args, fmt);
+    nchars = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    write_console(current_console(), buf, nchars);
+}
 
 __fastcall
 void crash(struct iregs *regs)
 {
     // TODO: print line-by-line
-
-    early_print_attr = 0x47;    // white on red
 
     uint16_t _cs;
     struct segsel *curr_cs;

@@ -33,10 +33,7 @@ struct dev_file {
     const char *name;
 };
 
-struct file_ops chdev_ops = {
-    .open = chdev_open
-};
-
+extern struct file_ops chdev_ops;
 
 struct file fd_pool[64];    // TODO: dynamically alloc
 uint64_t fd_mask;
@@ -47,7 +44,7 @@ void init_fs(void)
     zeromem(fd_pool, sizeof(fd_pool));
 }
 
-static struct file * find_next_file(void)
+static struct file * find_next_fd(void)
 {
     struct file *file;
     int index = -1;
@@ -88,13 +85,31 @@ static void free_fd(struct file *file)
     }
 }
 
+static struct inode * find_file(struct file *file, const char *name)
+{
+    struct inode *inode;
+    inode = NULL;
+
+    // TODO: TEMP get rid of this lol
+    if (strcmp(name, "/dev/tty1") == 0) {
+        inode = get_chdev_inode(TTY_MAJOR, 1);
+        file->fops = get_chdev_fops(TTY_MAJOR);
+    }
+    else if (strcmp(name, "/dev/ttyS0") == 0) {
+        inode = get_chdev_inode(TTYS_MAJOR, 0);
+        file->fops = get_chdev_fops(TTYS_MAJOR);
+    }
+
+    return inode;
+}
+
 __syscall int sys_open(const char *name, int flags)
 {
     int fd;
     int ret;
     uint32_t cli_flags;
-    struct file *file;
     struct task *task;
+    struct file *file;
     struct inode *inode;
 
     assert(getpl() == KERNEL_PL);
@@ -112,34 +127,20 @@ __syscall int sys_open(const char *name, int flags)
     }
 
     if (fd < 0) {
-        ret = -ENFILE;  // Too many open files in system
+        ret = -ENFILE;  // Too many open files in process
         goto done;
     }
 
-    file = find_next_file();
+    file = find_next_fd();
     if (file == NULL) {
-        ret = -ENOMEM;
+        ret = -EMFILE;  // Too many open files in system
         goto done;
     }
-    task->files[fd] = file;
 
-    // TODO: for now, just assume everything is a device...
-    //       and search our hardcoded list of files :)
-    // later: find device using inode device ID number
-    struct inode _inode;
-    inode = &_inode;
-
-    // TEMP get rid of this lol
-    if (strcmp(name, "/dev/tty") == 0) {
-        inode->dev_id = TTY_DEVICE; // TODO: do this in filesys
-        file->fops = get_chdev(TTY_DEVICE);
-    }
-    else if (strcmp(name, "/dev/ttyS") == 0) {
-        inode->dev_id = TTYS_DEVICE;
-        file->fops = get_chdev(TTYS_DEVICE);
-    }
-    else {
-        panic("unknown device or file - %s", name);
+    inode = find_file(file, name);
+    if (!inode) {
+        ret = -ENOENT;  // File not found
+        goto done;
     }
 
     if (!file->fops) {
@@ -156,7 +157,9 @@ __syscall int sys_open(const char *name, int flags)
     if (ret < 0) {
         goto done;
     }
+
     ret = fd;
+    task->files[fd] = file;
 
 done:
     restore_flags(cli_flags);

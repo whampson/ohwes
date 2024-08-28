@@ -27,12 +27,10 @@
 #include <queue.h>
 #include <ohwes.h>
 
-static struct tty ttys[NR_TTYS];   // TODO: dynamically alloc each tty
-static struct tty_ldisc ldiscs[NR_LDISCS]; // default line disciplines
-
-// struct tty_driver *tty_drivers;   // TODO: linked list
+// struct tty_driver *tty_drivers;   // TODO: linked list?
 
 static struct termios default_termios = {
+    .c_line = N_TTY,
     .c_oflag = OPOST | ONLCR,
     .c_lflag = ECHO
 };
@@ -46,7 +44,7 @@ static ssize_t tty_read(struct file *, char *buf, size_t count);
 static ssize_t tty_write(struct file *, const char *buf, size_t count);
 static int tty_ioctl(struct file *, unsigned int num, unsigned long arg);
 
-static struct file_ops tty_fops = {
+struct file_ops tty_fops = {
     .open = tty_open,
     .close = tty_close,
     .read = tty_read,
@@ -59,37 +57,33 @@ static struct file_ops tty_fops = {
 //
 static int tty_ldisc_open(struct tty *);
 static int tty_ldisc_close(struct tty *);
-static ssize_t tty_ldisc_read(struct tty *, struct file *, char *buf, size_t count);
-static ssize_t tty_ldisc_write(struct tty *, struct file *, const char *buf, size_t count);
-static int tty_ldisc_ioctl(struct tty *, struct file *, unsigned int num, unsigned long arg);
+static ssize_t tty_ldisc_read(struct tty *, char *buf, size_t count);
+static ssize_t tty_ldisc_write(struct tty *, const char *buf, size_t count);
+static int tty_ldisc_ioctl(struct tty *, unsigned int num, unsigned long arg);
 static ssize_t tty_ldisc_recv(struct tty *, char *buf, size_t count);
 static size_t  tty_ldisc_recv_room(struct tty *);
 
-static struct tty_ldisc n_tty = {
-    .num = N_TTY,
-    .name = "n_tty",
-    .open = tty_ldisc_open,
-    .close = tty_ldisc_close,
-    .read = tty_ldisc_read,
-    .write = tty_ldisc_write,
-    .ioctl = tty_ldisc_ioctl,
-    .recv = tty_ldisc_recv,
-    .recv_room = tty_ldisc_recv_room,
+struct tty g_ttys[NR_TTY + NR_SERIAL];
+struct tty_ldisc g_ldiscs[NR_LDISC] =
+{
+    {
+        .num = N_TTY,
+        .name = "n_tty",
+        .open = tty_ldisc_open,
+        .close = tty_ldisc_close,
+        .read = tty_ldisc_read,
+        .write = tty_ldisc_write,
+        .ioctl = tty_ldisc_ioctl,
+        .recv = tty_ldisc_recv,
+        .recv_room = tty_ldisc_recv_room,
+    }
 };
 
 // ----------------------------------------------------------------------------
 
 void init_tty(void)
 {
-    ldiscs[N_TTY] = n_tty;
-
-    if (chdev_register(TTY_DEVICE, "tty", &tty_fops)) {
-        panic("could not register tty!");
-    }
-
-    if (chdev_register(TTYS_DEVICE, "ttyS", &tty_fops)) {
-        panic("could not register ttyS!");
-    }
+    zeromem(g_ttys, sizeof(struct tty) * NR_TTY);
 }
 
 // ----------------------------------------------------------------------------
@@ -101,28 +95,52 @@ static int tty_open(struct inode *inode, struct file *file)
 {
     int ret;
     struct tty *tty;
+    uint16_t index;
 
-    // TODO: use inode data (device Id, etc.) to find the appropriate
-    // driver, create a private data instance for output buffers, etc.
-    switch (inode->dev_id) {
-        case TTY_DEVICE:
-            tty = &ttys[0]; // TODO: allocate tty memory
-            tty->driver = &console_driver;
-            break;
-        case TTYS_DEVICE:
-            tty = &ttys[1]; // !!! BAD BAD BAD
-            tty->driver = &serial_driver;
-            break;
-        default:
-            panic("invalid tty device!");
-            return -EINVAL;
+    if (!inode) {
+        return -EINVAL;
     }
+
+    tty = NULL;
+    switch (_DEV_MAJ(inode->device)) {
+        case TTY_MAJOR:
+            index = _DEV_MIN(inode->device);
+            assert(index > 0); // TODO: tty0 should represent current process's TTY
+            if ((index - 1) >= NR_TTY) {
+                return -ENXIO;
+            }
+            tty = &g_ttys[index - 1];
+            tty->driver = &console_driver;  // TODO: get from tty_drivers list
+            break;
+        case TTYS_MAJOR:
+            index = _DEV_MIN(inode->device);
+            if (index >= NR_SERIAL) {
+                return -ENXIO;
+            }
+            tty = &g_ttys[NR_TTY + index];
+            tty->driver = &serial_driver;   // TODO: get from tty_drivers list
+            break;
+    }
+
+    if (!tty) {
+        panic("invalid tty device!");
+        return -ENXIO;
+    }
+
+    if (tty->open) {
+        ret = 0;
+        goto open_done;
+    }
+
+    tty->major = _DEV_MAJ(inode->device);
+    tty->index = index;
+    snprintf(tty->name, countof(tty->name), "%s%d", tty->driver->name, index);
+
     tty->driver->default_termios = default_termios; // TODO: move this to driver init
     tty->termios = &tty->driver->default_termios;
 
-
     // open line discipline
-    tty->ldisc = &ldiscs[N_TTY];
+    tty->ldisc = &g_ldiscs[N_TTY];
     if (!tty->ldisc->open) {
         return -ENXIO;
     }
@@ -135,14 +153,23 @@ static int tty_open(struct inode *inode, struct file *file)
     if (!tty->driver->open) {
         return -ENXIO;
     }
-    ret = tty->driver->open(tty, file);
+    ret = tty->driver->open(tty);
     if (ret) {
         return ret;
     }
 
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%s\n", tty->name);
+    tty_ldisc_write(tty, buf, strlen(buf));
+
+open_done:
     // set file state
-    file->fops = &tty_fops;
-    file->private_data = tty;
+    if (file) {
+        file->fops = &tty_fops;
+        file->private_data = tty;
+    }
+
+    tty->open = true;
     return ret;
 }
 
@@ -177,7 +204,7 @@ static ssize_t tty_write(struct file *file, const char *buf, size_t count)
         return -ENOSYS;
     }
 
-    return tty->ldisc->write(tty, file, buf, count);
+    return tty->ldisc->write(tty, buf, count);
 }
 
 static int tty_ioctl(struct file *file, unsigned int num, unsigned long arg)
@@ -204,31 +231,57 @@ static int tty_ldisc_close(struct tty *tty)
 }
 
 static ssize_t tty_ldisc_read(
-    struct tty *tty, struct file *file, char *buf, size_t count)
+    struct tty *tty, char *buf, size_t count)
 {
     return -ENOSYS;
 }
 
 static ssize_t tty_ldisc_write(
-    struct tty *tty, struct file *file, const char *buf, size_t count)
+    struct tty *tty, const char *buf, size_t count)
 {
-    if (!tty || !file || !buf) {
+    if (!tty || !buf) {
         return -EINVAL;
     }
 
     if (!tty->driver) {
         return -ENXIO;
     }
-    if (!tty->driver->write) {
+    if (!tty->driver->write_char) {
         return -ENOSYS;
     }
 
-    // TODO: termios processing
+    // TODO: need a write buffer, fill it up then send it to driver->write() until
+    // source buffer is drained; don't send char-by-char (let the driver do that)
 
-    return tty->driver->write(tty, file, buf, count);
+    ssize_t nwritten = 0;
+    for (int i = 0; i < count; i++) {
+        char c = buf[i];
+        if (O_OPOST(tty)) {
+            switch (c) {
+                case '\n':
+                    if (O_ONLCR(tty)) {
+                        tty->driver->write_char(tty, '\r');
+                    }
+                    break;
+                case '\r':
+                    if (O_OCRNL(tty)) {
+                        tty->driver->write_char(tty, '\n');
+                    }
+                    break;
+            }
+        }
+
+        int ret = tty->driver->write_char(tty, buf[i]);
+        if (ret < 0) {
+            return ret;
+        }
+        nwritten += ret;    // deliberately ignoring post processing chars
+    }
+
+    return nwritten;
 }
 
-static int tty_ldisc_ioctl(struct tty *tty, struct file *file, unsigned int num, unsigned long arg)
+static int tty_ldisc_ioctl(struct tty *tty, unsigned int num, unsigned long arg)
 {
     return -ENOSYS;
 }

@@ -22,6 +22,7 @@
 #include <ohwes.h>
 #include <boot.h>
 #include <console.h>
+#include <chdev.h>
 #include <ctype.h>
 #include <errno.h>
 #include <kernel.h>
@@ -49,53 +50,78 @@
 // global vars
 struct vga _vga = { };
 struct vga *g_vga = &_vga;
-struct console g_consoles[NR_CONSOLES];
+struct console g_consoles[NR_CONSOLE];
 bool system_console_initialized = false;
 
-static int console_open(struct tty *, struct file *);
-static int console_close(struct tty *, struct file *);
-static ssize_t console_write(struct tty *, struct file *, const char *buf, size_t count);
-static int console_ioctl(struct tty *, struct file *, unsigned int cmd, unsigned long arg);
+extern struct tty *g_ttys;
+
+static int console_open(struct tty *);
+static int console_close(struct tty *);
+static int console_ioctl(struct tty *, unsigned int cmd, unsigned long arg);
+static int console_write_char(struct tty *, char c);
 static size_t console_write_room(struct tty *);
 
 struct tty_driver console_driver = {
     .name = "console",
     .open = console_open,
     .close = console_close,
-    .write = console_write,
     .ioctl = console_ioctl,
+    .write_char = console_write_char,
     ./* in the */write_room/* with black curtains*/ = console_write_room,
 };
 
-static int console_open(struct tty *tty, struct file *file)
+static int console_open(struct tty *tty)
 {
     struct console *cons;
 
-    if (!tty || !file) {
+    if (!tty) {
         return -EINVAL;
     }
     if (!tty->driver) {
-        return -ENXIO;
+        return -ENXIO;  // tty driver not registered
     }
 
-    cons = &g_consoles[0]; // TODO: select based on device ID
-    cons->tty = tty;
-    tty->driver_data = cons;
+    if (tty->index < 0 || tty->index >= NR_CONSOLE) {
+        panic("attempt to open a tty%d on nonexistent console!", tty->index);
+    }
 
+    cons = get_console(tty->index);
+    if (cons == NULL) {
+        return -ENXIO;  // invalid console
+    }
+    if (cons->open) {
+        return -EBUSY;  // console already open
+    }
+
+    tty->driver_data = cons;
+    cons->tty = tty;
+    cons->open = true;
     return 0;
 }
 
-static int console_close(struct tty *tty, struct file *file)
-{
-    return -ENOSYS;
-}
-
-static ssize_t console_write(
-    struct tty *tty, struct file *file, const char *buf, size_t count)
+static int console_close(struct tty *tty)
 {
     struct console *cons;
 
-    if (!tty || !file || !buf) {
+    if (!tty) {
+        return -EINVAL;
+    }
+
+    cons = get_console(tty->index);
+    if (cons == NULL) {
+        return -ENODEV;
+    }
+
+    cons->open = false;
+    cons->tty = NULL;
+    return 0;
+}
+
+static int console_write_char(struct tty *tty, char c)
+{
+    struct console *cons;
+
+    if (!tty) {
         return -EINVAL;
     }
 
@@ -105,11 +131,11 @@ static ssize_t console_write(
 
     // TODO: verify device driver data
     cons = tty->driver_data;
-    return console_putbuf(cons, buf, count);
+    return console_putchar(cons, c);
 }
 
 static int console_ioctl(
-    struct tty *tty, struct file *file, unsigned int cmd, unsigned long arg)
+    struct tty *tty, unsigned int cmd, unsigned long arg)
 {
     return -ENOSYS;
 }
@@ -175,7 +201,7 @@ extern void init_kb(const struct boot_info *info);
 void init_console(const struct boot_info *info)
 {
     zeromem(g_vga, sizeof(struct vga));
-    zeromem(g_consoles, sizeof(struct console) * NR_CONSOLES);
+    zeromem(g_consoles, sizeof(struct console) * NR_CONSOLE);
 
     // get VGA info from boot info
     g_vga->active_console = 1;
@@ -210,8 +236,8 @@ void init_console(const struct boot_info *info)
     }
 
     // make sure we have enough memory for the configured number of consoles
-    if (vga_fb_size_pages - PAGES_PER_CONSOLE_FB < NR_CONSOLES * PAGES_PER_CONSOLE_FB) {
-        panic("Not enough memory available for %d consoles! See config.h.", NR_CONSOLES);
+    if (vga_fb_size_pages - PAGES_PER_CONSOLE_FB < NR_CONSOLE * PAGES_PER_CONSOLE_FB) {
+        panic("Not enough memory available for %d consoles! See config.h.", NR_CONSOLE);
         for(;;);
     }
 
@@ -241,7 +267,7 @@ void init_console(const struct boot_info *info)
     }
 
     // initialize virtual consoles
-    for (int i = 1; i <= NR_CONSOLES; i++) {
+    for (int i = 1; i <= NR_CONSOLE; i++) {
         struct console *cons = &g_consoles[i - 1];
         cons->framebuf = g_vga->fb;
         cons->framebuf += (i * PAGES_PER_CONSOLE_FB) << PAGE_SHIFT;
@@ -300,14 +326,26 @@ void init_console(const struct boot_info *info)
 // ----------------------------------------------------------------------------
 // public functions
 
+extern int chdev_open(struct inode *inode, struct file *file);  // TEMP
+
 int switch_console(int num)
 {
-    if (num <= 0 || num > NR_CONSOLES) {
+    if (num <= 0 || num > NR_CONSOLE) {
         return -EINVAL;
     }
 
     struct console *curr = current_console();
     struct console *next = get_console(num);
+
+    if (!next->open) {
+        struct inode *inode = get_chdev_inode(TTY_MAJOR, next->number);
+        if (!inode) {
+            panic("could not find inode for tty%d", next->number);
+        }
+        if (chdev_open(inode, NULL) < 0) {
+            panic("failed to open tty%d", next->number);
+        }
+    }
 
     uint32_t pgdir_addr = 0;
     read_cr3(pgdir_addr);
@@ -361,14 +399,14 @@ struct console * current_console(void)
 
 struct console * get_console(int num)
 {
-    if (num < 0 || num > NR_CONSOLES) {
+    if (num < 0 || num > NR_CONSOLE) {
         return NULL;
     }
 
     if (num == 0) {
         num = g_vga->active_console;
     }
-    panic_assert(num > 0 && (num - 1) < NR_CONSOLES);
+    panic_assert(num > 0 && (num - 1) < NR_CONSOLE);
 
     struct console *cons = &g_consoles[num - 1];
     panic_assert(cons->number == num);
@@ -402,26 +440,26 @@ int console_read(struct console *cons, char *buf, size_t count)
     return nread;
 }
 
-int console_putbuf(struct console *cons, const char *buf, size_t count)
-{
-    if (!cons || !buf) {
-        return -EINVAL;
-    }
+// int console_putbuf(struct console *cons, const char *buf, size_t count)
+// {
+//     if (!cons || !buf) {
+//         return -EINVAL;
+//     }
 
-    // TODO: make sure this goes to the correct console for the
-    // calling process!!
+//     // TODO: make sure this goes to the correct console for the
+//     // calling process!!
 
-    for (int i = 0; i < count; i++) {
-        console_putchar(cons, buf[i]);
-#if E9_HACK
-        if (cons == get_console(SYSTEM_CONSOLE)) {
-            outb(0xE9, buf[i]);
-        }
-#endif
-    }
+//     for (int i = 0; i < count; i++) {
+//         console_putchar(cons, buf[i]);
+// #if E9_HACK
+//         if (cons == get_console(SYSTEM_CONSOLE)) {
+//             outb(0xE9, buf[i]);
+//         }
+// #endif
+//     }
 
-    return count;
-}
+//     return count;
+// }
 
 int console_recv(struct console *cons, char c)  // called from ps2kb.c
 {
@@ -429,6 +467,10 @@ int console_recv(struct console *cons, char c)  // called from ps2kb.c
 
     if (!cons) {
         return -EINVAL;
+    }
+
+    if (!cons->initialized) {
+        panic("got keyboard input on uninitialized terminal %d", cons->number);
     }
 
     if (ring_full(&cons->tty->iring)) {
@@ -552,6 +594,12 @@ int console_putchar(struct console *cons, char c)
     uint16_t char_pos;
     int nwritten = 0;
 
+#if E9_HACK
+    if (cons == get_console(SYSTEM_CONSOLE)) {
+        outb(0xE9, c);
+    }
+#endif
+
     // handle escape sequences if not a control character
     if (!iscntrl(c)) {
         switch (cons->state) {
@@ -581,22 +629,13 @@ int console_putchar(struct console *cons, char c)
             tab(cons);
             break;
         case '\n':      // ^J - LF - line feed
-            // TODO: move to ldisc
-            // if (has_oflag(cons, OPOST) && has_oflag(cons, ONLCR)) {
-            //     carriage_return(cons);
-            // }
             __fallthrough;
         case '\v':      // ^K - VT - vertical tab
         case '\f':      // ^L - FF - form feed
             line_feed(cons);
             break;
         case '\r':      // ^M - CR -  carriage return
-            // if (has_oflag(cons, OPOST) && has_oflag(cons, OCRNL)) {
-            //     line_feed(cons);
-            // }
-            // else {
-                carriage_return(cons);
-            // }
+            carriage_return(cons);
             break;
 
         case ASCII_CAN: // ^X - CAN - cancel escape sequence

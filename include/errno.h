@@ -30,13 +30,14 @@
 #define EBUSY       3   // Device or resource busy
 #define EINVAL      4   // Invalid argument
 #define EIO         5   // Input/output error
-#define ENFILE      6   // Too many files open in system
-#define ENODEV      7   // No such device
-#define ENOENT      8   // No such file or directory
-#define ENOMEM      9   // Not enough memory
-#define ENOSYS      10  // Function not implemented
-#define ENOTTY      11  // Invalid I/O control operation
-#define ENXIO       12  // No such device or address
+#define EMFILE      6   // Too many files open in process
+#define ENFILE      7   // Too many files open in system
+#define ENODEV      8   // No such device
+#define ENOENT      9   // No such file or directory
+#define ENOMEM      10   // Not enough memory
+#define ENOSYS      11  // Function not implemented
+#define ENOTTY      12  // Invalid I/O control operation
+#define ENXIO       13  // No such device or address
 
 
 // TODO: consider this instead...? more descriptive

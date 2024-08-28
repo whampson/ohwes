@@ -13,35 +13,28 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/fs.h
- *      Created: March 25, 2024
+ *         File: include/device.h
+ *      Created: August 26, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __FS_H
-#define __FS_H
+#ifndef __DEVICE_H
+#define __DEVICE_H
 
-#include <stddef.h>
 #include <stdint.h>
-#include <device.h>
 
-struct inode {
-    uint32_t device;
-};
+typedef uint32_t dev_t;     // device id
 
-struct file;
-struct file_ops {
-    int     (*open)(struct inode *, struct file *);
-    int     (*close)(struct file *);
-    ssize_t (*read)(struct file *, char *, size_t);
-    ssize_t (*write)(struct file *, const char *, size_t);
-    int     (*ioctl)(struct file *, unsigned int, unsigned long);
-};
+#define _DEV_MAJ(id)        ((id) & 0xFFFF)
+#define _DEV_MIN(id)        (((id) >> 16) & 0xFFFF)
 
-struct file {
-    struct file_ops *fops;
-    void *private_data;
-};
+#define __mkdev(maj,min)    ((((min) & 0xFFFF) << 16) | ((maj) & 0xFFFF))
 
-#endif // __FS_H
+#define TTY_MAJOR           1
+#define TTYS_MAJOR          2
+// #define KBD_MAJOR           3
+// #define RTC_MAJOR           4
+// #define PCSPK_MAJOR         5
+
+#endif // __DEVICE_H

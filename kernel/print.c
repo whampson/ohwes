@@ -22,17 +22,25 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <console.h>
-#include <fs.h>
 #include <paging.h>
+#include <fs.h>
+#include <io.h>
+
 
 #define KPRINT_BUFSIZ   4096
-
-uint8_t early_print_attr = 0x07;
-
+extern struct vga *g_vga;
 extern bool system_console_initialized;
+
+uint8_t early_print_attr = 0x47;    // white on red
 
 void early_print(const char *buf, size_t count)
 {
+    //
+    // writes directly to the frame buffer,
+    // bypassing all the console and tty gobbledygook
+    //
+    // set early_print_attr to affect the color attributes
+    //
     static int pos = 0; // always prints at top left!
     const int cols = 80;
 
@@ -47,10 +55,16 @@ void early_print(const char *buf, size_t count)
             x = 0; y++; // no scroll support!
         }
         else {
-            ((uint16_t *) __phys_to_virt(0xB8000))[pos] = (early_print_attr << 8) | c;
+            // TODO: what if g_vga not yet initialized?
+            ((uint16_t *) g_vga->fb)[pos] = (early_print_attr << 8) | c;
             x++;
         }
         pos = y * cols + x;
+
+#if E9_HACK
+        outb(0xE9, c);
+#endif
+        // TODO: write serial port?
     }
 }
 
