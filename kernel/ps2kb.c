@@ -351,7 +351,7 @@ static void kb_interrupt(int irq_num)
     handle_modifier(key, alt, KEY_LALT, KEY_RALT);
     handle_modifier(key, meta, KEY_LWIN, KEY_RWIN);
 
-    // submit alt code
+    // submit alt code upon release of ALT key
     if (isalt(key) && release && g_kb.has_altcode) {
         kb_putq(g_kb.altcode);
         g_kb.has_altcode = false;
@@ -359,7 +359,11 @@ static void kb_interrupt(int irq_num)
         goto record_key_event;
     }
 
+    //
     // handle special keystrokes
+    //
+
+    // CTRL+ALT+DEL: system reboot
     switch (key) {
         case KEY_DELETE:
         case KEY_KPDOT:
@@ -369,9 +373,6 @@ static void kb_interrupt(int irq_num)
             }
             break;
     }
-    // TODO: ALT+<N> = switch terminal
-    // TODO: CTRL+SCRLK = print kernel output buffer
-    // TOOD: SYSRQ = something cool (debug menu?)
 
 #ifdef DEBUG
     if (g_kb.ctrl && g_kb.alt) {
@@ -381,15 +382,19 @@ static void kb_interrupt(int irq_num)
     }
 #endif
 
+    // TODO: CTRL+SCRLK = print kernel output buffer
+    // TOOD: SYSRQ = something cool (debug menu?)
+
+    // ALT+<FN>: switch terminal
     if (g_kb.alt) {
-        if (isfnkey(key)) {
+        if (isfnkey(key) && !release) {
             int cons = key - KEY_F1 + 1;
             switch_console(cons);
             goto done;
         }
     }
 
-    // handle character code entry (<ALT>+<NUMPAD> if NumLk on)
+    // ALT+<NUMPAD>: handle character code entry (if NumLk on)
     if (g_kb.alt && !release && iskpnum(key)) {
         g_kb.has_altcode = true;
         g_kb.altcode *= 10;
