@@ -27,7 +27,7 @@
  *----------------------------------------------------------------------------*/
 #define A20_NONE            0       // A20 already enabled (emulators only)
 #define A20_KEYBOARD        1       // A20 enabled via PS/2 keyboard controller
-#define A20_FAST            2       // A20 enabled via IO port 92h
+#define A20_PORT92          2       // A20 enabled via IO port 92h
 #define A20_BIOS            3       // A20 enabled via BIOS INT=15h,AX=2401h
 
 // ----------------------------------------------------------------------------

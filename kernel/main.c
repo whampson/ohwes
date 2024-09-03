@@ -412,9 +412,14 @@ static void print_info(const struct boot_info *info)
         nfloppies, PLURAL2(nfloppies, "floppy", "floppies"),
         nserial, PLURAL(nserial, "port"),
         nparallel, PLURAL(nparallel, "port"));
-    kprint("bios: %s ps/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
+    kprint("bios: A20 mode is %s\n",
+        (info->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
+        (info->a20_method == A20_PORT92) ? "A20_PORT92" :
+        (info->a20_method == A20_BIOS) ? "A20_BIOS" :
+        "A20_NONE");
+    kprint("bios: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
     kprint("bios: video mode is %02Xh\n", info->vga_mode & 0x7F);
-    if (info->ebda_base) kprint("boot: EBDA:\t%08X,%Xh\n", info->ebda_base, ebda_size);
+    if (info->ebda_base) kprint("boot: EBDA=%08X,%Xh\n", info->ebda_base, ebda_size);
     // kprint("boot: stage2:\t%08X,%Xh\n", info->stage2_base, info->stage2_size);
     // kprint("boot: kernel:\t%08X,%Xh\n", info->kernel_base, info->kernel_size);
 }
