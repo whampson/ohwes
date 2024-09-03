@@ -31,7 +31,7 @@ if [ "$1" = "qemu" ]; then
     QEMU_FLAGS+=" -fda $2"
     QEMU_FLAGS+=" -monitor stdio"
     QEMU_FLAGS+=" -d cpu_reset"
-    QEMU_FLAGS+=" -serial telnet:127.0.0.1:2323,server=on,wait=on"
+    # QEMU_FLAGS+=" -serial telnet:127.0.0.1:2323,server=on,wait=on"
 
     DEBUG_MODE=0
     if [ "$3" = "debug" ]; then

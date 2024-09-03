@@ -304,15 +304,19 @@ _detectmem_legacy_error:
 enable_a20:
         call            _test_a20
         jnc             _enable_a20_done
+
         call            _enable_a20_bios
         call            _test_a20
         jnc             _enable_a20_done
+
         call            _enable_a20_port_92h
         call            _test_a20
         jnc             _enable_a20_done
+
         call            _enable_a20_keyboard
         call            _test_a20
         jc              _enable_a20_error
+
 _enable_a20_done:
         ret
 
@@ -325,7 +329,7 @@ _enable_a20_error:
 ##
 _test_a20:
         xorw            %ax, %ax
-        movw            %ax, %es                # ds = 0x0000
+        movw            %ax, %es                # es = 0x0000
         decw            %ax                     # fs = 0xFFFF
         movw            %ax, %fs
         rorw            $4, %ds:0x7DFE          # tweak the boot sector ID
@@ -347,19 +351,23 @@ _test_a20_done:
 _enable_a20_bios:
         movw            $0x2401, %ax
         int             $0x15
+        jc              _enable_a20_bios_done   # error
+        cmpb            $0x86, %ah              # function not supported
+        je              _enable_a20_bios_done
         movw            $A20_BIOS, a20_method
+_enable_a20_bios_done:
         ret
 
 ##
-# Enable A20 by writing port 92h.
+# Enable A20 by writing port 92h (System Control Port A).
 # Not supported on all systems.
 ##
 _enable_a20_port_92h:
         inb             $0x92, %al
         orb             $0x02, %al              # A20 enable bit
-        andb            $0xFE, %al              # ensure possible reset flag cleared
-        outb            %al, $0x92
-        movw            $A20_FAST, a20_method
+        andb            $0xFE, %al              # ensure potential reset flag cleared
+        outb            %al, $0x92              # send it
+        movw            $A20_PORT92, a20_method
         ret
 
 ##
@@ -367,57 +375,33 @@ _enable_a20_port_92h:
 # This is the most common method and usually does the trick.
 ##
 _enable_a20_keyboard:
-        call            kbout_wait
-        movb            $0xAD, %al              # cmd: disable keyboard
-        outb            %al, $0x64
-
-        call            kbout_wait
-        movb            $0xD0, %al              # cmd: read controller output port
-        outb            %al, $0x64
-
-        call            kbin_wait
-        inb             $0x60, %al              # data: controller output port
-        pushw           %ax                     # save output port
-
-        call            kbout_wait
+        call            kb_flush
         movb            $0xD1, %al              # cmd: write controller output port
         outb            %al, $0x64
-
-        call            kbout_wait
-        popw            %ax
-        orb             $0x02, %al              # A20 enable bit
+        call            kbout_wait              # wait for controller ready
+        movb            $0xFF, %al              # A20 enable bit
         outb            %al, $0x60              # write output reg
-
-        call            kbout_wait
-        movb            $0xAE, %al              # cmd: enable keyboard
-        outb            %al, $0x64
-
-        call            kbout_wait              # (delay)
+        call            kb_flush
         movw            $A20_KEYBOARD, a20_method
         ret
 
-WAIT_DELAY = 1000
-
 kbout_wait:
-        movw            $WAIT_DELAY, %cx
-_kbout_wait_loop:
-        inb             $0x64, %al              # (from controller perspective)
-        testb           $0x02, %al              # is input buffer full?
-        jz              _kbout_wait_done        #  yes: continue checking data arrives
-        decw            %cx
-        jnz             _kbout_wait_loop
+        inb             $0x64, %al
+        testb           $0x02, %al
+        jz              _kbout_wait_done
+        jmp             kbout_wait
 _kbout_wait_done:
         ret
 
-kbin_wait:
-        movw            $WAIT_DELAY, %cx
-_kbin_wait_loop:
-        inb             $0x64, %al              # (from controller perspective)
-        testb           $0x01, %al              # is output buffer full?
-        jnz             _kbin_wait_done         #   yes: continue checking 'til empty (consumed)
-        decw            %cx
-        jnz             _kbin_wait_loop
-_kbin_wait_done:
+kb_flush:
+        call            kbout_wait
+_kb_flush_loop:
+        inb             $0x64, %al
+        testb           $0x01, %al
+        jz              _kb_flush_done
+        inb             $0x60
+        jmp             _kb_flush_loop
+_kb_flush_done:
         ret
 
 
@@ -512,6 +496,6 @@ sz_video_error_bad_font:
 sz_video_error:
         .asciz          "\r\nVGA initialization error!"
 sz_a20_error:
-        .asciz          "\r\Could not enable A20!"
+        .asciz          "\r\A20 error!"
 sz_kernel_too_big:
         .asciz          "\r\nKernel image too big!"

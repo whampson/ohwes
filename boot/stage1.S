@@ -398,6 +398,14 @@ _print_string_done:
 ##
 .globl readkey
 readkey:
+_readkey_flush:
+        movb            $0x01, %ah
+        int             $0x16
+        jz              _readkey_read
+        xorb            %ah, %ah
+        int             $0x16
+        jmp             _readkey_flush
+_readkey_read:
         xorb            %ah, %ah
         int             $0x16
         ret
@@ -449,7 +457,7 @@ sz_stage2_filename:
 sz_disk_error:
         .asciz          "\r\nDiskette read error!"
 sz_try_again:
-        .asciz          "\r\nPress any key to try again..."
+        .asciz          "\r\nPress any key to reboot..."
 
 .space                  0x1FE - (. - entry), 0xCC       # pad with debugbreak
 .short                  0xAA55                          # boot sector indicator
