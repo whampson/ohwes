@@ -49,7 +49,7 @@ typedef long long max_align_t;
 // OH-WES additions
 #ifndef __SSIZE_T_DEFINED
 #define __SSIZE_T_DEFINED
-typedef signed long long ssize_t;
+typedef signed int ssize_t;
 #endif
 
 #endif // __ASSEMBLER__
