@@ -45,66 +45,95 @@ _setup:
         movw            %ax, %es                # es = KERNEL_DS
         movw            %ax, %ss                # ss = KERNEL_DS
         xorw            %ax, %ax
-        movw            %ax, %fs                # fs = (not used)
-        movw            %ax, %gs                # gs = (not used)
-        movw            $_LDT_SEGMENT, %ax
-        lldt            %ax                     # LDT not used
-        movw            $_TSS_SEGMENT, %ax
-        ltr             %ax                     # TSS not used
+        movw            %ax, %fs                # fs = 0
+        movw            %ax, %gs                # gs = 0
 
-        # setup the init stack
+        # setup the inititial stack
         movl            $KERNEL_INIT_STACK, %ebp
         movl            %ebp, %esp
 
-        # setup the IDT and paging; first 1M of physical memory will be mapped
-        # at PAGE_OFFSET and temporarily identity mapped
-        call            setup_idt
+        # setup paging; first 1M of physical memory will be both mapped at
+        # PAGE_OFFSET and temporarily identity mapped
         call            setup_paging
 
         # now that paging is enabled and kernel-space is mapped in high memory,
-        # reload the stack registers, IDT and GDT registers, the boot params
-        # ptr, and EIP with their kernel-space equivalents
-        movl            $PAGE_OFFSET+KERNEL_INIT_STACK, %ebp
+        # reload the stack registers, the CPU descriptor registers and pointers,
+        # the boot params pointer, and EIP with their kernel-space equivalents
+        addl            $PAGE_OFFSET, %ebp
         movl            %ebp, %esp
         addl            $PAGE_OFFSET, boot_params_ptr
         addl            $PAGE_OFFSET, gdt_ptr
         addl            $PAGE_OFFSET, idt_ptr
+        addl            $PAGE_OFFSET, ldt_ptr
+        addl            $PAGE_OFFSET, tss_ptr
         lgdt            gdt_desc
         lidt            idt_desc
+        call            make_ldt_desc
+        call            make_tss_desc
         ljmp            $KERNEL_CS, $PAGE_OFFSET+_kernel_trampoline
 
 _kernel_trampoline:
         # now we are executing in high address space :-) this screws with
         # debugger symbols, luckily we aren't in this code for much longer...
 
-        # load boot params ptr, clear identity mapping, and pass control off
-        # to the high-mapped kernel
+        # load boot params ptr, clear the identity mapping, and pass control
+        # off to the high-mapped kernel
         movl            boot_params_ptr, %ecx       # fastcall param goes in ecx
         movl            $0, KERNEL_PGDIR            # clear identity mapping
-        movl            %cr3, %eax
-        movl            %eax, %cr3                  # flush TLB
+        movl            %cr3, %eax                  # flush TLB
+        movl            %eax, %cr3
         lcall           $KERNEL_CS, $start_kernel   # far call into the kernel
 
-        # we should never end up here... but in case we do, spin forever
-_idle:
+_idle:  # we should never end up here... but in case we do, spin forever
         jmp             _idle
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
 # -----------------------------------------------------------------------------
 
-##
-# -----------------------------------------------------------------------------
-# setup_idt
-# -----------------------------------------------------------------------------
-# Fill the IDT with interrupt vectors (see kernel/entry.S).
-##
-setup_idt:
-        # TODO
-        lidt            idt_desc
+make_ldt_desc:
+        movl            gdt_ptr, %ebx               # gdt_base in ebx
+        movl            ldt_ptr, %eax               # base in eax
+        movl            ldt_limit, %ecx             # limit in ecx
+        roll            $16, %eax                   # base[15:0] in upper eax
+        movl            %eax, %edx                  # base[31:16] in dx
+        movw            %cx, %ax                    # limit[15:0] in ax
+        movl            %eax, _LDT_SEGMENT(%ebx)    # write desc[31:0]
+        movw            %dx, %ax                    # base[31:24] in ah, base[23:16] in dl
+        rorl            $16, %ecx
+        movb            %cl, %al                    # limit[19:16] in al
+        andb            $0x0F, %al                  # g=0
+        movb            $0x82, %dh                  # p=1,dpl=0,s=0,type=2 (LDT)
+        rorl            $16, %eax                   # base[31:24] and limit[19:16] in upper eax
+        movw            %dx, %ax                    # everything else in ax
+        movl            %eax, _LDT_SEGMENT+4(%ebx)  # write desc[63:32]
+        movw            $_LDT_SEGMENT, %ax
+        lldt            %ax
+        ret
+
+make_tss_desc:
+        movl            gdt_ptr, %ebx               # gdt_base in ebx
+        movl            tss_ptr, %eax               # base in eax
+        movl            tss_limit, %ecx             # limit in ecx
+        roll            $16, %eax                   # base[15:0] in upper eax
+        movl            %eax, %edx                  # base[31:16] in dx
+        movw            %cx, %ax                    # limit[15:0] in ax
+        movl            %eax, _TSS_SEGMENT(%ebx)    # write desc[31:0]
+        movw            %dx, %ax                    # base[31:24] in ah, base[23:16] in dl
+        rorl            $16, %ecx
+        movb            %cl, %al                    # limit[19:16] in al
+        andb            $0x0F, %al                  # g=0
+        movb            $0x89, %dh                  # p=1,dpl=0,s=0,type=9 (TSS)
+        rorl            $16, %eax                   # base[31:24] and limit[19:16] in upper eax
+        movw            %dx, %ax                    # everything else in ax
+        movl            %eax, _TSS_SEGMENT+4(%ebx)  # write desc[63:32]
+        movw            $_TSS_SEGMENT, %ax
+        ltr             %ax
         ret
 
 # -----------------------------------------------------------------------------
+
+
 
 ##
 # -----------------------------------------------------------------------------
@@ -126,7 +155,7 @@ setup_idt:
 setup_paging:
 
 TABLE_COUNT = PAGE_SIZE >> 2
-PAGE_FLAGS = _PAGE_PRESENT | _PAGE_RW
+PAGE_FLAGS = _PAGE_PRESENT | _PAGE_RW | _PAGE_USER
 KERNEL_PDN = PAGE_OFFSET >> (PGDIR_SHIFT - 2)
 
         # zero the page directory
@@ -167,9 +196,9 @@ _map_low_1M_loop:
         movl            $KERNEL_PGDIR, %eax
         movl            %eax, %cr3
         movl            %cr0, %eax
-        orl             $CR0_PG, %eax
+        orl             $CR0_PG, %eax               # PG = paging enable
+        orl             $CR0_WP, %eax               # WP = write-protect
         movl            %eax, %cr0
-        # TODO: set WP and PSE bit in CR4
 
 _setup_paging_done:
         ret
@@ -186,11 +215,12 @@ boot_params_ptr:
 # Interrupt Descriptor Table
 .align PAGE_SIZE, 0
 _idt:
-        .fill           IDT_COUNT, 4, 0
+        .fill           IDT_COUNT, 8, 0
 _idt_end:
 
         .word           0                       # align
 idt_desc:
+idt_limit:
         .word           _idt_end - _idt - 1
 idt_ptr:
         .long           _idt
@@ -199,6 +229,8 @@ idt_ptr:
 
 # Global Descriptor Table
 # We load the real GDT here and not in stage2 so we can keep it in kernel space.
+# The LDT and TSS segments are loaded later, after we've begun executing the
+# higher-half kernel.
 .align 8
 _gdt:
         .quad           0                       # (must be 0)
@@ -207,12 +239,37 @@ _gdt:
         .quad           0x00CF92000000FFFF      # [0x18] KERNEL_DS  rw  ring0
         .quad           0x00CFFA000000FFFF      # [0x23] USER_CS    rx  ring3
         .quad           0x00CFF2000000FFFF      # [0x2B] USER_DS    rw  ring3
-        .quad           0x0080820000000000      # [0x30] _LDT_SEGMENT
-        .quad           0x0080890000000000      # [0x38] _TSS_SEGMENT
+        .quad           0                       # [0x30] _LDT_SEGMENT
+        .quad           0                       # [0x38] _TSS_SEGMENT
 _gdt_end:
 
         .word           0                       # align
 gdt_desc:
+gdt_limit:
         .word           _gdt_end - _gdt - 1
 gdt_ptr:
         .long           _gdt
+
+# -----------------------------------------------------------------------------
+
+.align 8
+_ldt:
+        .quad           0
+_ldt_end:
+
+ldt_limit:
+        .long           _ldt_end - _ldt - 1
+ldt_ptr:
+        .long           _ldt
+
+# -----------------------------------------------------------------------------
+
+.align 8
+_tss:
+        .fill           TSS_SIZE
+_tss_end:
+
+tss_limit:
+        .long           _tss_end - _tss - 1
+tss_ptr:
+        .long           _tss

@@ -25,13 +25,38 @@
 #include <paging.h>
 #include <fs.h>
 #include <io.h>
-
+#include <vga.h>
 
 #define KPRINT_BUFSIZ   4096
 extern struct vga *g_vga;
 extern bool system_console_initialized;
 
 uint8_t early_print_attr = 0x47;    // white on red
+
+static void lazy_init_vga(void)
+{
+    uint8_t grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
+    uint8_t fb_select = (grfx_misc & 0x0C) >> 2;
+    switch (fb_select) {
+        case VGA_FB_128K:
+            g_vga->fb = (void *) __phys_to_virt(0xA0000);
+            g_vga->fb_size_pages = 32;
+            break;
+        case VGA_FB_64K:
+            g_vga->fb = (void *) __phys_to_virt(0xA0000);
+            g_vga->fb_size_pages = 16;
+            break;
+        case VGA_FB_32K_LO:
+            g_vga->fb = (void *) __phys_to_virt(0xB0000);
+            g_vga->fb_size_pages = 8;
+            break;
+        case VGA_FB_32K_HI:
+        default:
+            g_vga->fb = (void *) __phys_to_virt(0xB8000);
+            g_vga->fb_size_pages = 8;
+            break;
+    }
+}
 
 void early_print(const char *buf, size_t count)
 {
@@ -44,6 +69,10 @@ void early_print(const char *buf, size_t count)
     static int pos = 0; // always prints at top left!
     const int cols = 80;
 
+    if (!g_vga->fb) {
+        lazy_init_vga();    // we tried to print before initializing the VGA!
+    }
+
     for (int i = 0; i < count; i++) {
         char c = buf[i];
         if (c == '\0') {
@@ -55,7 +84,6 @@ void early_print(const char *buf, size_t count)
             x = 0; y++; // no scroll support!
         }
         else {
-            // TODO: what if g_vga not yet initialized?
             ((uint16_t *) g_vga->fb)[pos] = (early_print_attr << 8) | c;
             x++;
         }

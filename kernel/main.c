@@ -39,6 +39,7 @@
 
 #define CHATTY 1
 
+extern void init_cpu(const struct boot_info *info);
 extern void init_irq(void);
 extern void init_tasks(void);
 extern void init_console(const struct boot_info *info);
@@ -75,65 +76,6 @@ int g_test_crash_kernel;
 void debug_interrupt(int irq_num);
 #endif
 
-void verify_gdt(void)
-{
-    volatile struct table_desc gdt_desc = { };
-    __sgdt(gdt_desc);
-
-    struct x86_desc *kernel_cs = x86_get_desc(gdt_desc.base, KERNEL_CS);
-    panic_assert(kernel_cs->seg.type == DESCTYPE_CODE_XR || kernel_cs->seg.type == DESCTYPE_CODE_XRA);
-    panic_assert(kernel_cs->seg.dpl == KERNEL_PL);
-    panic_assert(kernel_cs->seg.db == 1);
-    panic_assert(kernel_cs->seg.s == 1);
-    panic_assert(kernel_cs->seg.p == 1);
-
-    struct x86_desc *kernel_ds = x86_get_desc(gdt_desc.base, KERNEL_DS);
-    panic_assert(kernel_ds->seg.type == DESCTYPE_DATA_RW || kernel_ds->seg.type == DESCTYPE_DATA_RWA);
-    panic_assert(kernel_ds->seg.dpl == KERNEL_PL);
-    panic_assert(kernel_ds->seg.db == 1);
-    panic_assert(kernel_ds->seg.s == 1);
-    panic_assert(kernel_ds->seg.p == 1);
-
-    struct x86_desc *user_cs = x86_get_desc(gdt_desc.base, USER_CS);
-    panic_assert(user_cs->seg.type == DESCTYPE_CODE_XR);
-    panic_assert(user_cs->seg.dpl == USER_PL);
-    panic_assert(user_cs->seg.db == 1);
-    panic_assert(user_cs->seg.s == 1);
-    panic_assert(user_cs->seg.p == 1);
-
-    struct x86_desc *user_ds = x86_get_desc(gdt_desc.base, USER_DS);
-    panic_assert(user_ds->seg.type == DESCTYPE_DATA_RW);
-    panic_assert(user_ds->seg.dpl == USER_PL);
-    panic_assert(user_ds->seg.db == 1);
-    panic_assert(user_ds->seg.s == 1);
-    panic_assert(user_ds->seg.p == 1);
-}
-
-void init_idt(void)
-{
-    extern idt_thunk exception_thunks[NR_EXCEPTIONS];
-    extern idt_thunk irq_thunks[NR_IRQS];
-    extern idt_thunk _syscall;
-
-    struct x86_desc *idt;
-    volatile struct table_desc idt_desc = { };
-
-    __sidt(idt_desc);
-    idt = (struct x86_desc *) idt_desc.base;
-
-    for (int i = 0; i < NR_EXCEPTIONS; i++) {
-        int vec = VEC_INTEL + i;
-        make_trap_gate(&idt[vec], KERNEL_CS, KERNEL_PL, exception_thunks[i]);
-    }
-
-    for (int i = 0; i < NR_IRQS; i++) {
-        int vec = VEC_DEVICEIRQ + i;
-        make_intr_gate(&idt[vec], KERNEL_CS, KERNEL_PL, irq_thunks[i]);
-    }
-
-    make_trap_gate(&idt[VEC_SYSCALL], KERNEL_CS, USER_PL, _syscall);
-}
-
 struct boot_info _boot;
 struct boot_info *g_boot = &_boot;
 
@@ -144,12 +86,16 @@ extern __syscall int sys_close(int fd);
 
 __fastcall void start_kernel(const struct boot_info *info)
 {
-    // copy the boot info onto the stack so we don't accidentally overwrite it
+    // copy boot info into kernel memory so we don't accidentally overwrite it
     memcpy(g_boot, info, sizeof(struct boot_info));
-    info = g_boot;  // for convenience ;)
+    info = g_boot;  // reassign ptr for convenience ;)
+
+    kprint("Hello, world!");
+
+    // finish setting up CPU descriptors
+    init_cpu(info);
 
     // initialize interrupts and timers
-    init_idt();
     init_pic();
     init_irq();
     init_timer();
@@ -160,8 +106,6 @@ __fastcall void start_kernel(const struct boot_info *info)
     init_console(info);
     // safe to print now using kprint, keyboard also works
 
-    // ensure the GDT wasn't mucked with
-    verify_gdt();
     // TODO: basic tests
 
     init_serial();
@@ -175,59 +119,59 @@ __fastcall void start_kernel(const struct boot_info *info)
     irq_register(IRQ_TIMER, debug_interrupt);
 #endif
 
-    kprint("enabling interrupts...\n");
-    __sti();
+    // kprint("enabling interrupts...\n");
+    // __sti();
 
-    // virtual console #1 (default, ALT+F1 on keyboard)
-    {
-        kprint(">> /dev/tty1\n");
-        int fd = sys_open("/dev/tty1", 0);
-        if (fd < 0) {
-            panic("open(): failed with %d\n", fd);
-        }
-        kprint("open(): returned %d\n", fd);
+    // // virtual console #1 (default, ALT+F1 on keyboard)
+    // {
+    //     kprint(">> /dev/tty1\n");
+    //     int fd = sys_open("/dev/tty1", 0);
+    //     if (fd < 0) {
+    //         panic("open(): failed with %d\n", fd);
+    //     }
+    //     kprint("open(): returned %d\n", fd);
 
-        const char *hello = "\e[33mHello from write() syscall!\e[0m\n";
-        ssize_t count = sys_write(fd, hello, strlen(hello));
-        if (count < 0) {
-            panic("write(): failed with %lld\n", count);
-        }
-        kprint("write(): returned %lld\n", count);
+    //     const char *hello = "\e[33mHello from write() syscall!\e[0m\n";
+    //     ssize_t count = sys_write(fd, hello, strlen(hello));
+    //     if (count < 0) {
+    //         panic("write(): failed with %lld\n", count);
+    //     }
+    //     kprint("write(): returned %lld\n", count);
 
-        int ret = sys_close(fd);
-        // if (ret < 0) {
-        //     panic("close(): failed with %d\n", ret);
-        // }
-        kprint("close(): returned %d\n", ret);
-    }
+    //     int ret = sys_close(fd);
+    //     // if (ret < 0) {
+    //     //     panic("close(): failed with %d\n", ret);
+    //     // }
+    //     kprint("close(): returned %d\n", ret);
+    // }
 
 
-    // serial port
-    {
-        kprint(">> /dev/ttyS0\n");
-        int fd = sys_open("/dev/ttyS0", 0);
-        if (fd < 0) {
-            panic("open(): failed with %d\n", fd);
-        }
-        kprint("open(): returned %d\n", fd);
+    // // serial port
+    // {
+    //     kprint(">> /dev/ttyS0\n");
+    //     int fd = sys_open("/dev/ttyS0", 0);
+    //     if (fd < 0) {
+    //         panic("open(): failed with %d\n", fd);
+    //     }
+    //     kprint("open(): returned %d\n", fd);
 
-        const char *hello = "\e[36mOH-WES says hello over RS-232!\e[0m\r\n";
-        ssize_t count = sys_write(fd, hello, strlen(hello));
-        if (count < 0) {
-            panic("write(): failed with %lld\n", count);
-        }
-        kprint("write(): returned %lld\n", count);
+    //     const char *hello = "\e[36mOH-WES says hello over RS-232!\e[0m\r\n";
+    //     ssize_t count = sys_write(fd, hello, strlen(hello));
+    //     if (count < 0) {
+    //         panic("write(): failed with %lld\n", count);
+    //     }
+    //     kprint("write(): returned %lld\n", count);
 
-        int ret = sys_close(fd);
-        // if (ret < 0) {
-        //     panic("close(): failed with %d\n", ret);
-        // }
-        kprint("close(): returned %d\n", ret);
-    }
+    //     int ret = sys_close(fd);
+    //     // if (ret < 0) {
+    //     //     panic("close(): failed with %d\n", ret);
+    //     // }
+    //     kprint("close(): returned %d\n", ret);
+    // }
 
-    // kprint("boot: entering ring3...\n");
-    // uint32_t user_stack = 0x80000;
-    // enter_ring3((uint32_t) init +  PAGE_OFFSET, user_stack);
+    kprint("boot: entering ring3...\n");
+    uint32_t user_stack = __phys_to_virt(KERNEL_INIT_STACK);
+    enter_ring3((uint32_t) init, user_stack);
 
     kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
     for (;;);
@@ -242,15 +186,16 @@ int init(void)
 
     // TODO: load shell program from disk
 
-    int fd = open("/dev/console", 0);
-    if (fd < 0) {
-        panic("open(): failed with %d\n", errno);
-    }
+    // int fd = open("/dev/console", 0);
+    // if (fd < 0) {
+    //     panic("open(): failed with %d\n", errno);
+    // }
 
     // printf("\e4\e[5;33mHello, world!\e[m\n");
     // basic_shell();
 
-    return 0;
+    return 69;
+
 }
 
 // static void basic_shell(void)
@@ -371,6 +316,11 @@ static size_t drain_queue(struct ring *q, char *buf, size_t bufsiz)
     return count;
 }
 
+static void leave_ring3(int retval)
+{
+    exit(retval);
+}
+
 static void enter_ring3(uint32_t entry, uint32_t stack)
 {
     assert(getpl() == KERNEL_PL);
@@ -379,6 +329,8 @@ static void enter_ring3(uint32_t entry, uint32_t stack)
     struct eflags eflags;
     cli_save(eflags);
     eflags.intf = 1;        // enable interrupts
+
+    ((uint32_t *) stack)[0] = (uint32_t) leave_ring3;
 
     // ring 3 initial register context
     struct iregs regs = {};

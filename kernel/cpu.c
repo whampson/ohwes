@@ -22,6 +22,7 @@
  */
 
 #include <ohwes.h>
+#include <config.h>
 #include <boot.h>
 #include <cpu.h>
 #include <interrupt.h>
@@ -85,6 +86,159 @@
 #define CPUID_PAE               (1 << 6)
 #define CPUID_PGE               (1 << 13)
 #define CPUID_PAT               (1 << 16)
+
+struct x86_desc * get_gdt(void)
+{
+    volatile struct table_desc desc = { };
+    __sgdt(desc);
+
+    return (struct x86_desc *) desc.base;
+}
+
+struct tss * get_tss(void)
+{
+    struct x86_desc *gdt = get_gdt();
+    struct x86_desc *tss_desc = x86_get_desc(gdt, _TSS_SEGMENT);
+
+    return (struct tss *) ((tss_desc->tss.basehi << 24) | tss_desc->tss.baselo);
+}
+
+void verify_gdt(void)
+{
+    struct x86_desc *gdt = get_gdt();
+
+    struct x86_desc *kernel_cs = x86_get_desc(gdt, KERNEL_CS);
+    panic_assert(kernel_cs->seg.type == DESCTYPE_CODE_XR || kernel_cs->seg.type == DESCTYPE_CODE_XRA);
+    panic_assert(kernel_cs->seg.dpl == KERNEL_PL);
+    panic_assert(kernel_cs->seg.db == 1);
+    panic_assert(kernel_cs->seg.s == 1);
+    panic_assert(kernel_cs->seg.g == 1);
+    panic_assert(kernel_cs->seg.p == 1);
+
+    struct x86_desc *kernel_ds = x86_get_desc(gdt, KERNEL_DS);
+    panic_assert(kernel_ds->seg.type == DESCTYPE_DATA_RW || kernel_ds->seg.type == DESCTYPE_DATA_RWA);
+    panic_assert(kernel_ds->seg.dpl == KERNEL_PL);
+    panic_assert(kernel_ds->seg.db == 1);
+    panic_assert(kernel_ds->seg.s == 1);
+    panic_assert(kernel_ds->seg.g == 1);
+    panic_assert(kernel_ds->seg.p == 1);
+
+    struct x86_desc *user_cs = x86_get_desc(gdt, USER_CS);
+    panic_assert(user_cs->seg.type == DESCTYPE_CODE_XR);
+    panic_assert(user_cs->seg.dpl == USER_PL);
+    panic_assert(user_cs->seg.db == 1);
+    panic_assert(user_cs->seg.s == 1);
+    panic_assert(user_cs->seg.g == 1);
+    panic_assert(user_cs->seg.p == 1);
+
+    struct x86_desc *user_ds = x86_get_desc(gdt, USER_DS);
+    panic_assert(user_ds->seg.type == DESCTYPE_DATA_RW);
+    panic_assert(user_ds->seg.dpl == USER_PL);
+    panic_assert(user_ds->seg.db == 1);
+    panic_assert(user_ds->seg.s == 1);
+    panic_assert(user_ds->seg.g == 1);
+    panic_assert(user_ds->seg.p == 1);
+
+    struct x86_desc *ldt_desc = x86_get_desc(gdt, _LDT_SEGMENT);
+    panic_assert(ldt_desc->seg.type == DESCTYPE_LDT);
+    panic_assert(ldt_desc->seg.dpl == KERNEL_PL);
+    panic_assert(ldt_desc->seg.s == 0);
+    panic_assert(ldt_desc->seg.g == 0);
+    panic_assert(ldt_desc->seg.p == 1);
+    // TODO: verify base/limit in kernel space
+
+    struct x86_desc *tss_desc = x86_get_desc(gdt, _TSS_SEGMENT);
+    panic_assert(tss_desc->tss.type == DESCTYPE_TSS32_BUSY);
+    panic_assert(tss_desc->tss.dpl == KERNEL_PL);
+    panic_assert(tss_desc->tss.g == 0);
+    panic_assert(tss_desc->tss.p == 1);
+    // TODO: verify base/limit in kernel space
+}
+
+void init_idt(void)
+{
+    extern idt_thunk exception_thunks[NR_EXCEPTIONS];
+    extern idt_thunk irq_thunks[NR_IRQS];
+    extern idt_thunk _syscall;
+
+    struct x86_desc *idt;
+    volatile struct table_desc idt_desc = { };
+
+    __sidt(idt_desc);
+    idt = (struct x86_desc *) idt_desc.base;
+
+    for (int i = 0; i < NR_EXCEPTIONS; i++) {
+        int vec = VEC_INTEL + i;
+        make_trap_gate(&idt[vec], KERNEL_CS, KERNEL_PL, exception_thunks[i]);
+    }
+
+    for (int i = 0; i < NR_IRQS; i++) {
+        int vec = VEC_DEVICEIRQ + i;
+        make_intr_gate(&idt[vec], KERNEL_CS, KERNEL_PL, irq_thunks[i]);
+    }
+
+    make_trap_gate(&idt[VEC_SYSCALL], KERNEL_CS, USER_PL, &_syscall);
+}
+
+void init_tss(void)
+{
+    struct tss *tss = get_tss();
+    tss->ss0 = KERNEL_DS;
+    tss->esp0 = __phys_to_virt(KERNEL_INIT_STACK);
+    tss->ldt_segsel = _LDT_SEGMENT;
+}
+
+void init_cpu(const struct boot_info *info)
+{
+    // struct x86_desc *gdt;
+    // volatile struct table_desc gdt_desc = { };
+
+    // extern intptr_t _tss_ptr;
+    // extern uint32_t _tss_limit;
+    // struct tss *tss;
+    // uint32_t tss_limit;
+    // void *tss_desc;
+
+    // extern intptr_t _ldt_ptr;
+    // extern uint32_t _ldt_limit;
+    // struct x86_desc *ldt;
+    // uint32_t ldt_limit;
+    // void *ldt_desc;
+
+    // // grab the GDT
+    // __sgdt(gdt_desc);
+    // gdt = (struct x86_desc *) gdt_desc.base;
+
+    // // this is nasty... convert the TSS symbols to their high-mapped equivalents
+    // tss = *((struct tss **) __phys_to_virt((intptr_t) &_tss_ptr));
+    // tss_limit = *((uint32_t *) __phys_to_virt((intptr_t) &_tss_limit)); // TODO: make a macro for this or something...
+
+    // // setup minimal TSS
+    // tss->ss0 = KERNEL_DS;
+    // tss->esp0 = __phys_to_virt(KERNEL_INIT_STACK);
+    // tss->ldt_segsel = _LDT_SEGMENT;
+
+    // // write the TSS descriptor to the GDT
+    // tss_desc = x86_get_desc(gdt, _TSS_SEGMENT);
+    // make_tss_desc(tss_desc, KERNEL_PL, (intptr_t) tss, tss_limit);
+    // __ltr(_TSS_SEGMENT);
+
+    // // now do the same for the LDT, convert symbols
+    // ldt = *((struct x86_desc **) __phys_to_virt((intptr_t) &_ldt_ptr));
+    // ldt_limit = *((uint32_t *) __phys_to_virt((intptr_t) &_ldt_limit));
+
+    // // LDT is unused, so we don't need to set anything up, but we're going to
+    // // load one anyway to keep the CPU happy.
+
+    // // write the LDT descriptor to the GDT
+    // ldt_desc = x86_get_desc(gdt, _LDT_SEGMENT);
+    // make_ldt_desc(ldt_desc, KERNEL_PL, (intptr_t) ldt, ldt_limit);
+    // __lldt(_LDT_SEGMENT);
+
+    verify_gdt();
+    init_idt();
+    init_tss();
+}
 
 bool cpu_has_cpuid(void)
 {

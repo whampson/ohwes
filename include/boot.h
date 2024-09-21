@@ -130,17 +130,22 @@ struct boot_info {
     //
     // !!! KEEP OFFSETS IN-LINE WITH src/boot/stage2.h !!!
     //
-    intptr_t ebda_base;             // Extended BIOS Data Area
-    const acpi_mmap_t *mem_map;     // ACPI Memory Map (INT 15h,AX=E820h)
 
+    // important memory addresses
+    intptr_t ebda_base;             // Extended BIOS Data Area
+
+    // memory size/layout information
+    const acpi_mmap_t *mem_map;     // ACPI Memory Map (INT 15h,AX=E820h)
     uint32_t kb_low;                // 1K blocks 0 to 640K (INT 12h)
     uint32_t kb_high;               // 1K blocks 1M to 16M (INT 15h,AX=88h)
     uint32_t kb_high_e801h;         // 1K blocks 1M to 16M (INT 15h,AX=E801h)
     uint32_t kb_extended;           // 64K blocks 16M to 4G (INT 15h,AX=E801h)
 
+    // hardware info
     struct hwflags hwflags;         // system hardware flags (INT 11h)
-
     uint32_t a20_method;            // method used to enable A20 line, one of A20_*
+
+    // console info
     uint32_t vga_mode;              // VGA video mode (INT 10h,AH=0Fh)
     uint32_t vga_rows;              // VGA row count
     uint32_t vga_cols;              // VGA column count (INT 10h,AH=0Fh)
