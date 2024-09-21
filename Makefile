@@ -125,7 +125,7 @@ define add-target
 
         $${${1}_GENLDSCRIPT}: $${${1}_LDSCRIPT} $${${1}_OBJECTS}
 	    @mkdir -p $$(dir $$@)
-	    @echo -e '/*\n * THIS FILE WAS AUTO-GENERATED. DO NOT EDIT!\n * Source: $${${1}_LDSCRIPT}\n */\n' > $$@
+	    @printf '/*\n * THIS FILE WAS AUTO-GENERATED. DO NOT EDIT!\n * Source: $${${1}_LDSCRIPT}\n */\n' > $$@
 	    $$(strip ${CC} -E -P -x c -D__LDSCRIPT__ $${INCLUDES} $$< >> $$@)
     endif
 endef
