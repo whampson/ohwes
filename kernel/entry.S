@@ -28,24 +28,6 @@
 #include <x86.h>
 #include <ohwes.h>
 
-// ##
-// # kentry:
-// # Global entry point for the kernel. This is where the bootloader drops us off.
-// ##
-// .globl kentry
-// kentry:
-//         cli
-//         call            kmain
-
-##
-# idle:
-# And this is where we lay to our bones to rest...
-##
-.globl idle
-idle:
-        hlt
-        jmp             idle
-
 ##
 # recv_interrupt:
 # Common Interrupt Handler

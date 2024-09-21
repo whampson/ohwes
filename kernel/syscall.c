@@ -43,7 +43,6 @@ __syscall __noreturn int sys_exit(int status)
     assert(getpl() == KERNEL_PL);
 
     kprint("\nexit: returned %d\n", status);
-    // idle();     // TODO: switch task, handle signals, etc.
 
     die();
 }
