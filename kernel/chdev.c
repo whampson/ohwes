@@ -24,7 +24,6 @@
 #include <ohwes.h>
 
 struct chdev {
-    bool valid;
     uint16_t major;
     const char *name;
     struct file_ops *fops;

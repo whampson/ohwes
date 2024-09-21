@@ -29,7 +29,7 @@
 #define MAX_PATH    256
 
 struct dev_file {
-    uint16_t dev_id;
+    dev_t dev_id;
     const char *name;
 };
 
@@ -88,16 +88,38 @@ static void free_fd(struct file *file)
 static struct inode * find_file(struct file *file, const char *name)
 {
     struct inode *inode;
-    inode = NULL;
+    struct dev_file *dev;
 
     // TODO: TEMP get rid of this lol
-    if (strcmp(name, "/dev/tty1") == 0) {
-        inode = get_chdev_inode(TTY_MAJOR, 1);
-        file->fops = get_chdev_fops(TTY_MAJOR);
-    }
-    else if (strcmp(name, "/dev/ttyS0") == 0) {
-        inode = get_chdev_inode(TTYS_MAJOR, 0);
-        file->fops = get_chdev_fops(TTYS_MAJOR);
+    struct dev_file devs[] = {
+        { .name = "/dev/tty1",  .dev_id = __mkdev(TTY_MAJOR,  1) },
+        { .name = "/dev/tty2",  .dev_id = __mkdev(TTY_MAJOR,  2) },
+        { .name = "/dev/tty3",  .dev_id = __mkdev(TTY_MAJOR,  3) },
+        { .name = "/dev/tty4",  .dev_id = __mkdev(TTY_MAJOR,  4) },
+        { .name = "/dev/tty5",  .dev_id = __mkdev(TTY_MAJOR,  5) },
+        { .name = "/dev/tty6",  .dev_id = __mkdev(TTY_MAJOR,  6) },
+        { .name = "/dev/tty7",  .dev_id = __mkdev(TTY_MAJOR,  7) },
+        { .name = "/dev/ttyS0", .dev_id = __mkdev(TTYS_MAJOR, 0) },
+        { .name = "/dev/ttyS1", .dev_id = __mkdev(TTYS_MAJOR, 1) },
+        { .name = "/dev/ttyS2", .dev_id = __mkdev(TTYS_MAJOR, 2) },
+        { .name = "/dev/ttyS3", .dev_id = __mkdev(TTYS_MAJOR, 3) },
+        { .name = NULL, .dev_id = 0 },
+    };
+
+
+    dev = &devs[0];
+    do {
+        if (strcmp(name, dev->name) == 0) {
+            break;
+        }
+    } while ((++dev)->name);
+
+    inode = NULL;
+    file->fops = NULL;
+
+    if (dev->name) {
+        file->fops = get_chdev_fops(_DEV_MAJ(dev->dev_id));
+        inode = get_chdev_inode(_DEV_MAJ(dev->dev_id), _DEV_MIN(dev->dev_id));
     }
 
     return inode;
