@@ -7,3 +7,5 @@ SOURCES := \
     stdio.c \
     string.c \
     syscall.c \
+
+TARGET_CFLAGS  := -nostdinc -ffreestanding
