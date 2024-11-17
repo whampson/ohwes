@@ -37,6 +37,7 @@
 setup_kernel:
         movl            %ecx, boot_params_ptr   # store boot params
         lgdt            gdt_desc                # load the real GDT
+        lidt            idt_desc                #  and the real IDT
         ljmp            $KERNEL_CS, $_setup     # cs = KERNEL_CS
 _setup:
         # reload the segment registers
@@ -67,25 +68,24 @@ _setup:
         addl            $PAGE_OFFSET, idt_ptr
         addl            $PAGE_OFFSET, ldt_ptr
         addl            $PAGE_OFFSET, tss_ptr
+        call            make_ldt_desc
+        call            make_tss_desc
         lgdt            gdt_desc
         lidt            idt_desc
         ljmp            $KERNEL_CS, $PAGE_OFFSET+_kernel_trampoline
-
 _kernel_trampoline:
         # now we are executing in high address space :-) this screws with
         # debugger symbols, luckily we aren't in this code for much longer...
         # clear the identity mapping
         movl            $0, KERNEL_PGDIR
-#endif
-
-        # setup the LDT and TSS; this must be performed after any higher-half
-        # adjustments are made to the GDT
+#else
+        # build the LDT and TSS
         call            make_ldt_desc
         call            make_tss_desc
+#endif
 
         # load boot params ptr and pass control off to the kernel
         movl            boot_params_ptr, %ecx       # fastcall param goes in ecx
-
         movl            %cr3, %eax                  # flush TLB
         movl            %eax, %cr3
         lcall           $KERNEL_CS, $start_kernel   # far call into the kernel
