@@ -184,7 +184,7 @@ void init_tss(void)
 {
     struct tss *tss = get_tss();
     tss->ss0 = KERNEL_DS;
-    tss->esp0 = __phys_to_virt(KERNEL_INIT_STACK);
+    tss->esp0 = __phys_to_virt(INTERRUPT_STACK);
     tss->ldt_segsel = _LDT_SEGMENT;
 }
 
@@ -215,7 +215,7 @@ void init_cpu(const struct boot_info *info)
 
     // // setup minimal TSS
     // tss->ss0 = KERNEL_DS;
-    // tss->esp0 = __phys_to_virt(KERNEL_INIT_STACK);
+    // tss->esp0 = __phys_to_virt(INITIAL_STACK);
     // tss->ldt_segsel = _LDT_SEGMENT;
 
     // // write the TSS descriptor to the GDT

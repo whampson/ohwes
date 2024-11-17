@@ -61,14 +61,16 @@ typedef int (*test_main)(void);
 extern void tmain(void);
 #endif
 
-int init(void);     // usermode entry point
+void _start(void);  // usermode runtime entry point
+int main(void);     // usermode program entry point
+
+static void usermode(uint32_t stack);
 
 static void basic_shell(void);
 static size_t /*
     it is now my duty to completely
 */  drain_queue(struct ring *q, char *buf, size_t bufsiz);
 
-static void enter_ring3(uint32_t entry, uint32_t stack);
 static void print_info(const struct boot_info *info);
 
 #ifdef DEBUG
@@ -90,7 +92,7 @@ __fastcall void start_kernel(const struct boot_info *info)
     memcpy(g_boot, info, sizeof(struct boot_info));
     info = g_boot;  // reassign ptr for convenience ;)
 
-    kprint("Hello, world!");
+    kprint("Early print test...\n");
 
     // finish setting up CPU descriptors
     init_cpu(info);
@@ -105,6 +107,8 @@ __fastcall void start_kernel(const struct boot_info *info)
     init_tty();
     init_console(info);
     // safe to print now using kprint, keyboard also works
+
+    kprint("Print test...\n");
 
     // TODO: basic tests
 
@@ -169,15 +173,59 @@ __fastcall void start_kernel(const struct boot_info *info)
     //     kprint("close(): returned %d\n", ret);
     // }
 
-    kprint("boot: entering ring3...\n");
-    uint32_t user_stack = __phys_to_virt(KERNEL_INIT_STACK);
-    enter_ring3((uint32_t) init, user_stack);
+    kprint("boot: entering user mode...\n");
+    usermode(__phys_to_virt(USER_STACK));
 
     kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
     for (;;);
 }
 
-int init(void)
+static void usermode(uint32_t stack)
+{
+    assert(getpl() == KERNEL_PL);
+
+    // tweak flags
+    struct eflags eflags;
+    cli_save(eflags);
+    eflags.intf = 1;        // enable interrupts
+
+    uint32_t entry = (uint32_t) _start;
+
+    // ring 3 initial register context
+    struct iregs regs = {};
+    regs.cs = USER_CS;
+    regs.ss = USER_DS;
+    regs.ds = USER_DS;
+    regs.es = USER_DS;
+    regs.ebp = stack;
+    regs.esp = stack;
+    regs.eip = entry;
+    regs.eflags = eflags._value;
+
+    // drop to ring 3
+    switch_context(&regs);
+}
+
+#define SYS_CHECK(sys)                                          \
+({                                                              \
+    int __sysret = (sys);                                       \
+    if (__sysret < 0) {                                         \
+        panic(#sys ": failed with 0x%X (%d)\n", errno, errno);  \
+    }                                                           \
+    __sysret;                                                   \
+})
+
+void _start(void)
+{
+    int fd0 = SYS_CHECK(open("/dev/keyboard", 0));      /// TODO: open /dev/console, then call dup() to duplicate file desc
+    int fd1 = SYS_CHECK(open("/dev/console", 0));
+    int ret = main();
+    close(fd1);
+    close(fd0);
+    exit(ret);
+}
+
+int main(void)
 {
     //
     // Runs in ring 3.
@@ -186,12 +234,8 @@ int init(void)
 
     // TODO: load shell program from disk
 
-    // int fd = open("/dev/console", 0);
-    // if (fd < 0) {
-    //     panic("open(): failed with %d\n", errno);
-    // }
 
-    // printf("\e4\e[5;33mHello, world!\e[m\n");
+    printf("\e4\e[5;33mHello, world!\e[m\n");
     // basic_shell();
 
     return 69;
@@ -314,37 +358,6 @@ static size_t drain_queue(struct ring *q, char *buf, size_t bufsiz)
         *buf = '\0';
     }
     return count;
-}
-
-static void leave_ring3(int retval)
-{
-    exit(retval);
-}
-
-static void enter_ring3(uint32_t entry, uint32_t stack)
-{
-    assert(getpl() == KERNEL_PL);
-
-    // tweak flags
-    struct eflags eflags;
-    cli_save(eflags);
-    eflags.intf = 1;        // enable interrupts
-
-    ((uint32_t *) stack)[0] = (uint32_t) leave_ring3;
-
-    // ring 3 initial register context
-    struct iregs regs = {};
-    regs.cs = USER_CS;
-    regs.ss = USER_DS;
-    regs.ds = USER_DS;
-    regs.es = USER_DS;
-    regs.ebp = stack;
-    regs.esp = stack;
-    regs.eip = entry;
-    regs.eflags = eflags._value;
-
-    // drop to ring 3
-    switch_context(&regs);
 }
 
 static void print_info(const struct boot_info *info)

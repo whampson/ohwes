@@ -49,7 +49,7 @@ _setup:
         movw            %ax, %gs                # gs = 0
 
         # setup the inititial stack
-        movl            $KERNEL_INIT_STACK, %ebp
+        movl            $INITIAL_STACK, %ebp
         movl            %ebp, %esp
 
         # setup paging; first 1M of physical memory will be both mapped at
