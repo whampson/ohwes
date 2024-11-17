@@ -49,16 +49,17 @@ _setup:
         movw            %ax, %gs                # gs = 0
 
         # setup the inititial stack
-        movl            $KERNEL_INIT_STACK, %ebp
+        movl            $INITIAL_STACK, %ebp
         movl            %ebp, %esp
 
-        # setup paging; first 1M of physical memory will be both mapped at
-        # PAGE_OFFSET and temporarily identity mapped
+        # setup paging; first 1M of physical memory will be identity mapped
         call            setup_paging
 
-        # now that paging is enabled and kernel-space is mapped in high memory,
-        # reload the stack registers, the CPU descriptor registers and pointers,
-        # the boot params pointer, and EIP with their kernel-space equivalents
+#if HIGHER_GROUND
+        # now that paging is enabled and kernel-space is also mapped in high
+        # memory at PAGE_OFFSET, reload the stack registers, the CPU descriptor
+        # registers and pointers, the boot params pointer, and EIP with their
+        # kernel-space equivalents
         addl            $PAGE_OFFSET, %ebp
         movl            %ebp, %esp
         addl            $PAGE_OFFSET, boot_params_ptr
@@ -68,18 +69,23 @@ _setup:
         addl            $PAGE_OFFSET, tss_ptr
         lgdt            gdt_desc
         lidt            idt_desc
-        call            make_ldt_desc
-        call            make_tss_desc
         ljmp            $KERNEL_CS, $PAGE_OFFSET+_kernel_trampoline
 
 _kernel_trampoline:
         # now we are executing in high address space :-) this screws with
         # debugger symbols, luckily we aren't in this code for much longer...
+        # clear the identity mapping
+        movl            $0, KERNEL_PGDIR
+#endif
 
-        # load boot params ptr, clear the identity mapping, and pass control
-        # off to the high-mapped kernel
+        # setup the LDT and TSS; this must be performed after any higher-half
+        # adjustments are made to the GDT
+        call            make_ldt_desc
+        call            make_tss_desc
+
+        # load boot params ptr and pass control off to the kernel
         movl            boot_params_ptr, %ecx       # fastcall param goes in ecx
-        movl            $0, KERNEL_PGDIR            # clear identity mapping
+
         movl            %cr3, %eax                  # flush TLB
         movl            %eax, %cr3
         lcall           $KERNEL_CS, $start_kernel   # far call into the kernel
@@ -187,8 +193,10 @@ _map_low_1M_loop:
         movl            $KERNEL_PGDIR, %edi
         movl            $KERNEL_PGTBL, %eax
         orl             $PAGE_FLAGS, %eax
-        movl            %eax, KERNEL_PDN(%edi)      # "high" map
         movl            %eax, 0(%edi)               # identity map
+#if HIGHER_GROUND
+        movl            %eax, KERNEL_PDN(%edi)      # "high" map
+#endif
 
         # enable paging
         movl            $KERNEL_PGDIR, %eax

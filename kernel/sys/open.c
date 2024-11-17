@@ -90,7 +90,15 @@ static struct inode * find_file(struct file *file, const char *name)
     struct inode *inode;
     inode = NULL;
 
-    // TODO: TEMP get rid of this lol
+    // TODO: TEMP HACK get rid of this lol
+    if (strcmp(name, "/dev/keyboard") == 0) {
+        inode = get_chdev_inode(TTY_MAJOR, 1);
+        file->fops = get_chdev_fops(TTY_MAJOR);
+    }
+    if (strcmp(name, "/dev/console") == 0) {
+        inode = get_chdev_inode(TTY_MAJOR, 1);
+        file->fops = get_chdev_fops(TTY_MAJOR);
+    }
     if (strcmp(name, "/dev/tty1") == 0) {
         inode = get_chdev_inode(TTY_MAJOR, 1);
         file->fops = get_chdev_fops(TTY_MAJOR);

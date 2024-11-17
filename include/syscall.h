@@ -28,14 +28,13 @@
 //
 // syscall numbers
 //
-#define _sys_init                       0
-#define _sys_exit                       1
-#define _sys_read                       2
-#define _sys_write                      3
-#define _sys_open                       4
-#define _sys_close                      5
-#define _sys_ioctl                      6
-#define NR_SYSCALLS                     7
+#define _sys_exit                       0
+#define _sys_read                       1
+#define _sys_write                      2
+#define _sys_open                       3
+#define _sys_close                      4
+#define _sys_ioctl                      5
+#define NR_SYSCALLS                     6
 
 #ifndef __ASSEMBLER__
 

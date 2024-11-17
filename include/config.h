@@ -28,11 +28,21 @@
 #define PRINT_PAGE_MAP          1
 #define E9_HACK                 1
 
+#define HIGHER_GROUND           0       // map kernel in high virtual address space
+
+#if HIGHER_GROUND
+  #define KERNEL_VA_BASE        0xC0000000
+#else
+  #define KERNEL_VA_BASE        0x0
+#endif
+
 #define BOOT_MEMMAP             0x1000
 #define KERNEL_PGDIR            0x2000
 #define KERNEL_PGTBL            0x3000
 #define KERNEL_LMA              0x10000     // physical load address
-#define KERNEL_INIT_STACK       KERNEL_LMA  // grows toward 0
+#define INITIAL_STACK           (KERNEL_LMA - (0 * PAGE_SIZE))  // grows toward 0
+#define INTERRUPT_STACK         (KERNEL_LMA - (1 * PAGE_SIZE))
+#define USER_STACK              (KERNEL_LMA - (2 * PAGE_SIZE))
 
 #define NR_CONSOLE              7
 #define NR_TTY                  NR_CONSOLE
@@ -66,7 +76,7 @@
 
 // VGA params
 #define VGA_MODE_SELECT         MODE_03h
-#define VGA_FONT_SELECT         VGA_FONT_80x50
+#define VGA_FONT_SELECT         VGA_FONT_80x28
 #define VGA_FB_SELECT           VGA_FB_64K
 
 #endif // __CONFIG_H

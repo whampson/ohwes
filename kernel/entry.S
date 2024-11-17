@@ -193,7 +193,7 @@ exception_handlers:
         .long           crash, crash, crash, crash, crash, crash, crash, crash
 
 syscall_handlers:
-        .long           init, sys_exit, sys_read, sys_write, sys_open, sys_close
+        .long           sys_exit, sys_read, sys_write, sys_open, sys_close
         .long           sys_ioctl
 
 
