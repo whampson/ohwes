@@ -40,8 +40,7 @@
 #define PDE_COUNT               1024                // PDEs per page directory
 #define PTE_COUNT               1024                // PTEs per page table
 
-#define PAGE_OFFSET             0xC0000000
-#define LOW_MEMORY              0x00010000
+#define PAGE_OFFSET             KERNEL_VA_BASE
 
 //   10987654321098765432109876543210
 //  +---------+---------+-----------+

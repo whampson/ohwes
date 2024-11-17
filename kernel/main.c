@@ -86,13 +86,15 @@ extern __syscall int sys_write(int fd, const void *buf, size_t count);
 extern __syscall int sys_open(const char *name, int flags);
 extern __syscall int sys_close(int fd);
 
+// linker script symbols -- use & to get assigned value
+extern uintptr_t __kernel_text_vma;
+extern uintptr_t __kernel_base;
+
 __fastcall void start_kernel(const struct boot_info *info)
 {
     // copy boot info into kernel memory so we don't accidentally overwrite it
     memcpy(g_boot, info, sizeof(struct boot_info));
     info = g_boot;  // reassign ptr for convenience ;)
-
-    kprint("Early print test...\n");
 
     // finish setting up CPU descriptors
     init_cpu(info);
@@ -108,7 +110,8 @@ __fastcall void start_kernel(const struct boot_info *info)
     init_console(info);
     // safe to print now using kprint, keyboard also works
 
-    kprint("Print test...\n");
+    kprint("boot: kernel space mapped at 0x%x\n", &__kernel_base);
+    kprint("boot: kernel .text mapped at 0x%x\n", &__kernel_text_vma);
 
     // TODO: basic tests
 

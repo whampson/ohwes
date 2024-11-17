@@ -36,8 +36,9 @@ SECTIONS
     }
     . = ALIGN(PAGE_SIZE);
 
-    __text_lma = .;
-    .text PAGE_OFFSET + __text_lma : AT (__text_lma)
+    __kernel_text_lma = .;
+    __kernel_text_vma = PAGE_OFFSET + __kernel_text_lma;
+    .text __kernel_text_vma : AT (__kernel_text_lma)
     {
         *(.text*)
     }

@@ -351,9 +351,11 @@ int switch_console(int num)
     read_cr3(pgdir_addr);
     pgdir_addr = __phys_to_virt(pgdir_addr);
 
+#if HIGHER_GROUND
     // enable kernel identity mapping so we can operate on page tables
     pde_t *ident_pde = (pde_t *) pgdir_addr;
     *ident_pde = __mkpde(KERNEL_PGTBL, _PAGE_RW);
+#endif
 
     // identity map old frame buffer, so it will write to back buffer
     for (int i = 0; i < PAGES_PER_CONSOLE_FB; i++) {
@@ -376,8 +378,10 @@ int switch_console(int num)
         *pte = __mkpte(__virt_to_phys(vga_page), _PAGE_RW);
     }
 
-    // clear kernel identity mapping and flush TLB
+#if HIGHER_GROUND
     pde_clear(ident_pde);
+#endif
+
     flush_tlb();
 
     // update VGA state
