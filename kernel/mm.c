@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <ohwes.h>
 #include <paging.h>
+#include <pool.h>
 
 // see doc/mm.txt for memory map
 
@@ -34,94 +35,75 @@ static void print_memory_map(const struct boot_info *info);
 static void print_page_info(uint32_t vaddr, const struct pginfo *page);
 static void print_page_mappings(struct mm_info *mm);
 
+extern void init_pools(void);   // pool.c
+
 struct mm_info kernel_mm;
+
+struct free_range {
+    uintptr_t base;
+    size_t count;
+};
 
 void init_mm(const struct boot_info *boot_info)
 {
-    // bool large_page_support;
-    // struct cpuid cpuid;
-    // struct mm_info *kmm;
-    // pde_t *pde;
-    // pte_t *pte;
-    // pgflags_t flags;
-    // uint32_t addr;
+    init_pools();
 
-    // print_memory_map(boot_info);
+    const int Capacity1 = 4;
+    const int Capacity2 = 50;
+    pool_t p, p2;
 
-    // kmm = &kernel_mm;
+    p = create_pool(
+        'gPrF', __phys_to_virt((void *) FREE_LIST_POOL),
+        Capacity1, sizeof(struct free_range));
 
-    // zeromem((void *) SYSTEM_PAGE_DIRECTORY, PAGE_SIZE); // TODO: get from boot info
-    // zeromem((void *) KERNEL_PAGE_TABLE, PAGE_SIZE);
+    void *alloc0 = pool_alloc(p);
+    void *alloc1 = pool_alloc(p);
+    void *alloc2 = pool_alloc(p);
+    void *alloc3 = pool_alloc(p);
+    void *alloc4 = pool_alloc(p);           // should fail
 
-    // zeromem(kmm, sizeof(struct mm_info));
-    // kmm->pgdir = (pde_t *) SYSTEM_PAGE_DIRECTORY;
+    kprint("alloc0=%#x, alloc1=%#x, alloc2=%#x, alloc3=%#x, alloc4=%#x\n",
+        alloc0, alloc1, alloc2, alloc3, alloc4);
 
-    // flags = _PAGE_USER | _PAGE_RW;
+    pool_free(p, alloc2);
+    pool_free(p, alloc0);
 
-    // // create kernel page directory entry
-    // pde = pde_offset(kmm, KERNEL_PAGE_TABLE);
-    // *pde = __mkpde(KERNEL_PAGE_TABLE, flags);
+    alloc2 = pool_alloc(p);
+    alloc0 = pool_alloc(p);
 
-    // // map cpu structs
-    // pte = pte_offset(pde, SYSTEM_CPU_PAGE);
-    // *pte = __mkpte(SYSTEM_CPU_PAGE, flags);
+    kprint("alloc0=%#x, alloc1=%#x, alloc2=%#x, alloc3=%#x, alloc4=%#x\n",
+        alloc0, alloc1, alloc2, alloc3, alloc4);
 
-    // // map frame buffer
-    // for (int i = 0; i < boot_info->framebuffer_pages; i++) {
-    //     addr = boot_info->framebuffer + (i << PAGE_SHIFT);
-    //     pte = pte_offset(pde, addr);
-    //     *pte = __mkpte(addr, flags);
-    // }
+    pool_free(p, alloc2);
+    pool_free(p, alloc1);
+    pool_free(p, alloc3);
+    pool_free(p, alloc0);
+    pool_free(p, alloc4);                   // should fail
+    pool_free(p, (void *) 0xdeadbeef);      // should fail
 
-    // // map kernel code
-    // uint32_t num_kernel_code_pages = div_ceil(boot_info->kernel_size, PAGE_SIZE);
-    // for (int i = 0; i <  num_kernel_code_pages; i++) {
-    //     addr = boot_info->kernel + (i << PAGE_SHIFT);
-    //     pte = pte_offset(pde, addr);
-    //     *pte = __mkpte(addr, flags);
-    // }
+    alloc0 = pool_alloc(p);
+    alloc1 = pool_alloc(p);
+    alloc2 = pool_alloc(p);
+    alloc3 = pool_alloc(p);
+    alloc4 = pool_alloc(p);                 // should fail
 
-    // // map kernel stack
-    // addr = boot_info->stack - PAGE_SIZE;
-    // pte = pte_offset(pde, addr);
-    // *pte = __mkpte(addr, flags);
+    kprint("alloc0=%#x, alloc1=%#x, alloc2=%#x, alloc3=%#x, alloc4=%#x\n",
+        alloc0, alloc1, alloc2, alloc3, alloc4);
 
-    // // map user stack
-    // addr = USER_STACK_PAGE;
-    // pte = pte_offset(pde, addr);
-    // *pte = __mkpte(addr, flags);
+    p2 = create_pool(
+        'gPrF', __phys_to_virt((void *) 0x60000),
+        Capacity2, sizeof(struct free_range));
 
-    // (void) pde;
-    // (void) pte;
-    // (void) flags;
-    // (void) addr;
+    destroy_pool(p);
 
-    // // check large page support
-    // get_cpuid(&cpuid);
-    // large_page_support = cpuid.pse_support;
+    p = create_pool(
+        'gPrF', __phys_to_virt((void *) FREE_LIST_POOL),
+        Capacity2, sizeof(struct free_range));
 
-    // // configure CR4
-    // if (large_page_support) {
-    //     uint32_t cr4 = 0;
-    //     read_cr4(cr4);
-    //     cr4 |= CR4_PSE; // allow 4M pages
-    //     write_cr4(cr4);
-    // }
-    // else {
-    //     kprint("\e[1;31mno large page support!\e[0m\n");    // TODO: deal with this
-    // }
+    destroy_pool(p2);
+    destroy_pool(p);
 
-    // // configure CR3
-    // uint32_t cr3 = 0;
-    // cr3 |= SYSTEM_PAGE_DIRECTORY;
-    // write_cr3(cr3);
-
-    // // configure CR0
-    // uint32_t cr0 = 0;
-    // read_cr0(cr0);
-    // cr0 |= CR0_PG;      // enable paging
-    // cr0 |= CR0_WP;      // enable write-protection for supervisor
-    // write_cr0(cr0);     //   to prevent kernel from writing read-only page
+    print_memory_map(boot_info);
 }
 
 static void print_memory_map(const struct boot_info *info)

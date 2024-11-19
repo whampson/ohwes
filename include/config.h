@@ -39,6 +39,7 @@
 #define BOOT_MEMMAP             0x1000
 #define KERNEL_PGDIR            0x2000
 #define KERNEL_PGTBL            0x3000
+#define FREE_LIST_POOL          0x4000
 #define KERNEL_LMA              0x10000     // physical load address
 #define INITIAL_STACK           (KERNEL_LMA - (0 * PAGE_SIZE))  // grows toward 0
 #define INTERRUPT_STACK         (KERNEL_LMA - (1 * PAGE_SIZE))

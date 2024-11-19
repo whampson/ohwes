@@ -116,65 +116,14 @@ __fastcall void start_kernel(const struct boot_info *info)
     // TODO: basic tests
 
     init_serial();
+    init_mm(info);
     init_fs();
     init_tasks();
-
-    // screw around
 
 #ifdef DEBUG
     // CTRL+ALT+FN to crash kernel
     irq_register(IRQ_TIMER, debug_interrupt);
 #endif
-
-    // kprint("enabling interrupts...\n");
-    // __sti();
-
-    // // virtual console #1 (default, ALT+F1 on keyboard)
-    // {
-    //     kprint(">> /dev/tty1\n");
-    //     int fd = sys_open("/dev/tty1", 0);
-    //     if (fd < 0) {
-    //         panic("open(): failed with %d\n", fd);
-    //     }
-    //     kprint("open(): returned %d\n", fd);
-
-    //     const char *hello = "\e[33mHello from write() syscall!\e[0m\n";
-    //     ssize_t count = sys_write(fd, hello, strlen(hello));
-    //     if (count < 0) {
-    //         panic("write(): failed with %lld\n", count);
-    //     }
-    //     kprint("write(): returned %lld\n", count);
-
-    //     int ret = sys_close(fd);
-    //     // if (ret < 0) {
-    //     //     panic("close(): failed with %d\n", ret);
-    //     // }
-    //     kprint("close(): returned %d\n", ret);
-    // }
-
-
-    // // serial port
-    // {
-    //     kprint(">> /dev/ttyS0\n");
-    //     int fd = sys_open("/dev/ttyS0", 0);
-    //     if (fd < 0) {
-    //         panic("open(): failed with %d\n", fd);
-    //     }
-    //     kprint("open(): returned %d\n", fd);
-
-    //     const char *hello = "\e[36mOH-WES says hello over RS-232!\e[0m\r\n";
-    //     ssize_t count = sys_write(fd, hello, strlen(hello));
-    //     if (count < 0) {
-    //         panic("write(): failed with %lld\n", count);
-    //     }
-    //     kprint("write(): returned %lld\n", count);
-
-    //     int ret = sys_close(fd);
-    //     // if (ret < 0) {
-    //     //     panic("close(): failed with %d\n", ret);
-    //     // }
-    //     kprint("close(): returned %d\n", ret);
-    // }
 
     kprint("boot: entering user mode...\n");
     usermode(__phys_to_virt(USER_STACK));

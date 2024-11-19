@@ -13,6 +13,7 @@ SOURCES := \
     main.c \
     mm.c \
     pic.c \
+    pool.c \
     print.c \
     ps2kb.c \
     rtc.c \
@@ -25,7 +26,8 @@ SOURCES := \
     sys/open.c \
 
 TARGET_DEFINES := __KERNEL__
-TARGET_CFLAGS  := -nostdinc -ffreestanding -Wno-unused-function
+TARGET_CFLAGS  := -nostdinc -ffreestanding
+TARGET_CFLAGS  += -Wno-unused-function -Wno-multichar
 TARGET_LDSCRIPT := kernel.ld
 
 TARGET_LDLIBS := \
