@@ -28,7 +28,7 @@ struct chunk {
 };
 
 struct pool {
-    uint32_t tag;           // identifier
+    const char *name;       // identifier
     bool valid;             // in use?
     uintptr_t base;         // base address of pool
     struct chunk *alloc;    // current alloc pointer
@@ -42,6 +42,7 @@ struct pool g_pools[NUM_POOLS]; // global pool... pool :D
                                 // in one big pool pool!
 
 static unsigned int get_pool_index(pool_t pool);
+static const char * get_pool_name(pool_t pool);
 static uintptr_t get_pool_base(pool_t pool);
 static uintptr_t get_pool_limit(pool_t pool);
 static size_t get_pool_capacity(pool_t pool);
@@ -55,7 +56,7 @@ void init_pools(void)
     zeromem(g_pools, sizeof(g_pools));
 }
 
-pool_t create_pool(uint32_t tag, void *addr, size_t capacity, size_t item_size)
+pool_t create_pool(const char *name, void *addr, size_t capacity, size_t item_size)
 {
     struct pool *p = NULL;
     for (int i = 0; i < NUM_POOLS; i++) {
@@ -70,7 +71,7 @@ pool_t create_pool(uint32_t tag, void *addr, size_t capacity, size_t item_size)
         return NULL;
     }
 
-    p->tag = tag;
+    p->name = name;
     p->base = (uintptr_t) addr;
     p->alloc = (struct chunk *) addr;
     p->capacity = capacity;
@@ -85,9 +86,9 @@ pool_t create_pool(uint32_t tag, void *addr, size_t capacity, size_t item_size)
     chunk->next = NULL;
     p->valid = true;
 
-    kprint("allocated pool %d: range=0x%x-0x%x capacity=%d chunk_size=0x%x\n",
-        get_pool_index(p), get_pool_base(p), get_pool_limit(p),
-        capacity, get_chunk_size(p));
+    kprint("pool: created '%s': id=%d range=0x%x-0x%x capacity=%d chunk_size=0x%x\n",
+        name, get_pool_index(p), get_pool_base(p), get_pool_limit(p), capacity,
+        get_chunk_size(p));
 
     return p;
 }
@@ -95,22 +96,25 @@ pool_t create_pool(uint32_t tag, void *addr, size_t capacity, size_t item_size)
 int destroy_pool(pool_t pool)
 {
     if (!is_pool_valid(pool)) {
-        kprint("attempt to free invalid pool (pool = 0x%x)\n", pool);
+        kprint("pool: attempt to free invalid pool (pool=0x%x)\n", pool);
         return -EINVAL;
     }
+
+    const char *name = get_pool_name(pool);
+    int index = get_pool_index(pool);
 
     struct pool *p = pool;
     zeromem(p, sizeof(struct pool));
     p->valid = false;
 
-    kprint("destroyed pool %d\n", get_pool_index(p))
+    kprint("pool: '%s' destroyed\n", name, index)
     return 0;
 }
 
 void * pool_alloc(pool_t pool)
 {
     if (!is_pool_valid(pool)) {
-        kprint("attempt to allocate on an invalid pool (pool = 0x%x)\n", pool);
+        kprint("pool: attempt to allocate on an invalid pool (pool=0x%x)\n", pool);
         return NULL;
     }
 
@@ -120,7 +124,7 @@ void * pool_alloc(pool_t pool)
         return NULL;        // no more space! D:
     }
 
-    kprint("pool %d: allocated chunk at 0x%x\n", get_pool_index(p), free_chunk);
+    kprint("pool: %s: allocated chunk at 0x%x\n", get_pool_name(p), free_chunk);
     p->alloc = free_chunk->next;
     return free_chunk + 1;  // advance ptr past chunk data
 }
@@ -128,12 +132,12 @@ void * pool_alloc(pool_t pool)
 int pool_free(pool_t pool, void *item)
 {
     if (!is_pool_valid(pool)) {
-        kprint("attempt to free item on an invalid pool (pool=0x%x)\n", pool);
+        kprint("pool: attempt to free item on an invalid pool (pool=0x%x)\n", pool);
         return -EINVAL;
     }
 
     if (!is_item_in_pool(pool, item)) {
-        kprint("attempt to free an item not in the pool (pool=0x%x, item=0x%x)\n", pool, item)
+        kprint("pool: %s: attempt to free an item not in the pool (item=0x%x)\n", get_pool_name(pool), pool, item)
         return -EINVAL;
     }
 
@@ -143,7 +147,7 @@ int pool_free(pool_t pool, void *item)
     // TODO: could do some math here to ensure the ptr points to the actual data
     // and not the next chunk pointer...
 
-    kprint("pool %d: freed chunk at 0x%x\n", get_pool_index(p), free_chunk);
+    kprint("pool: %s: freed chunk at 0x%x\n", get_pool_name(p), free_chunk);
     free_chunk->next = pool->alloc;
     pool->alloc = free_chunk;
     return 0;
@@ -152,6 +156,11 @@ int pool_free(pool_t pool, void *item)
 static unsigned int get_pool_index(pool_t pool)
 {
     return pool - g_pools;
+}
+
+static const char * get_pool_name(pool_t pool)
+{
+    return ((struct pool *) pool)->name;
 }
 
 static uintptr_t get_pool_base(pool_t pool)

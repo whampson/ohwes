@@ -53,7 +53,7 @@ void init_mm(const struct boot_info *boot_info)
     pool_t p, p2;
 
     p = create_pool(
-        'gPrF', __phys_to_virt((void *) FREE_LIST_POOL),
+        "free_pages", __phys_to_virt((void *) FREE_LIST_POOL),
         Capacity1, sizeof(struct free_range));
 
     void *alloc0 = pool_alloc(p);
@@ -91,13 +91,13 @@ void init_mm(const struct boot_info *boot_info)
         alloc0, alloc1, alloc2, alloc3, alloc4);
 
     p2 = create_pool(
-        'gPrF', __phys_to_virt((void *) 0x60000),
+        "test_pool", __phys_to_virt((void *) 0x60000),
         Capacity2, sizeof(struct free_range));
 
     destroy_pool(p);
 
     p = create_pool(
-        'gPrF', __phys_to_virt((void *) FREE_LIST_POOL),
+        "test_pool2", __phys_to_virt((void *) FREE_LIST_POOL),
         Capacity2, sizeof(struct free_range));
 
     destroy_pool(p2);

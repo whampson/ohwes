@@ -16,8 +16,6 @@
  *         File: include/pool.h
  *      Created: November 18, 2024
  *       Author: Wes Hampson
- *
- * Intel 8259A Programmable Interrupt Controller interface.
  * =============================================================================
  */
 
@@ -27,7 +25,8 @@
 struct pool;
 typedef struct pool * pool_t;
 
-pool_t create_pool(uint32_t tag, void *addr, size_t capacity, size_t item_size);
+// create a fixed-size pool of items of a fixed size at a known address
+pool_t create_pool(const char *name, void *addr, size_t capacity, size_t item_size);
 int destroy_pool(pool_t pool);
 
 void * pool_alloc(pool_t pool);
