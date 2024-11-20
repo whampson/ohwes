@@ -8,7 +8,7 @@
             "configurationProvider": "ms-vscode.makefile-tools"
         },
         {
-            "name": "OH-WES",
+            "name": "OH-WES Kernel [Win32]",
             "includePath": [
                 "${workspaceFolder}/include/*"
             ],
@@ -21,6 +21,29 @@
                 "${workspaceFolder}/include/compiler.h"
             ],
             "compilerPath": "${workspaceFolder}/build/i686-elf-tools/bin/i686-elf-gcc",
+            "cStandard": "c11",
+            "intelliSenseMode": "gcc-x86",
+            "compilerArgs": [
+                "-ffreestanding",
+                "-nostdinc",
+                "-nostdlib"
+            ],
+            "configurationProvider": "ms-vscode.makefile-tools"
+        },
+        {
+            "name": "OH-WES Kernel [macOS]",
+            "includePath": [
+                "${workspaceFolder}/include/*"
+            ],
+            "defines": [
+                "__KERNEL__",
+                "DEBUG",
+                "TEST_BUILD"
+            ],
+            "forcedInclude": [
+                "${workspaceFolder}/include/compiler.h"
+            ],
+            "compilerPath": "/usr/local/bin/i686-elf-gcc",
             "cStandard": "c11",
             "intelliSenseMode": "gcc-x86",
             "compilerArgs": [
