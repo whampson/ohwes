@@ -10,6 +10,7 @@ SOURCES := \
     crash.c \
     i8042.c \
     irq.c \
+    list.c \
     main.c \
     mm.c \
     pic.c \
@@ -24,6 +25,7 @@ SOURCES := \
     tty.c \
     vga.c \
     sys/open.c \
+    test/list_test.c \
 
 TARGET_DEFINES := __KERNEL__
 TARGET_CFLAGS  := -nostdinc -ffreestanding

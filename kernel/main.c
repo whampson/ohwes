@@ -56,10 +56,12 @@ extern void init_fs(void);  // sys/open.c
 extern void init_chdev(void);
 extern void init_serial(void);
 
-#ifdef TEST_BUILD
-typedef int (*test_main)(void);
-extern void tmain(void);
-#endif
+// #ifdef TEST_BUILD
+// typedef int (*test_main)(void);
+// extern void tmain(void);
+// #endif
+
+extern void test_list(void);    // test/list_test.c
 
 void _start(void);  // usermode runtime entry point
 int main(void);     // usermode program entry point

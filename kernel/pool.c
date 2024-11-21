@@ -23,6 +23,8 @@
 #include <pool.h>
 #include <errno.h>
 
+#define DEBUG_POOL  1
+
 struct chunk {
     struct chunk *next;     // next chunk in chain
 };
@@ -86,9 +88,11 @@ pool_t create_pool(const char *name, void *addr, size_t capacity, size_t item_si
     chunk->next = NULL;
     p->valid = true;
 
-    kprint("pool: created '%s': id=%d range=0x%x-0x%x capacity=%d chunk_size=0x%x\n",
+#if DEBUG_POOL
+    kprint("pool: '%s' created: id=%d range=0x%x-0x%x capacity=%d chunk_size=0x%x\n",
         name, get_pool_index(p), get_pool_base(p), get_pool_limit(p), capacity,
         get_chunk_size(p));
+#endif
 
     return p;
 }
@@ -96,25 +100,25 @@ pool_t create_pool(const char *name, void *addr, size_t capacity, size_t item_si
 int destroy_pool(pool_t pool)
 {
     if (!is_pool_valid(pool)) {
-        kprint("pool: attempt to free invalid pool (pool=0x%x)\n", pool);
+        kprint("pool: attempt to free invalid pool (handle=0x%x)\n", pool);
         return -EINVAL;
     }
-
-    const char *name = get_pool_name(pool);
-    int index = get_pool_index(pool);
 
     struct pool *p = pool;
     zeromem(p, sizeof(struct pool));
     p->valid = false;
 
-    kprint("pool: '%s' destroyed\n", name, index)
+#if DEBUG_POOL
+    kprint("pool: '%s' destroyed\n", get_pool_name(pool), get_pool_index(pool))
+#endif
+
     return 0;
 }
 
 void * pool_alloc(pool_t pool)
 {
     if (!is_pool_valid(pool)) {
-        kprint("pool: attempt to allocate on an invalid pool (pool=0x%x)\n", pool);
+        kprint("pool: attempt to allocate on an invalid pool (handle=0x%x)\n", pool);
         return NULL;
     }
 
@@ -124,7 +128,10 @@ void * pool_alloc(pool_t pool)
         return NULL;        // no more space! D:
     }
 
-    kprint("pool: %s: allocated chunk at 0x%x\n", get_pool_name(p), free_chunk);
+#if DEBUG_POOL
+    kprint("pool: %s: chunk allocated at 0x%x\n", get_pool_name(p), free_chunk);
+#endif
+
     p->alloc = free_chunk->next;
     return free_chunk + 1;  // advance ptr past chunk data
 }
@@ -132,22 +139,24 @@ void * pool_alloc(pool_t pool)
 int pool_free(pool_t pool, void *item)
 {
     if (!is_pool_valid(pool)) {
-        kprint("pool: attempt to free item on an invalid pool (pool=0x%x)\n", pool);
+        kprint("pool: attempt to free item on an invalid pool (handle=0x%x)\n", pool);
         return -EINVAL;
     }
 
     if (!is_item_in_pool(pool, item)) {
-        kprint("pool: %s: attempt to free an item not in the pool (item=0x%x)\n", get_pool_name(pool), pool, item)
+        kprint("pool: %s: attempt to free an item not in the pool (item=0x%x)\n", get_pool_name(pool), item)
         return -EINVAL;
     }
 
-    struct pool *p = pool;
     struct chunk *free_chunk = item;
     free_chunk = free_chunk - 1;    // back the ptr up to the chunk data
     // TODO: could do some math here to ensure the ptr points to the actual data
-    // and not the next chunk pointer...
+    // and not the next chunk pointer... or some other chunk
 
-    kprint("pool: %s: freed chunk at 0x%x\n", get_pool_name(p), free_chunk);
+#if DEBUG_POOL
+    kprint("pool: %s: freed chunk at 0x%x\n", get_pool_name(pool), free_chunk);
+#endif
+
     free_chunk->next = pool->alloc;
     pool->alloc = free_chunk;
     return 0;

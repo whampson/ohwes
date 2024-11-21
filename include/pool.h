@@ -22,6 +22,8 @@
 #ifndef __POOL_H
 #define __POOL_H
 
+#include <stddef.h>
+
 struct pool;
 typedef struct pool * pool_t;
 

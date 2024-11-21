@@ -37,73 +37,30 @@ static void print_page_mappings(struct mm_info *mm);
 
 extern void init_pools(void);   // pool.c
 
-struct mm_info kernel_mm;
-
-struct free_range {
-    uintptr_t base;
-    size_t count;
-};
+struct mm_info _mm = { };
+struct mm_info *g_mm = &_mm;
 
 void init_mm(const struct boot_info *boot_info)
 {
+    zeromem(g_mm, sizeof(struct mm_info));
+    g_mm->pgdir = (void *) __phys_to_virt(KERNEL_PGDIR);
+
     init_pools();
 
-    const int Capacity1 = 4;
-    const int Capacity2 = 50;
-    pool_t p, p2;
+    if (!boot_info->mem_map) {
+        panic("TODO: need to support systems without ACPI memory map!");
+    }
 
-    p = create_pool(
-        "free_pages", __phys_to_virt((void *) FREE_LIST_POOL),
-        Capacity1, sizeof(struct free_range));
-
-    void *alloc0 = pool_alloc(p);
-    void *alloc1 = pool_alloc(p);
-    void *alloc2 = pool_alloc(p);
-    void *alloc3 = pool_alloc(p);
-    void *alloc4 = pool_alloc(p);           // should fail
-
-    kprint("alloc0=%#x, alloc1=%#x, alloc2=%#x, alloc3=%#x, alloc4=%#x\n",
-        alloc0, alloc1, alloc2, alloc3, alloc4);
-
-    pool_free(p, alloc2);
-    pool_free(p, alloc0);
-
-    alloc2 = pool_alloc(p);
-    alloc0 = pool_alloc(p);
-
-    kprint("alloc0=%#x, alloc1=%#x, alloc2=%#x, alloc3=%#x, alloc4=%#x\n",
-        alloc0, alloc1, alloc2, alloc3, alloc4);
-
-    pool_free(p, alloc2);
-    pool_free(p, alloc1);
-    pool_free(p, alloc3);
-    pool_free(p, alloc0);
-    pool_free(p, alloc4);                   // should fail
-    pool_free(p, (void *) 0xdeadbeef);      // should fail
-
-    alloc0 = pool_alloc(p);
-    alloc1 = pool_alloc(p);
-    alloc2 = pool_alloc(p);
-    alloc3 = pool_alloc(p);
-    alloc4 = pool_alloc(p);                 // should fail
-
-    kprint("alloc0=%#x, alloc1=%#x, alloc2=%#x, alloc3=%#x, alloc4=%#x\n",
-        alloc0, alloc1, alloc2, alloc3, alloc4);
-
-    p2 = create_pool(
-        "test_pool", __phys_to_virt((void *) 0x60000),
-        Capacity2, sizeof(struct free_range));
-
-    destroy_pool(p);
-
-    p = create_pool(
-        "test_pool2", __phys_to_virt((void *) FREE_LIST_POOL),
-        Capacity2, sizeof(struct free_range));
-
-    destroy_pool(p2);
-    destroy_pool(p);
+    const acpi_mmap_t *e = boot_info->mem_map;
+    while (e->type != 0) {
+        if (e->type == ACPI_MMAP_TYPE_USABLE) {
+            kprint("mem: %08llX: %llu free pages\n", e->base, e->length / PAGE_SIZE);
+        }
+        e++;
+    }
 
     print_memory_map(boot_info);
+    // print_page_mappings(g_mm);
 }
 
 static void print_memory_map(const struct boot_info *info)
@@ -201,7 +158,7 @@ static void print_page_info(uint32_t vaddr, const struct pginfo *page)
     }
 
     //            vaddr-vlimit -> paddr-plimit k/M/T rw u/s a/d g wt nc
-    printf("page: v(%08X-%08X) -> p(%08X-%08X) %c %-2s %c %c %c %s%s\n",
+    kprint("page: v(%08X-%08X) -> p(%08X-%08X) %c %-2s %c %c %c %s%s\n",
         vaddr, vlimit, paddr, plimit,
         page->pde ? (page->ps ? 'M' : 'T') : 'k',       // (k) small page, (M) large page, (T) page table
         page->rw ? "rw" : "r",                          // read/write
