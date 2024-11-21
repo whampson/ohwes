@@ -103,7 +103,7 @@ struct pginfo {
             uint32_t d   : 1;   // Dirty: software has written this page
             uint32_t ps  : 1;   // Page Size: 1=4M, 0=4K (PDEs only, requires CR4.PSE=1)
             uint32_t g   : 1;   // Global: pins page to TLB (requires CR4.PGE=1)
-            uint32_t pde : 1;   // PDE: this is a PDE
+            uint32_t pde : 1;   // PDE: this is a PDE (OH-WES addition)
             uint32_t     : 2;   // (available for use)
             uint32_t pfn : 20;  // Page Frame Number
         };

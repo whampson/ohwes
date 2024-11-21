@@ -193,6 +193,7 @@ _map_low_1M_loop:
         movl            $KERNEL_PGDIR, %edi
         movl            $KERNEL_PGTBL, %eax
         orl             $PAGE_FLAGS, %eax
+        orl             $_PAGE_PDE, %eax
         movl            %eax, 0(%edi)               # identity map
 #if HIGHER_GROUND
         movl            %eax, KERNEL_PDN(%edi)      # "high" map
