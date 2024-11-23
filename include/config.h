@@ -23,11 +23,11 @@
 #define __CONFIG_H
 
 #define MIN_KB_REQUIRED         639     // let's see how long this lasts!
-#define PRINT_MEMORY_MAP        1
-#define PRINT_IOCTL             0
-#define PRINT_PAGE_MAP          1
-#define E9_HACK                 1
-
+#define PRINT_LOGO              0       // show a special logo at boot
+#define PRINT_MEMORY_MAP        1       // show BIOS memory map at boot
+#define PRINT_PAGE_MAP          0       // show initial page table mappings
+#define PRINT_IOCTL             0       // show ioctl calls
+#define E9_HACK                 1       // tee console output to port 0xE9
 #define HIGHER_GROUND           0       // map kernel in high virtual address space
 
 #if HIGHER_GROUND
@@ -36,20 +36,18 @@
   #define KERNEL_VA_BASE        0x0
 #endif
 
-#define BOOT_MEMMAP             0x1000
-#define KERNEL_PGDIR            0x2000
-#define KERNEL_PGTBL            0x3000
-#define FREE_LIST_POOL          0x4000
-#define KERNEL_LMA              0x10000     // physical load address
-#define INITIAL_STACK           (KERNEL_LMA - (0 * PAGE_SIZE))  // grows toward 0
-#define INTERRUPT_STACK         (KERNEL_LMA - (1 * PAGE_SIZE))
-#define USER_STACK              (KERNEL_LMA - (2 * PAGE_SIZE))
+// Important memory addresses
+#define KERNEL_PGDIR            0x10000
+#define KERNEL_PGTBL            0x11000
+#define FREE_LIST_POOL          0x12000
+#define KERNEL_BASE             0x20000     // physical load address
+#define INITIAL_STACK           (KERNEL_BASE - (0 * PAGE_SIZE))  // grows toward 0
+#define INTERRUPT_STACK         (KERNEL_BASE - (1 * PAGE_SIZE))
+#define USER_STACK              (KERNEL_BASE - (2 * PAGE_SIZE))
 
 #define NR_CONSOLE              7
 #define NR_TTY                  NR_CONSOLE
 #define NR_SERIAL               4
-
-#define IDT_COUNT               256
 
 /*----------------------------------------------------------------------------*
  * VGA Stuff

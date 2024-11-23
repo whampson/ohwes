@@ -88,10 +88,6 @@ extern __syscall int sys_write(int fd, const void *buf, size_t count);
 extern __syscall int sys_open(const char *name, int flags);
 extern __syscall int sys_close(int fd);
 
-// linker script symbols -- use & to get assigned value
-extern uintptr_t __kernel_text_vma;
-extern uintptr_t __kernel_base;
-
 __fastcall void start_kernel(const struct boot_info *info)
 {
     // copy boot info into kernel memory so we don't accidentally overwrite it
@@ -101,24 +97,24 @@ __fastcall void start_kernel(const struct boot_info *info)
     // finish setting up CPU descriptors
     init_cpu(info);
 
-    // initialize interrupts and timers
-    init_pic();
-    init_irq();
-    init_timer();
-    init_rtc();
+    // setup memory manager
+    init_mm(info);
 
     // get the console working
     init_tty();
     init_console(info);
-    // safe to print now using kprint, keyboard also works
+    init_serial();
 
-    kprint("boot: kernel space mapped at 0x%x\n", &__kernel_base);
-    kprint("boot: kernel .text mapped at 0x%x\n", &__kernel_text_vma);
+    // initialize interrupts and timers
+    init_pic();
+    // init_irq();  // no longer needed as BSS is zeroed by init_mm :D
+    init_timer();
+    init_rtc();
+
+
 
     // TODO: basic tests
 
-    init_serial();
-    init_mm(info);
     init_fs();
     init_tasks();
 
@@ -132,6 +128,9 @@ __fastcall void start_kernel(const struct boot_info *info)
 
     kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
     for (;;);
+
+    // for future reference...
+    // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
 }
 
 static void usermode(uint32_t stack)

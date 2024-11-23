@@ -16,6 +16,9 @@
  *         File: kernel/mm.c
  *      Created: July 3, 2024
  *       Author: Wes Hampson
+ *
+ * Physical Page Allocator, Buddy System:
+ * https://www.kernel.org/doc/gorman/html/understand/understand009.html
  * =============================================================================
  */
 
@@ -23,11 +26,20 @@
 #include <boot.h>
 #include <cpu.h>
 #include <config.h>
+#include <list.h>
 #include <mm.h>
 #include <errno.h>
 #include <ohwes.h>
 #include <paging.h>
 #include <pool.h>
+
+// linker script symbols -- use operator& to get assigned value
+extern uint32_t __kernel_start, __kernel_end, __kernel_size;
+extern uint32_t __setup_start, __setup_end, __setup_size;
+extern uint32_t __text_start, __text_end, __text_size;
+extern uint32_t __data_start, __data_end, __data_size;
+extern uint32_t __rodata_start, __rodata_end, __rodata_size;
+extern uint32_t __bss_start, __bss_end, __bss_size;
 
 // see doc/mm.txt for memory map
 
@@ -35,32 +47,63 @@ static void print_memory_map(const struct boot_info *info);
 static void print_page_info(uint32_t vaddr, const struct pginfo *page);
 static void print_page_mappings(struct mm_info *mm);
 
+static void init_bss(struct boot_info *boot_info);
 extern void init_pools(void);   // pool.c
 
 struct mm_info _mm = { };
 struct mm_info *g_mm = &_mm;
 
+struct free_area {
+    struct list_node free_list;
+    void *bitmap;   // buddy list pair state
+};
+
+#define MAX_ORDER   11
+struct zone {
+    uintptr_t zone_base;
+    struct free_area free_area[MAX_ORDER];
+    pool_t free_list_pool;
+};
+
 void init_mm(const struct boot_info *boot_info)
 {
-    zeromem(g_mm, sizeof(struct mm_info));
+    kprint("mem: PA:%08x-%08x VA:%08x-%08x kernel image\n",
+        __virt_to_phys(&__kernel_start), __virt_to_phys(&__kernel_end),
+        &__kernel_start, &__kernel_end);
+    kprint("mem: PA:%08x-%08x VA:%08x-%08x .setup\n",
+        __virt_to_phys(&__setup_start), __virt_to_phys(&__setup_end),
+        &__setup_start, &__setup_end);
+    kprint("mem: PA:%08x-%08x VA:%08x-%08x .text\n",
+        __virt_to_phys(&__text_start), __virt_to_phys(&__text_end),
+        &__text_start, &__text_end);
+    kprint("mem: PA:%08x-%08x VA:%08x-%08x .data\n",
+        __virt_to_phys(&__data_start), __virt_to_phys(&__data_end),
+        &__data_start, &__data_end);
+    kprint("mem: PA:%08x-%08x VA:%08x-%08x .rodata\n",
+        __virt_to_phys(&__rodata_start), __virt_to_phys(&__rodata_end),
+        &__rodata_start, &__rodata_end);
+    kprint("mem: PA:%08x-%08x VA:%08x-%08x .bss\n",
+        __virt_to_phys(&__bss_start), __virt_to_phys(&__bss_end),
+        &__bss_start, &__bss_end);
+    kprint("mem: kernel image takes up %d pages\n",
+        PAGE_ALIGN((uint32_t) &__kernel_size) >> PAGE_SHIFT);
+
+    init_bss((struct boot_info *) boot_info);
+
     g_mm->pgdir = (void *) __phys_to_virt(KERNEL_PGDIR);
 
-    init_pools();
-
-    if (!boot_info->mem_map) {
-        panic("TODO: need to support systems without ACPI memory map!");
-    }
-
-    const acpi_mmap_t *e = boot_info->mem_map;
-    while (e->type != 0) {
-        if (e->type == ACPI_MMAP_TYPE_USABLE) {
-            kprint("mem: %08llX: %llu free pages\n", e->base, e->length / PAGE_SIZE);
-        }
-        e++;
-    }
-
-    print_memory_map(boot_info);
+    // print_memory_map(boot_info);
     // print_page_mappings(g_mm);
+}
+
+static void init_bss(struct boot_info *boot_info)
+{
+    // zero the BSS region
+    // make sure we back up the boot info so we don't lose it!!
+    struct boot_info boot_info_copy;
+    memcpy(&boot_info_copy, boot_info, sizeof(struct boot_info));
+    memset(&__bss_start, 0, (size_t) &__bss_size);
+    memcpy(boot_info, &boot_info_copy, sizeof(struct boot_info));
 }
 
 static void print_memory_map(const struct boot_info *info)
@@ -145,32 +188,9 @@ static void print_memory_map(const struct boot_info *info)
     }
 }
 
-static void print_page_info(uint32_t vaddr, const struct pginfo *page)
-{
-    uint32_t paddr = page->pfn << PAGE_SHIFT;
-    uint32_t plimit = paddr + PAGE_SIZE - 1;
-    uint32_t vlimit = vaddr + PAGE_SIZE - 1;
-    if (page->pde) {
-        if (page->ps) {
-            plimit = paddr + PGDIR_SIZE - 1;
-        }
-        vlimit = vaddr + PGDIR_SIZE - 1;
-    }
-
-    //            vaddr-vlimit -> paddr-plimit k/M/T rw u/s a/d g wt nc
-    kprint("page: v(%08X-%08X) -> p(%08X-%08X) %c %-2s %c %c %c %s%s\n",
-        vaddr, vlimit, paddr, plimit,
-        page->pde ? (page->ps ? 'M' : 'T') : 'k',       // (k) small page, (M) large page, (T) page table
-        page->rw ? "rw" : "r",                          // read/write
-        page->us ? 'u' : 's',                           // user/supervisor
-        page->a ? (page->d ? 'd' : 'a') : ' ',          // accessed/dirty
-        page->g ? 'g' : ' ',                            // global
-        page->pwt ? "wt " : "  ",                       // write-through
-        page->pcd ? "nc " : "  ");                      // no-cache
-}
-
 static void print_page_mappings(struct mm_info *mm)
 {
+#if PRINT_PAGE_MAP
     struct pginfo *pgdir = mm->pgdir;
     struct pginfo *pgtbl;
     struct pginfo *page;
@@ -199,4 +219,29 @@ static void print_page_mappings(struct mm_info *mm)
             print_page_info(vaddr, page);
         }
     }
+#endif
+}
+
+static void print_page_info(uint32_t vaddr, const struct pginfo *page)
+{
+    uint32_t paddr = page->pfn << PAGE_SHIFT;
+    uint32_t plimit = paddr + PAGE_SIZE - 1;
+    uint32_t vlimit = vaddr + PAGE_SIZE - 1;
+    if (page->pde) {
+        if (page->ps) {
+            plimit = paddr + PGDIR_SIZE - 1;
+        }
+        vlimit = vaddr + PGDIR_SIZE - 1;
+    }
+
+    //            vaddr-vlimit -> paddr-plimit k/M/T rw u/s a/d g wt nc
+    kprint("page: v(%08X-%08X) -> p(%08X-%08X) %c %-2s %c %c %c %s%s\n",
+        vaddr, vlimit, paddr, plimit,
+        page->pde ? (page->ps ? 'M' : 'T') : 'k',       // (k) small page, (M) large page, (T) page table
+        page->rw ? "rw" : "r",                          // read/write
+        page->us ? 'u' : 's',                           // user/supervisor
+        page->a ? (page->d ? 'd' : 'a') : ' ',          // accessed/dirty
+        page->g ? 'g' : ' ',                            // global
+        page->pwt ? "wt " : "  ",                       // write-through
+        page->pcd ? "nc " : "  ");                      // no-cache
 }

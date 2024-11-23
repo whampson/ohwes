@@ -50,12 +50,12 @@
 #define SEGMENT_SIZE        (1 << SEGMENT_SHIFT)
 
 #define BDA_SEGMENT         0x0040
-#define KERNEL_SEGMENT      (KERNEL_LMA >> 4)
+#define KERNEL_SEGMENT      (KERNEL_BASE >> 4)
 
 #define BOOT_CS             0x08
 #define BOOT_DS             0x10
 
-#define MEMMAP_BASE         BOOT_MEMMAP
+#define MEMMAP_BASE         0x1000
 #define ROOTDIR_BASE        0x2000
 #define STAGE2_BASE         0x7E00
 

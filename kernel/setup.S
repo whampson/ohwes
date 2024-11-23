@@ -219,6 +219,8 @@ boot_params_ptr:
 
 # -----------------------------------------------------------------------------
 
+IDT_COUNT = 256
+
 # Interrupt Descriptor Table
 .align PAGE_SIZE, 0
 _idt:

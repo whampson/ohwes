@@ -114,6 +114,26 @@ do {                                    \
 #define MB      (1 << 20)
 #define GB      (1 << 30)
 
+static inline void set_bit(void *addr, uint32_t index)
+{
+    ((uint32_t *) addr)[index / 32] |= (1 << (index % 32));
+}
+
+static inline void clear_bit(void *addr, uint32_t index)
+{
+    ((uint32_t *) addr)[index / 32] &= ~(1 << (index % 32));
+}
+
+static inline void flip_bit(void *addr, uint32_t index)
+{
+    ((uint32_t *) addr)[index / 32] ^= (1 << (index % 32));
+}
+
+static inline bool test_bit(void *addr, uint32_t index)
+{
+    return ((uint32_t *) addr)[index / 32] & (1 << (index % 32));
+}
+
 #endif // __ASSEMBLER__
 
 #endif // __OHWES_H

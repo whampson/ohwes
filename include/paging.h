@@ -123,8 +123,8 @@ static_assert(sizeof(struct pginfo) == sizeof(uint32_t), "bad size!");
 #define __mkpte(addr,flags)         __pte(PAGE_ALIGN(addr) | __pgflags((flags)|_PAGE_PRESENT))
 
 // TODO: verify/test these!!
-#define __virt_to_phys(v)   (((v) >= PAGE_OFFSET) ? ((v) - PAGE_OFFSET) : (v))
-#define __phys_to_virt(p)   (((p) >= -PAGE_OFFSET)  ? (p) : ((p) + PAGE_OFFSET))
+#define __virt_to_phys(v)   (((uintptr_t) (v) >= PAGE_OFFSET) ? ((uintptr_t) (v) - PAGE_OFFSET) : (uintptr_t) (v))
+#define __phys_to_virt(p)   (((uintptr_t) (p) >= -PAGE_OFFSET)  ? (uintptr_t) (p) : ((uintptr_t) (p) + PAGE_OFFSET))
 
 // Future-proofing a bit here...
 // Intel paging structures are always read/execute in kernel mode so long as the

@@ -289,6 +289,7 @@ void init_console(const struct boot_info *info)
     }
     system_console_initialized = true;
 
+#if PRINT_LOGO
     // safe to print now, so let's print a bird lol
     kprint("                                                                \n\
                                                       ,::::.._              \n\
@@ -313,6 +314,8 @@ void init_console(const struct boot_info *info)
                                          ``-.-._                            \n\
                                              `                              \n\
     "); //https://ascii.co.uk/art/raven
+#endif
+
     kprint("\r\n\e4\e6");
     kprint("\e[0;1m" OS_NAME " " OS_VERSION " '" OS_MONIKER "', build: " OS_BUILDDATE "\e[0m\n");
 

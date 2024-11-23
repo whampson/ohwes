@@ -67,7 +67,7 @@ stage2:
 
         # load GDT and switch to Protected Mode
         cli                                     # no more interrupts!
-        lgdt            early_gdt_desc           # load temp GDT
+        lgdt            early_gdt_desc          # load temp GDT
         movl            %cr0, %eax
         orl             $CR0_PE, %eax           # enable Protected Mode
         movl            %eax, %cr0
@@ -76,10 +76,11 @@ stage2:
         movw            $BOOT_DS, %ax
         movw            %ax, %ds
         movw            %ax, %es
+        movw            %ax, %ss
 
         # long jump to the kernel setup
         leal            boot_info, %ecx         # pass bootparams ptr to kernel
-        ljmpl           $BOOT_CS, $KERNEL_LMA   # reload CS, jump to 32-bit code
+        ljmpl           $BOOT_CS, $KERNEL_BASE  # reload CS, jump to 32-bit code
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
@@ -424,7 +425,7 @@ _kb_flush_done:
 #       ecx - kernel image size
 ##
 check_kernel_size:
-        movl            $KERNEL_LMA, %eax
+        movl            $KERNEL_BASE, %eax
         cmpl            $0, ebda_base
         jz              _no_ebda_info
         movl            ebda_base, %ebx # EBDA = effective top of low memory
