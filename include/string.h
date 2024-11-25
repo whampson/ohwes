@@ -24,7 +24,7 @@
 
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
-typedef __typeof__(sizeof(int)) size_t;
+typedef __SIZE_TYPE__ size_t;
 #endif
 
 #ifndef __NULL_DEFINED

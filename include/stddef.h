@@ -30,7 +30,7 @@
 
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
-typedef __typeof__(sizeof(int)) size_t;
+typedef __SIZE_TYPE__ size_t;
 #endif
 
 #ifndef __NULL_DEFINED
@@ -38,13 +38,9 @@ typedef __typeof__(sizeof(int)) size_t;
 #define NULL ((void*)0)
 #endif
 
-typedef __typeof__(((int*)NULL)-((int*)NULL)) ptrdiff_t;
+typedef __PTRDIFF_TYPE__ ptrdiff_t;
 
 #define offsetof(type,member) ((size_t)((char*)&((type*)0)->member-(char*)0))
-
-typedef long long max_align_t;
-
-// typedef short wchar_t;
 
 // OH-WES additions
 #ifndef __SSIZE_T_DEFINED
