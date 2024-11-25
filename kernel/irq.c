@@ -31,11 +31,6 @@
 
 irq_handler isr_map[NR_IRQS][MAX_ISR];
 
-// void init_irq(void)
-// {
-//     zeromem(isr_map, sizeof(isr_map));
-// }
-
 void irq_mask(int irq_num)
 {
     pic_mask(irq_num);

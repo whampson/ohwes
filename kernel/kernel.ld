@@ -27,64 +27,64 @@ OUTPUT_ARCH("i386")
 
 SECTIONS
 {
-    __kernel_lma = KERNEL_BASE;
-    __kernel_vma = PAGE_OFFSET + __kernel_lma;
-    __kernel_start = __kernel_vma;
+    _kernel_lma = KERNEL_BASE;
+    _kernel_vma = PAGE_OFFSET + _kernel_lma;
+    _kernel_start = _kernel_vma;
 
-    __setup_lma = __kernel_lma;
-    .setup __setup_lma :
+    _setup_lma = _kernel_lma;
+    .setup _setup_lma :
     {
-        __setup_start = .;
+        _setup_start = .;
         *(.setup)
-        __setup_end = .;
+        _setup_end = .;
     }
-    __setup_size = SIZEOF(.setup);
+    _setup_size = SIZEOF(.setup);
     . = ALIGN(PAGE_SIZE);
 
-    __text_lma = .;
-    __text_vma = PAGE_OFFSET + __text_lma;
-    .text __text_vma : AT (__text_lma)
+    _text_lma = .;
+    _text_vma = PAGE_OFFSET + _text_lma;
+    .text _text_vma : AT (_text_lma)
     {
-        __text_start = .;
+        _text_start = .;
         *(.text*)
-        __text_end = .;
+        _text_end = .;
     }
-    __text_size = SIZEOF(.text);
+    _text_size = SIZEOF(.text);
 
     .data :
     {
-        __data_start = .;
+        _data_start = .;
         *(.data*)
-        __data_end = .;
+        _data_end = .;
     }
-    __data_size = SIZEOF(.data);
+    _data_size = SIZEOF(.data);
 
     .rodata :
     {
-        __rodata_start = .;
+        _rodata_start = .;
         *(.rodata*)
-        __rodata_end = .;
+        _rodata_end = .;
     }
-    __rodata_size = SIZEOF(.rodata);
+    _rodata_size = SIZEOF(.rodata);
 
     .bss :
     {
-        __bss_start = .;
+        _bss_start = .;
         *(.bss*)
-        __bss_end = .;
+        _bss_end = .;
     }
-    __bss_size = SIZEOF(.bss);
+    _bss_size = SIZEOF(.bss);
 
     /* TODO: do we need this?
              we aren't doing kernel-level exception handling... */
     .eh_frame :
     {
-        __eh_frame_start = .;
+        _eh_frame_start = .;
         *(.eh_frame*)
-        __eh_frame_end = .;
+        _eh_frame_end = .;
     }
-    __eh_frame_size = SIZEOF(.eh_frame);
+    _eh_frame_size = SIZEOF(.eh_frame);
 
-    __kernel_end = .;
-    __kernel_size = __kernel_end - __kernel_start;
+    _kernel_end = .;
+    _kernel_size = _kernel_end - _kernel_start;
 }

@@ -29,37 +29,6 @@
 #include <irq.h>
 #include <paging.h>
 
-// #if DEBUG
-// #define CHATTY               1
-// #endif
-
-// //
-// // x86 Descriptor table and TSS geometry.
-// //
-// // IDT
-// #define IDT_COUNT           256
-// #define IDT_BASE            SYSTEM_CPU_PAGE
-// #define IDT_LIMIT           (IDT_COUNT*DESC_SIZE-1)
-// #define IDT_SIZE            (IDT_LIMIT+1)
-// // GDT                                              //
-// #define GDT_COUNT           8                       //
-// #define GDT_BASE            (IDT_BASE+IDT_SIZE)     // GDT immediately follows IDT
-// #define GDT_LIMIT           (GDT_COUNT*DESC_SIZE-1)
-// #define GDT_SIZE            (GDT_LIMIT+1)
-// // LDT
-// #define LDT_COUNT           2
-// #define LDT_BASE            (GDT_BASE+GDT_SIZE)     // LDT immediately follows GDT
-// #define LDT_LIMIT           (LDT_COUNT*DESC_SIZE-1)
-// #define LDT_SIZE            (LDT_LIMIT+1)
-// // TSS
-// #define TSS_BASE            (LDT_BASE+LDT_SIZE)     // TSS immediately follows LDT
-// #define TSS_LIMIT           (TSS_SIZE-1)            // TSS_SIZE is fixed, defined in x86.h
-
-// static_assert(IDT_BASE + IDT_LIMIT < GDT_BASE, "IDT overlaps GDT!");
-// static_assert(GDT_BASE + GDT_LIMIT < LDT_BASE, "GDT overlaps LDT!");
-// static_assert(LDT_BASE + LDT_LIMIT < TSS_BASE, "LDT overlaps TSS!");
-// static_assert(IDT_SIZE + GDT_SIZE + LDT_SIZE + TSS_SIZE <= PAGE_SIZE, "CPU data runs into next page!");
-
 //
 // CPUID.EAX=01h EAX return fields.
 //
@@ -87,23 +56,55 @@
 #define CPUID_PGE               (1 << 13)
 #define CPUID_PAT               (1 << 16)
 
-struct x86_desc * get_gdt(void)
-{
-    volatile struct table_desc desc = { };
-    __sgdt(desc);
+static void init_idt(void);
+static void init_tss(void);
 
-    return (struct x86_desc *) desc.base;
+static void verify_gdt(void);
+
+static struct x86_desc * get_gdt(void);
+static struct tss * get_tss(void);
+
+void init_cpu(const struct boot_info *info)
+{
+    init_idt();
+    init_tss();
+    verify_gdt();
 }
 
-struct tss * get_tss(void)
+void init_idt(void)
 {
-    struct x86_desc *gdt = get_gdt();
-    struct x86_desc *tss_desc = x86_get_desc(gdt, _TSS_SEGMENT);
+    extern idt_thunk exception_thunks[NR_EXCEPTIONS];
+    extern idt_thunk irq_thunks[NR_IRQS];
+    extern idt_thunk _syscall;
 
-    return (struct tss *) ((tss_desc->tss.basehi << 24) | tss_desc->tss.baselo);
+    struct x86_desc *idt;
+    volatile struct table_desc idt_desc = { };
+
+    __sidt(idt_desc);
+    idt = (struct x86_desc *) idt_desc.base;
+
+    for (int i = 0; i < NR_EXCEPTIONS; i++) {
+        int vec = VEC_INTEL + i;
+        make_trap_gate(&idt[vec], KERNEL_CS, KERNEL_PL, exception_thunks[i]);
+    }
+
+    for (int i = 0; i < NR_IRQS; i++) {
+        int vec = VEC_DEVICEIRQ + i;
+        make_intr_gate(&idt[vec], KERNEL_CS, KERNEL_PL, irq_thunks[i]);
+    }
+
+    make_trap_gate(&idt[VEC_SYSCALL], KERNEL_CS, USER_PL, &_syscall);
 }
 
-void verify_gdt(void)
+static void init_tss(void)
+{
+    struct tss *tss = get_tss();
+    tss->ss0 = KERNEL_DS;
+    tss->esp0 = __phys_to_virt(INTERRUPT_STACK);
+    tss->ldt_segsel = _LDT_SEGMENT;
+}
+
+static void verify_gdt(void)
 {
     struct x86_desc *gdt = get_gdt();
 
@@ -155,90 +156,22 @@ void verify_gdt(void)
     // TODO: verify base/limit in kernel space
 }
 
-void init_idt(void)
+static struct x86_desc * get_gdt(void)
 {
-    extern idt_thunk exception_thunks[NR_EXCEPTIONS];
-    extern idt_thunk irq_thunks[NR_IRQS];
-    extern idt_thunk _syscall;
+    volatile struct table_desc desc = { };
+    __sgdt(desc);
 
-    struct x86_desc *idt;
-    volatile struct table_desc idt_desc = { };
-
-    __sidt(idt_desc);
-    idt = (struct x86_desc *) idt_desc.base;
-
-    for (int i = 0; i < NR_EXCEPTIONS; i++) {
-        int vec = VEC_INTEL + i;
-        make_trap_gate(&idt[vec], KERNEL_CS, KERNEL_PL, exception_thunks[i]);
-    }
-
-    for (int i = 0; i < NR_IRQS; i++) {
-        int vec = VEC_DEVICEIRQ + i;
-        make_intr_gate(&idt[vec], KERNEL_CS, KERNEL_PL, irq_thunks[i]);
-    }
-
-    make_trap_gate(&idt[VEC_SYSCALL], KERNEL_CS, USER_PL, &_syscall);
+    return (struct x86_desc *) desc.base;
 }
 
-void init_tss(void)
+static struct tss * get_tss(void)
 {
-    struct tss *tss = get_tss();
-    tss->ss0 = KERNEL_DS;
-    tss->esp0 = __phys_to_virt(INTERRUPT_STACK);
-    tss->ldt_segsel = _LDT_SEGMENT;
+    struct x86_desc *gdt = get_gdt();
+    struct x86_desc *tss_desc = x86_get_desc(gdt, _TSS_SEGMENT);
+
+    return (struct tss *) ((tss_desc->tss.basehi << 24) | tss_desc->tss.baselo);
 }
 
-void init_cpu(const struct boot_info *info)
-{
-    // struct x86_desc *gdt;
-    // volatile struct table_desc gdt_desc = { };
-
-    // extern intptr_t _tss_ptr;
-    // extern uint32_t _tss_limit;
-    // struct tss *tss;
-    // uint32_t tss_limit;
-    // void *tss_desc;
-
-    // extern intptr_t _ldt_ptr;
-    // extern uint32_t _ldt_limit;
-    // struct x86_desc *ldt;
-    // uint32_t ldt_limit;
-    // void *ldt_desc;
-
-    // // grab the GDT
-    // __sgdt(gdt_desc);
-    // gdt = (struct x86_desc *) gdt_desc.base;
-
-    // // this is nasty... convert the TSS symbols to their high-mapped equivalents
-    // tss = *((struct tss **) __phys_to_virt((intptr_t) &_tss_ptr));
-    // tss_limit = *((uint32_t *) __phys_to_virt((intptr_t) &_tss_limit)); // TODO: make a macro for this or something...
-
-    // // setup minimal TSS
-    // tss->ss0 = KERNEL_DS;
-    // tss->esp0 = __phys_to_virt(INITIAL_STACK);
-    // tss->ldt_segsel = _LDT_SEGMENT;
-
-    // // write the TSS descriptor to the GDT
-    // tss_desc = x86_get_desc(gdt, _TSS_SEGMENT);
-    // make_tss_desc(tss_desc, KERNEL_PL, (intptr_t) tss, tss_limit);
-    // __ltr(_TSS_SEGMENT);
-
-    // // now do the same for the LDT, convert symbols
-    // ldt = *((struct x86_desc **) __phys_to_virt((intptr_t) &_ldt_ptr));
-    // ldt_limit = *((uint32_t *) __phys_to_virt((intptr_t) &_ldt_limit));
-
-    // // LDT is unused, so we don't need to set anything up, but we're going to
-    // // load one anyway to keep the CPU happy.
-
-    // // write the LDT descriptor to the GDT
-    // ldt_desc = x86_get_desc(gdt, _LDT_SEGMENT);
-    // make_ldt_desc(ldt_desc, KERNEL_PL, (intptr_t) ldt, ldt_limit);
-    // __lldt(_LDT_SEGMENT);
-
-    verify_gdt();
-    init_idt();
-    init_tss();
-}
 
 bool cpu_has_cpuid(void)
 {

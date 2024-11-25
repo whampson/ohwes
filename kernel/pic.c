@@ -49,6 +49,9 @@ static uint8_t pic_read_data(int pic);
 
 void init_pic(void)
 {
+    uint16_t mask;
+    mask = pic_getmask();  // backup the old mask
+
     // configure master PIC
     pic_write_cmd(MASTER_PIC, ICW1);
     pic_write_data(MASTER_PIC, ICW2_M);
@@ -64,6 +67,8 @@ void init_pic(void)
     // mask all IRQs, except slave line on master PIC
     pic_write_data(MASTER_PIC, OCW1_MASK_ALL & ~SLAVE_MASK);
     pic_write_data(SLAVE_PIC, OCW1_MASK_ALL);
+
+    pic_setmask(mask);  // restore mask
 }
 
 void pic_eoi(uint8_t irq_num)

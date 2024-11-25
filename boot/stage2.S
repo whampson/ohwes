@@ -94,6 +94,11 @@ stage2:
 # console.
 ##
 init_early_console:
+
+VGA_FONT_80x28  = 1
+VGA_FONT_80x50  = 2
+VGA_FONT_80x25  = 4
+
         # store cursor position
         xorb            %bh, %bh                # bh = page
         movb            $0x03, %ah
@@ -103,7 +108,7 @@ init_early_console:
         movb            %dl, cursor_col
 
         # set video mode
-        movb            $VGA_MODE_SELECT, %al
+        movb            $VGA_MODE, %al
         orb             $0x80, %al              # don't clear screen
         movb            $0x00, %ah
         int             $0x10
@@ -124,16 +129,16 @@ init_early_console:
         jc              _vga_error
 
         # set font size
-        movw            $VGA_FONT_SELECT, %ax
-_font0: cmpw            $VGA_FONT_80x25, %ax    # 8x16, 80x25
+        movw            $VGA_DIMENSION, %ax
+_font0: cmpw            $VGA_FONT_80x25, %ax
         jne             _font1
         movl            $25, vga_rows
         jmp             _dofont
-_font1: cmpw            $VGA_FONT_80x28, %ax    # 8x14, 80x28
+_font1: cmpw            $VGA_FONT_80x28, %ax
         jne             _font2
         movl            $28, vga_rows
         jmp             _dofont
-_font2: cmpw            $VGA_FONT_80x50, %ax    # 8x8, 80x50
+_font2: cmpw            $VGA_FONT_80x50, %ax
         jne             _vga_error_bad_font
         movl            $50, vga_rows
 _dofont:addw            $0x1110, %ax

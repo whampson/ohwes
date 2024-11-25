@@ -54,7 +54,7 @@ void init_ps2(const struct boot_info *info)
     cfg = ps2_read();
     port2 = !has_flag(cfg, PS2_CFG_P2CLKOFF) && info->hwflags.has_ps2mouse;
     if (!port2) {
-        kprint("ps2: mouse not detected\n");
+        kprint("PS/2 mouse not detected\n");
     }
 
     //

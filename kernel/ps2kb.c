@@ -37,6 +37,8 @@
 #include <ps2.h>
 #include <string.h>
 
+#define CHATTY_KB       0       // print extra debug messages
+
 #define SCANCODE_SET    1       // using scancode set 1
 #define TYPEMATIC_BYTE  0x22    // repeat rate = 24cps, delay = 500ms
 #define RETRY_COUNT     3       // command resends before giving up
@@ -161,12 +163,14 @@ void init_kb(const struct boot_info *info)
     irq_register(IRQ_KEYBOARD, kb_interrupt);
     irq_unmask(IRQ_KEYBOARD);
 
+#if CHATTY_KB
     kprint("ps2kb: ident=%02Xh,%02Xh translation=%s\n",
         g_kb.ident[0], g_kb.ident[1], ONOFF(ps2cfg & PS2_CFG_TRANSLATE));
     kprint("ps2kb: leds=%02Xh typematic=%02Xh\n",
         g_kb.leds, g_kb.typematic_byte);
     kprint("ps2kb: scancode_set=%d sc2_support=%s sc3_support=%s\n",
         g_kb.scancode_set,  YN(g_kb.sc2_support), YN(g_kb.sc3_support));
+#endif
 }
 
 static void kb_putq(char c)
@@ -221,12 +225,15 @@ static void kb_interrupt(int irq_num)
 
     // check keyboard status
     status = ps2_status();
+#if CHATTY_KB
     if (status & PS2_STATUS_TIMEOUT) {
         kprint("ps2kb: timeout error\n");
     }
     if (status & PS2_STATUS_PARITY) {
         kprint("ps2kb: parity error\n");
     }
+#endif
+    (void) status;
 
     // grab the scancode
     sc = inb_delay(0x60);
@@ -238,6 +245,7 @@ static void kb_interrupt(int irq_num)
             if ((g_kb.ack_count % WARN_INTERVAL) == 0) {
                 kprint("ps2kb: seen %d stray acks\n", g_kb.ack_count);
             }
+            // TODO: panic after some amount...?
             goto done;
 
         case 0xFE:
@@ -543,11 +551,15 @@ static bool kb_selftest(void)
             continue;
         }
         else if (data == 0xFC || data == 0xFD) {
+#if CHATTY_KB
             kprint("ps2kb: self-test failed!\n");
+#endif
             return false;
         }
         else {
+#if CHATTY_KB
             kprint("ps2kb: self-test failed! (got 0x%X)\n", data);
+#endif
             return false;
         }
     }
@@ -556,7 +568,9 @@ static bool kb_selftest(void)
         // 0 means we timed out reading... on some machines, the command acks
         // but the result byte never comes... not sure why this is, let's
         // consider it a command support bug and thus vacuous
+#if CHATTY_KB
         kprint("ps2kb: self-test did not respond!\n");
+#endif
         return true;
     }
 
@@ -645,19 +659,21 @@ bool kb_sendcmd(uint8_t cmd)
             ack = true;
             break;
         }
+#if CHATTY_KB
         if (resp != 0) {
-            kprint("ps2kb: cmd 0x%X returned 0x%X, trying again...\n",
-                cmd, resp);
+            kprint("ps2kb: cmd 0x%X returned 0x%X, trying again...\n", cmd, resp);
         }
+#endif
     } while (resp != 0 && retries);
 
+#if CHATTY_KB
     if (!retries) {
-        kprint("ps2kb: cmd 0x%X timed out after %d retries!\n",
-            cmd, RETRY_COUNT);
+        kprint("ps2kb: cmd 0x%X timed out after %d retries!\n", cmd, RETRY_COUNT);
     }
     else if (resp == 0) {
         kprint("ps2kb: cmd 0x%X not supported\n", cmd);
     }
+#endif
 
     restore_flags(flags);
     return ack;
@@ -681,12 +697,14 @@ uint8_t kb_rdport(void)
         }
     }
 
+#if CHATTY_KB
     if (status & PS2_STATUS_TIMEOUT) {
         kprint("ps2kb: timeout error\n");
     }
     if (status & PS2_STATUS_PARITY) {
         kprint("ps2kb: parity error\n");
     }
+#endif
 
     if (count >= PS2_IO_TIMEOUT) {
         return 0;
@@ -695,7 +713,9 @@ uint8_t kb_rdport(void)
     data = inb_delay(0x60);
     switch (data) {
         case 0xFF:
+#if CHATTY_KB
             kprint("ps2kb: kb_rdport: inb 0x%X\n", data);
+#endif
             g_kb.error_count++;
              __fallthrough;
         case 0x00:
@@ -725,15 +745,19 @@ void kb_wrport(uint8_t data)
         }
     }
 
+#if CHATTY_KB
     if (status & PS2_STATUS_TIMEOUT) {
         kprint("ps2kb: timeout error\n");
     }
     if (status & PS2_STATUS_PARITY) {
         kprint("ps2kb: parity error\n");
     }
+#endif
 
     if (count >= PS2_IO_TIMEOUT) {
+#if CHATTY_KB
         panic("ps2kb: timed out waiting for write\n");
+#endif
     }
     else {
         // write the port

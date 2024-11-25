@@ -39,7 +39,7 @@
 #define OS_NAME                         "OH-WES"
 #define OS_VERSION                      "0.1"
 #define OS_MONIKER                      "Ronnie Raven"
-#define OS_BUILDDATE                    __DATE__ " " __TIME__
+#define OS_AUTHOR                       "whampson"
 
 //
 // Useful Kernel Macros

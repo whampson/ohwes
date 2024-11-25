@@ -30,7 +30,7 @@
 #include <rtc.h>
 #include <fs.h>
 
-#define CHATTY                  0
+#define CHATTY_RTC              0
 
 //
 // RTC Register Ports
@@ -275,7 +275,7 @@ static int set_rate(unsigned char rate)
     wr_a(data);
     restore_flags(flags);
 
-#if CHATTY
+#if CHATTY_RTC
     kprint("rtc: periodic interrupt frequency is now %dHz\n", rate2hz(rate));
 #endif
 
@@ -320,7 +320,7 @@ static void get_time(struct rtc_time *time, bool alarm)
     regb &= ~REG_B_SET;
     wr_b(regb);
 
-#if CHATTY
+#if CHATTY_RTC
     if (alarm) {
         kprint("rtc: get_time: cmos alarm is %02d:%02d:%02d (hex: %02x:%02x:%02x)\n",
             time->tm_hour, time->tm_min, time->tm_sec,
@@ -340,7 +340,7 @@ static void get_time(struct rtc_time *time, bool alarm)
     // do this before BCD conversion
     pm = false;
     if (!(regb & REG_B_24H)) {
-#if CHATTY
+#if CHATTY_RTC
         kprint("rtc: get_time: time is in 12h format\n");
 #endif
         if ((time->tm_hour & PM_FLAG)) {
@@ -353,7 +353,7 @@ static void get_time(struct rtc_time *time, bool alarm)
     // some hardware doesn't seem to honor this bit if we manually set it,
     // so just read it as-is and convert to binary if necessary
     if (!(regb & REG_B_DM)) {
-#if CHATTY
+#if CHATTY_RTC
         kprint("rtc: get_time: time is in BCD\n");
 #endif
         time->tm_sec = bcd2bin(time->tm_sec);
@@ -468,7 +468,7 @@ static int set_time(struct rtc_time *time, bool alarm)
         cmos_write(REG_SECONDS, time->tm_sec);
     }
 
-#if CHATTY
+#if CHATTY_RTC
     if (alarm) {
         kprint("rtc: set_time: cmos alarm set to %02d:%02d:%02d (hex: %02x:%02x:%02x)\n",
             time->tm_hour, time->tm_min, time->tm_sec,

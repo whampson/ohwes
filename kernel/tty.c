@@ -151,6 +151,7 @@ static int tty_open(struct inode *inode, struct file *file)
         return ret;
     }
 
+    // TODO: this prints a blank line sometimes...
     char buf[64];
     snprintf(buf, sizeof(buf), "%s\n", tty->name);
     tty_ldisc_write(tty, buf, strlen(buf));

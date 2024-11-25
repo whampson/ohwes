@@ -25,7 +25,7 @@
 #include <stdbool.h>
 #include <x86.h>
 
-struct cpuid
+struct cpuid    // TODO: move to cpuid.h or something
 {
     char vendor_id[13];         // e.g. "GenuineIntel"
     char family;                // cpu family
@@ -48,7 +48,6 @@ struct cpuid
 
 bool cpu_has_cr4(void);
 bool cpu_has_cpuid(void);
-
-bool get_cpu_info(struct cpuid *cpuid_info);
+bool get_cpu_info(struct cpuid *cpuid_info);    // cpuid
 
 #endif // __CPU_H

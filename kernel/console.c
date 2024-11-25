@@ -47,10 +47,11 @@
 #define ALERT_FREQ              1675
 #define ALERT_TIME              50
 
-// global vars
-/*__data_segment*/ static struct vga _vga;
-/*__data_segment*/ struct vga *g_vga = &_vga;
-/*__data_segment*/ struct console g_console[NR_CONSOLE];
+// global vars, put them in the data segment to
+// ensure they are initialized to zero
+__data_segment static struct vga _vga = { };
+__data_segment struct vga *g_vga = &_vga;
+__data_segment struct console g_console[NR_CONSOLE] = { };
 
 extern struct tty *g_ttys;
 
@@ -225,9 +226,13 @@ void init_vga(
     }
     g_vga->fb_info = fb_info_new;
 
+    // move the old frame buffer to the new one
     fb_old = (void *) __phys_to_virt(fb_info_old.framebuf);
     fb_new = (void *) __phys_to_virt(fb_info_new.framebuf);
     memmove(fb_new, fb_old, PAGES_PER_CONSOLE_FB);
+
+    // update system console frame buffer
+    g_console->framebuf = fb_new;
 
     // read cursor attributes leftover from BIOS
     uint8_t cl_lo, cl_hi;
@@ -237,6 +242,10 @@ void init_vga(
     cl_lo = vga_crtc_read(VGA_CRTC_REG_CSS) & VGA_CRTC_FLD_CSS_CSS_MASK;
     cl_hi = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
     g_vga->orig_cursor_shape = (cl_hi << 8) | cl_lo;
+
+    kprint("VGA frame buffer is %08X-%08X\n",
+        g_vga->fb_info.framebuf, g_vga->fb_info.framebuf +
+            (g_vga->fb_info.size_pages << PAGE_SHIFT) - 1);
 }
 
 void init_console(const struct boot_info *info)
@@ -246,7 +255,7 @@ void init_console(const struct boot_info *info)
 
     // make sure we have enough memory for the configured number of consoles
     if (g_vga->fb_info.size_pages - PAGES_PER_CONSOLE_FB < NR_CONSOLE * PAGES_PER_CONSOLE_FB) {
-        panic("not enough memory available for %d consoles! See config.h.", NR_CONSOLE);
+        panic("not enough video memory available for %d consoles! See config.h.", NR_CONSOLE);
         for(;;);
     }
 
@@ -257,6 +266,7 @@ void init_console(const struct boot_info *info)
         cons->framebuf += (i * PAGES_PER_CONSOLE_FB) << PAGE_SHIFT;
         cons->number = i;
         console_defaults(cons);
+        erase(cons, 2);
     }
 
     struct console *cons = get_console(1);
@@ -272,35 +282,34 @@ void init_console(const struct boot_info *info)
         panic("failed to initialize system console!");
     }
 
-#if PRINT_LOGO
-    // safe to print now, so let's print a bird lol
-    kprint("                                                                \n\
-                                                      ,::::.._              \n\
-                                                   ,':::::::::.             \n\
-                                               _,-'`:::,::(o)::`-,.._       \n\
-                                            _.', ', `:::::::::;'-..__`.     \n\
-                                       _.-'' ' ,' ,' ,\\:::,'::-`'''        \n\
-                                   _.-'' , ' , ,'  ' ,' `:::/               \n\
-                             _..-'' , ' , ' ,' , ,' ',' '/::                \n\
-                     _...:::'`-..'_, ' , ,'  , ' ,'' , ,'::|                \n\
-                  _`.:::::,':::::,'::`-:..'_',_'_,'..-'::,'|                \n\
-          _..-:::'::,':::::::,':::,':,'::,':::,'::::::,':::;                \n\
-            `':,'::::::,:,':::::::::::::::::':::,'::_:::,'/                 \n\
-            __..:'::,':::::::--''' `-:,':,':::'::-' ,':::/                  \n\
-       _.::::::,:::.-''-`-`..'_,'. ,',  , ' , ,'  ', `','                   \n\
-     ,::SSt:''''`                 \\:. . ,' '  ,',' '_,'                    \n\
-                                   ``::._,'_'_,',.-'                        \n\
-                                       \\\\ \\\\                            \n\
-                                        \\\\_\\\\                           \n\
-                                         \\\\`-`.-'_                        \n\
-                                      .`-.\\\\__`. ``                       \n\
-                                         ``-.-._                            \n\
-                                             `                              \n\
-    "); //https://ascii.co.uk/art/raven
-#endif
+    kprint("\e4\e6");   // enable blink, show cursor
 
-    kprint("\r\n\e4\e6");
-    kprint("\e[0;1m" OS_NAME " " OS_VERSION " '" OS_MONIKER "', build: " OS_BUILDDATE "\e[0m\n");
+#if PRINT_LOGO
+    kprint( // safe to print now, so let's print a bird with a blinking eye lol
+    "\e[1;37m                                                                           \n\
+                                                     ,::::.._                           \n\
+                                                  ,':::::::::.                          \n\
+                                              _,-'`:::,::(\e[5;31mo\e[25;37m)::`-,.._   \n\
+                                           _.', ', `:::::::::;'-..__`.                  \n\
+                                      _.-'' ' ,' ,' ,\\:::,'::-`'''                     \n\
+                                  _.-'' , ' , ,'  ' ,' `:::/                            \n\
+                            _..-'' , ' , ' ,' , ,' ',' '/::                             \n\
+                    _...:::'`-..'_, ' , ,'  , ' ,'' , ,'::|                             \n\
+                 _`.:::::,':::::,'::`-:..'_',_'_,'..-'::,'|                             \n\
+         _..-:::'::,':::::::,':::,':,'::,':::,'::::::,':::;                             \n\
+           `':,'::::::,:,':::::::::::::::::':::,'::_:::,'/                              \n\
+           __..:'::,':::::::--''' `-:,':,':::'::-' ,':::/                               \n\
+      _.::::::,:::.-''-`-`..'_,'. ,',  , ' , ,'  ', `','                                \n\
+    ,::SSt:''''`                 \\:. . ,' '  ,',' '_,'                                 \n\
+                                  ``::._,'_'_,',.-'                                     \n\
+                                      \\\\ \\\\                                         \n\
+                                       \\\\_\\\\                                        \n\
+                                        \\\\`-`.-'_                                     \n\
+                                     .`-.\\\\__`. ``                                    \n\
+                                        ``-.-._                                         \n\
+                                            `                                           \n\
+    \e[0m\n"); //https://ascii.co.uk/art/raven
+#endif
 
     // get the keyboard working
     init_kb(info);

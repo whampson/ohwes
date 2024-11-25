@@ -22,60 +22,71 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
-#define MIN_KB_REQUIRED         639     // let's see how long this lasts!
-#define PRINT_LOGO              0       // show a special logo at boot
-#define PRINT_MEMORY_MAP        1       // show BIOS memory map at boot
-#define PRINT_PAGE_MAP          0       // show initial page table mappings
-#define PRINT_IOCTL             0       // show ioctl calls
-#define E9_HACK                 1       // tee console output to port 0xE9
-#define HIGHER_GROUND           0       // map kernel in high virtual address space
+//
+// General Configuration
+// ----------------------------------------------------------------------------
 
-#if HIGHER_GROUND
-  #define KERNEL_VA_BASE        0xC0000000
+#define MIN_KB              512     // let's see how long this lasts!
+#define PRINT_LOGO          0       // show a special logo at boot
+#define PRINT_MEMORY_MAP    1       // show BIOS memory map at boot
+#define PRINT_PAGE_MAP      0       // show initial page table mappings
+#define PRINT_IOCTL         0       // show ioctl calls
+#define E9_HACK             1       // tee console output to port 0xE9
+#define HIGHER_GROUND       0       // map kernel in high virtual address space
+
+//
+// Important Memory Addresses
+// All addresses are physical unless otherwise noted.
+//
+// Stacks are PAGE_SIZE bytes and /grow in the negative direction/ towards 0.
+// Stack base addresses are offset by +4 bytes from the written data.
+// ----------------------------------------------------------------------------
+
+#define KERNEL_PGDIR        0x10000     // global page directory
+#define KERNEL_PGTBL        0x11000     // kernel page table
+#define KERNEL_BASE         0x20000     // kernel image load address
+#define INITIAL_STACK       (KERNEL_BASE-(PAGE_SIZE*0)) // boot stack
+#define INTERRUPT_STACK     (KERNEL_BASE-(PAGE_SIZE*1)) // interrupt stack
+#define USER_STACK          (KERNEL_BASE-(PAGE_SIZE*2)) // user mode stack
+
+// Kernel space base virtual address. The lower 1MB of physical memory is mapped.
+#if HIGHER_GROUND // TOOD: move this toggle elsewhere
+  #define KERNEL_VA_BASE    0xC0000000
 #else
-  #define KERNEL_VA_BASE        0x0
+  #define KERNEL_VA_BASE    0x0
 #endif
 
-// Important memory addresses
-#define KERNEL_PGDIR            0x10000
-#define KERNEL_PGTBL            0x11000
-#define FREE_LIST_POOL          0x12000
-#define KERNEL_BASE             0x20000     // physical load address
-#define INITIAL_STACK           (KERNEL_BASE - (0 * PAGE_SIZE))  // grows toward 0
-#define INTERRUPT_STACK         (KERNEL_BASE - (1 * PAGE_SIZE))
-#define USER_STACK              (KERNEL_BASE - (2 * PAGE_SIZE))
+//
+// Counts of Things
+// ----------------------------------------------------------------------------
 
-#define NR_CONSOLE              7
-#define NR_TTY                  NR_CONSOLE
-#define NR_SERIAL               4
+#define NR_CONSOLE          7           // number of virtual consoles
+#define NR_TTY              NR_CONSOLE  // number of TTY devices
+#define NR_SERIAL           4           // number of serial ports
 
-/*----------------------------------------------------------------------------*
- * VGA Stuff
- *----------------------------------------------------------------------------*/
+//
+// VGA Stuff
+// ----------------------------------------------------------------------------
 // http://www.ctyme.com/intr/rb-0069.htm
 // https://www.stanislavs.org/helppc/int_10-0.html
 
-// text mode enum
-#define MODE_02h                0x02        // 80x25,B8000,16gray
-#define MODE_03h                0x03        // 80x25,B8000,16
-#define MODE_07h                0x07        // 80x25,B0000,mono
+// Modes:
+//  - 2: 80x25,640x200,B8000,16gray
+//  - 3: 80x25,640x200,B8000,16
+//  - 7: 80x25,640x200,B0000,mono
+#define VGA_MODE            3
 
-// font enum
-#define VGA_FONT_80x28          1           // INT 10h,AX=1111h
-#define VGA_FONT_80x50          2           // INT 10h,AX=1112h
-#define VGA_FONT_80x25          4           // INT 10h,AX=1114h
+// Fonts:
+//  - 1: text mode 80x28
+//  - 2: text mode 80x50
+//  - 4: text mode 80x25
+#define VGA_DIMENSION       1
 
-// // frame buffer select enum
-// #define VGA_FB_128K             0           // A0000-BFFFF
-// #define VGA_FB_64K              1           // A0000-AFFFF
-// #define VGA_FB_32K_LO           2           // B0000-B7FFF
-// #define VGA_FB_32K_HI           3           // B8000-BFFFF
-
-// --------------------------------------------------------------------------
-
-// VGA params
-#define VGA_MODE_SELECT         MODE_03h
-#define VGA_FONT_SELECT         VGA_FONT_80x28
-#define VGA_FB_SELECT           1   // VGA_FB_64K
+// Frame Buffer:
+//  - 0: 0xA0000-0xBFFFF 128k
+//  - 1: 0xA0000-0xAFFFF 64k
+//  - 2: 0xB0000-0xB7FFF 32k
+//  - 3: 0xB8000-0xBFFFF 32k
+#define VGA_FB_SELECT       0
 
 #endif // __CONFIG_H

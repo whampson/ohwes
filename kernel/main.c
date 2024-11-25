@@ -37,8 +37,6 @@
 #include <x86.h>
 #include <syscall.h>
 
-#define CHATTY 1
-
 extern void init_cpu(const struct boot_info *info);
 extern void init_tasks(void);
 extern void init_console(const struct boot_info *info);
@@ -81,8 +79,6 @@ void debug_interrupt(int irq_num);
 static struct boot_info _boot;
 struct boot_info *g_boot = &_boot;
 
-extern struct console g_console[NR_CONSOLE];
-
 extern __syscall int sys_read(int fd, void *buf, size_t count);
 extern __syscall int sys_write(int fd, const void *buf, size_t count);
 extern __syscall int sys_open(const char *name, int flags);
@@ -90,48 +86,41 @@ extern __syscall int sys_close(int fd);
 
 __fastcall void start_kernel(const struct boot_info *info)
 {
-    // copy boot info into kernel memory
+    // copy boot info into kernel memory so we don't lose it
     memcpy(g_boot, info, sizeof(struct boot_info));
-    info = g_boot;  // reassign local ptr so we don't use the wrong one
+    info = g_boot;  // reassign local ptr so we don't use the wrong one below
 
-    // make /absolutely/ sure the console is marked as uninitialized so it will
-    // properly initialize when it comes time to print something (see print.c)
-    // g_console->initialized = false;
-    kprint("\n");
+    // init the output terminal by printing something to it
+    kprint("\n\e[0;1m%s %s '%s'\n", OS_NAME, OS_VERSION, OS_MONIKER);
+    kprint("built %s %s using GCC %s by %s\e[0m\n",
+        __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
 
-    kprint("test print 1\n");
-    kprint("test print 2\n");
-
-    for(;;);
+    print_info(info);
 
     // finish setting up CPU descriptors
     init_cpu(info);
 
-    // setup memory manager
+    // initialize static memory and setup memory manager,
+    // do this as early as possible to ensure BSS is zeroed
     init_mm(info);
-
-    // get the console and tty working
-    init_console(info);
-    init_serial();
 
     // initialize interrupts and timers
     init_pic();
     init_timer();
     init_rtc();
-
-
-
-    // TODO: basic tests
-
-    init_fs();
-    init_tasks();
-
 #ifdef DEBUG
-    // CTRL+ALT+FN to crash kernel
-    irq_register(IRQ_TIMER, debug_interrupt);
+    irq_register(IRQ_TIMER, debug_interrupt);   // CTRL+ALT+FN to crash kernel
 #endif
 
-    kprint("boot: entering user mode...\n");
+    // get the console and tty working for real
+    init_console(info);
+    init_serial();
+
+    // init_fs();
+    // init_tasks();
+    // TODO: basic tests
+
+    kprint("entering user mode...\n");
     usermode(__phys_to_virt(USER_STACK));
 
     kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
@@ -345,7 +334,7 @@ static void print_info(const struct boot_info *info)
         "A20_NONE");
     kprint("bios: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
     kprint("bios: video mode is %02Xh\n", info->vga_mode & 0x7F);
-    if (info->ebda_base) kprint("boot: EBDA=%08X,%Xh\n", info->ebda_base, ebda_size);
+    if (info->ebda_base) kprint("bios: EBDA=%08X,%Xh\n", info->ebda_base, ebda_size);
     // kprint("boot: stage2:\t%08X,%Xh\n", info->stage2_base, info->stage2_size);
     // kprint("boot: kernel:\t%08X,%Xh\n", info->kernel_base, info->kernel_size);
 }

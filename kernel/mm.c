@@ -34,12 +34,13 @@
 #include <pool.h>
 
 // linker script symbols -- use operator& to get assigned value
-extern uint32_t __kernel_start, __kernel_end, __kernel_size;
-extern uint32_t __setup_start, __setup_end, __setup_size;
-extern uint32_t __text_start, __text_end, __text_size;
-extern uint32_t __data_start, __data_end, __data_size;
-extern uint32_t __rodata_start, __rodata_end, __rodata_size;
-extern uint32_t __bss_start, __bss_end, __bss_size;
+extern uint32_t _kernel_start, _kernel_end, _kernel_size;
+extern uint32_t _setup_start, _setup_end, _setup_size;
+extern uint32_t _text_start, _text_end, _text_size;
+extern uint32_t _data_start, _data_end, _data_size;
+extern uint32_t _rodata_start, _rodata_end, _rodata_size;
+extern uint32_t _bss_start, _bss_end, _bss_size;
+extern uint32_t _eh_frame_start, _eh_frame_end, _eh_frame_size;
 
 // see doc/mm.txt for memory map
 
@@ -83,32 +84,38 @@ static void init_bss(struct boot_info *boot_info)
     // make sure we back up the boot info so we don't lose it!!
     struct boot_info boot_info_copy;
     memcpy(&boot_info_copy, boot_info, sizeof(struct boot_info));
-    memset(&__bss_start, 0, (size_t) &__bss_size);
+    memset(&_bss_start, 0, (size_t) &_bss_size);
     memcpy(boot_info, &boot_info_copy, sizeof(struct boot_info));
 }
 
 static void print_kernel_sections(void)
 {
-    kprint("mem: PA:%08x-%08x VA:%08x-%08x kernel\n",
-        __virt_to_phys(&__kernel_start), __virt_to_phys(&__kernel_end),
-        &__kernel_start, &__kernel_end);
-    kprint("mem: PA:%08x-%08x VA:%08x-%08x .setup\n",
-        __virt_to_phys(&__setup_start), __virt_to_phys(&__setup_end),
-        &__setup_start, &__setup_end);
-    kprint("mem: PA:%08x-%08x VA:%08x-%08x .text\n",
-        __virt_to_phys(&__text_start), __virt_to_phys(&__text_end),
-        &__text_start, &__text_end);
-    kprint("mem: PA:%08x-%08x VA:%08x-%08x .data\n",
-        __virt_to_phys(&__data_start), __virt_to_phys(&__data_end),
-        &__data_start, &__data_end);
-    kprint("mem: PA:%08x-%08x VA:%08x-%08x .rodata\n",
-        __virt_to_phys(&__rodata_start), __virt_to_phys(&__rodata_end),
-        &__rodata_start, &__rodata_end);
-    kprint("mem: PA:%08x-%08x VA:%08x-%08x .bss\n",
-        __virt_to_phys(&__bss_start), __virt_to_phys(&__bss_end),
-        &__bss_start, &__bss_end);
-    kprint("mem: kernel image takes up %d pages\n",
-        PAGE_ALIGN((uint32_t) &__kernel_size) >> PAGE_SHIFT);
+    struct section {
+        const char *name;
+        void *start, *end;
+        size_t size;
+    };
+
+    struct section sections[] = {
+        { ".kernel",   &_kernel_start,   &_kernel_end,   (size_t) &_kernel_size },
+        { ".setup",    &_setup_start,    &_setup_end,    (size_t) &_setup_size },
+        { ".text",     &_text_start,     &_text_end,     (size_t) &_text_size },
+        { ".data",     &_data_start,     &_data_end,     (size_t) &_data_size },
+        { ".rodata",   &_rodata_start,   &_rodata_end,   (size_t) &_rodata_size },
+        { ".bss",      &_bss_start,      &_bss_end,      (size_t) &_bss_size },
+        { ".eh_frame", &_eh_frame_start, &_eh_frame_end, (size_t) &_eh_frame_size }
+    };
+
+    for (int i = 0; i < countof(sections); i++) {
+        struct section *sec = &sections[i];
+        kprint("PA:%08X-%08X VA:%08X-%08X %s\n",
+            __virt_to_phys(sec->start), __virt_to_phys(sec->end),
+            sec->start, sec->end, sec->name);
+    }
+
+    kprint("kernel image is %dk bytes (%d pages)\n",
+        align((size_t) &_kernel_size, 1024) >> 10,
+        PAGE_ALIGN((size_t) &_kernel_size) >> PAGE_SHIFT);
 }
 
 static void print_memory_map(const struct boot_info *info)
@@ -124,13 +131,13 @@ static void print_memory_map(const struct boot_info *info)
     int kb_free_16M = 0;    // between 1M and 4G
 
     if (!info->mem_map) {
-        kprint("mem: bios-e820: memory map not available\n");
+        kprint("bios-e820: memory map not available\n");
         if (info->kb_high_e801h != 0) {
             kb_free_1M = info->kb_high_e801h;
             kb_free_16M = (info->kb_extended << 6);
         }
         else {
-            kprint("mem: bios-e801: memory map not available\n");
+            kprint("bios-e801: memory map not available\n");
             kb_free_1M = info->kb_high;
         }
         kb_free_low = info->kb_low;
@@ -144,7 +151,7 @@ static void print_memory_map(const struct boot_info *info)
             uint32_t base = (uint32_t) e->base;
             uint32_t limit = (uint32_t) e->length - 1;
 
-            kprint("mem: bios-e820: %08lX-%08lX ", base, base+limit, e->attributes, e->type);
+            kprint("bios-e820: %08lX-%08lX ", base, base+limit, e->attributes, e->type);
             switch (e->type) {
                 case ACPI_MMAP_TYPE_USABLE: kprint("free"); break;
                 case ACPI_MMAP_TYPE_RESERVED: kprint("reserved"); break;
@@ -184,12 +191,13 @@ static void print_memory_map(const struct boot_info *info)
         }
     }
 
-    kprint("mem: %dk free", kb_free);
-    if (kb_total) kprint(", %dk total", kb_total);
+    if (kb_total) kprint("%dk total, ", kb_total);
+    kprint("%dk free", kb_free);
     if (kb_bad) kprint(", %dk bad", kb_bad);
     kprint("\n");
-    if (kb_free < MIN_KB_REQUIRED) {
-        panic("we need at least %dk of RAM to operate!", MIN_KB_REQUIRED);
+
+    if (kb_free < MIN_KB) {
+        panic("not enough memory -- OH-WES needs least %dk to operate!", MIN_KB);
     }
 }
 
