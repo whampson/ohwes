@@ -43,6 +43,7 @@ extern uint32_t __bss_start, __bss_end, __bss_size;
 
 // see doc/mm.txt for memory map
 
+static void print_kernel_sections(void);
 static void print_memory_map(const struct boot_info *info);
 static void print_page_info(uint32_t vaddr, const struct pginfo *page);
 static void print_page_mappings(struct mm_info *mm);
@@ -67,7 +68,28 @@ struct zone {
 
 void init_mm(const struct boot_info *boot_info)
 {
-    kprint("mem: PA:%08x-%08x VA:%08x-%08x kernel image\n",
+    print_memory_map(boot_info);
+    print_kernel_sections();
+
+    init_bss((struct boot_info *) boot_info);
+    g_mm->pgdir = (void *) __phys_to_virt(KERNEL_PGDIR);
+
+    print_page_mappings(g_mm);
+}
+
+static void init_bss(struct boot_info *boot_info)
+{
+    // zero the BSS region
+    // make sure we back up the boot info so we don't lose it!!
+    struct boot_info boot_info_copy;
+    memcpy(&boot_info_copy, boot_info, sizeof(struct boot_info));
+    memset(&__bss_start, 0, (size_t) &__bss_size);
+    memcpy(boot_info, &boot_info_copy, sizeof(struct boot_info));
+}
+
+static void print_kernel_sections(void)
+{
+    kprint("mem: PA:%08x-%08x VA:%08x-%08x kernel\n",
         __virt_to_phys(&__kernel_start), __virt_to_phys(&__kernel_end),
         &__kernel_start, &__kernel_end);
     kprint("mem: PA:%08x-%08x VA:%08x-%08x .setup\n",
@@ -87,23 +109,6 @@ void init_mm(const struct boot_info *boot_info)
         &__bss_start, &__bss_end);
     kprint("mem: kernel image takes up %d pages\n",
         PAGE_ALIGN((uint32_t) &__kernel_size) >> PAGE_SHIFT);
-
-    init_bss((struct boot_info *) boot_info);
-
-    g_mm->pgdir = (void *) __phys_to_virt(KERNEL_PGDIR);
-
-    // print_memory_map(boot_info);
-    // print_page_mappings(g_mm);
-}
-
-static void init_bss(struct boot_info *boot_info)
-{
-    // zero the BSS region
-    // make sure we back up the boot info so we don't lose it!!
-    struct boot_info boot_info_copy;
-    memcpy(&boot_info_copy, boot_info, sizeof(struct boot_info));
-    memset(&__bss_start, 0, (size_t) &__bss_size);
-    memcpy(boot_info, &boot_info_copy, sizeof(struct boot_info));
 }
 
 static void print_memory_map(const struct boot_info *info)
