@@ -48,10 +48,9 @@
 #define ALERT_TIME              50
 
 // global vars
-struct vga _vga = { };
-struct vga *g_vga = &_vga;
-struct console g_consoles[NR_CONSOLE];
-bool system_console_initialized = false;
+/*__data_segment*/ static struct vga _vga;
+/*__data_segment*/ struct vga *g_vga = &_vga;
+/*__data_segment*/ struct console g_console[NR_CONSOLE];
 
 extern struct tty *g_ttys;
 
@@ -157,7 +156,7 @@ enum console_state {
 };
 
 // console state
-static void defaults(struct console *cons);
+// static void defaults(struct console *cons);
 static void reset(struct console *cons);                // ESC c
 static void save_console(struct console *cons);         // ESC 7
 static void restore_console(struct console *cons);      // ESC 8
@@ -198,81 +197,66 @@ static uint16_t xy2pos(uint16_t ncols, uint16_t x, uint16_t y);
 
 extern void init_kb(const struct boot_info *info);
 
-void init_console(const struct boot_info *info)
+void init_vga(
+    const struct boot_info *info, uint8_t fb_select,
+    uint16_t *cursor_x, uint16_t *cursor_y)
 {
-    zeromem(g_vga, sizeof(struct vga));
-    zeromem(g_consoles, sizeof(struct console) * NR_CONSOLE);
+    struct vga_fb_info fb_info_old, fb_info_new;
+    void *fb_old, *fb_new;
 
-    // get VGA info from boot info
-    g_vga->active_console = 1;
+    if (!cursor_x || !cursor_y) {
+        panic("cursor pointers are null!");
+    }
+
+    // grab text mode dimensions from boot info
     g_vga->rows = info->vga_rows;
     g_vga->cols = info->vga_cols;
-    g_vga->fb = DEFAULT_FB; // TODO: gather this in stage 2 and pass it in boot_info
+    g_vga->active_console = 1;
 
-    void *vga_fb = g_vga->fb;
-    int vga_fb_size_pages = 0;
-
-    // select frame buffer based on config
-    switch (VGA_FB_SELECT) {
-        case VGA_FB_128K:
-            vga_fb = (void *) __phys_to_virt(0xA0000);
-            vga_fb_size_pages = 32;
-            break;
-        case VGA_FB_64K:
-            vga_fb = (void *) __phys_to_virt(0xA0000);
-            vga_fb_size_pages = 16;
-            break;
-        case VGA_FB_32K_LO:
-            vga_fb = (void *) __phys_to_virt(0xB0000);
-            vga_fb_size_pages = 8;
-            break;
-        case VGA_FB_32K_HI:
-            vga_fb = (void *) __phys_to_virt(0xB8000);
-            vga_fb_size_pages = 8;
-            break;
-        default:
-            panic("Invalid frame buffer select! See config.h.");
-            for (;;);
+    // read the current frame buffer parameters
+    if (!vga_get_fb_info(&fb_info_old)) {
+        panic("failed to get VGA frame buffer info!");
     }
-
-    // make sure we have enough memory for the configured number of consoles
-    if (vga_fb_size_pages - PAGES_PER_CONSOLE_FB < NR_CONSOLE * PAGES_PER_CONSOLE_FB) {
-        panic("Not enough memory available for %d consoles! See config.h.", NR_CONSOLE);
-        for(;;);
+    if (!vga_set_fb(fb_select)) {
+        panic("failed to change VGA frame buffer!");
     }
-
-    // copy the existing frame buffer
-    memcpy(vga_fb, DEFAULT_FB, PAGES_PER_CONSOLE_FB);
-
-    // program the VGA frame buffer select
-    {
-        uint8_t ram_select = VGA_FB_SELECT;
-        uint8_t grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
-        grfx_misc = (grfx_misc & 0xF3) | (ram_select << 2);
-        vga_grfx_write(VGA_GRFX_REG_MISC, grfx_misc);
-        g_vga->fb_size_pages = vga_fb_size_pages;
-        g_vga->fb = vga_fb;
+    if (!vga_get_fb_info(&fb_info_new)) {
+        panic("failed to get VGA frame buffer info!");
     }
+    g_vga->fb_info = fb_info_new;
+
+    fb_old = (void *) __phys_to_virt(fb_info_old.framebuf);
+    fb_new = (void *) __phys_to_virt(fb_info_new.framebuf);
+    memmove(fb_new, fb_old, PAGES_PER_CONSOLE_FB);
 
     // read cursor attributes leftover from BIOS
+    uint8_t cl_lo, cl_hi;
+    cl_lo = vga_crtc_read(VGA_CRTC_REG_CL_LO);
+    cl_hi = vga_crtc_read(VGA_CRTC_REG_CL_HI);
+    pos2xy(g_vga->cols, (cl_hi << 8) | cl_lo, cursor_x, cursor_y);
+    cl_lo = vga_crtc_read(VGA_CRTC_REG_CSS) & VGA_CRTC_FLD_CSS_CSS_MASK;
+    cl_hi = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
+    g_vga->orig_cursor_shape = (cl_hi << 8) | cl_lo;
+}
+
+void init_console(const struct boot_info *info)
+{
     uint16_t cursor_x, cursor_y;
-    {
-        uint8_t lo, hi;
-        lo = vga_crtc_read(VGA_CRTC_REG_CL_LO);
-        hi = vga_crtc_read(VGA_CRTC_REG_CL_HI);
-        pos2xy(g_vga->cols, (hi << 8) | lo, &cursor_x, &cursor_y);
-        lo = vga_crtc_read(VGA_CRTC_REG_CSS) & VGA_CRTC_FLD_CSS_CSS_MASK;
-        hi = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
-        g_vga->orig_cursor_shape = (hi << 8) | lo;
+    init_vga(info, VGA_FB_SELECT, &cursor_x, &cursor_y);
+
+    // make sure we have enough memory for the configured number of consoles
+    if (g_vga->fb_info.size_pages - PAGES_PER_CONSOLE_FB < NR_CONSOLE * PAGES_PER_CONSOLE_FB) {
+        panic("not enough memory available for %d consoles! See config.h.", NR_CONSOLE);
+        for(;;);
     }
 
     // initialize virtual consoles
     for (int i = 1; i <= NR_CONSOLE; i++) {
-        struct console *cons = &g_consoles[i - 1];
-        cons->framebuf = g_vga->fb;
+        struct console *cons = &g_console[i - 1];
+        cons->framebuf = (void *) g_vga->fb_info.framebuf;
         cons->framebuf += (i * PAGES_PER_CONSOLE_FB) << PAGE_SHIFT;
         cons->number = i;
-        defaults(cons);
+        console_defaults(cons);
     }
 
     struct console *cons = get_console(1);
@@ -287,7 +271,6 @@ void init_console(const struct boot_info *info)
     if (ret != 0) {
         panic("failed to initialize system console!");
     }
-    system_console_initialized = true;
 
 #if PRINT_LOGO
     // safe to print now, so let's print a bird lol
@@ -369,14 +352,14 @@ int switch_console(int num)
     flush_tlb();
 
     // swap buffers
-    memcpy(curr->framebuf, g_vga->fb, PAGE_SIZE * PAGES_PER_CONSOLE_FB);
-    memcpy(g_vga->fb, next->framebuf, PAGE_SIZE * PAGES_PER_CONSOLE_FB);
+    memcpy(curr->framebuf, (void *) g_vga->fb_info.framebuf, PAGE_SIZE * PAGES_PER_CONSOLE_FB);
+    memcpy((void *) g_vga->fb_info.framebuf, next->framebuf, PAGE_SIZE * PAGES_PER_CONSOLE_FB);
     curr = next;
 
     // map new frame buffer to VGA
     for (int i = 0; i < PAGES_PER_CONSOLE_FB; i++) {
         uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
-        uint32_t vga_page = (intptr_t) (g_vga->fb + (i << PAGE_SHIFT));
+        uint32_t vga_page = g_vga->fb_info.framebuf + (i << PAGE_SHIFT);
         pte_t *pte = pte_offset((pde_t *) pgdir_addr, fb_page);
         *pte = __mkpte(__virt_to_phys(vga_page), _PAGE_RW);
     }
@@ -415,7 +398,7 @@ struct console * get_console(int num)
     }
     panic_assert(num > 0 && (num - 1) < NR_CONSOLE);
 
-    struct console *cons = &g_consoles[num - 1];
+    struct console *cons = &g_console[num - 1];
     panic_assert(cons->number == num);
 
     return cons;
@@ -463,9 +446,9 @@ int console_read(struct console *cons, char *buf, size_t count)
 //             outb(0xE9, buf[i]);
 //         }
 // #endif
-//     }
+    //     }
 
-//     return count;
+    //     return count;
 // }
 
 int console_recv(struct console *cons, char c)  // called from ps2kb.c
@@ -526,7 +509,7 @@ int console_recv(struct console *cons, char c)  // called from ps2kb.c
 // ----------------------------------------------------------------------------
 // private functions
 
-void defaults(struct console *cons)
+void console_defaults(struct console *cons)
 {
     cons->state = S_NORM;
     cons->cols = g_vga->cols;
@@ -552,13 +535,13 @@ void defaults(struct console *cons)
     cons->cursor.hidden = false;
     cons->csi_defaults.attr = cons->attr;
     cons->csi_defaults.cursor = cons->cursor;
-    erase(cons, 2);
+    // erase(cons, 2);
     save_console(cons);
 }
 
 static void reset(struct console *cons)
 {
-    defaults(cons);
+    console_defaults(cons);
     if (cons == current_console()) {
         set_vga_blink_enable(cons);
         set_vga_cursor_enable(cons);
@@ -602,9 +585,9 @@ int console_putchar(struct console *cons, char c)
     int nwritten = 0;
 
 #if E9_HACK
-    if (cons == get_console(SYSTEM_CONSOLE)) {
+    // if (cons == get_console(SYSTEM_CONSOLE)) {
         outb(0xE9, c);
-    }
+    // }
 #endif
 
     // handle escape sequences if not a control character
@@ -695,7 +678,7 @@ write_vga:
         }
         set_vga_attr(cons, char_pos, cons->attr);
     }
-    if (update_cursor_pos && cons == current_console()) {
+    if (update_cursor_pos /*&& cons == current_console()*/) {   // TODO: come back to this
         set_vga_cursor_pos(cons);
     }
 
@@ -1171,6 +1154,8 @@ static void cursor_right(struct console *cons, int n)
 
 static void pos2xy(uint16_t ncols, uint16_t pos, uint16_t *x, uint16_t *y)
 {
+    assert(ncols != 0);
+
     *x = pos % ncols;
     *y = pos / ncols;
 }

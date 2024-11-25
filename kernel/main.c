@@ -40,7 +40,6 @@
 #define CHATTY 1
 
 extern void init_cpu(const struct boot_info *info);
-extern void init_irq(void);
 extern void init_tasks(void);
 extern void init_console(const struct boot_info *info);
 
@@ -50,7 +49,6 @@ extern void init_pic(void);
 extern void init_timer(void);
 extern void init_rtc(void);
 
-extern void init_tty(void);
 extern void init_fs(void);  // sys/open.c
 
 extern void init_chdev(void);
@@ -80,8 +78,10 @@ int g_test_crash_kernel;
 void debug_interrupt(int irq_num);
 #endif
 
-struct boot_info _boot;
+static struct boot_info _boot;
 struct boot_info *g_boot = &_boot;
+
+extern struct console g_console[NR_CONSOLE];
 
 extern __syscall int sys_read(int fd, void *buf, size_t count);
 extern __syscall int sys_write(int fd, const void *buf, size_t count);
@@ -90,9 +90,19 @@ extern __syscall int sys_close(int fd);
 
 __fastcall void start_kernel(const struct boot_info *info)
 {
-    // copy boot info into kernel memory so we don't accidentally overwrite it
+    // copy boot info into kernel memory
     memcpy(g_boot, info, sizeof(struct boot_info));
-    info = g_boot;  // reassign ptr for convenience ;)
+    info = g_boot;  // reassign local ptr so we don't use the wrong one
+
+    // make /absolutely/ sure the console is marked as uninitialized so it will
+    // properly initialize when it comes time to print something (see print.c)
+    // g_console->initialized = false;
+    kprint("\n");
+
+    kprint("test print 1\n");
+    kprint("test print 2\n");
+
+    for(;;);
 
     // finish setting up CPU descriptors
     init_cpu(info);
@@ -100,14 +110,12 @@ __fastcall void start_kernel(const struct boot_info *info)
     // setup memory manager
     init_mm(info);
 
-    // get the console working
-    init_tty();
+    // get the console and tty working
     init_console(info);
     init_serial();
 
     // initialize interrupts and timers
     init_pic();
-    // init_irq();  // no longer needed as BSS is zeroed by init_mm :D
     init_timer();
     init_rtc();
 

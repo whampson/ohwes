@@ -28,6 +28,7 @@
 #include <stdint.h>
 #include <queue.h>
 #include <tty.h>
+#include <vga.h>
 
 #define SYSTEM_CONSOLE      1
 
@@ -46,13 +47,12 @@ enum csi_color {
     CSI_WHITE
 };
 
-
+// TODO: move to vga.c?
 struct vga {
     uint32_t active_console;
     uint32_t rows, cols;
-    uint32_t fb_size_pages;
     uint16_t orig_cursor_shape;
-    void *fb;
+    struct vga_fb_info fb_info;
 };
 
 struct console
@@ -108,9 +108,13 @@ struct console
 struct console * current_console(void);
 struct console * get_console(int num);      // indexed at 1, 0 = current console
 
-void write_console(struct console *cons, const char *buf, size_t count);
+// print.c
+void print_to_console(struct console *cons, const char *buf, size_t count);
+void print_to_syscon(const char *buf, size_t count);
 
 int switch_console(int num);
+
+void console_defaults(struct console *cons);
 
 int console_read(struct console *cons, char *buf, size_t count);
 int console_putbuf(struct console *cons, const char *buf, size_t count);

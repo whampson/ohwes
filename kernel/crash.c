@@ -70,7 +70,7 @@ static void crash_print(const char *fmt, ...)
     nchars = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    write_console(current_console(), buf, nchars);
+    print_to_console(current_console(), buf, nchars);
 }
 
 __fastcall
@@ -365,8 +365,6 @@ static void print_banner(const char *banner)
     center_text(banner);
     crash_print("\e[37;4%dm", BANNER_COLOR);
 }
-
-extern void write_syscon(const char *buf, size_t count);
 
 static const char *exception_names[NR_EXCEPTIONS] =
 {

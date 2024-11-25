@@ -24,6 +24,54 @@
 #include <vga.h>
 #include <x86.h>
 
+bool vga_get_fb_info(struct vga_fb_info *fb_info)
+{
+    uint8_t grfx_misc;
+    uint8_t fb_select;
+
+    if (!fb_info) {
+        return false;
+    }
+
+    grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
+    fb_select = (grfx_misc & 0x0C) >> 2;
+
+    switch (fb_select) {
+        case VGA_GRFX_ENUM_MISC_MMAP_128K:
+            fb_info->framebuf = 0xA0000;
+            fb_info->size_pages = 32;
+            break;
+        case VGA_GRFX_ENUM_MISC_MMAP_64K:
+            fb_info->framebuf = 0xA0000;
+            fb_info->size_pages = 16;
+            break;
+        case VGA_GRFX_ENUM_MISC_MMAP_32K_LO:
+            fb_info->framebuf = 0xB0000;
+            fb_info->size_pages = 8;
+            break;
+        case VGA_GRFX_ENUM_MISC_MMAP_32K_HI:
+            fb_info->framebuf = 0xB8000;
+            fb_info->size_pages = 8;
+            break;
+        default:    // cannot happen...
+            return false;
+    }
+
+    return true;
+}
+
+bool vga_set_fb(enum vga_fb_select fb_select)
+{
+    volatile uint8_t grfx_misc;
+
+    grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
+    grfx_misc = (grfx_misc & 0xF3) | ((fb_select & 3) << 2);
+    vga_grfx_write(VGA_GRFX_REG_MISC, grfx_misc);
+
+    grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
+    return ((grfx_misc & 0x0C) >> 2) == fb_select;
+}
+
 uint8_t vga_crtc_read(uint8_t reg)
 {
     int flags;

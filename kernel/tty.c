@@ -81,13 +81,6 @@ struct tty_ldisc g_ldiscs[NR_LDISC] =
 
 // ----------------------------------------------------------------------------
 
-void init_tty(void)
-{
-    zeromem(g_ttys, sizeof(struct tty) * NR_TTY);
-}
-
-// ----------------------------------------------------------------------------
-
 extern struct tty_driver console_driver;
 extern struct tty_driver serial_driver;
 

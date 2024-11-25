@@ -149,8 +149,8 @@ struct boot_info {
     uint32_t vga_mode;              // VGA video mode (INT 10h,AH=0Fh)
     uint32_t vga_rows;              // VGA row count
     uint32_t vga_cols;              // VGA column count (INT 10h,AH=0Fh)
-    uint32_t cursor_col;            // current cursor column (INT 10h,AH=03h)
     uint32_t cursor_row;            // current cursor row (INT 10h,AH=03h)
+    uint32_t cursor_col;            // current cursor column (INT 10h,AH=03h)
 };
 
 #endif  // __ASSEMBLER__

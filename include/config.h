@@ -65,17 +65,17 @@
 #define VGA_FONT_80x50          2           // INT 10h,AX=1112h
 #define VGA_FONT_80x25          4           // INT 10h,AX=1114h
 
-// frame buffer select enum
-#define VGA_FB_128K             0           // A0000-BFFFF
-#define VGA_FB_64K              1           // A0000-AFFFF
-#define VGA_FB_32K_LO           2           // B0000-B7FFF
-#define VGA_FB_32K_HI           3           // B8000-BFFFF
+// // frame buffer select enum
+// #define VGA_FB_128K             0           // A0000-BFFFF
+// #define VGA_FB_64K              1           // A0000-AFFFF
+// #define VGA_FB_32K_LO           2           // B0000-B7FFF
+// #define VGA_FB_32K_HI           3           // B8000-BFFFF
 
 // --------------------------------------------------------------------------
 
 // VGA params
 #define VGA_MODE_SELECT         MODE_03h
 #define VGA_FONT_SELECT         VGA_FONT_80x28
-#define VGA_FB_SELECT           VGA_FB_64K
+#define VGA_FB_SELECT           1   // VGA_FB_64K
 
 #endif // __CONFIG_H

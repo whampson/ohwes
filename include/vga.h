@@ -33,7 +33,7 @@
  * CRT Controller Registers
  * http://www.osdever.net/FreeVGA/vga/crtcreg.htm
  */
-// CRTC Port Addresses controled by IOAS bit in Miscellaneous Output Register
+// CRTC Port Addresses controlled by IOAS bit in Miscellaneous Output Register
 #define VGA_CRTC_PORT_ADDR          0x3D4   /* CRTC Address Port */
 #define VGA_CRTC_PORT_DATA          0x3D5   /* CRTC Data Port */
 #define VGA_CRTC_PORT_ADDR_MONO     0x3B4   /* CRTC Address Port (Monochrome) */
@@ -194,6 +194,13 @@ enum vga_color {
     VGA_WHITE,
 };
 
+enum vga_fb_select {
+    VGA_FB_128K,        // A0000-BFFFF
+    VGA_FB_64K,         // A0000-AFFFF
+    VGA_FB_32K_LO,      // B0000-B7FFF
+    VGA_FB_32K_HI,      // B8000-BFFFF
+};
+
 /**
  * Text Mode character attribute.
  */
@@ -227,6 +234,31 @@ struct vga_cell {
     };
 };
 static_assert(sizeof(struct vga_cell) == 2, "sizeof(struct vga_cell)");
+
+/**
+ * Frame buffer information.
+ */
+struct vga_fb_info {
+    uintptr_t framebuf;     // frame buffer physical address
+    size_t size_pages;      // frame buffer size in pages
+};
+
+/**
+ * Fill a vga_fb_info struct with the current frame buffer parameters.
+ *
+ * @param fb_info the vga_fb_info structure to fill
+ * @return 'true' if the fb_info structure was successfully filled
+*/
+bool vga_get_fb_info(struct vga_fb_info *fb_info);
+
+/**
+ * Program the VGA frame buffer address.
+ *
+ * @param fb_select one of the vga_fb_select enum values
+ * @return true if the fb_select parameter was valid and the frame buffer
+ *         address was successfully programmed
+*/
+bool vga_set_fb(enum vga_fb_select fb_select);
 
 /**
  * Reads a CRT Controller register.
