@@ -111,7 +111,7 @@ struct tty_driver {
     int     (*open)(struct tty *);
     int     (*close)(struct tty *);
     int     (*ioctl)(struct tty *, unsigned int cmd, unsigned long arg);
-    int     (*write_char)(struct tty *, char c);
+    int     (*write)(struct tty *, const char *buf, size_t count);
     size_t  (*write_room)(struct tty *);
     // TODO: flush?
 

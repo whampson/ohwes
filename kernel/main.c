@@ -84,6 +84,8 @@ extern __syscall int sys_write(int fd, const void *buf, size_t count);
 extern __syscall int sys_open(const char *name, int flags);
 extern __syscall int sys_close(int fd);
 
+static void test_tty(const char *dev, const char *msg);
+
 __fastcall void start_kernel(const struct boot_info *info)
 {
     // copy boot info into kernel memory so we don't lose it
@@ -123,7 +125,9 @@ __fastcall void start_kernel(const struct boot_info *info)
     kprint("entering user mode...\n");
     usermode(__phys_to_virt(USER_STACK));
 
-    kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
+    // kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
+
+    __sti();
     for (;;);
 
     // for future reference...
@@ -167,9 +171,11 @@ static void usermode(uint32_t stack)
 
 void _start(void)
 {
-    int fd0 = SYS_CHECK(open("/dev/keyboard", 0));      /// TODO: open /dev/console, then call dup() to duplicate file desc
-    int fd1 = SYS_CHECK(open("/dev/console", 0));
+    int fd0 = SYS_CHECK(open("/dev/tty0", 0));      /// TODO: open /dev/console, then call dup() to duplicate file desc
+    int fd1 = SYS_CHECK(open("/dev/tty0", 0));
+    int fd2 = SYS_CHECK(open("/dev/tty2", 0));
     int ret = main();
+    close(fd2);
     close(fd1);
     close(fd0);
     exit(ret);
@@ -187,6 +193,9 @@ int main(void)
 
     printf("\e4\e[5;33mHello, world!\e[m\n");
     // basic_shell();
+
+    char *str = "test write to tty2\n";
+    write(2, str, strlen(str));
 
     return 69;
 
