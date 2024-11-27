@@ -55,6 +55,7 @@ static void set_background(int bg);
 
 struct crash_screen {
     int bg; // background color
+    bool handling_crash;
 };
 
 #define DECLARE_GLOBAL(type, name)  \
@@ -85,6 +86,18 @@ void __fastcall crash(struct iregs *regs)
 {
     uint16_t mask;
     bool allow_return = false;
+
+    if (g_crash->handling_crash) {
+        // reentrancy check. if we end up here, we hit an exception while trying
+        // to show the crash screen. VERY BAD. show bare minimum information
+        // here, stuff that's unlikely to fail.
+        // TODO: mini register dump or something
+        cprint("\r\n\n\e[31mfatal: %s at %04X:%08X!",
+            exception_names[regs->vec_num], regs->cs, regs->eip);
+        // TODO: Ctrl+Alt+Del does not work here for some reason
+        goto done;
+    }
+    g_crash->handling_crash = true;
 
     // get control registers
     uint32_t cr0; read_cr0(cr0);
@@ -266,7 +279,8 @@ done:
     console_restore(current_console(), &saved_console);
     memcpy(get_console_fb(g_vga->active_console), old_fb, FB_SIZE);
     pic_setmask(mask);
-    (void) mask;
+
+    g_crash->handling_crash = false;
 }
 
 static void center_text(const char *str, ...)
