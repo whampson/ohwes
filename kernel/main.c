@@ -109,7 +109,7 @@ __fastcall void start_kernel(const struct boot_info *info)
     init_timer();
     init_rtc();
 #ifdef DEBUG
-    irq_register(IRQ_TIMER, debug_interrupt);   // CTRL+ALT+FN to crash kernel
+    irq_register(IRQ_RTC, debug_interrupt);   // CTRL+ALT+FN to crash kernel
 #endif
 
     // get the console and tty working for real

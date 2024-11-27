@@ -30,11 +30,19 @@
 #include <tty.h>
 #include <vga.h>
 
-#define SYSTEM_CONSOLE      1
+#define SYSTEM_CONSOLE          1       // console for boot, kprint, etc...
+#define MAX_CSIPARAM            16      // ESC[p;q;r;s;...,n param count
+#define MAX_TABSTOP             80
+#define TABSTOP_WIDTH           8       // TODO: make configurable
 
-#define MAX_CSIPARAM        16
-#define MAX_TABSTOP         80      // TODO: make this not depend on console width
-#define TABSTOP_WIDTH       8       // TODO: make configurable
+#define FB_SIZE_PAGES           2       // 8192 chars (enough for 80x50)
+#define FB_SIZE                 ((FB_SIZE_PAGES)<<PAGE_SHIFT)
+
+// TODO: set via ioctl
+#define BELL_FREQ               750     // Hz
+#define BELL_TIME               50      // ms
+#define ALERT_FREQ              1675
+#define ALERT_TIME              50
 
 enum csi_color {
     CSI_BLACK,
@@ -55,8 +63,14 @@ struct vga {
     struct vga_fb_info fb_info;
 };
 
-struct console
-{
+struct console_save_state {
+    bool blink_on;
+    char tabstops[MAX_TABSTOP];
+    uint32_t attr;
+    uint64_t cursor;
+};
+
+struct console {
     int number;                         // console I/O line number
     int state;                          // current control state
     bool initialized;                   // console can be used
@@ -67,7 +81,7 @@ struct console
     uint16_t cols, rows;                // screen dimensions
     void *framebuf;                     // frame buffer
 
-    char tabstops[MAX_TABSTOP];         // tab stops    // TODO: make indexing independent of console width
+    char tabstops[MAX_TABSTOP];         // tab stops
 
     int csiparam[MAX_CSIPARAM];         // control sequence parameters
     int paramidx;                       // control sequence parameter index
@@ -76,49 +90,60 @@ struct console
     bool need_wrap;                     // wrap output to next line on next character
 
     struct _char_attr {                 // character attributes
-        uint8_t bg, fg;                 //   background, foreground colors
-        uint8_t bright    : 1;          //   use bright foreground
-        uint8_t faint     : 1;          //   use dim foreground
-        uint8_t italic    : 1;          //   italicize (simulated with color
-        uint8_t underline : 1;          //   underline (simulated with color)
-        uint8_t blink     : 1;          //   blink character (if enabled)
-        uint8_t invert    : 1;          //   swap background and foreground colors
+        union {
+            struct {
+                uint32_t fg        : 8; //   foreground color
+                uint32_t bg        : 8; //   background colors
+                uint32_t bright    : 1; //   use bright foreground
+                uint32_t faint     : 1; //   use dim foreground
+                uint32_t italic    : 1; //   italicize (simulated with color)
+                uint32_t underline : 1; //   underline (simulated with color)
+                uint32_t blink     : 1; //   blink character (if enabled)
+                uint32_t invert    : 1; //   swap background and foreground colors
+            };
+            uint32_t _value;
+        };
     } attr;
-    static_assert(sizeof(struct _char_attr) <= 4, "_char_attr too large!");
+    static_assert(sizeof(struct _char_attr) == 4, "_char_attr too large!");
 
     struct _cursor {                    // cursor parameters
-        uint16_t x, y;                  //   position
-        int shape;                      //   shape
-        bool hidden;                    //   visibility
+        union {
+            struct {
+                uint64_t shape : 16;    //   start/end scan line
+                uint64_t x     : 12;    //   x position (4096 max)
+                uint64_t y     : 12;    //   y position (4096 max)
+                uint64_t hidden : 1;    //   visibility
+            };
+            uint64_t _value;
+        };
     } cursor;
+    static_assert(sizeof(struct _cursor) == 8, "_cursor too large!");
 
     struct _csi_defaults {              // CSI defaults (ESC [0m)
         struct _char_attr attr;
         struct _cursor cursor;
     } csi_defaults;
 
-    struct _save_state {                // saved parameters
-        bool blink_on;
-        char tabstops[MAX_TABSTOP];
-        struct _char_attr attr;
-        struct _cursor cursor;
-    } saved_state;
+    struct console_save_state saved_state; // saved parameters
 };
 
-struct console * current_console(void);
-struct console * get_console(int num);      // indexed at 1, 0 = current console
-
-// print.c
-void print_to_console(struct console *cons, const char *buf, size_t count);
-void print_to_syscon(const char *buf, size_t count);
-
+struct console * current_console(void);     // return current console (console0)
+struct console * get_console(int num);      // indexed at 1; 0 gets current
 int switch_console(int num);
+void * get_console_fb(int num);
+
+void console_save(struct console *cons, struct console_save_state *save);
+void console_restore(struct console *cons, struct console_save_state *save);
 
 void console_defaults(struct console *cons);
+void console_flush(struct console *cons);   // flush input buffer
+
+int console_getchar(struct console *cons);
+int console_putchar(struct console *cons, char c);
 
 int console_read(struct console *cons, char *buf, size_t count);
-int console_putbuf(struct console *cons, const char *buf, size_t count);
-int console_putchar(struct console *cons, char c);
+int console_write(struct console *cons, const char *buf, size_t count);
+
 
 /**
  * ASCII Control Characters

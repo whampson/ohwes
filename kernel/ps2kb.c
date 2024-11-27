@@ -394,7 +394,7 @@ static void kb_interrupt(int irq_num)
     // TOOD: SYSRQ = something cool (debug menu?)
 
     // ALT+<FN>: switch terminal
-    if (g_kb.alt) {
+    if (g_kb.alt && !g_kb.ctrl) {
         if (isfnkey(key) && !release) {
             int cons = key - KEY_F1 + 1;
             switch_console(cons);

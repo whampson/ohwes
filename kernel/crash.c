@@ -33,33 +33,41 @@
 #include <interrupt.h>
 #include <irq.h>
 #include <io.h>
+#include <pic.h>
 #include <x86.h>
 #include <cpu.h>
 #include <fs.h>
 #include <paging.h>
 
 #define CRASH_COLOR     CSI_BLUE
-#define PANIC_COLOR     CSI_BLUE
 #define IRQ_COLOR       CSI_RED
 #define NMI_COLOR       CSI_RED
 #define BANNER_COLOR    CSI_BLUE
-#define CRASH_BANNER    " " OS_NAME " "
-#define CRASH_WIDTH     80
 #define CRASH_BUFSIZ    1024
 
 extern struct vga *g_vga;
 
 static const char *exception_names[NR_EXCEPTIONS];
 
-static void center_text(const char *str, ...);
-static void print_flags(uint32_t eflags);
-static void print_segsel(int segsel);
 static void print_banner(const char *banner);
+static void center_text(const char *str, ...);
+static void set_background(int bg);
 
-#define BRIGHT(s)           "\e[1m" s "\e[22m"
-// #define crash_print(...)    _kprint(__VA_ARGS__)
+struct crash_screen {
+    int bg; // background color
+};
 
-static void crash_print(const char *fmt, ...)
+#define DECLARE_GLOBAL(type, name)  \
+    type _##name;                   \
+    type *name = &_##name           \
+
+DECLARE_GLOBAL(__data_segment struct crash_screen, g_crash);   // hmmm
+
+#define BOLD(s)         "\e[1m" s "\e[22m"
+#define ITALIC(s)       "\e[3m" s "\e[23m"
+#define UNDERLINE(s)    "\e[4m" s "\e[24m"
+
+static void cprint(const char *fmt, ...)
 {
     size_t nchars;
     char buf[CRASH_BUFSIZ];
@@ -70,213 +78,201 @@ static void crash_print(const char *fmt, ...)
     nchars = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    print_to_console(current_console(), buf, nchars);
+    console_write(current_console(), buf, nchars);
 }
 
-__fastcall
-void crash(struct iregs *regs)
+void __fastcall crash(struct iregs *regs)
 {
-    // TODO: print line-by-line
+    uint16_t mask;
+    bool allow_return = false;
 
-    uint16_t _cs;
-    struct segsel *curr_cs;
-    struct segsel *fault_cs;
-    int curr_pl, fault_pl;
-    bool pl_change;
-    uint32_t cr0, cr2, cr3, cr4;
-    uint32_t *stack_ptr;
-    // uint16_t irq_mask;
-    bool irq;
-    bool nmi;
-    bool pf;
-
-    // grab the control registers
-    cr4 = 0;
-    read_cr0(cr0);
-    read_cr2(cr2);
-    read_cr3(cr3);
-    if (cpu_has_cr4()) {
-        read_cr4(cr4);
-    }
+    // get control registers
+    uint32_t cr0; read_cr0(cr0);
+    uint32_t cr2; read_cr2(cr2);
+    uint32_t cr3; read_cr3(cr3);
+    uint32_t cr4; cr4 = 0;
+    if (cpu_has_cr4()) read_cr4(cr4);
 
     // get the current and faulting privilege levels
-    read_cs(_cs);
-    curr_cs = (struct segsel *) &_cs;
-    fault_cs = (struct segsel *) &regs->cs;
-    curr_pl = curr_cs->rpl;
-    fault_pl = fault_cs->rpl;
+    uint16_t _cs; read_cs(_cs);
+    struct segsel *curr_cs = (struct segsel *) &_cs;
+    struct segsel *fault_cs = (struct segsel *) &regs->cs;
+    int curr_pl = curr_cs->rpl;
+    int fault_pl = fault_cs->rpl;
 
     // did we change privilege levels?
-    pl_change = false;
+    bool pl_change = false;
     if (curr_pl != fault_pl) {
         pl_change = true;
     }
 
-    // // enable select interrupts
-    // irq_mask = irq_getmask();
-    // irq_setmask(0xFFFF);
-    // irq_unmask(IRQ_KEYBOARD);
-    // irq_unmask(IRQ_TIMER);
-    // __sti();
-    // // TODO: should probably check whether we crashed from the keyboard or timer
-    // //    ISR before deciding to enable those interrupts. Also the console_write()
-    // //    function, because if we crashed there we're SOL here...
+    // grab the flags
+    struct eflags *flags = (struct eflags *) &regs->eflags;
+
+    // was it an IRQ?
+    bool irq = (regs->vec_num < 0);
+    int irq_num = ~regs->vec_num;
+
+    // an non-maskable interrupt? a page fault?
+    bool nmi = (regs->vec_num == EXCEPTION_NMI);
+    bool pf = (regs->vec_num == EXCEPTION_PF);
 
     // locate faulting stack
+    uint32_t *stack_ptr;
     if (pl_change) {
+        // ESP was pushed to the interrupt stack, thus the ESP value in the
+        // iregs structure is valid.
         stack_ptr = (uint32_t *) regs->esp;
-    }
-    else {
+     }
+     else {
         // SS and ESP are not pushed onto the stack if an interrupt did not
         // change privilege levels, i.e. we are using the same stack. Our common
-        // interrupt handler pushed iregs into the stack, so we must subtract
-        // (or add, because Intel) the size of the iregs structure to the
-        // current iregs pointer, less ESP and SS, in order to get the top of
-        // the faulting function's stack.
+        // interrupt handler pushed the iregs onto the stack at the time the
+        // interrupt occurred, so we must subtract the size of the iregs
+        // structure from the stack pointer (excluding ESP and SS) in order to
+        // retrieve the top of the faulting stack.
         stack_ptr = (uint32_t *) ((uint32_t) regs + SIZEOF_IREGS_NO_PL_CHANGE);
+        regs->esp = (uint32_t) stack_ptr;
     }
 
+    const int NumConsoleCols = (g_vga->cols) ? g_vga->cols : 80;
+    const int NumConsoleRows = (g_vga->rows) ? g_vga->rows : 25;
 
-    // crash screen layout tuning params
-    const int banner_line = 4;
-    const int irq_banner_line = 9;
-    const int regs_line = 17;
-    const int seg_regs_line = 18;
-    const int seg_regs_col = 26;
-    const int stack_num_lines = 8;
-    const int stack_width_dwords = 2;
-    const int stack_left_col = g_vga->cols - (9 + (stack_width_dwords * 9));
-
-    // was it a device interrupt?
-    irq = (regs->vec_num < 0);
-
-    // or a non-maskable interrupt?
-    nmi = (regs->vec_num == EXCEPTION_NMI);
-
-    // or a page fault?
-    pf = (regs->vec_num == EXCEPTION_PF);
-
-    if (irq || nmi) {
-        crash_print("\e[0;0H\e[37;4%dm\e[2J\e5", IRQ_COLOR);
-        crash_print("\e[%d;0H", irq_banner_line);
-
-        if (irq) {
-            print_banner(" Unhandled Interrupt ");
-            crash_print("\n\n\e[37;4%dm", IRQ_COLOR);
-            center_text("An unhandled device interrupt was raised by " BRIGHT("IRQ %d") ".",
-                ~regs->vec_num, regs->cs, regs->eip);
-        }
-        else {
-            print_banner(" Non-Maskable Interrupt ");
-            crash_print("\n\n\e[37;4%dm", NMI_COLOR);
-            crash_print("\tA non-maskable interrupt was raised. If this continues, press");
-            crash_print("\n\tCtrl+Alt+Del to restart your computer.");
-            if (inb(SYSCNTL_PORT_A) & 0x10) {
-                crash_print("\n\n\t * Watchdog Timer");
+    if (!(irq || nmi)) {
+        // fatal crash, does not return
+        // Intel Exception
+        set_background(CRASH_COLOR);
+        cprint("\e[%dH", NumConsoleRows / 4);
+        print_banner(" " OS_NAME " ");
+        cprint("\n\n");
+        cprint("\r\n    A fatal exception " BOLD("%02X") " has occurred at " BOLD("%04X:%08X") ". Press Ctrl+Alt+Del",
+            regs->vec_num, regs->cs, regs->eip);
+        cprint("\r\n    to restart your computer.");
+        cprint("\n");
+        cprint("\r\n    *  Exception Name: " BOLD("%s"), exception_names[regs->vec_num]);
+        if (pf) {
+            cprint("\r\n    *  Description: " BOLD("%s %s Access Violation") " at " BOLD("%08X"),
+                regs->err_code & PF_US ? "User" : "Supervisor",
+                regs->err_code & PF_WR ? "Write" : "Read", cr2);
+            if (!(regs->err_code & PF_P)) {
+                cprint("\r\n        -  Page Not Present");
             }
-            if (inb(SYSCNTL_PORT_B) & 0x40) {
-                center_text("\n\n\t * Channel Check");
+            if (regs->err_code & PF_ID) {
+                cprint("\r\n        -  Instruction Fetch Page Fault");
             }
-            if (inb(SYSCNTL_PORT_B) & 0x80) {
-                center_text("\n\n\t * Parity Check");
+            if (regs->err_code & PF_RSVD) {
+                cprint("\r\n        -  Reserved Bit Violation");
             }
         }
-        crash_print("\n\n\n");
-        center_text("Press any key to continue \e6");
+        else if (regs->err_code) {
+            cprint("\r\n    *  Descriptor: " BOLD("%s(%02X)"),
+                (regs->err_code & 0x02) ? "IDT" :
+                    (regs->err_code & 0x04) ? "LDT" : "GDT",
+                (regs->err_code & 0xFFFF) >> 3,
+                (regs->err_code & 0x01) ? " (external)" : "");
+        }
+
+        const int StackLines = 8;
+
+        cprint("\e[%dH", NumConsoleRows-StackLines);
+        for (int i = 0; i < StackLines; i++) {
+            cprint("\r\n");
+            if (i==(StackLines-8)+0) cprint(" EAX: %08X EBX: %08X", regs->eax, regs->ebx);
+            if (i==(StackLines-8)+1) cprint(" ECX: %08X EDX: %08X", regs->ecx, regs->edx);
+            if (i==(StackLines-8)+2) cprint(" ESI: %08X EDI: %08X", regs->esi, regs->edi);
+            if (i==(StackLines-8)+3) cprint(" ESP: %08X EBP: %08X", regs->esp, regs->ebp);
+            if (i==(StackLines-8)+4) cprint(" EIP: %08X ERR: %08X", regs->eip, regs->err_code);
+            if (i==(StackLines-8)+5) cprint(" CR0: %08X CR2: %08X", cr0, cr2);
+            if (i==(StackLines-8)+6) cprint(" CR3: %08X CR4: %08X", cr3, cr4);
+            if (i==(StackLines-8)+7) {
+                cprint(" [");
+                if (flags->id)   cprint(" ID");
+                // if (flags->vip)  cprint(" VIP");
+                // if (flags->vif)  cprint(" VIF");
+                // if (flags->ac)   cprint(" AC");
+                // if (flags->vm)   cprint(" VM");
+                // if (flags->rf)   cprint(" RF");
+                // if (flags->nt)   cprint(" NT");
+                if (flags->of)   cprint(" OF");
+                if (flags->df)   cprint(" DF");
+                if (flags->intf) cprint(" IF");
+                if (flags->tf)   cprint(" TF");
+                if (flags->sf)   cprint(" SF");
+                if (flags->zf)   cprint(" ZF");
+                if (flags->af)   cprint(" AF");
+                if (flags->pf)   cprint(" PF");
+                if (flags->cf)   cprint(" CF");
+                cprint(" ]");
+            }
+            cprint("\e[%dG", NumConsoleCols-(8+1)*5);
+            cprint("%08X: %08X %08X %08X %08X",
+                stack_ptr,
+                stack_ptr[0], stack_ptr[1],
+                stack_ptr[2], stack_ptr[3]);
+            stack_ptr += 4;
+        }
         goto done;
     }
 
-    crash_print("\e[0;0H\e[37;4%dm\e[2J\e5", CRASH_COLOR);
-    crash_print("\e[%d;0H", banner_line);
-    print_banner(" Fatal Exception ");
-    crash_print("\n\n\n\e[37;4%dm", CRASH_COLOR);
-    crash_print("\tA fatal exception " BRIGHT("%02X") " has occurred at " BRIGHT("%04X:%08X") ". The program",
-        regs->vec_num, regs->cs, regs->eip);
-    crash_print("\n\tmay be able to continue execution. Press any key to continue or");
-    crash_print("\n\tpress Ctrl+Alt+Del to restart your computer.");
-    crash_print("\n");
-    crash_print("\n\t * Exception Name: " BRIGHT("%s"), exception_names[regs->vec_num]);
-    if (regs->err_code && !pf) {
-        crash_print("\n\t * Faulting Descriptor: " BRIGHT("%s(%02X)%s"),
-            (regs->err_code & 0x02) ? "IDT" :
-                (regs->err_code & 0x04) ? "LDT" : "GDT",
-            (regs->err_code & 0xFFFF) >> 3,
-            (regs->err_code & 0x01) ? " (external)" : "");
-    }
-    else if (pf) {
-        crash_print("\n\t * Details:");
-        crash_print("\n\t    - Linear Address: %08X", cr2);
-        crash_print("\n\t    - %s %s Access Violation",
-            regs->err_code & PF_US ? "User" : "Supervisor",
-            regs->err_code & PF_WR ? "Write" : "Read");
-        if (!(regs->err_code & PF_P)) {
-            crash_print("\n\t    - Page Not Present");
-        }
-        if (regs->err_code & PF_ID) {
-            crash_print("\n\t    - Instruction Fetch Page Fault");
-        }
-        if (regs->err_code & PF_RSVD) {
-            crash_print("\n\t    - Reserved Bit Violation");
-        }
-        if (regs->err_code & 0xFFFFFFE0) {
-            crash_print("\n\t    - NOTE: Additional Error Code Bits Set\n");
-        }
-    }
+    // backup frame buffer and console state
+    char old_fb[FB_SIZE];
+    struct console_save_state saved_console;
+    memcpy(old_fb, get_console_fb(g_vga->active_console), FB_SIZE);
+    console_save(current_console(), &saved_console);
 
-    // dump control registers
-    crash_print("\e[%d;0H", regs_line);
-    if (cpu_has_cr4()) {
-        crash_print("\n CR0=%08X CR2=%08X", cr0, cr2);
-        crash_print("\n CR3=%08X CR4=%08X", cr3, cr4);
+    if (irq) {
+        allow_return = true;
+        set_background(IRQ_COLOR);
+        cprint("\e[%dH", NumConsoleRows / 3);
+        print_banner(" Unhandled Interrupt ");
+        cprint("\n\n\e[1m");
+        cprint("\r\n    An unhandled interrupt was raised by device " UNDERLINE("IRQ %d") ". This could mean the", irq_num);
+        cprint("\r\n    device is misconfigured or malfunctioning. If this persists, press");
+        cprint("\r\n    Ctrl+Alt+Del to restart your computer.");
+        cprint("\n\n\n");
+        center_text("Press any key to continue \e6");
+    }
+    else if (nmi) {
+        allow_return = true;
+        set_background(NMI_COLOR);
+        cprint("\e[%dH", NumConsoleRows / 3);
+        print_banner(" Non-Maskable Interrupt ");
+        cprint("\n\n\e[1m");
+        cprint("\r\n    A non-maskable interrupt was raised. If this persists, press Ctrl+Alt+Del");
+        cprint("\r\n    to restart your computer.");
+        cprint("\n\n\n");
+        center_text("Press any key to continue \e6");
     }
     else {
-        crash_print("\n CR0=%08X ", cr0);
-        crash_print("\n CR2=%08X CR3=%08X ", cr2, cr3);
-    }
 
-    // dump context registers and error code
-    crash_print("\n EAX=%08X EBX=%08X\n ECX=%08X EDX=%08X",
-        regs->eax, regs->ebx, regs->ecx, regs->edx);
-    crash_print("\n EDI=%08X ESI=%08X\n EBP=%08X ESP=%08X",
-        regs->edi, regs->esi, regs->ebp, stack_ptr);
-    crash_print("\n EIP=%08X ERR=%08X", regs->eip, regs->err_code);
-    crash_print("\n");
-    print_flags(regs->eflags);
-
-    // dump segment registers
-    crash_print("\e[%d;%dH", seg_regs_line, seg_regs_col);
-    crash_print("\n\e[%dC CS=", seg_regs_col); print_segsel(regs->cs);
-    crash_print("\n\e[%dC DS=", seg_regs_col); print_segsel(regs->ds);
-    crash_print("\n\e[%dC ES=", seg_regs_col); print_segsel(regs->es);
-    crash_print("\n\e[%dC FS=", seg_regs_col); print_segsel(regs->fs);
-    crash_print("\n\e[%dC GS=", seg_regs_col); print_segsel(regs->gs);
-    if (pl_change) {
-        crash_print("\n\e[%dC SS=", seg_regs_col); print_segsel(regs->ss & 0xFFFF);
     }
-
-    // dump stack
-    for (int l = 0; l < stack_num_lines; l++) {
-        crash_print("\e[%d;%dH",
-            g_vga->rows - stack_num_lines + l + 1, stack_left_col);
-        crash_print("%08X:", stack_ptr - 1);
-        for (int w = 0; w < stack_width_dwords; w++, stack_ptr--) {
-            crash_print(" %08X", *(stack_ptr - 1));
-        }
-    }
+    cprint("\e[0m");
 
 done:
-    // kbwait();
-    // crash_print("\e[0;0H\e[37;40m\e[2J\e5");    // restore console
-    // __cli();
-    // irq_setmask(irq_mask);
-    // return;
-    for(;;);
+    mask = pic_getmask();
+    pic_setmask(0xFFFF);
+    pic_unmask(IRQ_KEYBOARD);
+
+    if (!allow_return) {
+        for (;;);   // spin forever
+    }
+    console_flush(current_console());
+
+    __sti();
+    console_getchar(current_console());
+    __cli();
+
+    // restore console state
+    console_restore(current_console(), &saved_console);
+    memcpy(get_console_fb(g_vga->active_console), old_fb, FB_SIZE);
+    pic_setmask(mask);
+    (void) mask;
 }
 
 static void center_text(const char *str, ...)
 {
     va_list args;
-    char buf[CRASH_WIDTH];
+    char buf[g_vga->cols];
     int len;
     int col;
     char c;
@@ -311,59 +307,33 @@ static void center_text(const char *str, ...)
             esc = 0;        // any other char, terminate CSI escape sequence
             continue;
         }
+        if (iscntrl(c)) {
+            continue;
+        }
 
         assert(esc == 0);
         len++;
     }
 
-    col = (CRASH_WIDTH - len) / 2;
+    col = (g_vga->cols - len) / 2;
     if (col < 0) {
         col = 0;
     }
-    crash_print("\e[%dG%s", col, buf);
+    cprint("\e[%dG%s", col, buf);
 }
 
-static void print_segsel(int segsel)
-{
-    struct segsel *ss = (struct segsel *) &segsel;
-    // struct seg_desc *desc = &get_seg_desc(segsel)->seg;
-
-    crash_print("%02X(%04X|%d|%d)", // ,%X,%X%c
-        segsel, ss->index, ss->ti, ss->rpl/*,
-        (desc->basehi << 24) | desc->baselo,
-        (desc->limithi << 16) | desc->limitlo,
-        (desc->g) ? ' ' : 'b'*/);
-}
-
-static void print_flags(uint32_t eflags)
-{
-    struct eflags *flags = (struct eflags *) &eflags;
-    crash_print(" EFL=%08X", eflags);
-    crash_print(" [");
-    if (flags->id)   crash_print(" ID");
-    if (flags->vip)  crash_print(" VIP");
-    if (flags->vif)  crash_print(" VIF");
-    if (flags->ac)   crash_print(" AC");
-    if (flags->vm)   crash_print(" VM");
-    if (flags->rf)   crash_print(" RF");
-    if (flags->nt)   crash_print(" NT");
-    if (flags->of)   crash_print(" OF");
-    if (flags->df)   crash_print(" DF");
-    if (flags->intf) crash_print(" IF");
-    if (flags->tf)   crash_print(" TF");
-    if (flags->sf)   crash_print(" SF");
-    if (flags->zf)   crash_print(" ZF");
-    if (flags->af)   crash_print(" AF");
-    if (flags->pf)   crash_print(" PF");
-    if (flags->cf)   crash_print(" CF");
-    crash_print(" ]");
-}
 
 static void print_banner(const char *banner)
 {
-    crash_print("\e[47;3%dm", BANNER_COLOR);
+    cprint("\e[47;3%dm", BANNER_COLOR);
     center_text(banner);
-    crash_print("\e[37;4%dm", BANNER_COLOR);
+    cprint("\e[37;4%dm", g_crash->bg);
+}
+
+static void set_background(int bg)
+{
+    g_crash->bg = bg;
+    cprint("\e5\e[0H\e[4%dm\e[2J", bg);
 }
 
 static const char *exception_names[NR_EXCEPTIONS] =

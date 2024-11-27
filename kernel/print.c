@@ -35,57 +35,40 @@ extern struct vga *g_vga;
 extern struct boot_info *g_boot;
 extern struct console g_console[NR_CONSOLE];
 
-void print_to_console(struct console *cons, const char *buf, size_t count)
-{
-    if (!cons) {
-        panic("console is null!");
-    }
-
-    if (!cons->initialized) {
-        panic("attempt to print to an uninitialized console!");
-    }
-
-    if (!buf) {
-        panic("attempt to print from a null buffer!");
-        return;
-    }
-
-    for (size_t i = 0; i < count; i++) {
-        char c = buf[i];
-        if (c == '\0') {
-            break;
-        }
-        if (c == '\n') {
-            // OPOST && ONLCR
-            // TODO: kprint termios?
-            console_putchar(cons, '\r');
-        }
-        console_putchar(cons, c);
-    }
-}
-
 void print_to_syscon(const char *buf, size_t count)
 {
+    struct console *cons = get_console(SYSTEM_CONSOLE);
+
     if (!g_console->initialized) {
         // we tried to print before the console was initialized! do the bare
         // minimum initialization here so we can print safely; full
         // initialization will occur when init_console() is called
         struct vga_fb_info fb_info;
         vga_get_fb_info(&fb_info);
-        console_defaults(g_console);
-        g_console->cols = g_boot->vga_cols;
-        g_console->rows = g_boot->vga_rows;
-        g_console->framebuf = (void *) fb_info.framebuf;
-        g_console->cursor.x = g_boot->cursor_col;
-        g_console->cursor.y = g_boot->cursor_row;
-        g_console->initialized = true; // partially true...
+        g_vga->rows = g_boot->vga_rows;
+        g_vga->cols = g_boot->vga_cols;
+        g_vga->active_console = SYSTEM_CONSOLE;
+
+        console_defaults(cons);
+        cons->number = SYSTEM_CONSOLE;
+        cons->cols = g_boot->vga_cols;
+        cons->rows = g_boot->vga_rows;
+        cons->framebuf = (void *) fb_info.framebuf;
+        cons->cursor.x = g_boot->cursor_col;
+        cons->cursor.y = g_boot->cursor_row;
+        cons->initialized = true; // partially true...
     }
 
-    // print using console subsystem
-    print_to_console(g_console, buf, count);
+    for (int i = 0; i < count; i++) {
+        char c = buf[i];
+        if (c == '\n') {
+            console_putchar(cons, '\r');    // TODO: kprint ldisc/termios?
+        }
+        console_putchar(cons, c);
+    }
 
-    g_boot->cursor_col = g_console->cursor.x;
-    g_boot->cursor_row = g_console->cursor.y;
+    g_boot->cursor_col = cons->cursor.x;
+    g_boot->cursor_row = cons->cursor.y;
 }
 
 //

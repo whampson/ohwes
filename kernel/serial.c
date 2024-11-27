@@ -618,7 +618,7 @@ static void com_interrupt(struct com_port *com)
                 while (com->lsr.data_ready) {
                     data = com_read(com, COM_REG_RX);
                     // TODO: put into line discipline
-                    print_to_console(get_console(2), &data, 1);
+                    console_putchar(get_console(2), data);  // DEBUG DEBUG
                     com->lsr._value = com_read(com, COM_REG_LSR);
                 }
                 break;

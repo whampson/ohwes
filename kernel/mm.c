@@ -97,13 +97,13 @@ static void print_kernel_sections(void)
     };
 
     struct section sections[] = {
-        { ".kernel",   &_kernel_start,   &_kernel_end,   (size_t) &_kernel_size },
-        { ".setup",    &_setup_start,    &_setup_end,    (size_t) &_setup_size },
-        { ".text",     &_text_start,     &_text_end,     (size_t) &_text_size },
-        { ".data",     &_data_start,     &_data_end,     (size_t) &_data_size },
-        { ".rodata",   &_rodata_start,   &_rodata_end,   (size_t) &_rodata_size },
-        { ".bss",      &_bss_start,      &_bss_end,      (size_t) &_bss_size },
-        { ".eh_frame", &_eh_frame_start, &_eh_frame_end, (size_t) &_eh_frame_size }
+        { "kernel image:", &_kernel_start,   &_kernel_end,   (size_t) &_kernel_size },
+        { ".setup",        &_setup_start,    &_setup_end,    (size_t) &_setup_size },
+        { ".text",         &_text_start,     &_text_end,     (size_t) &_text_size },
+        { ".data",         &_data_start,     &_data_end,     (size_t) &_data_size },
+        { ".rodata",       &_rodata_start,   &_rodata_end,   (size_t) &_rodata_size },
+        { ".bss",          &_bss_start,      &_bss_end,      (size_t) &_bss_size },
+        { ".eh_frame",     &_eh_frame_start, &_eh_frame_end, (size_t) &_eh_frame_size }
     };
 
     for (int i = 0; i < countof(sections); i++) {

@@ -38,18 +38,12 @@
 //   a (PS/2) keyboard input and VGA output device that are connected to the
 //   system as a console
 
-#define DEFAULT_FB              ((void *) __phys_to_virt(0xB8000))
-#define PAGES_PER_CONSOLE_FB    2   // 8192 chars (enough for 80x50 in text mode)
-
-// TODO: set via ioctl
-#define BELL_FREQ               750     // Hz
-#define BELL_TIME               50      // ms
-#define ALERT_FREQ              1675
-#define ALERT_TIME              50
+#define is_syscon(cons)         ((cons)->number == SYSTEM_CONSOLE)
+#define is_current(cons)        ((cons) == current_console())
 
 // global vars, put them in the data segment to
 // ensure they are initialized to zero
-__data_segment static struct vga _vga = { };
+__data_segment static struct vga _vga = { .active_console = SYSTEM_CONSOLE };
 __data_segment struct vga *g_vga = &_vga;
 __data_segment struct console g_console[NR_CONSOLE] = { };
 
@@ -157,7 +151,6 @@ enum console_state {
 };
 
 // console state
-// static void defaults(struct console *cons);
 static void reset(struct console *cons);                // ESC c
 static void save_console(struct console *cons);         // ESC 7
 static void restore_console(struct console *cons);      // ESC 8
@@ -182,12 +175,14 @@ static void cursor_right(struct console *cons, int n);  // ESC [<n>C
 static void cursor_left(struct console *cons, int n);   // ESC [<n>D
 
 // VGA programming
-static void set_vga_blink_enable(struct console *cons); // ESC 3 / ESC 4
-static void set_vga_cursor_enable(struct console *cons);// ESC 5 / ESC 6
-static void set_vga_cursor_pos(struct console *cons);   // ESC [ <n>;<m>H
-static void set_vga_cursor_shape(struct console *cons);
-static void set_vga_char(struct console *cons, uint16_t pos, char c);
-static void set_vga_attr(struct console *cons, uint16_t pos, struct _char_attr attr);
+static void vga_blink_enable(const struct console *cons); // ESC 3 / ESC 4
+static void vga_cursor_enable(const struct console *cons);// ESC 5 / ESC 6
+static void vga_set_cursor_pos(const struct console *cons);   // ESC [ <n>;<m>H
+static void vga_set_cursor_shape(const struct console *cons);
+
+// frame buffer
+static void set_fb_char(struct console *cons, uint16_t pos, char c);
+static void set_fb_attr(struct console *cons, uint16_t pos, struct _char_attr attr);
 
 // screen positioning
 static void pos2xy(uint16_t ncols, uint16_t pos, uint16_t *x, uint16_t *y);
@@ -212,7 +207,7 @@ void init_vga(
     // grab text mode dimensions from boot info
     g_vga->rows = info->vga_rows;
     g_vga->cols = info->vga_cols;
-    g_vga->active_console = 1;
+    g_vga->active_console = SYSTEM_CONSOLE;
 
     // read the current frame buffer parameters
     if (!vga_get_fb_info(&fb_info_old)) {
@@ -229,7 +224,7 @@ void init_vga(
     // move the old frame buffer to the new one
     fb_old = (void *) __phys_to_virt(fb_info_old.framebuf);
     fb_new = (void *) __phys_to_virt(fb_info_new.framebuf);
-    memmove(fb_new, fb_old, PAGES_PER_CONSOLE_FB);
+    memmove(fb_new, fb_old, FB_SIZE_PAGES);
 
     // update system console frame buffer
     g_console->framebuf = fb_new;
@@ -254,7 +249,7 @@ void init_console(const struct boot_info *info)
     init_vga(info, VGA_FB_SELECT, &cursor_x, &cursor_y);
 
     // make sure we have enough memory for the configured number of consoles
-    if (g_vga->fb_info.size_pages - PAGES_PER_CONSOLE_FB < NR_CONSOLE * PAGES_PER_CONSOLE_FB) {
+    if (g_vga->fb_info.size_pages - FB_SIZE_PAGES < NR_CONSOLE * FB_SIZE_PAGES) {
         panic("not enough video memory available for %d consoles! See config.h.", NR_CONSOLE);
         for(;;);
     }
@@ -262,25 +257,25 @@ void init_console(const struct boot_info *info)
     // initialize virtual consoles
     for (int i = 1; i <= NR_CONSOLE; i++) {
         struct console *cons = &g_console[i - 1];
-        cons->framebuf = (void *) g_vga->fb_info.framebuf;
-        cons->framebuf += (i * PAGES_PER_CONSOLE_FB) << PAGE_SHIFT;
+        cons->framebuf = get_console_fb(i);
         cons->number = i;
         console_defaults(cons);
         erase(cons, 2);
     }
 
-    struct console *cons = get_console(1);
+    struct console *cons = get_console(SYSTEM_CONSOLE);
     cons->cursor.x = cursor_x;
     cons->cursor.y = cursor_y;
 
-    // create a restore point
-    save_console(cons);
-
     // do a proper 'switch' to the initial console
-    int ret = switch_console(1);
+    int ret = switch_console(SYSTEM_CONSOLE);
     if (ret != 0) {
         panic("failed to initialize system console!");
     }
+    assert(cons == get_console(SYSTEM_CONSOLE));
+
+    // create a restore point
+    save_console(cons);
 
     kprint("\e4\e6");   // enable blink, show cursor
 
@@ -321,202 +316,6 @@ void init_console(const struct boot_info *info)
 // ----------------------------------------------------------------------------
 // public functions
 
-extern int chdev_open(struct inode *inode, struct file *file);  // TEMP
-
-int switch_console(int num)
-{
-    if (num <= 0 || num > NR_CONSOLE) {
-        return -EINVAL;
-    }
-
-    struct console *curr = current_console();
-    struct console *next = get_console(num);
-
-    if (!next->open) {
-        struct inode *inode = get_chdev_inode(TTY_MAJOR, next->number);
-        if (!inode) {
-            panic("could not find inode for tty%d", next->number);
-        }
-        if (chdev_open(inode, NULL) < 0) {
-            panic("failed to open tty%d", next->number);
-        }
-    }
-
-    uint32_t pgdir_addr = 0;
-    read_cr3(pgdir_addr);
-    pgdir_addr = __phys_to_virt(pgdir_addr);
-
-#if HIGHER_GROUND
-    // enable kernel identity mapping so we can operate on page tables
-    pde_t *ident_pde = (pde_t *) pgdir_addr;
-    *ident_pde = __mkpde(KERNEL_PGTBL, _PAGE_RW);
-#endif
-
-    // identity map old frame buffer, so it will write to back buffer
-    for (int i = 0; i < PAGES_PER_CONSOLE_FB; i++) {
-        uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
-        pte_t *pte = pte_offset((pde_t *) pgdir_addr, fb_page);
-        *pte = __mkpte(__virt_to_phys(fb_page), _PAGE_RW);
-    }
-    flush_tlb();
-
-    // swap buffers
-    memcpy(curr->framebuf, (void *) g_vga->fb_info.framebuf, PAGE_SIZE * PAGES_PER_CONSOLE_FB);
-    memcpy((void *) g_vga->fb_info.framebuf, next->framebuf, PAGE_SIZE * PAGES_PER_CONSOLE_FB);
-    curr = next;
-
-    // map new frame buffer to VGA
-    for (int i = 0; i < PAGES_PER_CONSOLE_FB; i++) {
-        uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
-        uint32_t vga_page = g_vga->fb_info.framebuf + (i << PAGE_SHIFT);
-        pte_t *pte = pte_offset((pde_t *) pgdir_addr, fb_page);
-        *pte = __mkpte(__virt_to_phys(vga_page), _PAGE_RW);
-    }
-
-#if HIGHER_GROUND
-    pde_clear(ident_pde);
-#endif
-
-    flush_tlb();
-
-    // update VGA state
-    g_vga->active_console = curr->number;
-    set_vga_blink_enable(curr);
-    set_vga_cursor_enable(curr);
-    set_vga_cursor_shape(curr);
-    set_vga_cursor_pos(curr);
-
-    // a console is fully initialized once we've switch to it at least once :-)
-    curr->initialized = true;
-    return 0;
-}
-
-struct console * current_console(void)
-{
-    return get_console(0);
-}
-
-struct console * get_console(int num)
-{
-    if (num < 0 || num > NR_CONSOLE) {
-        return NULL;
-    }
-
-    if (num == 0) {
-        num = g_vga->active_console;
-    }
-    panic_assert(num > 0 && (num - 1) < NR_CONSOLE);
-
-    struct console *cons = &g_console[num - 1];
-    panic_assert(cons->number == num);
-
-    return cons;
-}
-
-int console_read(struct console *cons, char *buf, size_t count)
-{
-    int nread;
-    uint32_t flags;
-
-    if (!cons || !buf) {
-        return -EINVAL;
-    }
-
-    // TODO: make sure this comes from the correct console for the
-    // calling process!!
-
-    nread = 0;
-    while (count--) {
-        spin(ring_empty(&cons->tty->iring));    // block until a character appears
-        // TODO: allow nonblocking input
-
-        cli_save(flags);
-        *buf++ = ring_get(&cons->tty->iring);
-        restore_flags(flags);
-        nread++;
-    }
-
-    return nread;
-}
-
-// int console_putbuf(struct console *cons, const char *buf, size_t count)
-// {
-//     if (!cons || !buf) {
-//         return -EINVAL;
-//     }
-
-//     // TODO: make sure this goes to the correct console for the
-//     // calling process!!
-
-//     for (int i = 0; i < count; i++) {
-//         console_putchar(cons, buf[i]);
-// #if E9_HACK
-//         if (cons == get_console(SYSTEM_CONSOLE)) {
-//             outb(0xE9, buf[i]);
-//         }
-// #endif
-    //     }
-
-    //     return count;
-// }
-
-int console_recv(struct console *cons, char c)  // called from ps2kb.c
-{
-    int count;
-
-    if (!cons) {
-        return -EINVAL;
-    }
-
-    if (!cons->initialized) {
-        panic("got keyboard input on uninitialized terminal %d", cons->number);
-    }
-
-    if (ring_full(&cons->tty->iring)) {
-        beep(ALERT_FREQ, ALERT_TIME);
-        return 0;
-    }
-
-    // TODO: move to ldisc
-    // // input processing
-    // if (c == '\r') {
-    //     if (has_iflag(cons, IGNCR)) {
-    //         return 0;
-    //     }
-    //     if (has_iflag(cons, ICRNL)) {
-    //         c = '\n';
-    //     }
-    // }
-    // else if (c == '\n' && has_iflag(cons, INLCR)) {
-    //     c = '\r';
-    // }
-
-    // TODO: leave space for \n, etc.
-    ring_put(&cons->tty->iring, (char) c);
-    count = 1;
-
-    // // echoing
-    // if (has_lflag(cons, ECHO)) {
-    //     if (has_lflag(cons, ECHOCTL) && iscntrl(c)) {
-    //         if (c != '\t') {
-    //             write_char(cons, '^');
-    //             count++;
-    //             if (c == 0x7F) {
-    //                 c -= 0x40;
-    //             }
-    //             else {
-    //                 c += 0x40;
-    //             }
-    //         }
-    //     }
-    //     write_char(cons, c);
-    // }
-
-    return count;
-}
-
-// ----------------------------------------------------------------------------
-// private functions
 
 void console_defaults(struct console *cons)
 {
@@ -548,41 +347,219 @@ void console_defaults(struct console *cons)
     save_console(cons);
 }
 
-static void reset(struct console *cons)
+extern int chdev_open(struct inode *inode, struct file *file);  // TEMP
+
+int switch_console(int num)
 {
-    console_defaults(cons);
-    if (cons == current_console()) {
-        set_vga_blink_enable(cons);
-        set_vga_cursor_enable(cons);
-        set_vga_cursor_shape(cons);
-        set_vga_cursor_pos(cons);
+    if (num <= 0 || num > NR_CONSOLE) {
+        return -EINVAL;
+    }
+
+    uint32_t flags;
+    cli_save(flags);
+
+    struct console *curr = current_console();
+    struct console *next = get_console(num);
+
+    if (!next->open) {
+        struct inode *inode = get_chdev_inode(TTY_MAJOR, next->number);
+        if (!inode) {
+            panic("could not find inode for tty%d", next->number);
+        }
+        if (chdev_open(inode, NULL) < 0) {
+            panic("failed to open tty%d", next->number);
+        }
+    }
+
+    uint32_t pgdir_addr = 0;
+    read_cr3(pgdir_addr);
+    pgdir_addr = __phys_to_virt(pgdir_addr);
+
+#if HIGHER_GROUND
+    // enable kernel identity mapping so we can operate on page tables
+    pde_t *ident_pde = (pde_t *) pgdir_addr;
+    *ident_pde = __mkpde(KERNEL_PGTBL, _PAGE_RW);
+#endif
+
+    // identity map old frame buffer, so it will write to back buffer
+    for (int i = 0; i < FB_SIZE_PAGES; i++) {
+        uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
+        pte_t *pte = pte_offset((pde_t *) pgdir_addr, fb_page);
+        *pte = __mkpte(__virt_to_phys(fb_page), _PAGE_RW);
+    }
+    flush_tlb();
+
+    // swap buffers
+    memcpy(curr->framebuf, (void *) g_vga->fb_info.framebuf, PAGE_SIZE * FB_SIZE_PAGES);
+    memcpy((void *) g_vga->fb_info.framebuf, next->framebuf, PAGE_SIZE * FB_SIZE_PAGES);
+    curr = next;
+
+    // map new frame buffer to VGA
+    for (int i = 0; i < FB_SIZE_PAGES; i++) {
+        uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
+        uint32_t vga_page = g_vga->fb_info.framebuf + (i << PAGE_SHIFT);
+        pte_t *pte = pte_offset((pde_t *) pgdir_addr, fb_page);
+        *pte = __mkpte(__virt_to_phys(vga_page), _PAGE_RW);
+    }
+
+#if HIGHER_GROUND
+    pde_clear(ident_pde);
+#endif
+
+    flush_tlb();
+
+    // update VGA state
+    g_vga->active_console = curr->number;
+    vga_blink_enable(curr);
+    vga_cursor_enable(curr);
+    vga_set_cursor_shape(curr);
+    vga_set_cursor_pos(curr);
+
+    // a console is fully initialized once we've switch to it at least once :-)
+    curr->initialized = true;
+
+    restore_flags(flags);
+    return 0;
+}
+
+struct console * current_console(void)
+{
+    return get_console(0);
+}
+
+struct console * get_console(int num)
+{
+    if (num < 0 || num > NR_CONSOLE) {
+        return NULL;
+    }
+
+    if (num == 0) {
+        num = g_vga->active_console;
+        panic_assert(num > 0 && (num - 1) < NR_CONSOLE);
+    }
+
+    struct console *cons = &g_console[num - 1];
+    if (cons->initialized) {
+        panic_assert(cons->number == num);
+    }
+
+    return cons;
+}
+
+void * get_console_fb(int num)
+{
+    char *fb = (char *) g_vga->fb_info.framebuf;
+    fb += (num * FB_SIZE_PAGES) << PAGE_SHIFT;
+
+    return fb;
+}
+
+void console_save(struct console *cons, struct console_save_state *save)
+{
+    memcpy(save->tabstops, cons->tabstops, MAX_TABSTOP);
+    save->blink_on = cons->blink_on;
+    save->attr = cons->attr._value;
+    save->cursor = cons->cursor._value;
+}
+
+void console_restore(struct console *cons, struct console_save_state *save)
+{
+    memcpy(cons->tabstops, save->tabstops, MAX_TABSTOP);
+    cons->blink_on = save->blink_on;
+    cons->attr._value = save->attr;
+    cons->cursor._value = save->cursor;
+
+    if (is_current(cons)) {
+        vga_blink_enable(cons);
+        vga_cursor_enable(cons);
+        vga_set_cursor_shape(cons);
+        vga_set_cursor_pos(cons);
     }
 }
 
-static void save_console(struct console *cons)
+int console_recv(struct console *cons, char c)  // called from ps2kb.c
 {
-    memcpy(cons->saved_state.tabstops, cons->tabstops, MAX_TABSTOP);
-    cons->saved_state.blink_on = cons->blink_on;
-    cons->saved_state.attr = cons->attr;
-    cursor_save(cons);
+    int count;
+
+    if (!cons) {
+        return -EINVAL;
+    }
+
+    if (!cons->initialized) {
+        panic("got keyboard input on uninitialized terminal %d", cons->number);
+    }
+
+    if (ring_full(&cons->tty->iring)) {
+        beep(ALERT_FREQ, ALERT_TIME);
+        return 0;
+    }
+
+    // TODO: leave space for \n, etc.
+    ring_put(&cons->tty->iring, (char) c);
+    count = 1;
+
+    return count;
 }
 
-static void restore_console(struct console *cons)
+int console_read(struct console *cons, char *buf, size_t count)
 {
-    memcpy(cons->tabstops, cons->saved_state.tabstops, MAX_TABSTOP);
-    cons->blink_on = cons->saved_state.blink_on;
-    cons->attr = cons->saved_state.attr;
-    cursor_restore(cons);
+    int nread;
+    uint32_t flags;
+
+    if (!cons || !buf) {
+        return -EINVAL;
+    }
+
+    nread = 0;
+    while (count--) {
+        spin(ring_empty(&cons->tty->iring));    // block until a character appears
+        // TODO: allow nonblocking input
+
+        cli_save(flags);
+        *buf++ = ring_get(&cons->tty->iring);
+        restore_flags(flags);
+        nread++;
+    }
+
+    return nread;
 }
 
-static void cursor_save(struct console *cons)
+int console_write(struct console *cons, const char *buf, size_t count)
 {
-    cons->saved_state.cursor = cons->cursor;
+    size_t nwritten;
+
+    if (!cons || !buf) {
+        return -EINVAL;
+    }
+
+    nwritten = 0;
+    for (int i = 0; i < count; i++) {
+        nwritten += console_putchar(cons, buf[i]);
+    }
+    return nwritten;
 }
 
-static void cursor_restore(struct console *cons)
+void console_flush(struct console *cons)
 {
-    cons->cursor = cons->saved_state.cursor;
+    uint32_t flags;
+    cli_save(flags);
+
+    while (!ring_empty(&cons->tty->iring)) {
+        ring_get(&cons->tty->iring);
+    }
+    restore_flags(flags);
+}
+
+int console_getchar(struct console *cons)
+{
+    char c;
+
+    int ret = console_read(cons, &c, 1);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return c;
 }
 
 int console_putchar(struct console *cons, char c)
@@ -591,12 +568,14 @@ int console_putchar(struct console *cons, char c)
     bool update_attr = false;
     bool update_cursor_pos = true;
     uint16_t char_pos;
-    int nwritten = 0;
+
+    uint32_t flags;
+    cli_save(flags);
 
 #if E9_HACK
-    // if (cons == get_console(SYSTEM_CONSOLE)) {
+    if (is_syscon(cons)) {
         outb(0xE9, c);
-    // }
+    }
 #endif
 
     // handle escape sequences if not a control character
@@ -617,6 +596,7 @@ int console_putchar(struct console *cons, char c)
     }
 
     // control characters
+    // TODO: allow disabling of these to print glyphs?
     switch (c) {
         case '\a':      // ^G - BEL - beep!
             beep(BELL_FREQ, BELL_TIME);
@@ -678,22 +658,25 @@ int console_putchar(struct console *cons, char c)
 
 write_vga:
     if (update_char) {
-        set_vga_char(cons, char_pos, c);
-        nwritten = 1;
+        set_fb_char(cons, char_pos, c);
     }
     if (update_attr) {
         if (cons->attr.bright && cons->attr.faint) {
             cons->attr.bright = false;      // faint overrides bright
         }
-        set_vga_attr(cons, char_pos, cons->attr);
+        set_fb_attr(cons, char_pos, cons->attr);
     }
-    if (update_cursor_pos /*&& cons == current_console()*/) {   // TODO: come back to this
-        set_vga_cursor_pos(cons);
+    if (update_cursor_pos && is_current(cons)) {
+        vga_set_cursor_pos(cons);
     }
 
 done:
-    return nwritten;
+    restore_flags(flags);
+    return 1;
 }
+
+// ----------------------------------------------------------------------------
+// private functions
 
 static void esc(struct console *cons, char c)
 {
@@ -732,25 +715,25 @@ static void esc(struct console *cons, char c)
         case '3':       // ESC 3    disable blink
             cons->blink_on = false;
             if (cons == current_console()) {
-                set_vga_blink_enable(cons);
+                vga_blink_enable(cons);
             }
             break;
         case '4':       // ESC 4    enable blink
             cons->blink_on = true;
             if (cons == current_console()) {
-                set_vga_blink_enable(cons);
+                vga_blink_enable(cons);
             }
             break;
         case '5':       // ESC 5    hide cursor
             cons->cursor.hidden = true;
             if (cons == current_console()) {
-                set_vga_cursor_enable(cons);
+                vga_cursor_enable(cons);
             }
             break;
         case '6':       // ESC 6    show cursor
             cons->cursor.hidden = false;
             if (cons == current_console()) {
-                set_vga_cursor_enable(cons);
+                vga_cursor_enable(cons);
             }
             break;
         case '7':       // ESC 7    save console
@@ -984,6 +967,42 @@ static void csi_m(struct console *cons, char p)
     }
 }
 
+static void reset(struct console *cons)
+{
+    console_defaults(cons);
+    if (is_current(cons)) {
+        vga_blink_enable(cons);
+        vga_cursor_enable(cons);
+        vga_set_cursor_shape(cons);
+        vga_set_cursor_pos(cons);
+    }
+}
+
+static void save_console(struct console *cons)
+{
+    console_save(cons, &cons->saved_state);
+}
+
+static void restore_console(struct console *cons)
+{
+    console_restore(cons, &cons->saved_state);
+}
+
+static void cursor_save(struct console *cons)
+{
+    cons->saved_state.cursor = cons->cursor._value;
+}
+
+static void cursor_restore(struct console *cons)
+{
+    cons->cursor._value = cons->saved_state.cursor;
+    if (is_current(cons)) {
+        vga_cursor_enable(cons);
+        vga_set_cursor_shape(cons);
+        vga_set_cursor_pos(cons);
+    }
+}
+
 static void backspace(struct console *cons)
 {
     cursor_left(cons, 1);
@@ -1060,8 +1079,8 @@ static void scroll(struct console *cons, int n)   // n < 0 is reverse scroll
 
     for (i = 0; i < n_blank; i++) {
         int pos = (reverse) ? i : n_cells + i;
-        set_vga_char(cons, pos, ' ');
-        set_vga_attr(cons, pos, cons->attr);
+        set_fb_char(cons, pos, ' ');
+        set_fb_attr(cons, pos, cons->attr);
     }
 }
 
@@ -1089,8 +1108,8 @@ static void erase(struct console *cons, int mode)
     }
 
     for (int i = 0; i < count; i++) {
-        set_vga_char(cons, start + i, ' ');
-        set_vga_attr(cons, start + i, cons->attr);
+        set_fb_char(cons, start + i, ' ');
+        set_fb_attr(cons, start + i, cons->attr);
     }
 }
 
@@ -1116,8 +1135,8 @@ static void erase_line(struct console *cons, int mode)
     }
 
     for (int i = 0; i < count; i++) {
-        set_vga_char(cons, start + i, ' ');
-        set_vga_attr(cons, start + i, cons->attr);
+        set_fb_char(cons, start + i, ' ');
+        set_fb_attr(cons, start + i, cons->attr);
     }
 }
 
@@ -1174,83 +1193,12 @@ static uint16_t xy2pos(uint16_t ncols, uint16_t x, uint16_t y)
     return y * ncols + x;
 }
 
-// ----------------------------------------------------------------------------
-
-static void set_vga_blink_enable(struct console *cons)
-{
-    uint32_t flags;
-    uint8_t modectl;
-
-    cli_save(flags);
-    modectl = vga_attr_read(VGA_ATTR_REG_MODE);
-
-    if (cons->blink_on) {
-        modectl |= VGA_ATTR_FLD_MODE_BLINK;
-    }
-    else {
-        modectl &= ~VGA_ATTR_FLD_MODE_BLINK;
-    }
-
-    vga_attr_write(VGA_ATTR_REG_MODE, modectl);
-    restore_flags(flags);
-}
-
-static void set_vga_cursor_enable(struct console *cons)
-{
-    uint32_t flags;
-    uint8_t css;
-    cli_save(flags);
-    css = vga_crtc_read(VGA_CRTC_REG_CSS);
-
-    if (cons->cursor.hidden) {
-        css |= VGA_CRTC_FLD_CSS_CD_MASK;
-    }
-    else {
-        css &= ~VGA_CRTC_FLD_CSS_CD_MASK;
-    }
-
-    vga_crtc_write(VGA_CRTC_REG_CSS, css);
-    restore_flags(flags);
-}
-
-static void set_vga_cursor_pos(struct console *cons)
-{
-    uint32_t flags;
-    uint16_t pos;
-
-    pos = xy2pos(cons->cols, cons->cursor.x, cons->cursor.y);
-
-    cli_save(flags);
-    vga_crtc_write(VGA_CRTC_REG_CL_HI, pos >> 8);
-    vga_crtc_write(VGA_CRTC_REG_CL_LO, pos & 0xFF);
-    restore_flags(flags);
-}
-
-static void set_vga_cursor_shape(struct console *cons)
-{
-    uint32_t flags;
-    uint8_t start, end;
-    uint8_t css, cse;
-
-    start = ((uint16_t) cons->cursor.shape) & 0xFF;
-    end = ((uint16_t) cons->cursor.shape) >> 8;
-
-    cli_save(flags);
-    css = vga_crtc_read(VGA_CRTC_REG_CSS) & ~VGA_CRTC_FLD_CSS_CSS_MASK;
-    cse = vga_crtc_read(VGA_CRTC_REG_CSE) & ~VGA_CRTC_FLD_CSE_CSE_MASK;
-    css |= (start & VGA_CRTC_FLD_CSS_CSS_MASK);
-    cse |= (end   & VGA_CRTC_FLD_CSE_CSE_MASK);
-    vga_crtc_write(VGA_CRTC_REG_CSS, css);
-    vga_crtc_write(VGA_CRTC_REG_CSE, cse);
-    restore_flags(flags);
-}
-
-static void set_vga_char(struct console *cons, uint16_t pos, char c)
+static void set_fb_char(struct console *cons, uint16_t pos, char c)
 {
     ((struct vga_cell *) cons->framebuf)[pos].ch = c;
 }
 
-static void set_vga_attr(struct console *cons, uint16_t pos, struct _char_attr attr)
+static void set_fb_attr(struct console *cons, uint16_t pos, struct _char_attr attr)
 {
     struct vga_attr *vga_attr;
     vga_attr = &((struct vga_cell *) cons->framebuf)[pos].attr;
@@ -1280,3 +1228,76 @@ static void set_vga_attr(struct console *cons, uint16_t pos, struct _char_attr a
         swap(vga_attr->color_bg, vga_attr->color_fg);
     }
 }
+
+// ----------------------------------------------------------------------------
+
+static void vga_blink_enable(const struct console *cons)
+{
+    uint32_t flags;
+    uint8_t modectl;
+
+    cli_save(flags);
+    modectl = vga_attr_read(VGA_ATTR_REG_MODE);
+
+    if (cons->blink_on) {
+        modectl |= VGA_ATTR_FLD_MODE_BLINK;
+    }
+    else {
+        modectl &= ~VGA_ATTR_FLD_MODE_BLINK;
+    }
+
+    vga_attr_write(VGA_ATTR_REG_MODE, modectl);
+    restore_flags(flags);
+}
+
+static void vga_cursor_enable(const struct console *cons)
+{
+    uint32_t flags;
+    uint8_t css;
+    cli_save(flags);
+    css = vga_crtc_read(VGA_CRTC_REG_CSS);
+
+    if (cons->cursor.hidden) {
+        css |= VGA_CRTC_FLD_CSS_CD_MASK;
+    }
+    else {
+        css &= ~VGA_CRTC_FLD_CSS_CD_MASK;
+    }
+
+    vga_crtc_write(VGA_CRTC_REG_CSS, css);
+    restore_flags(flags);
+}
+
+static void vga_set_cursor_pos(const struct console *cons)
+{
+    uint32_t flags;
+    uint16_t pos;
+
+    pos = xy2pos(cons->cols, cons->cursor.x, cons->cursor.y);
+
+    cli_save(flags);
+    vga_crtc_write(VGA_CRTC_REG_CL_HI, pos >> 8);
+    vga_crtc_write(VGA_CRTC_REG_CL_LO, pos & 0xFF);
+    restore_flags(flags);
+}
+
+static void vga_set_cursor_shape(const struct console *cons)
+{
+    uint32_t flags;
+    uint8_t start, end;
+    uint8_t css, cse;
+
+    start = ((uint16_t) cons->cursor.shape) & 0xFF;
+    end = ((uint16_t) cons->cursor.shape) >> 8;
+
+    cli_save(flags);
+    css = vga_crtc_read(VGA_CRTC_REG_CSS) & ~VGA_CRTC_FLD_CSS_CSS_MASK;
+    cse = vga_crtc_read(VGA_CRTC_REG_CSE) & ~VGA_CRTC_FLD_CSE_CSE_MASK;
+    css |= (start & VGA_CRTC_FLD_CSS_CSS_MASK);
+    cse |= (end   & VGA_CRTC_FLD_CSE_CSE_MASK);
+    vga_crtc_write(VGA_CRTC_REG_CSS, css);
+    vga_crtc_write(VGA_CRTC_REG_CSE, cse);
+    restore_flags(flags);
+}
+
+
