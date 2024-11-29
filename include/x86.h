@@ -333,16 +333,6 @@ struct segsel {
 static_assert(sizeof(struct segsel) == SEGSEL_SIZE, "sizeof(struct segsel) == SEGSEL_SIZE");
 
 /**
- * Gets a Segment Descriptor from a descriptor table.
- *
- * @param table a pointer to the descriptor table (GDT, LDT, or IDT)
- * @param segsel the segment selector used to index the table
- * @return a pointer to the segment descriptor specified by the segment selector
- */
-#define x86_get_desc(table,segsel) \
-    (&(((struct x86_desc *)(table))[(segsel)>>3]))
-
-/**
  * Table Descriptor
  *
  * A Table Descriptor represents the data structure supplied in the LGDT and
@@ -357,6 +347,46 @@ struct table_desc
     uint32_t base;      // GDT or IDT limit
 } __pack __align(2);    // pack to ensure limit and base are contiguous 48 bits
 static_assert(sizeof(struct table_desc) == 6, "sizeof(struct table_desc) == 6");
+
+/**
+ * Gets a Segment Descriptor from a descriptor table.
+ *
+ * @param table a pointer to the descriptor table (GDT, LDT, or IDT)
+ * @param segsel the segment selector used to index the table
+ * @return a pointer to the segment descriptor specified by the segment selector
+ */
+#define x86_get_desc(table,segsel) \
+    (&(((struct x86_desc *)(table))[(segsel)>>3]))
+
+/**
+ * Gets the base address from a Segment Descriptor.
+ *
+ * @param desc a segment descriptor
+ * @return the segment base address
+ */
+#define x86_seg_base(desc) \
+    (((desc)->seg.basehi << 24) | (desc)->seg.baselo)
+
+/**
+ * Gets the limit value from a Segment Descriptor.
+ *
+ * @param desc a segment descriptor
+ * @return the segment limit
+ */
+#define x86_seg_limit(desc) \
+    (((desc)->seg.limithi << 16) | (desc)->seg.limitlo)
+
+/**
+ * Checks whether a Segment Descriptor exists within a descriptor table.
+ *
+ * @param table_desc a Table Descriptor containing the descriptor table address
+ *                   and limit
+ * @param desc a segment descriptor
+ * @return 'true' if the segment descriptor exists within the descriptor table
+ */
+#define x86_desc_valid(table_desc,desc) \
+    (((((uint32_t) (desc)) + (sizeof(struct x86_desc) - 1)) & ~(sizeof(struct x86_desc) - 1)) && \
+    ((uint32_t) (desc) >= (table_desc).base) && ((uint32_t) (desc) < (table_desc).base + (table_desc).limit))
 
 /**
  * Task State Segment
@@ -588,11 +618,11 @@ static inline void make_trap_gate(struct x86_desc *desc, int segsel, int dpl, vo
     __asm__ volatile ("cpuid":"=a"(eax),"=b"(ebx),"=c"(ecx),"=d"(edx):"a"(fn))
 
 #define  read_cs(cs) __asm__ volatile ("movw %%cs, %%ax"      : "=a"(cs))
-#define  read_ds(cs) __asm__ volatile ("movw %%ds, %%ax"      : "=a"(ds))
-#define  read_es(cs) __asm__ volatile ("movw %%es, %%ax"      : "=a"(es))
-#define  read_fs(cs) __asm__ volatile ("movw %%fs, %%ax"      : "=a"(fs))
-#define  read_gs(cs) __asm__ volatile ("movw %%gs, %%ax"      : "=a"(gs))
-#define  read_ss(cs) __asm__ volatile ("movw %%ss, %%ax"      : "=a"(ss))
+#define  read_ds(ds) __asm__ volatile ("movw %%ds, %%ax"      : "=a"(ds))
+#define  read_es(es) __asm__ volatile ("movw %%es, %%ax"      : "=a"(es))
+#define  read_fs(fs) __asm__ volatile ("movw %%fs, %%ax"      : "=a"(fs))
+#define  read_gs(gs) __asm__ volatile ("movw %%gs, %%ax"      : "=a"(gs))
+#define  read_ss(ss) __asm__ volatile ("movw %%ss, %%ax"      : "=a"(ss))
 #define write_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" :: "I"(cs))
 #define write_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      :: "a"(ds))
 #define write_es(es) __asm__ volatile ("movw %%ax, %%es"      :: "a"(es))

@@ -385,7 +385,7 @@ static void kb_interrupt(int irq_num)
 #ifdef DEBUG
     if (g_kb.ctrl && g_kb.alt) {
         if (isfnkey(key)) {
-            g_test_crash_kernel = key - KEY_F1 + 1;
+            g_crash_kernel = key - KEY_F1 + 1;
         }
     }
 #endif

@@ -72,12 +72,13 @@ static size_t /*
 static void print_info(const struct boot_info *info);
 
 #ifdef DEBUG
-int g_test_crash_kernel;
+int g_crash_kernel = 0;
+int g_crash_test_double_fault = 0;
 void debug_interrupt(int irq_num);
 #endif
 
-static struct boot_info _boot;
-struct boot_info *g_boot = &_boot;
+__data_segment static struct boot_info _boot;
+__data_segment struct boot_info *g_boot = &_boot;
 
 extern __syscall int sys_read(int fd, void *buf, size_t count);
 extern __syscall int sys_write(int fd, const void *buf, size_t count);
@@ -185,7 +186,7 @@ int main(void)
     // TODO: load shell program from disk
 
 
-    printf("\e4\e[5;33mHello, world!\e[m\n");
+    printf("\e4\e[5;33mHello from user mode!\e[m\n");
     // basic_shell();
 
     return 69;
@@ -342,11 +343,11 @@ static void print_info(const struct boot_info *info)
 #ifdef DEBUG
 void debug_interrupt(int irq_num)
 {
-    switch (g_test_crash_kernel) {
+    switch (g_crash_kernel) {
         case 1:     // F1 - divide by zero
             __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
             break;
-        case 2:     // F2 - simulate nmi (TODO: real NMI)
+        case 2:     // F2 - simulate nmi (TODO: real NMI possible?)
             __asm__ volatile ("int $2");
             break;
         case 3:     // F3 - debug break
@@ -358,7 +359,7 @@ void debug_interrupt(int irq_num)
         case 5:     // F5 - assert()
             assert(true == false);
             break;
-        case 6:     // F6 - invalid interrupt
+        case 6:     // F6 - invalid interrupt vector
             __asm__ volatile ("int $69");
             break;
         case 7:     // F7 - unexpected device interrupt vector
@@ -366,21 +367,35 @@ void debug_interrupt(int irq_num)
             break;
         case 8: {   // F8 - nullptr read
             volatile uint32_t *badptr = NULL;
-            const int bad  = *badptr;
+            const int bad = *badptr;
             (void) bad;
             break;
         }
-        case 9: {   // F9 - nullptr write
+        case 9: {   // F9 - bad ptr write
             volatile uint32_t *badptr = (uint32_t *) 0xCA55E77E;
             *badptr = 0xBADC0DE;
             break;
+        }
+        case 10: {  // F10 - double fault
+            g_crash_test_double_fault = true;
+            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
+            break;
+        }
+        case 11: {  // F11 - true double fault
+            volatile struct x86_desc *idt;
+            volatile struct table_desc idt_desc = { };
+
+            __sidt(idt_desc);
+            idt = (volatile struct x86_desc *) idt_desc.base;
+            idt[EXCEPTION_DE].trap.p = 0;
+            idt[EXCEPTION_NP].trap.p = 0;
+            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
         }
         case 12: {  // F12 - triple fault
             struct table_desc idt_desc = { .limit = 0, .base = 0 };
             __lidt(idt_desc);
         }
     }
-
-    g_test_crash_kernel = 0;
+    g_crash_kernel = 0;
 }
 #endif
