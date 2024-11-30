@@ -97,49 +97,50 @@
 #define DESCTYPE_CODE_XRCA      0x0F    // Code, Execute/Read, Conforming
 
 /**
- * EFLAGS register bits.
+ * EFLAGS Register Fields
  */
-#define EFLAGS_CF           (1 << 0)
-#define EFLAGS_PF           (1 << 2)
-#define EFLAGS_AF           (1 << 4)
-#define EFLAGS_ZF           (1 << 6)
-#define EFLAGS_SF           (1 << 7)
-#define EFLAGS_TF           (1 << 8)
-#define EFLAGS_IF           (1 << 9)
-#define EFLAGS_DF           (1 << 10)
-#define EFLAGS_OF           (1 << 11)
-#define EFLAGS_IOPL         (3 << 12)
-#define EFLAGS_NT           (1 << 14)
-#define EFLAGS_RF           (1 << 16)
-#define EFLAGS_VM           (1 << 17)
-#define EFLAGS_AC           (1 << 18)
-#define EFLAGS_VIF          (1 << 19)
-#define EFLAGS_VIP          (1 << 20)
-#define EFLAGS_ID           (1 << 21)
+#define EFLAGS_CF           (1 << 0)    // Carry Flag
+#define EFLAGS_PF           (1 << 2)    // Parity Flag
+#define EFLAGS_AF           (1 << 4)    // Auxiliary Carry Flag
+#define EFLAGS_ZF           (1 << 6)    // Zero Flag
+#define EFLAGS_SF           (1 << 7)    // Sign Flag
+#define EFLAGS_TF           (1 << 8)    // Trap Flag
+#define EFLAGS_IF           (1 << 9)    // Interrupt Flag
+#define EFLAGS_DF           (1 << 10)   // Direction Flag
+#define EFLAGS_OF           (1 << 11)   // Overflow Flag
+#define EFLAGS_IOPL         (3 << 12)   // I/O Privilege Level
+#define EFLAGS_NT           (1 << 14)   // Nested Task Flag
+#define EFLAGS_RF           (1 << 16)   // Resume Flag
+#define EFLAGS_VM           (1 << 17)   // Virtual 8086 Mode
+#define EFLAGS_AC           (1 << 18)   // Alignment Check (486+)
+#define EFLAGS_VIF          (1 << 19)   // Virtual Interrupt Flag (Pentium+)
+#define EFLAGS_VIP          (1 << 20)   // Virtual Interrupt Pending (Pentium+)
+#define EFLAGS_ID           (1 << 21)   // CPUID Instruction Present (Pentium+)
 
 /**
- * CR0 register bits.
+ * CR0 Register Fields
  */
-#define CR0_PE              (1 << 0)    // Protection Enable
+#define CR0_PE              (1 << 0)    // Protected Mode Enable
 #define CR0_MP              (1 << 1)    // Monitor Coprocessor
 #define CR0_EM              (1 << 2)    // x87 Emulation
 #define CR0_TS              (1 << 3)    // Task Switched
-#define CR0_ET              (1 << 4)    // Extension Type
-#define CR0_NE              (1 << 5)    // Numeric Error
+#define CR0_ET              (1 << 4)    // Extension Type (80287 or 80387)
+#define CR0_NE              (1 << 5)    // Numeric Error (x86 FPU error)
 #define CR0_WP              (1 << 16)   // Write Protect
 #define CR0_AM              (1 << 18)   // Alignment Mask
 #define CR0_NW              (1 << 29)   // Non Write-Through
 #define CR0_CD              (1 << 30)   // Cache Disable
-#define CR0_PG              (1 << 31)   // Paging
+#define CR0_PG              (1 << 31)   // Paging Enable
 
 /**
- * CR3 register bits.
+ * CR3 Register Fields
  */
 #define CR3_PWT             (1 << 3)    // Page-Level Write-Through
 #define CR3_PCD             (1 << 4)    // Page-Level Cache Disable
+#define CR3_PGDIR           (0xFFFFF << 12) // Page Directory Base
 
 /**
- * CR4 register bits.
+ * CR4 Register Fields
  */
 #define CR4_VME             (1 << 0)    // Virtual-8086 Mode Extensions
 #define CR4_PVI             (1 << 1)    // Protected Mode Virtual Interrupts
@@ -149,16 +150,12 @@
 #define CR4_MCE             (1 << 6)    // Machine Check Enable
 
 /**
- * Page Fault error code bits.
+ * Page Fault Error Code Fields
  */
-#define PF_P                (1 << 0)
-#define PF_WR               (1 << 1)
-#define PF_US               (1 << 2)
-#define PF_RSVD             (1 << 3)
-#define PF_ID               (1 << 4)
-#define PF_PK               (1 << 5)
-#define PF_SS               (1 << 6)
-#define PF_SGX              (1 << 15)
+#define PF_P                (1 << 0)    // Page Not Present
+#define PF_WR               (1 << 1)    // Read/Write Fault (1=Write)
+#define PF_US               (1 << 2)    // User/Supervisor Fault (1=User)
+#define PF_RSVD             (1 << 3)    // Reserved Bit Violation
 
 #ifdef __ASSEMBLER__
 // Assembler-only defines
@@ -396,8 +393,7 @@ static_assert(sizeof(struct table_desc) == 6, "sizeof(struct table_desc) == 6");
  *
  * See Intel Software Developer's Manual, Volume 3A, section 7.2.
  */
-struct tss
-{
+struct tss {
     uint16_t prev_task;
     uint16_t _reserved0;
     uint32_t esp0;
@@ -601,8 +597,15 @@ static inline void make_trap_gate(struct x86_desc *desc, int segsel, int dpl, vo
     desc->trap.p = (handler != NULL);
 }
 
-#define __cli() __asm__ volatile ("cli" ::: "cc")
-#define __sti() __asm__ volatile ("sti" ::: "cc")
+#define __cpuid(fn,eax,ebx,ecx,edx)             \
+__asm__ volatile (                              \
+    "cpuid"                                     \
+    : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)\
+    :"a"(fn)                                    \
+)
+
+#define __cli() __asm__ volatile ("cli")
+#define __sti() __asm__ volatile ("sti")
 
 #define __lgdt(table_desc) __asm__ volatile ("lgdt %0" :: "m"(table_desc))
 #define __sgdt(table_desc) __asm__ volatile ("sgdt %0" :: "m"(table_desc))
@@ -614,54 +617,53 @@ static inline void make_trap_gate(struct x86_desc *desc, int segsel, int dpl, vo
 #define __ltr(segsel)  __asm__ volatile ("ltr %w0"  :: "r"(segsel))
 #define __str(segsel)  __asm__ volatile ("str %w0"  :: "r"(segsel))
 
-#define __cpuid(fn,eax,ebx,ecx,edx) \
-    __asm__ volatile ("cpuid":"=a"(eax),"=b"(ebx),"=c"(ecx),"=d"(edx):"a"(fn))
+#define  load_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" :: "I"(cs))
+#define  load_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      :: "a"(ds))
+#define  load_es(es) __asm__ volatile ("movw %%ax, %%es"      :: "a"(es))
+#define  load_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      :: "a"(fs))
+#define  load_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      :: "a"(gs))
+#define  load_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      :: "a"(ss))
+#define store_cs(cs) __asm__ volatile ("movw %%cs, %%ax"      : "=a"(cs))
+#define store_ds(ds) __asm__ volatile ("movw %%ds, %%ax"      : "=a"(ds))
+#define store_es(es) __asm__ volatile ("movw %%es, %%ax"      : "=a"(es))
+#define store_fs(fs) __asm__ volatile ("movw %%fs, %%ax"      : "=a"(fs))
+#define store_gs(gs) __asm__ volatile ("movw %%gs, %%ax"      : "=a"(gs))
+#define store_ss(ss) __asm__ volatile ("movw %%ss, %%ax"      : "=a"(ss))
 
-#define  read_cs(cs) __asm__ volatile ("movw %%cs, %%ax"      : "=a"(cs))
-#define  read_ds(ds) __asm__ volatile ("movw %%ds, %%ax"      : "=a"(ds))
-#define  read_es(es) __asm__ volatile ("movw %%es, %%ax"      : "=a"(es))
-#define  read_fs(fs) __asm__ volatile ("movw %%fs, %%ax"      : "=a"(fs))
-#define  read_gs(gs) __asm__ volatile ("movw %%gs, %%ax"      : "=a"(gs))
-#define  read_ss(ss) __asm__ volatile ("movw %%ss, %%ax"      : "=a"(ss))
-#define write_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" :: "I"(cs))
-#define write_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      :: "a"(ds))
-#define write_es(es) __asm__ volatile ("movw %%ax, %%es"      :: "a"(es))
-#define write_fs(fs) __asm__ volatile ("movw %%ax, %%fs"      :: "a"(fs))
-#define write_gs(gs) __asm__ volatile ("movw %%ax, %%gs"      :: "a"(gs))
-#define write_ss(ss) __asm__ volatile ("movw %%ax, %%ss"      :: "a"(ss))
+#define  load_eax(eax) __asm__ volatile ("" :: "a"(eax))
+#define  load_ebx(ebx) __asm__ volatile ("" :: "b"(ebx))
+#define  load_ecx(ecx) __asm__ volatile ("" :: "c"(ecx))
+#define  load_edx(edx) __asm__ volatile ("" :: "d"(edx))
+#define  load_esi(esi) __asm__ volatile ("" :: "S"(esi))
+#define  load_edi(edi) __asm__ volatile ("" :: "D"(edi))
+#define store_eax(eax) __asm__ volatile ("" : "=a"(eax):)
+#define store_ebx(ebx) __asm__ volatile ("" : "=b"(ebx):)
+#define store_ecx(ecx) __asm__ volatile ("" : "=c"(ecx):)
+#define store_edx(edx) __asm__ volatile ("" : "=d"(edx):)
+#define store_esi(esi) __asm__ volatile ("" : "=S"(esi):)
+#define store_edi(edi) __asm__ volatile ("" : "=D"(edi):)
 
-#define  read_eax(eax) __asm__ volatile ("" : "=a"(eax):)
-#define  read_ebx(ebx) __asm__ volatile ("" : "=b"(ebx):)
-#define  read_ecx(ecx) __asm__ volatile ("" : "=c"(ecx):)
-#define  read_edx(edx) __asm__ volatile ("" : "=d"(edx):)
-#define  read_esi(esi) __asm__ volatile ("" : "=S"(esi):)
-#define  read_edi(edi) __asm__ volatile ("" : "=D"(edi):)
-#define write_eax(eax) __asm__ volatile ("" :: "a"(eax))
-#define write_ebx(ebx) __asm__ volatile ("" :: "b"(ebx))
-#define write_ecx(ecx) __asm__ volatile ("" :: "c"(ecx))
-#define write_edx(edx) __asm__ volatile ("" :: "d"(edx))
-#define write_esi(esi) __asm__ volatile ("" :: "S"(esi))
-#define write_edi(edi) __asm__ volatile ("" :: "D"(edi))
+#define  load_cr0(cr0) __asm__ volatile ("movl %%eax, %%cr0" :: "a"(cr0))
+#define  load_cr2(cr2) __asm__ volatile ("movl %%eax, %%cr2" :: "a"(cr2))
+#define  load_cr3(cr3) __asm__ volatile ("movl %%eax, %%cr3" :: "a"(cr3))
+#define  load_cr4(cr4) __asm__ volatile ("movl %%eax, %%cr4" :: "a"(cr4))
+#define store_cr0(cr0) __asm__ volatile ("movl %%cr0, %%eax" : "=a"(cr0))
+#define store_cr2(cr2) __asm__ volatile ("movl %%cr2, %%eax" : "=a"(cr2))
+#define store_cr3(cr3) __asm__ volatile ("movl %%cr3, %%eax" : "=a"(cr3))
+#define store_cr4(cr4) __asm__ volatile ("movl %%cr4, %%eax" : "=a"(cr4))
 
-#define  read_cr0(cr0) __asm__ volatile ("movl %%cr0, %%eax" : "=a"(cr0))
-#define  read_cr2(cr2) __asm__ volatile ("movl %%cr2, %%eax" : "=a"(cr2))
-#define  read_cr3(cr3) __asm__ volatile ("movl %%cr3, %%eax" : "=a"(cr3))
-#define  read_cr4(cr4) __asm__ volatile ("movl %%cr4, %%eax" : "=a"(cr4))
-#define write_cr0(cr0) __asm__ volatile ("movl %%eax, %%cr0" :: "a"(cr0))
-#define write_cr2(cr2) __asm__ volatile ("movl %%eax, %%cr2" :: "a"(cr2))
-#define write_cr3(cr3) __asm__ volatile ("movl %%eax, %%cr3" :: "a"(cr3))
-#define write_cr4(cr4) __asm__ volatile ("movl %%eax, %%cr4" :: "a"(cr4))
-
-#define flush_tlb() \
-    __asm__ volatile ("movl %%cr3, %%eax; movl %%eax, %%cr3" ::: "eax")
+#define flush_tlb()                         \
+__asm__ volatile (                          \
+    "movl %%cr3, %%eax; movl %%eax, %%cr3"  \
+    ::: "eax"                               \
+);
 
 /**
  * Page Directory Entry for 32-bit Paging
  *
  * Points to a 4M page or a 4K page table.
  */
-struct x86_pde
-{
+struct x86_pde {
     uint32_t p      : 1;    // Present
     uint32_t rw     : 1;    // Read/Write; 1 = writable
     uint32_t us     : 1;    // User/Supervisor; 1 = user accessible
@@ -681,8 +683,7 @@ static_assert(sizeof(struct x86_pde) == 4, "bad PDE size!");
  *
  * Points to a 4K page.
  */
-struct x86_pte
-{
+struct x86_pte {
     uint32_t p      : 1;    // Present
     uint32_t rw     : 1;    // Read/Write; 1 = writable
     uint32_t us     : 1;    // User/Supervisor; 1 = user accessible

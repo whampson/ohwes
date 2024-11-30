@@ -372,7 +372,7 @@ int switch_console(int num)
     }
 
     uint32_t pgdir_addr = 0;
-    read_cr3(pgdir_addr);
+    store_cr3(pgdir_addr);
     pgdir_addr = __phys_to_virt(pgdir_addr);
 
 #if HIGHER_GROUND
