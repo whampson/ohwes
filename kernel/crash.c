@@ -102,20 +102,22 @@ void __fastcall crash(struct iregs *regs)
     bool allow_return = false;
 
     //
+    // -------------------------------------------------------------------------
     // basic info collection
+    // -------------------------------------------------------------------------
     //
 
     // get necessary control registers
-    uint32_t cr2; read_cr2(cr2);
+    uint32_t cr2; store_cr2(cr2);
 
-    // get current segment registers
+    // get necessary segment registers
     struct segsel *cs, *ss;
     cs = (struct segsel *) &regs->cs;
     ss = (struct segsel *) &regs->ss;
-    uint32_t _cs; read_cs(_cs);
-    uint32_t _ss; read_ss(_ss);
+    uint32_t _cs; store_cs(_cs);
+    uint32_t _ss; store_ss(_ss);
 
-    // get the current and faulting privilege levels
+    // determine the current and faulting privilege levels
     struct segsel *curr_cs = (struct segsel *) &_cs;
     int curr_pl = curr_cs->rpl;
     int fault_pl = cs->rpl;
@@ -130,23 +132,31 @@ void __fastcall crash(struct iregs *regs)
     if (!pl_change) {
         ss = (struct segsel *) &_ss;
     }
-    uint32_t * const esp = (pl_change)
-        ? (uint32_t * const) regs->esp
-        : (uint32_t * const) (((char *) regs) + SIZEOF_IREGS_NO_PL_CHANGE);
+    uint32_t esp = (pl_change)
+        // if we changed privilege levels, ESP in iregs is valid
+        ? (uint32_t) regs->esp
+        // if we did not change privilege levels, no ESP (or SS) was pushed to
+        // the stack and the stack did not switch, so to find the top of the
+        // faulting stack we must subtract (or add, because Intel) the size of
+        // the iregs structure minus the ESP and SS values from the top of the
+        // interrupt stack
+        : (uint32_t) (((char *) regs) + SIZEOF_IREGS_NO_PL_CHANGE);
 
     // fixup the regs pointer,
-    //   make a copy and assign correct SS and ESP,
-    //   then reassign regs pointer to point to local copy
+    //   make a local copy and assign correct SS and ESP values, then reassign
+    //   regs pointer to point to copy so we can be sure all regs are valid
     struct iregs _regs_copy = *regs;
     _regs_copy.ss = ss->_value;
-    _regs_copy.esp = (uint32_t) esp;
+    _regs_copy.esp = esp;
     regs = &_regs_copy;
 
     //
+    // -------------------------------------------------------------------------
     // double fault handler, to catch exceptions that somehow occur while trying
     // to show the crash screen. this is a "software" double fault, as opposed
     // to a "true" double fault occurs when, for example, the CPU encounters a
     // page fault while handling a previous page fault.
+    // -------------------------------------------------------------------------
     //
 
     // reentrancy check
@@ -175,7 +185,9 @@ void __fastcall crash(struct iregs *regs)
 #endif
 
     //
-    // handle fatal crash
+    // -------------------------------------------------------------------------
+    // handle fatal crash (blue screen)
+    // -------------------------------------------------------------------------
     //
 
     // was it an IRQ?
@@ -188,11 +200,11 @@ void __fastcall crash(struct iregs *regs)
     bool df = (regs->vec_num == EXCEPTION_DF);
 
     // NOTE: PCem doesn't push an error code of 0 onto the stack when a true
-    // double fault occurs, which violates the Intel spec. Source code backs
-    // this up. As a result, a software double fault will occur here when
-    // attempting to print the stack contents because the iregs struture is
-    // misaligned due to the missing error code.
-    // TODO: file a bug on PCem for this!!
+    // double fault occurs, which violates the Intel spec. My inspection of the
+    // PCem source code backs this up. As a result, a software double fault will
+    // occur here when attempting to print the stack contents of a true double
+    // fault because the iregs struture is misaligned due to the missing error
+    // code. TODO: file a bug on PCem for this!!
 
     const int NumConsoleRows = (g_vga->rows) ? g_vga->rows : DEFAULT_VGA_ROWS;
     const int OffsetFromBottom = (NumConsoleRows-CRASH_DUMP_OFFSET)-STACK_ROWS;
@@ -214,9 +226,6 @@ void __fastcall crash(struct iregs *regs)
             if (!(regs->err_code & PF_P)) {
                 cprint("\r\n        -  Page Not Present");
             }
-            if (regs->err_code & PF_ID) {
-                cprint("\r\n        -  Instruction Fetch Page Fault");
-            }
             if (regs->err_code & PF_RSVD) {
                 cprint("\r\n        -  Reserved Bit Violation");
             }
@@ -235,7 +244,10 @@ void __fastcall crash(struct iregs *regs)
     }
 
     //
-    // handle warnings / alerts, user can press a key to return to running task
+    // -------------------------------------------------------------------------
+    // handle warnings / alerts (red screen)
+    // user can press a key to return to running task
+    // -------------------------------------------------------------------------
     //
 
     // backup frame buffer and console state
@@ -271,6 +283,11 @@ void __fastcall crash(struct iregs *regs)
     }
     cprint("\e[0m");
 
+    //
+    // -------------------------------------------------------------------------
+    // final cleanup, enable the keyboard so Ctrl+Alt+Del or anykey works
+    // -------------------------------------------------------------------------
+    //
 done:
     mask = pic_getmask();
     pic_setmask(0xFFFF);
@@ -303,11 +320,11 @@ static void print_regs_and_stack(struct iregs *regs)
     uint32_t *stack_ptr = (uint32_t *) regs->esp;
     struct eflags *flags = (struct eflags *) &regs->eflags;
 
-    uint32_t cr0; read_cr0(cr0);
-    uint32_t cr2; read_cr2(cr2);
-    uint32_t cr3; read_cr3(cr3);
+    uint32_t cr0; store_cr0(cr0);
+    uint32_t cr2; store_cr2(cr2);
+    uint32_t cr3; store_cr3(cr3);
     uint32_t cr4; cr4 = 0;
-    if (cpu_has_cr4()) read_cr4(cr4);
+    if (cpu_has_cr4()) store_cr4(cr4);
 
 #if SHOW_SEGMENT_REGS
     struct segsel *cs, *ds, *es, *fs, *gs, *ss;
@@ -344,7 +361,7 @@ static void print_regs_and_stack(struct iregs *regs)
         if (i == 0) { cprint("\e[6DESP-->"); }
 #endif
         for (int k = 0; k < STACK_COLUMNS; k++, stack_ptr++) {
-            cprint(" %08X", stack_ptr[i]);
+            cprint(" %08X", *stack_ptr);
         }
     }
 }
@@ -375,10 +392,11 @@ static void print_flags(struct eflags *flags)
     if (flags->id)   cprint(" ID");
     // if (flags->vip)  cprint(" VIP");
     // if (flags->vif)  cprint(" VIF");
-    // if (flags->ac)   cprint(" AC");
+    if (flags->ac)   cprint(" AC");
     // if (flags->vm)   cprint(" VM");
-    // if (flags->rf)   cprint(" RF");
-    // if (flags->nt)   cprint(" NT");
+    if (flags->rf)   cprint(" RF");
+    if (flags->nt)   cprint(" NT");
+    cprint(" IOPL=%d", flags->iopl);
     if (flags->of)   cprint(" OF");
     if (flags->df)   cprint(" DF");
     if (flags->intf) cprint(" IF");
