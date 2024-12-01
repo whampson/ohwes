@@ -17,19 +17,18 @@
  *      Created: December 29, 2023
  *       Author: Wes Hampson
  *
- * Boolean types.
- *
- * https://en.cppreference.com/w/c/types (C11)
+ * https://en.cppreference.com/w/c/types
+ * https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/stdbool.h.html
  * =============================================================================
  */
 
 #ifndef __STDBOOL_H
 #define __STDBOOL_H
 
-#define bool _Bool
+#define bool    _Bool
 
-#define false 0
-#define true 1
+#define true    1
+#define false   0
 
 #define __bool_true_false_are_defined 1
 

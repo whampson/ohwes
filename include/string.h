@@ -16,20 +16,23 @@
  *         File: include/string.h
  *      Created: January 3, 2024
  *       Author: Wes Hampson
+ *
+ * https://en.cppreference.com/w/c/string/byte
+ * https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/string.h.html
  * =============================================================================
  */
 
 #ifndef __STRING_H
 #define __STRING_H
 
+#ifndef __NULL_DEFINED
+#define __NULL_DEFINED
+#define NULL ((void *) 0)
+#endif
+
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
 typedef __SIZE_TYPE__ size_t;
-#endif
-
-#ifndef __NULL_DEFINED
-#define __NULL_DEFINED
-#define NULL ((void*)0)
 #endif
 
 void * memcpy(void *restrict dest, const void *restrict src, size_t count);

@@ -16,30 +16,37 @@
  *         File: include/stdio.h
  *      Created: January 3, 2024
  *       Author: Wes Hampson
+ *
+ * https://en.cppreference.com/w/c/io
+ * https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/stdio.h.html
  * =============================================================================
  */
 
 #ifndef __STDIO_H
 #define __STDIO_H
 
-#ifndef __SIZE_T_DEFINED
-#define __SIZE_T_DEFINED
-typedef __SIZE_TYPE__  size_t;
-#endif
-
 #ifndef __NULL_DEFINED
 #define __NULL_DEFINED
-#define NULL ((void*)0)
+#define NULL ((void *)0)
 #endif
 
 #ifndef __VA_LIST_DEFINED
 #define __VA_LIST_DEFINED
-typedef void *va_list;
+typedef __builtin_va_list va_list;
 #endif
+
+#ifndef __SIZE_T_DEFINED
+#define __SIZE_T_DEFINED
+typedef __SIZE_TYPE__ size_t;
+#endif
+
+// TODO: sys/types.h?
+typedef long signed int ssize_t;
 
 // TODO: unistd.h?
 #define STDIN_FILENO    0
 #define STDOUT_FILENO   1
+#define STDERR_FILENO   2
 
 int putchar(int c);
 int puts(const char *str);
