@@ -85,6 +85,8 @@ extern __syscall int sys_write(int fd, const void *buf, size_t count);
 extern __syscall int sys_open(const char *name, int flags);
 extern __syscall int sys_close(int fd);
 
+static void test_tty(const char *dev, const char *msg);
+
 __fastcall void start_kernel(const struct boot_info *info)
 {
     // copy boot info into kernel memory so we don't lose it
@@ -188,6 +190,23 @@ int main(void)
 
     printf("\e4\e[5;33mHello from user mode!\e[m\n");
     // basic_shell();
+
+        // // screw around
+
+    // const char *devs[] = {
+    //     "/dev/tty1",    // console1 (ALT+F1)
+    //     "/dev/ttyS0",   // COM1
+    //     "/dev/ttyS1",   // COM2
+    //     "/dev/ttyS2",   // COM3
+    //     "/dev/ttyS3",   // COM4
+    // };
+
+    // // serial port(s)
+    // for (int i = 0; i < countof(devs); i++) {
+    //     char msg[64];
+    //     snprintf(msg, sizeof(msg), "OH-WES says hello on %s!\n", devs[i]);
+    //     test_tty(devs[i], msg);
+    // }
 
     return 69;
 

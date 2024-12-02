@@ -38,6 +38,7 @@
 
 #define COM_BUFFER_SIZE     16
 #define LOOPBACK_TEST       0
+#define DEBUG_SERIAL        1
 
 //
 // Physical Serial Ports
@@ -361,9 +362,7 @@ struct com_port {
     uint8_t num;                // port number
     uint16_t io_port;           // I/O base port number
 
-    struct ring iq;       // <-- from device
     struct ring oq;       // --> to device
-    char _ibuf[COM_BUFFER_SIZE];
     char _obuf[COM_BUFFER_SIZE];
 
     // register shadows
@@ -382,15 +381,17 @@ struct com_port g_com[NR_SERIAL];
 static void init_com_port(int port);
 static struct com_port * get_com(int port);
 static int com_open(struct com_port *com);
+static int com_close(struct com_port *com);
 static uint8_t com_read(struct com_port *com, uint8_t reg);
 static void com_write(struct com_port *com, uint8_t reg, uint8_t data);
+static void com_flush(struct com_port *com);
 static void com_interrupt(struct com_port *com);
 
 static void serial_interrupt(int irq_num);
 
 static int serial_open(struct tty *);
 static int serial_close(struct tty *);
-static int serial_write_char(struct tty *, char c);
+static int serial_write(struct tty *, const char *buf, size_t count);
 static int serial_ioctl(struct tty *, unsigned int cmd, unsigned long arg);
 static size_t serial_write_room(struct tty *);
 
@@ -399,15 +400,13 @@ struct tty_driver serial_driver = {
     .open = serial_open,
     .close = serial_close,
     .ioctl = serial_ioctl,
-    .write_char = serial_write_char,
+    .write = serial_write,
     .write_room = serial_write_room,
 };
 
-static int serial_open(struct tty *tty)
+static int tty_get_com(struct tty *tty, struct com_port **com)
 {
-    struct com_port *com;
-
-    if (!tty) {
+    if (!tty || !com) {
         return -EINVAL;
     }
 
@@ -418,27 +417,56 @@ static int serial_open(struct tty *tty)
         return -ENXIO;
     }
 
-    com = get_com(tty->index + 1);  // TODO: consistent indexing
+    *com = get_com(tty->index + 1);  // TODO: consistent indexing
+    return 0;
+}
+
+static int serial_open(struct tty *tty)
+{
+    struct com_port *com;
+
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return ret;
+    }
+
     return com_open(com);
 }
 
 static int serial_close(struct tty *tty)
 {
-    return -ENOSYS;
+    struct com_port *com;
+
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return com_close(com);
 }
 
-static int serial_write_char(struct tty *tty, char c)
+static int serial_write(struct tty *tty, const char *buf, size_t count)
 {
-    struct lsr lsr;
-    struct com_port *com = &g_com[0];
+    struct com_port *com;
 
-    do {
-        // make sure we can send
-        lsr._value = com_read(com, COM_REG_LSR);
-    } while (!lsr.tx_ready);    // TODO: timeout!
-    com_write(com, COM_REG_TX, c);
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return ret;
+    }
 
-    return 1;
+    int nwritten = 0;
+    for (int i = 0; i < count; i++) {
+        if (ring_full(&com->oq)) {
+            com_flush(com);
+        }
+        if (!ring_full(&com->oq)) {
+            ring_put(&com->oq, buf[i]);
+            nwritten++;
+        }
+    }
+
+    com_flush(com);
+    return nwritten;
 }
 
 static int serial_ioctl(
@@ -499,8 +527,7 @@ static int com_open(struct com_port *com)
         return -EIO;
     }
 
-    // initialize i/o buffers
-    ring_init(&com->iq, com->_ibuf, COM_BUFFER_SIZE);
+    // initialize output buffer
     ring_init(&com->oq, com->_obuf, COM_BUFFER_SIZE);
 
     // disable all interrupts
@@ -578,6 +605,12 @@ static int com_open(struct com_port *com)
     return 0;
 }
 
+static int com_close(struct com_port *com)
+{
+    com->open = false;
+    return 0;
+}
+
 static uint8_t com_read(struct com_port *com, uint8_t reg)
 {
     assert(com != NULL);
@@ -598,6 +631,19 @@ static void com_write(struct com_port *com, uint8_t reg, uint8_t data)
     outb(com->io_port + reg, data);
 }
 
+static void com_flush(struct com_port *com)
+{
+    // while (!com->lsr.tx_ready) {
+    //     // spin...
+    // }
+
+    while (com->lsr.tx_ready && !ring_empty(&com->oq)) {
+        char c = ring_get(&com->oq);
+        com_write(com, COM_REG_TX, c);
+        com->lsr._value = com_read(com, COM_REG_LSR);
+    }
+}
+
 static void com_interrupt(struct com_port *com)
 {
     char data;
@@ -610,28 +656,30 @@ static void com_interrupt(struct com_port *com)
     do {
         com->iir._value = com_read(com, COM_REG_IIR);
         com->lsr._value = com_read(com, COM_REG_LSR);
+        com->msr._value = com_read(com, COM_REG_MSR);
 
         switch (com->iir.priority) {
             case PRIORITY_RXREADY:
+#if DEBUG_SERIAL
                 kprint("com%d: rx_ready\n", com->num);
+#endif
                 assert(com->lsr.data_ready);
                 while (com->lsr.data_ready) {
                     data = com_read(com, COM_REG_RX);
                     // TODO: put into line discipline
-                    console_putchar(get_console(2), data);  // DEBUG DEBUG
+                    console_write(get_console(com->num), &data, 1);
                     com->lsr._value = com_read(com, COM_REG_LSR);
                 }
                 break;
             case PRIORITY_TXREADY:
+#if DEBUG_SERIAL
                 kprint("com%d: tx_ready\n", com->num);
+#endif
                 assert(com->lsr.tx_ready);
-                while (com->lsr.tx_ready && !ring_empty(&com->oq)) {
-                    data = ring_get(&com->oq);
-                    com_write(com, COM_REG_TX, data);
-                    com->lsr._value = com_read(com, COM_REG_LSR);
-                }
+                com_flush(com);
                 break;
             case PRIORITY_LINE:
+#if DEBUG_SERIAL
                 if (com->lsr.overrun_error) {
                     kprint("\e[1;31mcom%d: overrun error\e[0m\n", com->num);
                 }
@@ -651,9 +699,11 @@ static void com_interrupt(struct com_port *com)
                         com->lsr.tx_ready ? " tx_ready" : "",
                         com->lsr.tx_idle ? " tx_idle" : "");
                 }
+#endif
                 break;
             case PRIORITY_MODEM:
-                com->msr._value = com_read(com, COM_REG_MSR);
+
+#if DEBUG_SERIAL
                 if (com->msr._value) {
                     kprint("com%d: modem status:%s%s%s%s%s%s%s%s\n", com->num,
                             com->msr.clear_to_send ? " cts" : "",
@@ -665,6 +715,7 @@ static void com_interrupt(struct com_port *com)
                             com->msr.trailing_edge_ring_indicator ? " teri" : "",
                             com->msr.delta_carrier_detect ? " ddcd" : "");
                 }
+#endif
                 break;
         }
         com->iir._value = com_read(com, COM_REG_IIR);

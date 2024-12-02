@@ -175,7 +175,41 @@ void init_kb(const struct boot_info *info)
 
 static void kb_putq(char c)
 {
-    console_recv(current_console(), c);
+    // TODO: put whole string
+    //      what happens if ldisc buffer fills in middle of string write?
+    //      queue a buffer drain on a timer interrupt? (like a DPC?)
+    //
+    // TODO: this needs to happen in the "bottom half" of the interrupt handler,
+    //      after the IRQ has been acknowledged and we're out of the critical
+    //      part interrupt handler, because it could take a long time to put the
+    //      buffer in the line discipline receive queue
+    //
+    // TODO: sidenote: panicking in the "top half" of the interrupt handler
+    //      (i.e. here) is bad because it leaves interrupts off; we cannot
+    //      reboot with a keystroke or turn off a beeper that we started...
+
+    struct tty *tty;
+    struct tty_ldisc *ldisc;
+
+    tty = current_console()->tty;
+    panic_assert(tty);
+
+    ldisc = tty->ldisc;
+    panic_assert(ldisc);
+    panic_assert(ldisc->recv);
+    panic_assert(ldisc->recv_room);
+
+    if (!ldisc->recv_room(tty)) {
+        // TODO: panic? drop character? defer recv? what should we do here?
+        beep(ALERT_FREQ, ALERT_TIME);
+        kprint("\e[1;33mtty%d: input buffer full!\e[0m\n", tty->index);
+        return;
+    }
+
+    ssize_t ret = ldisc->recv(tty, &c, 1);
+    if (ret < 0) {
+        panic("ldisc%d: recv on tty%d failed with %d", ldisc->num, tty->index, ret);
+    }
 }
 
 static void update_leds(void)
@@ -348,10 +382,10 @@ static void kb_interrupt(int irq_num)
         if ((key) == (l)) { _mask |= 1 << 0; }  \
         if ((key) == (r)) { _mask |= 1 << 1; }  \
         if (_mask && !release) {                \
-            g_kb.mod |= _mask;                 \
+            g_kb.mod |= _mask;                  \
         }                                       \
         else if (_mask && release) {            \
-            g_kb.mod &= ~_mask;                \
+            g_kb.mod &= ~_mask;                 \
         }                                       \
     })
     handle_modifier(key, ctrl, KEY_LCTRL, KEY_RCTRL);

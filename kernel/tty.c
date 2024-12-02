@@ -209,13 +209,23 @@ static int tty_ioctl(struct file *file, unsigned int num, unsigned long arg)
 
 // ----------------------------------------------------------------------------
 
+struct n_tty_ldisc_data {
+    struct ring iring;
+    struct ring oring;
+    char _iring_buf[TTY_BUFFER_SIZE];
+    char _oring_buf[TTY_BUFFER_SIZE];
+};
+static struct n_tty_ldisc_data ldisc_data;
+
 static int tty_ldisc_open(struct tty *tty)
 {
     if (!tty) {
         return -EINVAL;
     }
 
-    ring_init(&tty->iring, tty->iring_buf, TTY_BUFFER_SIZE);
+    ring_init(&ldisc_data.iring, ldisc_data._iring_buf, TTY_BUFFER_SIZE);
+    ring_init(&ldisc_data.oring, ldisc_data._oring_buf, TTY_BUFFER_SIZE);
+    tty->ldisc_data = &ldisc_data;
     return 0;
 }
 
@@ -240,7 +250,7 @@ static ssize_t tty_ldisc_write(
     if (!tty->driver) {
         return -ENXIO;
     }
-    if (!tty->driver->write_char) {
+    if (!tty->driver->write) {
         return -ENOSYS;
     }
 
@@ -254,18 +264,20 @@ static ssize_t tty_ldisc_write(
             switch (c) {
                 case '\n':
                     if (O_ONLCR(tty)) {
-                        tty->driver->write_char(tty, '\r');
+                        char c2 = '\r';
+                        tty->driver->write(tty, &c2, 1);
                     }
                     break;
                 case '\r':
                     if (O_OCRNL(tty)) {
-                        tty->driver->write_char(tty, '\n');
+                        char c2 = '\n';
+                        tty->driver->write(tty, &c2, 1);
                     }
                     break;
             }
         }
 
-        int ret = tty->driver->write_char(tty, buf[i]);
+        int ret = tty->driver->write(tty, &buf[i], 1);
         if (ret < 0) {
             return ret;
         }
@@ -282,10 +294,26 @@ static int tty_ldisc_ioctl(struct tty *tty, unsigned int num, unsigned long arg)
 
 static ssize_t tty_ldisc_recv(struct tty *tty, char *buf, size_t count)
 {
-    return -ENOSYS;
+    struct n_tty_ldisc_data *ldisc_data;
+    ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
+
+    for (int i = 0; i < count; i++) {
+        if (ring_full(&ldisc_data->iring)) {
+            return -EIO;        // TODO: something to indicate buffer full
+        }
+
+        // TODO: termios processing (or does that happen on read?)
+
+        ring_put(&ldisc_data->iring, buf[i]);
+    }
+
+    return count;
 }
 
 static size_t tty_ldisc_recv_room(struct tty *tty)
 {
-    return -ENOSYS;
+    struct n_tty_ldisc_data *ldisc_data;
+    ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
+
+    return ring_length(&ldisc_data->iring) - ring_count(&ldisc_data->iring);
 }

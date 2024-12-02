@@ -52,16 +52,16 @@ extern struct tty *g_ttys;
 static int console_open(struct tty *);
 static int console_close(struct tty *);
 static int console_ioctl(struct tty *, unsigned int cmd, unsigned long arg);
-static int console_write_char(struct tty *, char c);
-static size_t console_write_room(struct tty *);
+static int console_tty_write(struct tty *, const char *buf, size_t count);
+static size_t console_tty_write_room(struct tty *);
 
 struct tty_driver console_driver = {
     .name = "console",
     .open = console_open,
     .close = console_close,
     .ioctl = console_ioctl,
-    .write_char = console_write_char,
-    ./* in the */write_room/* with black curtains*/ = console_write_room,
+    .write = console_tty_write,
+    ./* in the */write_room/* with black curtains*/ = console_tty_write_room,
 };
 
 static int console_open(struct tty *tty)
@@ -75,7 +75,7 @@ static int console_open(struct tty *tty)
         return -ENXIO;  // tty driver not registered
     }
 
-    if (tty->index < 0 || tty->index >= NR_CONSOLE) {
+    if (tty->index < 0 || tty->index > NR_CONSOLE) {
         panic("attempt to open a tty%d on nonexistent console!", tty->index);
     }
 
@@ -111,11 +111,11 @@ static int console_close(struct tty *tty)
     return 0;
 }
 
-static int console_write_char(struct tty *tty, char c)
+static int console_tty_write(struct tty *tty, const char *buf, size_t count)
 {
     struct console *cons;
 
-    if (!tty) {
+    if (!tty || !buf) {
         return -EINVAL;
     }
 
@@ -125,7 +125,11 @@ static int console_write_char(struct tty *tty, char c)
 
     // TODO: verify device driver data
     cons = tty->driver_data;
-    return console_putchar(cons, c);
+    for (int i = 0; i < count; i++) {
+        console_putchar(cons, buf[i]);
+    }
+
+    return count;
 }
 
 static int console_ioctl(
@@ -134,7 +138,7 @@ static int console_ioctl(
     return -ENOSYS;
 }
 
-static size_t console_write_room(struct tty *tty)
+static size_t console_tty_write_room(struct tty *tty)
 {
     return -ENOSYS;
 }
