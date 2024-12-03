@@ -34,22 +34,14 @@
 #define ENFILE      7   // Too many files open in system
 #define ENODEV      8   // No such device
 #define ENOENT      9   // No such file or directory
-#define ENOMEM      10   // Not enough memory
+#define ENOMEM      10  // Not enough memory
 #define ENOSYS      11  // Function not implemented
 #define ENOTTY      12  // Invalid I/O control operation
 #define ENXIO       13  // No such device or address
-
-
-// TODO: consider this instead...? more descriptive
-// #define E_INVALID_ARGUMENT
-// #define E_INVALID_SYSTEM_CALL
-// #define E_INVALID_FUNCTION
-// #define E_ALREADY_IN_USE
 
 #ifndef __ASSEMBLER__
 extern int _errno;
 #define errno _errno
 #endif
-
 
 #endif // __ERRNO_H

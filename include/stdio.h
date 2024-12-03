@@ -58,4 +58,6 @@ int snprintf(char *buffer, size_t bufsz, const char *format, ...);
 int vprintf(const char *format, va_list args);
 int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args);
 
+void perror(const char *s);
+
 #endif // __STDIO_H

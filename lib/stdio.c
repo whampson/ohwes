@@ -19,28 +19,64 @@
  * =============================================================================
  */
 
+#include <errno.h>
 #include <stdio.h>
-#include <fs.h>
+#include <string.h>
 #include <syscall.h>
-
-void stdout_fn(char c)
-{
-    write(STDOUT_FILENO, &c, 1);
-}
 
 int putchar(int c)
 {
-    // TODO: write to stdout, return EOF on error
-    stdout_fn(c);
-    return c;
+    unsigned char ch;
+
+    ch = (unsigned char) c;
+    if (write(STDOUT_FILENO, &ch, 1) < 0) {
+        return -1;  // == EOF
+    }
+
+    return ch;
 }
 
 int puts(const char *str)
 {
-    // TODO: write to stdout, return EOF on error
-    while (*str) {
-        stdout_fn(*str++);
+    // TODO: write string to a buffer then write buffer in chunks
+
+    int nwritten, ret;
+
+    nwritten = 0;
+    ret = write(STDOUT_FILENO, str, strlen(str));
+    if (ret < 0) {
+        return -1;  // == EOF
     }
-    stdout_fn('\n');
-    return 1;
+    nwritten += ret;
+
+    char nl ='\n';
+    ret = write(STDOUT_FILENO, &nl, 1);
+    if (ret < 0) {
+        return -1;
+    }
+    nwritten += ret;
+
+    return nwritten;
+}
+
+void perror(const char *s)
+{
+    printf("%s: ", s);
+    switch (errno) {
+        default:      printf("Unknown error %d\n"); break;
+        case 0:       puts("Success"); break;
+        case EBADF:   puts("Bad file descriptor"); break;
+        case EBADRQC: puts("Invalid request descriptor"); break;
+        case EBUSY:   puts("Device or resource busy"); break;
+        case EINVAL:  puts("Invalid argument"); break;
+        case EIO:     puts("Input/output error"); break;
+        case EMFILE:  puts("Too many files open in process"); break;
+        case ENFILE:  puts("Too many files open in system"); break;
+        case ENODEV:  puts("No such device"); break;
+        case ENOENT:  puts("No such file or directory"); break;
+        case ENOMEM:  puts("Not enough memory"); break;
+        case ENOSYS:  puts("Function not implemented"); break;
+        case ENOTTY:  puts("Invalid I/O control operation"); break;
+        case ENXIO:   puts("No such device or address"); break;
+    }
 }
