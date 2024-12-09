@@ -17,37 +17,26 @@
  *      Created: December 29, 2023
  *       Author: Wes Hampson
  *
- * Common definitions.
- *
- * https://en.cppreference.com/w/c/types (C11)
+ * https://en.cppreference.com/w/c/types
+ * https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/stddef.h.html
  * =============================================================================
  */
 
 #ifndef __STDDEF_H
 #define __STDDEF_H
 
-#ifndef __ASSEMBLER__
+#ifndef __NULL_DEFINED
+#define __NULL_DEFINED
+#define NULL ((void *)0)
+#endif
+
+#define offsetof(type, member) __builtin_offsetof(type, member)
 
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
 typedef __SIZE_TYPE__ size_t;
 #endif
 
-#ifndef __NULL_DEFINED
-#define __NULL_DEFINED
-#define NULL ((void*)0)
-#endif
-
 typedef __PTRDIFF_TYPE__ ptrdiff_t;
-
-#define offsetof(type,member) ((size_t)((char*)&((type*)0)->member-(char*)0))
-
-// OH-WES additions
-#ifndef __SSIZE_T_DEFINED
-#define __SSIZE_T_DEFINED
-typedef signed int ssize_t;
-#endif
-
-#endif // __ASSEMBLER__
 
 #endif // __STDDEF_H

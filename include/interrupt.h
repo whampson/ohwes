@@ -101,8 +101,6 @@ __asm__ volatile (                                                          \
     cli                                                                     \n\
     "                                                                       \
     : "=r"(flags)                                                           \
-    :                                                                       \
-    : "cc"                                                                  \
 )
 
 /**
@@ -118,7 +116,6 @@ __asm__ volatile (                                                          \
     "                                                                       \
     :                                                                       \
     : "r"(flags)                                                            \
-    : "cc"                                                                  \
 )
 
 /**

@@ -17,9 +17,8 @@
  *      Created: December 29, 2023
  *       Author: Wes Hampson
  *
- * Variable argument list handling.
- *
- * https://en.cppreference.com/w/c/variadic (C11)
+ * https://en.cppreference.com/w/c/variadic
+ * https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/stdarg.h.html
  * =============================================================================
  */
 
@@ -28,19 +27,12 @@
 
 #ifndef __VA_LIST_DEFINED
 #define __VA_LIST_DEFINED
-typedef void *va_list;
+typedef __builtin_va_list va_list;
 #endif
 
-#define va_start(list,param) \
-    (void) ((list) = ((char *) &(param) + sizeof(param)))
+#define va_start(list, param)   __builtin_va_start(list, param)
+#define va_end(list)            __builtin_va_end(list)
+#define va_arg(list, type)      __builtin_va_arg(list, type)
+#define va_copy(dest, src)      __builtin_va_copy(dest, src)
 
-#define va_arg(list,type) \
-    (((type *) ((list) = ((list) + sizeof(type))))[-1])
-
-#define va_end(list) \
-    (list = (void *) 0)
-
-#define va_copy(dest,src) \
-    (dest = src)
-
-#endif /* __STDARG_H */
+#endif // __STDARG_H

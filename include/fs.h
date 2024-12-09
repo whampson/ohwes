@@ -22,7 +22,7 @@
 #ifndef __FS_H
 #define __FS_H
 
-#include <stddef.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <device.h>
 

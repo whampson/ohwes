@@ -112,7 +112,7 @@ static struct inode * find_file(struct file *file, const char *name)
     // hack lol
     if (strcmp(name, "/dev/tty0") == 0) {
         struct console *cons = get_console(0);
-        sprintf(buf, "/dev/tty%d", cons->index);
+        sprintf(buf, "/dev/tty%d", cons->number);
         name = buf;
     }
 

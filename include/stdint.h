@@ -17,9 +17,8 @@
  *      Created: December 29, 2023
  *       Author: Wes Hampson
  *
- * Fixed-width integer types.
- *
- * https://en.cppreference.com/w/c/types/integer (C11)
+ * https://en.cppreference.com/w/c/types/integer
+ * https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/stdint.h.html
  * =============================================================================
  */
 
@@ -43,7 +42,6 @@ typedef __INT_FAST32_TYPE__    int_fast32_t;
 typedef __UINT_FAST32_TYPE__  uint_fast32_t;
 typedef __INT_FAST64_TYPE__    int_fast64_t;
 typedef __UINT_FAST64_TYPE__  uint_fast64_t;
-
 
 typedef __INT_LEAST8_TYPE__     int_least8_t;
 typedef __UINT_LEAST8_TYPE__   uint_least8_t;
@@ -107,26 +105,16 @@ typedef __UINTMAX_TYPE__           uintmax_t;
 
 #define INTPTR_MAX          __INTPTR_MAX__
 #define INTPTR_MIN          (-INTPTR_MAX-1)
+#define UINTPTR_MAX         __UINTPTR_MAX__
 
 #define INTMAX_MAX          __INTMAX_MAX__
 #define INTMAX_MIN          (-INTMAX_MAX-1)
+#define UINTMAX_MAX         __UINTMAX_MAX__
 
 #define PTRDIFF_MAX         __PTRDIFF_MAX__
 #define PTRDIFF_MIN         (-PTRDIFF_MAX-1)
 
-#define UINTPTR_MAX         __UINTPTR_MAX__
-
-#define UINTMAX_MAX         __UINTMAX_MAX__
-
 #define SIZE_MAX            __SIZE_MAX__
-
-// TODO:
-// #define SIG_ATOMIC_MIN      0
-// #define SIG_ATOMIC_MAX      0
-// #define WCHAR_MIN           0
-// #define WCHAR_MAX           0
-// #define WINT_MIN            0
-// #define WINT_MAX            0
 
 #define INT8_C(c)           __INT8_C(c)
 #define UINT8_C(c)          __UINT8_C(c)
@@ -139,31 +127,4 @@ typedef __UINTMAX_TYPE__           uintmax_t;
 #define INTMAX_C(c)         __INTMAX_C(c)
 #define UINTMAX_C(c)        __UINTMAX_C(c)
 
-_Static_assert(        sizeof(int8_t) == 1,     "sizeof(int8_t) == 1");
-_Static_assert(       sizeof(uint8_t) == 1,     "sizeof(uint8_t) == 1");
-_Static_assert(       sizeof(int16_t) == 2,     "sizeof(int16_t) == 2");
-_Static_assert(      sizeof(uint16_t) == 2,     "sizeof(uint16_t) == 2");
-_Static_assert(       sizeof(int32_t) == 4,     "sizeof(int32_t) == 4");
-_Static_assert(      sizeof(uint32_t) == 4,     "sizeof(uint32_t) == 4");
-_Static_assert(       sizeof(int64_t) == 8,     "sizeof(int64_t) == 8");
-_Static_assert(      sizeof(uint64_t) == 8,     "sizeof(uint64_t) == 8");
-
-_Static_assert(   sizeof(int_fast8_t) >= 1,     "sizeof(int_fast8_t) >= 1");
-_Static_assert(  sizeof(uint_fast8_t) >= 1,     "sizeof(uint_fast8_t) >= 1");
-_Static_assert(  sizeof(int_fast16_t) >= 2,     "sizeof(int_fast16_t) >= 2");
-_Static_assert( sizeof(uint_fast16_t) >= 2,     "sizeof(uint_fast16_t) >= 2");
-_Static_assert(  sizeof(int_fast32_t) >= 4,     "sizeof(int_fast32_t) >= 4");
-_Static_assert( sizeof(uint_fast32_t) >= 4,     "sizeof(uint_fast32_t) >= 4");
-_Static_assert(  sizeof(int_fast64_t) >= 8,     "sizeof(int_fast64_t) >= 8");
-_Static_assert( sizeof(uint_fast64_t) >= 8,     "sizeof(uint_fast64_t) >= 8");
-
-_Static_assert(  sizeof(int_least8_t) >= 1,     "sizeof(int_least8_t) >= 1");
-_Static_assert( sizeof(uint_least8_t) >= 1,     "sizeof(uint_least8_t) >= 1");
-_Static_assert( sizeof(int_least16_t) >= 2,     "sizeof(int_least16_t) >= 2");
-_Static_assert(sizeof(uint_least16_t) >= 2,     "sizeof(uint_least16_t) >= 2");
-_Static_assert( sizeof(int_least32_t) >= 4,     "sizeof(int_least32_t) >= 4");
-_Static_assert(sizeof(uint_least32_t) >= 4,     "sizeof(uint_least32_t) >= 4");
-_Static_assert( sizeof(int_least64_t) >= 8,     "sizeof(int_least64_t) >= 8");
-_Static_assert(sizeof(uint_least64_t) >= 8,     "sizeof(uint_least64_t) >= 8");
-
-#endif /* __STDINT_H */
+#endif // __STDINT_H

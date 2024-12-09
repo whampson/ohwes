@@ -436,8 +436,8 @@ static int _doprintf(
                 intmax_t n = 0;
                 switch (length) {
                     default:    n = va_arg(state->args, int); break;
-                    case L_HH:  n = va_arg(state->args, signed char); break;
-                    case L_H:   n = va_arg(state->args, short); break;
+                    case L_HH:  n = (signed char)  va_arg(state->args, int); break;
+                    case L_H:   n = (signed short) va_arg(state->args, int); break;
                     case L_L:   n = va_arg(state->args, long); break;
                     case L_LL:  n = va_arg(state->args, long long); break;
                     case L_J:   n = va_arg(state->args, intmax_t); break;
@@ -455,8 +455,8 @@ static int _doprintf(
             get_unsigned:
                 switch (length) {
                     default:    num = va_arg(state->args, unsigned int); break;
-                    case L_HH:  num = va_arg(state->args, unsigned char); break;
-                    case L_H:   num = va_arg(state->args, unsigned short); break;
+                    case L_HH:  num = (unsigned char)  va_arg(state->args, unsigned int); break;
+                    case L_H:   num = (unsigned short) va_arg(state->args, unsigned int); break;
                     case L_L:   num = va_arg(state->args, unsigned long); break;
                     case L_LL:  num = va_arg(state->args, unsigned long long); break;
                     case L_J:   num = va_arg(state->args, uintmax_t); break;

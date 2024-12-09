@@ -62,7 +62,7 @@ do { \
 // #define kernel_task() get_task(0)
 
 #ifdef DEBUG
-extern int g_test_crash_kernel;
+extern int g_crash_kernel;
 #endif
 
 

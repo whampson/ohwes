@@ -27,9 +27,11 @@
 
 #define MAX_ISR 8
 
-#define valid_irq(n) ((n) >= 0 && (n) < NR_IRQS)
+#define IRQ_VALID(n) ((n) >= 0 && (n) < NR_IRQS)
 
 irq_handler isr_map[NR_IRQS][MAX_ISR];
+
+void __fastcall crash(struct iregs *regs); // crash.c
 
 void irq_mask(int irq_num)
 {
@@ -53,7 +55,7 @@ void irq_setmask(uint16_t mask)
 
 void irq_register(int irq_num, irq_handler func)
 {
-    assert(valid_irq(irq_num));
+    assert(IRQ_VALID(irq_num));
 
     bool registered = false;
     for (int i = 0; i < MAX_ISR; i++) {
@@ -65,13 +67,13 @@ void irq_register(int irq_num, irq_handler func)
     }
 
     if (!registered) {
-        panic("maximum number of handlers already registered for IRQ %d", irq_num);
+        kprint("irq: maximum number of handlers already registered for IRQ %d\n", irq_num);    // kwarn?
     }
 }
 
 void irq_unregister(int irq_num, irq_handler func)
 {
-    assert(valid_irq(irq_num));
+    assert(IRQ_VALID(irq_num));
 
     bool unregistered = false;
     for (int i = 0; i < MAX_ISR; i++) {
@@ -83,7 +85,7 @@ void irq_unregister(int irq_num, irq_handler func)
     }
 
     if (!unregistered) {
-        panic("handler %08X not registered for IRQ %d", func, irq_num);
+        kprint("irq: handler %08X not registered for IRQ %d\n", func, irq_num);
     }
 }
 
@@ -94,8 +96,8 @@ __fastcall void handle_irq(struct iregs *regs)
     bool handled = false;
 
     irq_num = ~regs->vec_num;
-    if (!valid_irq(irq_num)) {
-        panic("unknown device IRQ number: %d", irq_num);
+    if (!IRQ_VALID(irq_num)) {
+        kprint("irq: got interrupt from unknown device IRQ %d", irq_num);
     }
 
     handled = false;
@@ -108,7 +110,7 @@ __fastcall void handle_irq(struct iregs *regs)
     }
 
     if (!handled) {
-        panic("unhandled IRQ: %d", irq_num);
+        crash(regs);
     }
 
     pic_eoi(irq_num);

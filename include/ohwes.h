@@ -51,13 +51,6 @@ extern void pcspk_beep(int freq, int millis);  // see timer.c
 #define beep(f,ms)                      pcspk_beep(f, ms)   // beep at frequency for millis (nonblocking)
 #define sleep(ms)                       timer_sleep(ms)     // spin for millis (blocking)
 
-// console bell
-#define BELL_FREQ                       750     // Hz
-#define BELL_TIME                       50      // ms
-// alert beep
-#define ALERT_FREQ                      1675    // Hz
-#define ALERT_TIME                      75      // ms
-
 #define die()                           ({ kprint("system halted"); for (;;); }) // spin forever, satisfies __noreturn
 #define spin(cond)                      while (cond) { }    // spin while cond == true, TODO: THIS NEEDS TO HAVE A TIMEOUT!!
 
@@ -81,7 +74,7 @@ enum pl {
 #define getpl()                         \
 ({                                      \
     struct segsel cs;                   \
-    read_cs(cs);                        \
+    store_cs(cs);                       \
     cs.rpl;                             \
 })
 

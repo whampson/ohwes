@@ -22,9 +22,6 @@
 #ifndef __SYSCALL_H
 #define __SYSCALL_H
 
-#include <stddef.h>
-#include <interrupt.h>
-
 //
 // syscall numbers
 //
@@ -37,6 +34,9 @@
 #define NR_SYSCALLS                     6
 
 #ifndef __ASSEMBLER__
+
+#include <stddef.h>
+#include <interrupt.h>
 
 //
 // syscall C function prototypes
