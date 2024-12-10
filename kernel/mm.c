@@ -72,6 +72,8 @@ void init_mm(const struct boot_info *boot_info)
     print_memory_map(boot_info);
     print_kernel_sections();
 
+    kprint("kernel interrupt stack at %08X\n", __phys_to_virt(INTERRUPT_STACK));
+
     init_bss((struct boot_info *) boot_info);
     g_mm->pgdir = (void *) __phys_to_virt(KERNEL_PGDIR);
 

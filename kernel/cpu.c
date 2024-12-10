@@ -61,8 +61,8 @@ static void init_tss(void);
 
 static void verify_gdt(void);
 
-static struct x86_desc * get_gdt(void);
-static struct tss * get_tss(void);
+extern struct tss *g_double_fault_tss;      // crash.c
+extern __noreturn void double_fault(void);  // crash.c
 
 void init_cpu(const struct boot_info *info)
 {
@@ -84,24 +84,48 @@ void init_idt(void)
     idt = (struct x86_desc *) idt_desc.base;
 
     for (int i = 0; i < NR_EXCEPTIONS; i++) {
+        // trap gate for exceptions; device interrupts are OK
         int vec = VEC_INTEL + i;
         make_trap_gate(&idt[vec], KERNEL_CS, KERNEL_PL, exception_thunks[i]);
     }
 
+    // use task gate for double fault handler so we force a stack switch
+    make_task_gate(&idt[EXCEPTION_DF], _TSS1_SEGMENT, KERNEL_PL);
+
     for (int i = 0; i < NR_IRQS; i++) {
+        // interrupt gate for device IRQs; no nested device interrupts
         int vec = VEC_DEVICEIRQ + i;
         make_intr_gate(&idt[vec], KERNEL_CS, KERNEL_PL, irq_thunks[i]);
     }
 
+    // trap gate for system calls; device interrupts are OK
     make_trap_gate(&idt[VEC_SYSCALL], KERNEL_CS, USER_PL, &_syscall);
 }
 
 static void init_tss(void)
 {
-    struct tss *tss = get_tss();
-    tss->ss0 = KERNEL_DS;
+    // system call TSS
+    struct tss *tss = get_tss_from_gdt(_TSS0_SEGMENT);
+    zeromem(tss, TSS_SIZE);
     tss->esp0 = __phys_to_virt(INTERRUPT_STACK);
-    tss->ldt_segsel = _LDT_SEGMENT;
+    tss->ss0 = KERNEL_DS;
+
+    // double fault TSS, used to force a stack switch
+    make_tss_desc(
+        x86_get_desc(get_gdt(), _TSS1_SEGMENT),
+        KERNEL_PL, (uintptr_t) g_double_fault_tss);
+
+    struct tss *crash_tss = get_tss_from_gdt(_TSS1_SEGMENT);
+    assert(crash_tss == g_double_fault_tss);
+    zeromem(crash_tss, TSS_SIZE);
+    crash_tss->eip = (uint32_t) double_fault;
+    crash_tss->esp = __phys_to_virt(DOUBLE_FAULT_STACK);
+    crash_tss->ebp = __phys_to_virt(DOUBLE_FAULT_STACK);
+    crash_tss->cs = KERNEL_CS;
+    crash_tss->ds = KERNEL_DS;
+    crash_tss->es = KERNEL_DS;
+    crash_tss->ss = KERNEL_DS;
+    crash_tss->cr3 = KERNEL_PGDIR;
 }
 
 static void verify_gdt(void)
@@ -148,7 +172,7 @@ static void verify_gdt(void)
     panic_assert(ldt_desc->seg.p == 1);
     // TODO: verify base/limit in kernel space
 
-    struct x86_desc *tss_desc = x86_get_desc(gdt, _TSS_SEGMENT);
+    struct x86_desc *tss_desc = x86_get_desc(gdt, _TSS0_SEGMENT);
     panic_assert(tss_desc->tss.type == DESCTYPE_TSS32_BUSY);
     panic_assert(tss_desc->tss.dpl == KERNEL_PL);
     panic_assert(tss_desc->tss.g == 0);
@@ -156,7 +180,7 @@ static void verify_gdt(void)
     // TODO: verify base/limit in kernel space
 }
 
-static struct x86_desc * get_gdt(void)
+struct x86_desc * get_gdt(void)
 {
     volatile struct table_desc desc = { };
     __sgdt(desc);
@@ -164,14 +188,19 @@ static struct x86_desc * get_gdt(void)
     return (struct x86_desc *) desc.base;
 }
 
-static struct tss * get_tss(void)
+struct tss * get_tss(void)
+{
+    int segsel; __str(segsel);
+    return get_tss_from_gdt(segsel);
+}
+
+struct tss * get_tss_from_gdt(int segsel)
 {
     struct x86_desc *gdt = get_gdt();
-    struct x86_desc *tss_desc = x86_get_desc(gdt, _TSS_SEGMENT);
+    struct x86_desc *tss_desc = x86_get_desc(gdt, segsel);
 
     return (struct tss *) ((tss_desc->tss.basehi << 24) | tss_desc->tss.baselo);
 }
-
 
 bool cpu_has_cpuid(void)
 {

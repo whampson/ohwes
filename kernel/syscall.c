@@ -42,7 +42,7 @@ __syscall __noreturn int sys_exit(int status)
 {
     assert(getpl() == KERNEL_PL);
 
-    kprint("user mode returned %d\n", status);
+    kprint("\nuser mode returned %d\n", status);
     // idle();     // TODO: switch task, handle signals, etc.
 
     die();

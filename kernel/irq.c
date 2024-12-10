@@ -31,7 +31,7 @@
 
 irq_handler isr_map[NR_IRQS][MAX_ISR];
 
-void __fastcall crash(struct iregs *regs); // crash.c
+__fastcall void crash(struct iregs *regs); // crash.c
 
 void irq_mask(int irq_num)
 {

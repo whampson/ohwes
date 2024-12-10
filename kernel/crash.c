@@ -72,40 +72,74 @@
 static const char *exception_names[NR_EXCEPTIONS];
 
 struct crash_screen {
-    bool reentrant;
     int bg_color;
+    bool reentrant;
+    struct iregs orig_iregs;
 };
 
-__data_segment struct crash_screen _crash;
+__data_segment static struct crash_screen _crash;
 __data_segment struct crash_screen *g_crash = &_crash;
+
+__data_segment static struct tss _double_fault_tss = { };
+__data_segment struct tss *g_double_fault_tss = &_double_fault_tss;
 
 extern struct vga *g_vga;
 
 #if DEBUG
-extern int g_crash_test_double_fault;
+extern int g_test_soft_double_fault;
 #endif
 
-static void print_regs_and_stack(struct iregs *regs);
+static void print_regs_and_stack(struct iregs *regs, bool print_stack);
 static void print_segsel(struct segsel *segsel);
 static void print_flags(struct eflags *flags);
-
 
 static void cprint(const char *fmt, ...);
 static void set_background(int bg);
 static void print_banner(const char *banner);
 static void center_text(const char *str, ...);
 
-
-void __fastcall crash(struct iregs *regs)
+void soft_double_fault(struct iregs *regs)
 {
+    assert(g_crash->reentrant);
+    struct iregs *orig_regs = &g_crash->orig_iregs;
+
+    cprint("\r\n\r\n\e[0m\e[31m");
+    cprint("fatal: double fault -- %s while handling %s\e[0m",
+        exception_names[regs->vec_num], exception_names[orig_regs->vec_num]);
+    cprint("\r\n\r\n");
+    cprint("(2) " BOLD("%s") " at " BOLD("%04X:%08X") ":",
+        exception_names[regs->vec_num], regs->cs, regs->eip);
+    print_regs_and_stack(regs, false);
+    cprint("\r\n\r\n");
+    cprint("(1) " BOLD("%s") " at " BOLD("%04X:%08X") ":",
+        exception_names[orig_regs->vec_num], orig_regs->cs, orig_regs->eip);
+    print_regs_and_stack(&g_crash->orig_iregs, false);
+    cprint("\r\n\r\n");
+    center_text("Press Ctrl+Alt+Del to restart your computer.");
+    cprint("\r\n\e5");
+}
+
+__fastcall void crash(struct iregs *regs)
+{
+    struct console *cons;
+
     uint16_t mask;
-    bool allow_return = false;
+    bool die = true;
 
     //
     // -------------------------------------------------------------------------
     // basic info collection
     // -------------------------------------------------------------------------
     //
+
+    // was it an IRQ?
+    bool irq = (regs->vec_num < 0);
+    int irq_num = ~regs->vec_num;
+
+    // an non-maskable interrupt? a page fault? a double fault?
+    bool nmi = (regs->vec_num == EXCEPTION_NMI);
+    bool pf = (regs->vec_num == EXCEPTION_PF);
+    bool df = (regs->vec_num == EXCEPTION_DF);
 
     // get necessary control registers
     uint32_t cr2; store_cr2(cr2);
@@ -128,11 +162,13 @@ void __fastcall crash(struct iregs *regs)
         pl_change = true;
     }
 
-    // locate the faulting stack and associated stack segment selector
-    if (!pl_change) {
+    // locate the faulting stack and associated stack segment selector;
+    // for double faults, always use the value in iregs, since we know its valid
+    // because we originated from a task gate rather than a trap gate
+    if (!pl_change && !df) {
         ss = (struct segsel *) &_ss;
     }
-    uint32_t esp = (pl_change)
+    uint32_t esp = (pl_change || df)
         // if we changed privilege levels, ESP in iregs is valid
         ? (uint32_t) regs->esp
         // if we did not change privilege levels, no ESP (or SS) was pushed to
@@ -150,36 +186,21 @@ void __fastcall crash(struct iregs *regs)
     _regs_copy.esp = esp;
     regs = &_regs_copy;
 
-    //
-    // -------------------------------------------------------------------------
-    // double fault handler, to catch exceptions that somehow occur while trying
-    // to show the crash screen. this is a "software" double fault, as opposed
-    // to a "true" double fault occurs when, for example, the CPU encounters a
-    // page fault while handling a previous page fault.
-    // -------------------------------------------------------------------------
-    //
-
     // reentrancy check
     if (g_crash->reentrant) {
         // If we end up here, we hit an exception while trying to show the
-        // crash screen... VERY BAD! Show bare minimum information here, then
-        // spin. Less code the better; that's unlikely to fail.
-        cprint("\r\n\r\n\e[0m\e[31m");
-        cprint("fatal: double fault caused by %s at %04X:%08X\e[0m",
-            exception_names[regs->vec_num], regs->cs, regs->eip);
-        cprint("\r\n\r\n");
-        center_text("==> REGISTER AND STACK DUMP <==\r\n");
-        print_regs_and_stack(regs);
-        cprint("\r\n\r\n");
-        center_text("Press Ctrl+Alt+Del to restart your computer.");
-        cprint("\r\n\e5");
-        goto done;
+        // crash screen... VERY BAD! This is known as a software double fault.
+        // Show bare minimum information here, then spin. Less code the better;
+        // we don't want another crash...
+        soft_double_fault(regs);
+        die = true; goto done;
     }
-    g_crash->reentrant = true;  // catch a double-fault
+    g_crash->reentrant = true;      // catch a software double-fault
+    g_crash->orig_iregs = *regs;    // store original iregs for double fault
 
 #if DEBUG
-    // test a double fault
-    if (g_crash_test_double_fault) {
+    // test a software double fault
+    if (g_test_soft_double_fault) {
         __asm__ volatile (".short 0x0A0F");
     }
 #endif
@@ -189,15 +210,6 @@ void __fastcall crash(struct iregs *regs)
     // handle fatal crash (blue screen)
     // -------------------------------------------------------------------------
     //
-
-    // was it an IRQ?
-    bool irq = (regs->vec_num < 0);
-    int irq_num = ~regs->vec_num;
-
-    // an non-maskable interrupt? a page fault? a double fault?
-    bool nmi = (regs->vec_num == EXCEPTION_NMI);
-    bool pf = (regs->vec_num == EXCEPTION_PF);
-    bool df = (regs->vec_num == EXCEPTION_DF);
 
     // NOTE: PCem doesn't push an error code of 0 onto the stack when a true
     // double fault occurs, which violates the Intel spec. My inspection of the
@@ -234,12 +246,16 @@ void __fastcall crash(struct iregs *regs)
             cprint("\r\n    *  Descriptor: " BOLD("%s(%02X)"),
                 (regs->err_code & 0x02) ? "IDT" :
                     (regs->err_code & 0x04) ? "LDT" : "GDT",
-                (regs->err_code & 0xFFFF) >> 3,
+                (regs->err_code & 0xFFF8) >> 3,
                 (regs->err_code & 0x01) ? " (external)" : "");
         }
 
+        // TODO: ensure stack pages valid or else we'll page fault!! to be safe,
+        // we'll never show the stack if it's a double-fault
+        bool do_stack_dump = !df;
+
         cprint("\e[%dH", OffsetFromBottom);
-        print_regs_and_stack(regs);
+        print_regs_and_stack(regs, do_stack_dump);
         goto done;
     }
 
@@ -259,7 +275,7 @@ void __fastcall crash(struct iregs *regs)
     assert(irq || nmi);
 
     if (irq) {
-        allow_return = true;
+        die = false;
         set_background(IRQ_COLOR);
         cprint("\e[%dH", NumConsoleRows / 3);
         print_banner(" Unhandled Interrupt ");
@@ -271,7 +287,7 @@ void __fastcall crash(struct iregs *regs)
         center_text("Press any key to continue \e6");
     }
     else if (nmi) {
-        allow_return = true;
+        die = false;
         set_background(NMI_COLOR);
         cprint("\e[%dH", NumConsoleRows / 3);
         print_banner(" Non-Maskable Interrupt ");
@@ -289,19 +305,21 @@ void __fastcall crash(struct iregs *regs)
     // -------------------------------------------------------------------------
     //
 done:
+    cons = current_console();
+
     mask = pic_getmask();
     pic_setmask(0xFFFF);
     pic_unmask(IRQ_KEYBOARD);
 
-    if (!allow_return) {
+    if (die || !cons->initialized) {
         // spin forever
         __sti(); for (;;);
     }
 
     // wait for keypress
-    console_flush(current_console());
+    tty_ldisc_clear(cons->tty);
     __sti();
-    console_getchar(current_console());
+    tty_ldisc_read_char(cons->tty);
     __cli();
 
     // restore console state
@@ -312,7 +330,40 @@ done:
     g_crash->reentrant = false;
 }
 
-static void print_regs_and_stack(struct iregs *regs)
+__noreturn void double_fault(void)
+{
+    // true hardware double fault!
+    // we got here via the special double fault task gate, construct an iregs
+    // from the faulting TSS and pass it to crash()
+
+    struct tss *tss = get_tss();
+    struct tss *fault_tss = get_tss_from_gdt(tss->prev_task);
+
+    struct iregs regs = { };
+    regs.ebx = fault_tss->ebx;
+    regs.ecx = fault_tss->ecx;
+    regs.edx = fault_tss->edx;
+    regs.esi = fault_tss->esi;
+    regs.edi = fault_tss->edi;
+    regs.ebp = fault_tss->ebp;
+    regs.eax = fault_tss->eax;
+    regs.ds = fault_tss->ds;
+    regs.es = fault_tss->es;
+    regs.fs = fault_tss->fs;
+    regs.gs = fault_tss->gs;
+    regs.vec_num = EXCEPTION_DF;
+    regs.err_code = 0;
+    regs.eip = fault_tss->eip;
+    regs.cs = fault_tss->cs;
+    regs.eflags = fault_tss->eflags;
+    regs.esp = fault_tss->esp;
+    regs.ss = fault_tss->ss;
+
+    crash(&regs);
+    for (;;);
+}
+
+static void print_regs_and_stack(struct iregs *regs, bool print_stack)
 {
     const int NumConsoleCols = (g_vga->cols) ? g_vga->cols : DEFAULT_VGA_COLUMNS;
     const int StackStartCol = NumConsoleCols-((8+1)*STACK_COLUMNS);
@@ -356,12 +407,14 @@ static void print_regs_and_stack(struct iregs *regs)
         if (i==(STACK_ROWS-6)+5) { cprint("  GS="); print_segsel(gs); }
 #endif
 
-        cprint("\e[%dG", StackStartCol);
+        if (print_stack) {
+            cprint("\e[%dG", StackStartCol);
 #if SHOW_ESP_ARROW
-        if (i == 0) { cprint("\e[6DESP-->"); }
+            if (i == 0) { cprint("\e[6DESP-->"); }
 #endif
-        for (int k = 0; k < STACK_COLUMNS; k++, stack_ptr++) {
-            cprint(" %08X", *stack_ptr);
+            for (int k = 0; k < STACK_COLUMNS; k++, stack_ptr++) {
+                cprint(" %08X", *stack_ptr);
+            }
         }
     }
 }
@@ -527,3 +580,66 @@ static const char *exception_names[NR_EXCEPTIONS] =
     /*0x1F*/ "EXCEPTION_1F",
 };
 static_assert(countof(exception_names) == NR_EXCEPTIONS, "Bad exception_names length");
+
+#ifdef DEBUG
+int g_crash_kernel = 0;
+void debug_interrupt(int irq_num)   // TODO: call this vis sysreq...
+{
+    switch (g_crash_kernel) {
+        case 1:     // F1 - divide by zero
+            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
+            break;
+        case 2:     // F2 - simulate nmi (TODO: real NMI possible?)
+            __asm__ volatile ("int $2");
+            break;
+        case 3:     // F3 - debug break
+            __asm__ volatile ("int $3");
+            break;
+        case 4:     // F4 - panic()
+            panic("you fucked up!!");
+            break;
+        case 5:     // F5 - assert()
+            assert(true == false);
+            break;
+        case 6:     // F6 - unexpected device interrupt vector
+            __asm__ volatile ("int $0x2D");
+            break;
+        case 7:     // F7 - kernel stack page fault
+            __asm__ volatile ("movl $0, %esp; popl %eax");
+            break;
+        case 8: {   // F8 - nullptr read
+            volatile uint32_t *badptr = NULL;
+            const int bad = *badptr;
+            (void) bad;
+            break;
+        }
+        case 9: {   // F9 - bad ptr write
+            volatile uint32_t *badptr = (uint32_t *) 0xCA55E77E;
+            *badptr = 0xBADC0DE;
+            break;
+        }
+        case 10: {  // F10 - software double fault
+            kprint("\nsoft double fault...");
+            g_test_soft_double_fault = true;
+            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
+            break;
+        }
+        case 11: {  // F11 - true double fault
+            volatile struct x86_desc *idt;
+            volatile struct table_desc idt_desc = { };
+            kprint("\ntriple fault...");
+
+            __sidt(idt_desc);
+            idt = (volatile struct x86_desc *) idt_desc.base;
+            idt[EXCEPTION_DE].trap.p = 0;   // remove divide error trap (1)
+            idt[EXCEPTION_NP].trap.p = 0;   // remove seg not present trap (2)
+            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
+        }
+        case 12: {  // F12 - triple fault
+            struct table_desc idt_desc = { .limit = 0, .base = 0 };
+            __lidt(idt_desc);   // yoink away the IDT :D
+        }
+    }
+    g_crash_kernel = 0;
+}
+#endif

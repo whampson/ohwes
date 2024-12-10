@@ -38,18 +38,11 @@
 #include <syscall.h>
 
 extern void init_cpu(const struct boot_info *info);
-extern void init_tasks(void);
 extern void init_console(const struct boot_info *info);
-
 extern void init_mm(const struct boot_info *info);
 extern void init_pic(void);
-
 extern void init_timer(void);
 extern void init_rtc(void);
-
-extern void init_fs(void);  // sys/open.c
-
-extern void init_chdev(void);
 extern void init_serial(void);
 
 // #ifdef TEST_BUILD
@@ -57,35 +50,25 @@ extern void init_serial(void);
 // extern void tmain(void);
 // #endif
 
+static void print_info(const struct boot_info *info);
+
 extern void test_list(void);    // test/list_test.c
 
 void _start(void);  // usermode runtime entry point
 int main(void);     // usermode program entry point
-
 static void usermode(uint32_t stack);
 
-static void basic_shell(void);
-static size_t /*
-    it is now my duty to completely
-*/  drain_queue(struct ring *q, char *buf, size_t bufsiz);
-
-static void print_info(const struct boot_info *info);
+static size_t
+ /* it is now my duty to completely */
+    drain_queue(struct ring *q, char *buf, size_t bufsiz);
 
 #ifdef DEBUG
-int g_crash_kernel = 0;
-int g_crash_test_double_fault = 0;
+int g_test_soft_double_fault = 0;
 void debug_interrupt(int irq_num);
 #endif
 
 __data_segment static struct boot_info _boot;
 __data_segment struct boot_info *g_boot = &_boot;
-
-extern __syscall int sys_read(int fd, void *buf, size_t count);
-extern __syscall int sys_write(int fd, const void *buf, size_t count);
-extern __syscall int sys_open(const char *name, int flags);
-extern __syscall int sys_close(int fd);
-
-static void test_tty(const char *dev, const char *msg);
 
 __fastcall void start_kernel(const struct boot_info *info)
 {
@@ -161,20 +144,26 @@ static void usermode(uint32_t stack)
 
 #define SYS_CHECK(sys)                                          \
 ({                                                              \
-    int __sysret = (sys);                                       \
-    if (__sysret < 0) {                                         \
-        panic(#sys ": failed with 0x%X (%d)\n", errno, errno);  \
+    ret = (sys);                                                \
+    if (ret < 0) {                                              \
+        printf(#sys ": failed with errno %d\n", errno);         \
+        goto cleanup;                                           \
     }                                                           \
-    __sysret;                                                   \
+    ret;                                                        \
 })
 
 void _start(void)
 {
-    int fd0 = SYS_CHECK(open("/dev/keyboard", 0));      /// TODO: open /dev/console, then call dup() to duplicate file desc
-    int fd1 = SYS_CHECK(open("/dev/console", 0));
-    int ret = main();
-    close(fd1);
-    close(fd0);
+    int ret;
+
+    // TODO: open /dev/console, then call dup() to duplicate file desc
+    SYS_CHECK(open("/dev/tty1", 0));
+    SYS_CHECK(open("/dev/tty1", 0));
+    ret = main();
+
+cleanup:
+    close(1);
+    close(0);
     exit(ret);
 }
 
@@ -187,147 +176,15 @@ int main(void)
 
     // TODO: load shell program from disk
 
-
     printf("\e4\e[5;33mHello from user mode!\e[m\n");
-    // basic_shell();
+    printf("Reading chars from stdin and echoing them to stdout... press CTRL+C to exit.\n");
 
-        // // screw around
-
-    // const char *devs[] = {
-    //     "/dev/tty1",    // console1 (ALT+F1)
-    //     "/dev/ttyS0",   // COM1
-    //     "/dev/ttyS1",   // COM2
-    //     "/dev/ttyS2",   // COM3
-    //     "/dev/ttyS3",   // COM4
-    // };
-
-    // // serial port(s)
-    // for (int i = 0; i < countof(devs); i++) {
-    //     char msg[64];
-    //     snprintf(msg, sizeof(msg), "OH-WES says hello on %s!\n", devs[i]);
-    //     test_tty(devs[i], msg);
-    // }
-
-    return 69;
-
-}
-
-// static void basic_shell(void)
-// {
-// #define INPUT_LEN 128
-
-//     char _lineq_buf[INPUT_LEN];   // TOOD: NEED AN ALLOCATOR
-//     struct ring _lineq;
-//     struct ring *lineq = &_lineq;
-
-//     char line[INPUT_LEN];
-
-//     char c;
-//     int count;
-//     const char *prompt = "&";
-
-//     ring_init(lineq, _lineq_buf, sizeof(_lineq_buf));
-
-//     while (true) {
-//         // read a line
-//         printf(prompt);
-//         line[0] = '\0';
-
-//     read_char:
-//         // read a character
-//         count = read(stdin_fd, &c, 1);
-//         if (count == 0) {
-//             panic("read returned 0!");
-//         }
-//         assert(count == 1);
-
-//         //
-//         // TODO: all this line processing stuff needs to go in the terminal line discipline
-//         //
-
-//         // handle special characters and translations
-//         switch (c) {
-//             case '\b':      // ECHOE
-//                 break;
-//             case '\r':
-//                 c = '\n';   // ICRNL
-//                 break;
-//             case 3:
-//                 exit(1);    // CTRL+C
-//                 break;
-//             case 4:
-//                 exit(0);    // CTRL+D
-//                 break;
-//         }
-
-//         bool full = (ring_count(lineq) == ring_length(lineq) - 1);    // allow one space for newline
-
-//         // put translated character into queue
-//         if (c == '\b') {
-//             if (ring_empty(lineq)) {
-//                 printf("\a");       // beep!
-//                 goto read_char;
-//             }
-//             c = ring_erase(lineq);
-//             if (iscntrl(c)) {
-//                 printf("\b");
-//             }
-//             printf("\b");
-//             goto read_char;
-//         }
-//         else if (c == '\n' || !full) {
-//             ring_put(lineq, c);
-//         }
-//         else if (full) {
-//             printf("\a");       // beep!
-//             goto read_char;
-//         }
-
-//         assert(!ring_full(lineq));
-
-//         // echo char
-//         if (iscntrl(c) && c != '\t' && c != '\n') {
-//             printf("^%c", 0x40 ^ c);        // ECHOCTL
-//         }
-//         else {
-//             printf("%c", c);                // ECHO
-//         }
-
-//         // next char if not newline
-//         if (c != '\n') {
-//             goto read_char;
-//         }
-
-//         // get and print entire line
-//         size_t count = drain_queue(lineq, line, sizeof(line));
-//         if (strncmp(line, "\n", count) != 0) {
-//             printf("%.*s", (int) count, line);
-//         }
-
-//         //
-//         // process command line
-//         //
-//         if (strncmp(line, "cls\n", count) == 0) {
-//             printf("\033[2J");
-//         }
-//         if (strncmp(line, "exit\n", count) == 0) {
-//             exit(0);
-//         }
-//     }
-// }
-
-static size_t drain_queue(struct ring *q, char *buf, size_t bufsiz)
-{
-    size_t count = 0;
-    while (!ring_empty(q) && bufsiz--) {
-        *buf++ = ring_get(q);
-        count++;
+    char c;
+    while (read(STDIN_FILENO, &c, 1) && c != 3) {
+        write(STDOUT_FILENO, &c, 1);
     }
 
-    if (bufsiz > 0) {
-        *buf = '\0';
-    }
-    return count;
+    return 0;
 }
 
 static void print_info(const struct boot_info *info)
@@ -358,63 +215,3 @@ static void print_info(const struct boot_info *info)
     // kprint("boot: stage2:\t%08X,%Xh\n", info->stage2_base, info->stage2_size);
     // kprint("boot: kernel:\t%08X,%Xh\n", info->kernel_base, info->kernel_size);
 }
-
-#ifdef DEBUG
-void debug_interrupt(int irq_num)
-{
-    switch (g_crash_kernel) {
-        case 1:     // F1 - divide by zero
-            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
-            break;
-        case 2:     // F2 - simulate nmi (TODO: real NMI possible?)
-            __asm__ volatile ("int $2");
-            break;
-        case 3:     // F3 - debug break
-            __asm__ volatile ("int $3");
-            break;
-        case 4:     // F4 - panic()
-            panic("you fucked up!!");
-            break;
-        case 5:     // F5 - assert()
-            assert(true == false);
-            break;
-        case 6:     // F6 - invalid interrupt vector
-            __asm__ volatile ("int $69");
-            break;
-        case 7:     // F7 - unexpected device interrupt vector
-            __asm__ volatile ("int $0x2D");
-            break;
-        case 8: {   // F8 - nullptr read
-            volatile uint32_t *badptr = NULL;
-            const int bad = *badptr;
-            (void) bad;
-            break;
-        }
-        case 9: {   // F9 - bad ptr write
-            volatile uint32_t *badptr = (uint32_t *) 0xCA55E77E;
-            *badptr = 0xBADC0DE;
-            break;
-        }
-        case 10: {  // F10 - double fault
-            g_crash_test_double_fault = true;
-            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
-            break;
-        }
-        case 11: {  // F11 - true double fault
-            volatile struct x86_desc *idt;
-            volatile struct table_desc idt_desc = { };
-
-            __sidt(idt_desc);
-            idt = (volatile struct x86_desc *) idt_desc.base;
-            idt[EXCEPTION_DE].trap.p = 0;
-            idt[EXCEPTION_NP].trap.p = 0;
-            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
-        }
-        case 12: {  // F12 - triple fault
-            struct table_desc idt_desc = { .limit = 0, .base = 0 };
-            __lidt(idt_desc);
-        }
-    }
-    g_crash_kernel = 0;
-}
-#endif

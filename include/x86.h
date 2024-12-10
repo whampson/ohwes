@@ -266,6 +266,7 @@ struct x86_desc {
             uint64_t segsel     : 16;   // TSS segment selector
             uint64_t            : 8;    // reserved; set to 0
             uint64_t type       : 4;    // descriptor Type; set to DESCTYPE_TASK
+            uint64_t            : 1;    // reserved; set to 0
             uint64_t dpl        : 2;    // descriptor privilege level
             uint64_t p          : 1;    // gate present in memory
             uint64_t            : 16;   // reserved; set to 0
@@ -445,7 +446,7 @@ static_assert(sizeof(struct tss) == TSS_SIZE, "sizeof(struct tss) == TSS_SIZE");
  * @param dpl segment descriptor privilege level
  * @param base segment base address
  * @param limit segment limit (size - 1)
- * @param type segment type (one of DESCTYPE_MEM_CODE_* or DESCTYPE_MEM_DATA_*)
+ * @param type segment type (one of DESCTYPE_CODE_* or DESCTYPE_DATA_*)
  *
  */
 static inline void make_seg_desc(struct x86_desc *desc, int dpl, int base, int limit, int type)
@@ -494,17 +495,16 @@ static inline void make_ldt_desc(struct x86_desc *desc, int dpl, int base, int l
  * @param desc TSS segment descriptor pointer
  * @param dpl TSS descriptor privilege level
  * @param base TSS base address
- * @param limit TSS limit (size - 1)
  */
-static inline void make_tss_desc(struct x86_desc *desc, int dpl, int base, int limit)
+static inline void make_tss_desc(struct x86_desc *desc, int dpl, int base)
 {
     desc->_value = 0;
     desc->tss.type = DESCTYPE_TSS32;
     desc->tss.dpl = dpl;
     desc->tss.baselo = ((base) & 0x00FFFFFF);
     desc->tss.basehi = ((base) & 0xFF000000) >> 24;
-    desc->tss.limitlo = ((limit) & 0x0FFFF);
-    desc->tss.limithi = ((limit) & 0xF0000) >> 16;
+    desc->tss.limitlo = ((TSS_SIZE-1) & 0x0FFFF);
+    desc->tss.limithi = ((TSS_SIZE-1) & 0xF0000) >> 16;
     desc->tss.g = 0;    // 0 = byte granularity
     desc->tss.p = 1;    // 1 = present in memory
 }
@@ -514,7 +514,7 @@ static inline void make_tss_desc(struct x86_desc *desc, int dpl, int base, int l
  * A Task Gate descriptor provides an indirect, protected reference to a task. A
  * Task Gate is similar to a Call Gate, except that it provides access (through
  * a segment selector) to a TSS rather than a code segment. Task Gate
- * descriptors go in the IDT.
+ * descriptors go in the GDT, LDT, or IDT.
  *
  * @param desc Task Gate segment descriptor pointer
  * @param tss_segsel TSS Segment Selector
@@ -612,10 +612,10 @@ __asm__ volatile (                              \
 #define __lidt(table_desc) __asm__ volatile ("lidt %0" :: "m"(table_desc))
 #define __sidt(table_desc) __asm__ volatile ("sidt %0" :: "m"(table_desc))
 
-#define __lldt(segsel) __asm__ volatile ("lldt %w0" :: "r"(segsel))
-#define __sldt(segsel) __asm__ volatile ("sldt %w0" :: "r"(segsel))
-#define __ltr(segsel)  __asm__ volatile ("ltr %w0"  :: "r"(segsel))
-#define __str(segsel)  __asm__ volatile ("str %w0"  :: "r"(segsel))
+#define __lldt(segsel) __asm__ volatile ("lldt %0"  :: "r"(segsel))
+#define __sldt(segsel) __asm__ volatile ("sldt %0"  : "=r"(segsel))
+#define __ltr(segsel)  __asm__ volatile ("ltr %0"   :: "r"(segsel))
+#define __str(segsel)  __asm__ volatile ("str %0"   : "=r"(segsel))
 
 #define  load_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" :: "I"(cs))
 #define  load_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      :: "a"(ds))

@@ -124,7 +124,7 @@ make_tss_desc:
         roll            $16, %eax                   # base[15:0] in upper eax
         movl            %eax, %edx                  # base[31:16] in dx
         movw            %cx, %ax                    # limit[15:0] in ax
-        movl            %eax, _TSS_SEGMENT(%ebx)    # write desc[31:0]
+        movl            %eax, _TSS0_SEGMENT(%ebx)   # write desc[31:0]
         movw            %dx, %ax                    # base[31:24] in ah, base[23:16] in dl
         rorl            $16, %ecx
         movb            %cl, %al                    # limit[19:16] in al
@@ -132,8 +132,8 @@ make_tss_desc:
         movb            $0x89, %dh                  # p=1,dpl=0,s=0,type=9 (TSS)
         rorl            $16, %eax                   # base[31:24] and limit[19:16] in upper eax
         movw            %dx, %ax                    # everything else in ax
-        movl            %eax, _TSS_SEGMENT+4(%ebx)  # write desc[63:32]
-        movw            $_TSS_SEGMENT, %ax
+        movl            %eax, _TSS0_SEGMENT+4(%ebx) # write desc[63:32]
+        movw            $_TSS0_SEGMENT, %ax
         ltr             %ax
         ret
 
@@ -186,6 +186,9 @@ _map_low_1M_loop:
         incl            %ecx                        # count++
         cmpl            $0x100, %ecx
         jb              _map_low_1M_loop
+
+        # setup null pointer trap
+        andl            $~_PAGE_PRESENT, 0(%edi)
 
         # setup page directory
         #  map virt:00000000-000FFFFF to phys:00000000-000FFFFF (temp for setup)
@@ -249,7 +252,8 @@ _gdt:
         .quad           0x00CFFA000000FFFF      # [0x23] USER_CS    rx  ring3
         .quad           0x00CFF2000000FFFF      # [0x2B] USER_DS    rw  ring3
         .quad           0                       # [0x30] _LDT_SEGMENT
-        .quad           0                       # [0x38] _TSS_SEGMENT
+        .quad           0                       # [0x38] _TSS0_SEGMENT
+        .quad           0                       # [0x40] _TSS1_SEGMENT
 _gdt_end:
 
         .word           0                       # align
