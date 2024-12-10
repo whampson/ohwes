@@ -269,6 +269,15 @@ void init_console(const struct boot_info *info)
         for(;;);
     }
 
+    // initialize virtual consoles
+    for (int i = 1; i <= NR_CONSOLE; i++) {
+        struct console *cons = get_console(i);
+        cons->framebuf = get_console_fb(i);
+        cons->number = i;
+        console_defaults(cons);
+        erase(cons, 2);
+    }
+
     struct console *cons = get_console(SYSTEM_CONSOLE);
     cons->cursor.x = cursor_x;
     cons->cursor.y = cursor_y;
@@ -368,17 +377,6 @@ int switch_console(int num)
     struct console *curr = current_console();
     struct console *next = get_console(num);
 
-    if (!next->open) {
-        struct inode *inode = get_chdev_inode(TTY_MAJOR, next->number);
-        if (!inode) {
-            panic("could not find inode for tty%d", next->number);
-        }
-        int status = chdev_open(inode, NULL);
-        if (status < 0) {
-            panic("tty%d failed to open with error %d", next->number, status);
-        }
-    }
-
     uint32_t pgdir_addr = 0;
     store_cr3(pgdir_addr);
     pgdir_addr = __phys_to_virt(pgdir_addr);
@@ -415,6 +413,17 @@ int switch_console(int num)
 #endif
 
     flush_tlb();
+
+    if (!next->open) {
+        struct inode *inode = get_chdev_inode(TTY_MAJOR, next->number);
+        if (!inode) {
+            panic("could not find inode for tty%d", next->number);
+        }
+        int status = chdev_open(inode, NULL);
+        if (status < 0) {
+            panic("tty%d failed to open with error %d", next->number, status);
+        }
+    }
 
     // update VGA state
     g_vga->active_console = curr->number;
