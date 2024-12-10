@@ -1,0 +1,165 @@
+================================================================================
+The TTY Subsystem
+================================================================================
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+I. Design Ideas
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+--------------------------------------------------------------------------------
+1) Terminology
+--------------------------------------------------------------------------------
+tty:        TeleType        -- generic character input/output device
+tty_ldisc:  Line Discipline -- buffering and character processing mechanism
+tty_driver: Device Driver   -- specific TTY device (serial port, kbd/vga, etc.)
+
+--------------------------------------------------------------------------------
+2) TTY Line Discipline Interface
+--------------------------------------------------------------------------------
+Excellent Reference:
+    The TTY demystified - https://www.linusakesson.net/programming/tty/
+
+a) Introduction
+---------------
+
+A Line Discipline dictates how characters should be sent and received "on the
+line". It sits between the computer and the character device (terminal) and
+serves to provide input buffering, control character translation, character
+echoing, and flow control.
+
++----------+   +-------+   +-------+   (phone line)   +-------+   +----------+
+| Terminal |<->| ldisc |<->| Modem |<---------------->| Modem |<->| Computer |
++----------+   +-------+   +-------+                  +-------+   +----------+
+
+Imagine for a second that the only device you have to interface with your
+computer is a typewriter/printer (i.e. a TeleType). We'll call this device a
+Terminal. The terminal is connected to a modem which is connected to a phone
+line. At the other end of the phone line is another modem, which is finally
+connected directly to computer via a UART. In this scenario, the line discipline
+would be a small program or device that sits in between the terminal and the
+computer (or on the TeleType directly) and would control how characters are sent
+down the phone line. For example, if the ICANON input flag is set on your
+TeleType, characters typed on the TeleType are not sent down the line until the
+<Return> key is pressed.
+
++--------------------------+
+| +---------+   +-------+  |
+| | Display |<--| Recvr |<-|
+| +---------+   +-------+  |   +-------+    (line)    +-------+   +----------+
+|          TeleType        |<->| Modem |<------------>| Modem |<->| Computer |
+| +---------+   +-------+  |   +-------+              +-------+   +----------+
+| |Keyboard |-->| Xmitr |->|
+| +---------+   +-------+  |
++--------------------------+
+
+These days, this model is quite antiquated as modern computers have integrated
+the TeleType into a keyboard/display interface connected directly to the
+computer, but the separation described in this model is useful because it allows
+programs to have more control over how they handle I/O buffering. In addition
+the line discipline provides low level character drivers a means to control how
+their data is sent to and received from the computer.
+
++----------+   +-------------------------------------------------------------+
+| Hardware |   |                          Software                           |
+|          |   | +-------------------------------------+X+-----------------+ |
+| +-----+  |   | |  +------+       Kernel              |X| User +--------+ | |
+| | VGA |<-|<--|-|<-|Driver|<-┐                        |X|  ┌-->|Process0| | |
+| +-----+  |   | |  +------+  |  +-------+   +-----+   |X|  |   +--------+ | |
+|          |   | |            └--|       |   |     |<->|X|<-┘   +--------+ | |
+|          |   | |        (line) | ldisc |<->| TTY |<->|X|<---->|Process1| | |
+|          |   | |            ┌->|       |   |     |<->|X|<-┐   +--------+ | |
+| +-----+  |   | |  +------+  |  +-------+   +-----+   |X|  |   +--------+ | |
+| | KBD |->|-->|-|->|Driver|--┘                        |X|  └-->|Process2| | |
+| +-----+  |   | |  +------+                           |X|      +--------+ | |
+|          |   | +-------------------------------------+X+-----------------+ |
++----------+   +-------------------------------------------------------------+
+
+The most common line discipline is the TTY line discipline. TTY line disciplines
+traditionally feature ICANON input processing and OPOST output processing,
+referring to how input buffering and control characters are handled. Other line
+disciplines exist for SLIP and PPP protocols, which have different buffering
+schemes.
+
+b) Interface
+---------------
+
+int  (*open)(struct tty *);
+
+    Called when the line discipline is associated with a TTY. May be used to
+    initialize any line discipline state. Returns 0 upon success, or a negative
+    value to indicate an error.
+
+void (*close)(struct tty *);
+
+    Called when the line discipline is being closed down, e.g. when switching
+    line disciplines or when the TTY itself is closed.
+
+void (*clear)(struct tty *);
+
+    Called when the user requests to clear the input buffer. All characters in
+    the buffer will be erased.
+
+int  (*count)(struct tty *);
+
+    Called when the user requests to know the number of characters currently in
+    the input buffer.
+
+int  (*read)(struct tty *, char *buf, size_t count);
+
+    Called when the user requests to read characters from the TTY. Will copy
+    whatever characters are present in the line discipline's input buffer to the
+    user-supplied buffer, bounded by the count parameter, then clear the buffer
+    of all characters copied. Returns the number of characters read, or a
+    negative value if an error occurred.
+
+int  (*write)(struct tty *, const char *buf, size_t count);
+
+    Called when the user requests to write characters to the TTY. Will transmit
+    characters in the user-supplied buffer, bounded by the count parameter, to
+    the low-level character device driver. Output processing may be applied
+    before each character is sent. The character device driver may perform
+    output buffering. Returns the number of characters sent to the device, or a
+    negative value if an error occurred.
+
+int  (*ioctl)(struct tty *, unsigned int cmd, unsigned long arg);
+
+    Called when the user requests an ioctl on the line discipline.
+
+void (*recv)(struct tty *, char *buf, size_t count);
+
+    Called by the low-level TTY device driver to send characters received by the
+    hardware to the line discipline. Input processing may be is applied here.
+
+int  (*recv_room)(struct tty *);
+
+    Called by the low-level TTY device driver to check how much room is
+    remaining in the input buffer. If the driver sends more characters to the
+    line discipline than indicated by recv_room, those characters may be
+    dropped.
+
+void (*wakeup)(struct tty *);
+
+    Called by the low-level TTY device driver to signal to the line discipline
+    that the device is ready to transmit more characters.
+
+--------------------------------------------------------------------------
+
+write() pipeline:
+    write(fd, buf, count):
+      * user calls standard library function write() with file descriptor
+    ------ SYSTEM CALL ------
+    sys_write(fd, buf, count):
+      * file desc and buffer ranges validated
+      * file desc used to locate open file
+      * file ops from file used to call file-specific write():
+        fops->write(file, buf, count) -> tty_write(file, buf, count)
+    tty_write(file, buf, count):
+      * ensure file is a TTY device and is open
+          - use file->private_data to retrieve TTY-specfic state data
+      * write buffer to TTY line discipline:
+        tty->ldisc->write(file, buf, count) -> tty_ldisc_write(file, buf, count)
+    tty_ldisc_write(file, buf, count):
+      * applies OPOST character processing (if enabled) then sends chars to
+        driver write routine (serial_write or console_tty_write)
+    console_tty_write(tty, buf, count):
+      * writes characters from the TTY to the console
