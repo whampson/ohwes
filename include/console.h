@@ -136,7 +136,6 @@ void console_save(struct console *cons, struct console_save_state *save);
 void console_restore(struct console *cons, struct console_save_state *save);
 
 void console_defaults(struct console *cons);
-void console_flush(struct console *cons);   // flush input buffer
 
 int console_getchar(struct console *cons);
 int console_putchar(struct console *cons, char c);

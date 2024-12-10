@@ -108,3 +108,8 @@ size_t ring_count(struct ring *q)
 {
     return q->count;
 }
+
+void ring_clear(struct ring *q)
+{
+    q->head = q->tail = q->count = 0;
+}

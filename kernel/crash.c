@@ -122,6 +122,7 @@ void soft_double_fault(struct iregs *regs)
 __fastcall void crash(struct iregs *regs)
 {
     struct console *cons;
+    struct tty *tty;
 
     uint16_t mask;
     bool die = true;
@@ -306,6 +307,7 @@ __fastcall void crash(struct iregs *regs)
     //
 done:
     cons = current_console();
+    tty = cons->tty;
 
     mask = pic_getmask();
     pic_setmask(0xFFFF);
@@ -317,9 +319,9 @@ done:
     }
 
     // wait for keypress
-    tty_ldisc_clear(cons->tty);
-    __sti();
-    tty_ldisc_read_char(cons->tty);
+    tty->ldisc->clear(tty);             // TODO: need better way to clear input
+    __sti(); char c;
+    tty->ldisc->read(tty, &c, 1);
     __cli();
 
     // restore console state

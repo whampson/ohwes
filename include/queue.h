@@ -126,4 +126,6 @@ size_t ring_length(struct ring *q);
  */
 size_t ring_count(struct ring *q);
 
+void ring_clear(struct ring *q);
+
 #endif  // __QUEUE_H

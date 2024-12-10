@@ -23,6 +23,7 @@ SOURCES := \
     task.c \
     timer.c \
     tty.c \
+    tty_ldisc.c \
     vga.c \
     sys/open.c \
     test/list_test.c \

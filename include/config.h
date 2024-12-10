@@ -42,12 +42,14 @@
 // Stack base addresses are offset by +4 bytes from the written data.
 // ----------------------------------------------------------------------------
 
-#define KERNEL_PGDIR        0x10000     // global page directory
-#define KERNEL_PGTBL        0x11000     // kernel page table
-#define KERNEL_BASE         0x20000     // kernel image load address
-#define INITIAL_STACK       (KERNEL_BASE-(PAGE_SIZE*0)) // boot stack
-#define INTERRUPT_STACK     (KERNEL_BASE-(PAGE_SIZE*1)) // interrupt stack
-#define USER_STACK          (KERNEL_BASE-(PAGE_SIZE*2)) // user mode stack
+#define INITIAL_STACK       0x10000
+#define INTERRUPT_STACK     0x11000
+#define USER_STACK          0x12000
+#define DOUBLE_FAULT_STACK  0x13000 // page must be present in kernel mode
+#define KERNEL_PGDIR        0x13000 // global page directory
+#define KERNEL_PGTBL        0x14000 // kernel page table
+#define KERNEL_BASE         0x15000 // kernel image load address
+
 
 // Kernel space base virtual address. The lower 1MB of physical memory is mapped.
 #if HIGHER_GROUND // TOOD: move this toggle elsewhere

@@ -110,7 +110,6 @@ static void kb_wrport(uint8_t data);
 #define RIF_FALSE(x)  if (!(x)) { return false; }
 
 extern void init_ps2(const struct boot_info *info);
-extern int console_recv(struct console *cons, char c);
 
 void init_kb(const struct boot_info *info)
 {
@@ -175,41 +174,16 @@ void init_kb(const struct boot_info *info)
 
 static void kb_putq(char c)
 {
-    // TODO: put whole string
-    //      what happens if ldisc buffer fills in middle of string write?
-    //      queue a buffer drain on a timer interrupt? (like a DPC?)
-    //
-    // TODO: this needs to happen in the "bottom half" of the interrupt handler,
-    //      after the IRQ has been acknowledged and we're out of the critical
-    //      part interrupt handler, because it could take a long time to put the
-    //      buffer in the line discipline receive queue
-    //
-    // TODO: sidenote: panicking in the "top half" of the interrupt handler
-    //      (i.e. here) is bad because it leaves interrupts off; we cannot
-    //      reboot with a keystroke or turn off a beeper that we started...
-
-    struct tty *tty;
-    struct tty_ldisc *ldisc;
-
-    tty = current_console()->tty;
-    panic_assert(tty);
-
-    ldisc = tty->ldisc;
-    panic_assert(ldisc);
-    panic_assert(ldisc->recv);
-    panic_assert(ldisc->recv_room);
-
-    if (!ldisc->recv_room(tty)) {
-        // TODO: panic? drop character? defer recv? what should we do here?
-        beep(ALERT_FREQ, ALERT_TIME);
-        kprint("\e[1;33mtty%d: input buffer full!\e[0m\n", tty->index);
-        return;
+    struct tty *tty = current_console()->tty;
+    if (!tty || !tty->ldisc) {
+        panic("no TTY attached to keyboard!");
     }
 
-    ssize_t ret = ldisc->recv(tty, &c, 1);
-    if (ret < 0) {
-        panic("ldisc%d: recv on tty%d failed with %d", ldisc->num, tty->index, ret);
+    if (!tty->ldisc->read) {
+        panic("keyboard has no input receiver!");
     }
+
+    tty->ldisc->recv(tty, &c, 1);   // just drop chars if its full...
 }
 
 static void update_leds(void)

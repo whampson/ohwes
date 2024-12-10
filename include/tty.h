@@ -38,20 +38,6 @@
 #define N_TTY                       0
 #define NR_LDISC                    1
 
-// c_iflag
-#define INLCR   0x01                // map NL to CR
-#define IGNCR   0x02                // ignore carriage return
-#define ICRNL   0x04                // map CR to NL (unless IGNCR is set)
-
-// c_oflag
-#define OPOST   0x01                // enable post processing
-#define ONLCR   0x02                // convert NL to CRNL
-#define OCRNL   0x04                // map CR to NL
-
-// c_lflag
-#define ECHO    0x01                // echo input characters
-#define ECHOCTL 0x02                // if ECHO set, echo control characters as ^X
-
 struct tty;
 
 //
@@ -65,37 +51,34 @@ struct termios {
     uint32_t c_line;                // line discipline
 };
 
-#define _I_FLAG(tty,f)  ((tty)->termios->c_oflag & (f))
-#define _O_FLAG(tty,f)  ((tty)->termios->c_oflag & (f))
-#define _C_FLAG(tty,f)  ((tty)->termios->c_oflag & (f))
-#define _L_FLAG(tty,f)  ((tty)->termios->c_oflag & (f))
+// c_iflag
+#define ICRNL   (1 << 0)            // map CR to NL (unless IGNCR is set)
+#define INLCR   (1 << 1)            // map NL to CR
+#define IGNCR   (1 << 2)            // ignore carriage return
+
+// c_oflag
+#define OPOST   (1 << 0)            // enable post processing
+#define OCRNL   (1 << 1)            // map CR to NL
+#define ONLCR   (1 << 2)            // convert NL to CR-NL
+
+// c_lflag
+#define ECHO    (1 << 0)            // echo input characters
+#define ECHOCTL (1 << 1)            // if ECHO set, echo control characters as ^X
+
+#define _I_FLAG(tty,f)  ((tty)->termios.c_iflag & (f))
+#define _O_FLAG(tty,f)  ((tty)->termios.c_oflag & (f))
+#define _C_FLAG(tty,f)  ((tty)->termios.c_cflag & (f))
+#define _L_FLAG(tty,f)  ((tty)->termios.c_lflag & (f))
+
+#define I_ICRNL(tty)    _I_FLAG(tty, ICRNL)
+#define I_INLCR(tty)    _I_FLAG(tty, INLCR)
+#define I_IGNCR(tty)    _I_FLAG(tty, IGNCR)
 
 #define O_OPOST(tty)    _O_FLAG(tty, OPOST)
 #define O_ONLCR(tty)    _O_FLAG(tty, ONLCR)
 #define O_OCRNL(tty)    _O_FLAG(tty, OCRNL)
 
-//
-// TTY Line Discipline
-//
-// The line discipline controls how data is written to and read from the
-// character device.
-//
-struct tty_ldisc {
-    int num;
-    char *name;
-
-    // called from above (user)
-    int     (*open)(struct tty *);
-    int     (*close)(struct tty *);
-    ssize_t (*read)(struct tty *, char *buf, size_t count);
-    ssize_t (*write)(struct tty *, const char *buf, size_t count);
-    int     (*ioctl)(struct tty *, unsigned int cmd, unsigned long arg);
-    // TODO: poll? flush? ICANON buffering
-
-    // called from below (interrupt)
-    ssize_t (*recv)(struct tty *, char *buf, size_t count);
-    size_t  (*recv_room)(struct tty *);
-};
+struct tty_ldisc;
 
 //
 // TTY Driver
@@ -112,11 +95,13 @@ struct tty_driver {
     int     (*close)(struct tty *);
     int     (*ioctl)(struct tty *, unsigned int cmd, unsigned long arg);
     int     (*write)(struct tty *, const char *buf, size_t count);
+    void    (*write_char)(struct tty *, char c);
     size_t  (*write_room)(struct tty *);
-    // TODO: flush?
+    void    (*flush)(struct tty *);
 
     struct termios default_termios;
 };
+
 
 //
 // TTY - Teletype Emulation
@@ -131,16 +116,49 @@ struct tty {
     bool open;
 
     struct tty_ldisc *ldisc;        // line discipline
-    struct tty_driver *driver;      // low-level device driver
-    struct termios *termios;        // input/output behavior
-
-    // input buffer
-    struct ring iring;
-    char iring_buf[TTY_BUFFER_SIZE];// TODO: allocate
+    struct tty_driver driver;       // low-level device driver
+    struct termios termios;         // input/output behavior
 
     // private per-instance driver data
     void *ldisc_data;
     void *driver_data;
+};
+
+void tty_register(uint16_t major, const char *name, int ldisc);
+void tty_register_driver(uint16_t major, const char *name, struct tty_driver *driver);
+void tty_register_ldisc(struct tty *tty, int num, struct tty_ldisc *ldisc);
+
+//
+// TTY Line Discipline
+//
+// The line discipline controls how data is written to and read from the
+// character device.
+//
+//  open - open the line discipline
+//  close - close the line discipline
+//  read - read characters into a buffer
+//  write - write characters from a buffer
+//  flush - flush pending characters to the write channel
+//  clear - clear input and output buffers
+//  ioctl - line discipline control
+//
+struct tty_ldisc {
+    int num;
+    char *name;
+
+    // called from above (system)
+    int     (*open)(struct tty *);
+    int     (*close)(struct tty *);
+    int     (*read)(struct tty *, char *buf, size_t count);
+    ssize_t (*write)(struct tty *, const char *buf, size_t count);
+    void    (*flush)(struct tty *);
+    void    (*clear)(struct tty *);
+    int     (*ioctl)(struct tty *, unsigned int cmd, unsigned long arg);
+    // TODO: poll?
+
+    // called from below (interrupt)
+    void    (*recv)(struct tty *, char *buf, size_t count);
+    size_t  (*recv_room)(struct tty *);
 };
 
 #endif // __TTY_H

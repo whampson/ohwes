@@ -49,30 +49,30 @@ __data_segment struct console g_console[NR_CONSOLE] = { };
 
 extern struct tty *g_ttys;
 
-static int console_open(struct tty *);
-static int console_close(struct tty *);
-static int console_ioctl(struct tty *, unsigned int cmd, unsigned long arg);
+static int console_tty_open(struct tty *);
+static int console_tty_close(struct tty *);
+static int console_tty_ioctl(struct tty *, unsigned int cmd, unsigned long arg);
 static int console_tty_write(struct tty *, const char *buf, size_t count);
+static void console_tty_write_char(struct tty *, char c);
 static size_t console_tty_write_room(struct tty *);
 
 struct tty_driver console_driver = {
     .name = "console",
-    .open = console_open,
-    .close = console_close,
-    .ioctl = console_ioctl,
+    .open = console_tty_open,
+    .close = console_tty_close,
+    .ioctl = console_tty_ioctl,
     .write = console_tty_write,
     ./* in the */write_room/* with black curtains*/ = console_tty_write_room,
+    .write_char = console_tty_write_char,
+    .flush = NULL,
 };
 
-static int console_open(struct tty *tty)
+static int console_tty_open(struct tty *tty)
 {
     struct console *cons;
 
     if (!tty) {
         return -EINVAL;
-    }
-    if (!tty->driver) {
-        return -ENXIO;  // tty driver not registered
     }
 
     if (tty->index < 0 || tty->index > NR_CONSOLE) {
@@ -93,7 +93,7 @@ static int console_open(struct tty *tty)
     return 0;
 }
 
-static int console_close(struct tty *tty)
+static int console_tty_close(struct tty *tty)
 {
     struct console *cons;
 
@@ -107,6 +107,7 @@ static int console_close(struct tty *tty)
     }
 
     cons->open = false;
+    tty->driver_data = NULL;
     cons->tty = NULL;
     return 0;
 }
@@ -119,20 +120,21 @@ static int console_tty_write(struct tty *tty, const char *buf, size_t count)
         return -EINVAL;
     }
 
-    if (!tty->driver || !tty->driver_data) {
+    if (!tty->driver_data) {
         return -ENXIO;
     }
 
     // TODO: verify device driver data
     cons = tty->driver_data;
-    for (int i = 0; i < count; i++) {
-        console_putchar(cons, buf[i]);
+    int ret = console_write(cons, buf, count);
+    if (tty->driver.flush) {
+        tty->driver.flush(tty);
     }
 
-    return count;
+    return ret;
 }
 
-static int console_ioctl(
+static int console_tty_ioctl(
     struct tty *tty, unsigned int cmd, unsigned long arg)
 {
     return -ENOSYS;
@@ -141,6 +143,16 @@ static int console_ioctl(
 static size_t console_tty_write_room(struct tty *tty)
 {
     return -ENOSYS;
+}
+
+static void console_tty_write_char(struct tty *tty, char c)
+{
+    if (!tty || !tty->driver_data) {
+        return;
+    }
+
+    struct console *cons = tty->driver_data;
+    console_putchar(cons, c);
 }
 
 // ----------------------------------------------------------------------------
@@ -242,9 +254,8 @@ void init_vga(
     cl_hi = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
     g_vga->orig_cursor_shape = (cl_hi << 8) | cl_lo;
 
-    kprint("VGA frame buffer is %08X-%08X\n",
-        g_vga->fb_info.framebuf, g_vga->fb_info.framebuf +
-            (g_vga->fb_info.size_pages << PAGE_SHIFT) - 1);
+    kprint("frame buffer is VGA, %d pages at %08X\n",
+        g_vga->fb_info.size_pages, g_vga->fb_info.framebuf);
 }
 
 void init_console(const struct boot_info *info)
@@ -258,18 +269,10 @@ void init_console(const struct boot_info *info)
         for(;;);
     }
 
-    // initialize virtual consoles
-    for (int i = 1; i <= NR_CONSOLE; i++) {
-        struct console *cons = &g_console[i - 1];
-        cons->framebuf = get_console_fb(i);
-        cons->number = i;
-        console_defaults(cons);
-        erase(cons, 2);
-    }
-
     struct console *cons = get_console(SYSTEM_CONSOLE);
     cons->cursor.x = cursor_x;
     cons->cursor.y = cursor_y;
+    cons->cursor.shape = g_vga->orig_cursor_shape;
 
     // do a proper 'switch' to the initial console
     int ret = switch_console(SYSTEM_CONSOLE);
@@ -314,7 +317,7 @@ void init_console(const struct boot_info *info)
     init_kb(info);
 
     // TODO:
-    // register_driver(DEV_TTY, &console_driver, "console");
+    // tty_register_driver(TTY_MAJOR, "console", &console_driver);
 }
 
 // ----------------------------------------------------------------------------
@@ -370,8 +373,9 @@ int switch_console(int num)
         if (!inode) {
             panic("could not find inode for tty%d", next->number);
         }
-        if (chdev_open(inode, NULL) < 0) {
-            panic("failed to open tty%d", next->number);
+        int status = chdev_open(inode, NULL);
+        if (status < 0) {
+            panic("tty%d failed to open with error %d", next->number, status);
         }
     }
 
@@ -439,12 +443,12 @@ struct console * get_console(int num)
 
     if (num == 0) {
         num = g_vga->active_console;
-        panic_assert(num > 0 && (num - 1) < NR_CONSOLE);
+        assert(num > 0 && (num - 1) < NR_CONSOLE);
     }
 
     struct console *cons = &g_console[num - 1];
     if (cons->initialized) {
-        panic_assert(cons->number == num);
+        assert(cons->number == num);
     }
 
     return cons;
@@ -481,53 +485,6 @@ void console_restore(struct console *cons, struct console_save_state *save)
     }
 }
 
-int console_recv(struct console *cons, char c)  // called from ps2kb.c
-{
-    int count;
-
-    if (!cons) {
-        return -EINVAL;
-    }
-
-    if (!cons->initialized) {
-        panic("got keyboard input on uninitialized terminal %d", cons->number);
-    }
-
-    if (ring_full(&cons->tty->iring)) {
-        beep(ALERT_FREQ, ALERT_TIME);
-        return 0;
-    }
-
-    // TODO: leave space for \n, etc.
-    ring_put(&cons->tty->iring, (char) c);
-    count = 1;
-
-    return count;
-}
-
-int console_read(struct console *cons, char *buf, size_t count)
-{
-    int nread;
-    uint32_t flags;
-
-    if (!cons || !buf) {
-        return -EINVAL;
-    }
-
-    nread = 0;
-    while (count--) {
-        spin(ring_empty(&cons->tty->iring));    // block until a character appears
-        // TODO: allow nonblocking input
-
-        cli_save(flags);
-        *buf++ = ring_get(&cons->tty->iring);
-        restore_flags(flags);
-        nread++;
-    }
-
-    return nread;
-}
-
 int console_write(struct console *cons, const char *buf, size_t count)
 {
     size_t nwritten;
@@ -543,22 +500,21 @@ int console_write(struct console *cons, const char *buf, size_t count)
     return nwritten;
 }
 
-void console_flush(struct console *cons)
-{
-    uint32_t flags;
-    cli_save(flags);
-
-    while (!ring_empty(&cons->tty->iring)) {
-        ring_get(&cons->tty->iring);
-    }
-    restore_flags(flags);
-}
-
 int console_getchar(struct console *cons)
 {
     char c;
 
-    int ret = console_read(cons, &c, 1);
+    if (!cons) {
+        return -EINVAL;
+    }
+    if (!cons->tty || !cons->tty->ldisc) {
+        return -ENXIO;
+    }
+    if (!cons->tty->ldisc->read) {
+        return -ENOSYS;
+    }
+
+    int ret = cons->tty->ldisc->read(cons->tty, &c, 1);
     if (ret < 0) {
         return ret;
     }
