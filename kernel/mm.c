@@ -50,7 +50,6 @@ static void print_page_info(uint32_t vaddr, const struct pginfo *page);
 static void print_page_mappings(struct mm_info *mm);
 
 static void init_bss(struct boot_info *boot_info);
-extern void init_pools(void);   // pool.c
 
 struct mm_info _mm = { };
 struct mm_info *g_mm = &_mm;

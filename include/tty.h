@@ -30,6 +30,7 @@
 #define __TTY_H
 
 #include <fs.h>
+#include <list.h>
 #include <queue.h>
 #include <stddef.h>
 
@@ -37,8 +38,6 @@
 
 #define N_TTY                       0
 #define NR_LDISC                    1
-
-struct tty;
 
 //
 // Line Discipline Behavior
@@ -78,6 +77,7 @@ struct termios {
 #define O_ONLCR(tty)    _O_FLAG(tty, ONLCR)
 #define O_OCRNL(tty)    _O_FLAG(tty, OCRNL)
 
+struct tty;
 struct tty_ldisc;
 
 //
@@ -86,9 +86,9 @@ struct tty_ldisc;
 // This is the low level character device driver.
 //
 struct tty_driver {
+    struct list_node list;
+    uint16_t major, minor;
     char *name;
-    uint16_t major;
-    uint16_t minor;
 
     // interface functions
     int     (*open)(struct tty *);
@@ -98,8 +98,6 @@ struct tty_driver {
     void    (*write_char)(struct tty *, char c);
     size_t  (*write_room)(struct tty *);
     void    (*flush)(struct tty *);
-
-    struct termios default_termios;
 };
 
 
@@ -124,9 +122,8 @@ struct tty {
     void *driver_data;
 };
 
-void tty_register(uint16_t major, const char *name, int ldisc);
-void tty_register_driver(uint16_t major, const char *name, struct tty_driver *driver);
-void tty_register_ldisc(struct tty *tty, int num, struct tty_ldisc *ldisc);
+int tty_register_driver(struct tty_driver *driver);
+int tty_register_ldisc(int ldsic_num, struct tty_ldisc *ldisc);
 
 //
 // TTY Line Discipline
@@ -134,22 +131,14 @@ void tty_register_ldisc(struct tty *tty, int num, struct tty_ldisc *ldisc);
 // The line discipline controls how data is written to and read from the
 // character device.
 //
-//  open - open the line discipline
-//  close - close the line discipline
-//  read - read characters into a buffer
-//  write - write characters from a buffer
-//  flush - flush pending characters to the write channel
-//  clear - clear input and output buffers
-//  ioctl - line discipline control
-//
 struct tty_ldisc {
-    int num;
+    int ldisc_num;
     char *name;
 
     // called from above (system)
     int     (*open)(struct tty *);
     int     (*close)(struct tty *);
-    int     (*read)(struct tty *, char *buf, size_t count);
+    ssize_t (*read)(struct tty *, char *buf, size_t count);
     ssize_t (*write)(struct tty *, const char *buf, size_t count);
     void    (*flush)(struct tty *);
     void    (*clear)(struct tty *);

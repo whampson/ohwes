@@ -38,12 +38,11 @@
 #include <syscall.h>
 
 extern void init_cpu(const struct boot_info *info);
-extern void init_console(const struct boot_info *info);
 extern void init_mm(const struct boot_info *info);
 extern void init_pic(void);
 extern void init_timer(void);
 extern void init_rtc(void);
-extern void init_serial(void);
+extern void init_tty(const struct boot_info *info);
 
 // #ifdef TEST_BUILD
 // typedef int (*test_main)(void);
@@ -99,8 +98,7 @@ __fastcall void start_kernel(const struct boot_info *info)
 #endif
 
     // get the console and tty working for real
-    init_console(info);
-    init_serial();
+    init_tty(info);
 
     // init_fs();
     // init_tasks();

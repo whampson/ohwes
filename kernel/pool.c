@@ -53,11 +53,6 @@ static size_t get_chunk_size(pool_t pool);
 static bool is_pool_valid(pool_t pool);
 static bool is_item_in_pool(pool_t pool, void *item);
 
-void init_pools(void)
-{
-    zeromem(g_pools, sizeof(g_pools));
-}
-
 pool_t create_pool(const char *name, void *addr, size_t capacity, size_t item_size)
 {
     struct pool *p = NULL;

@@ -19,65 +19,81 @@
  * =============================================================================
  */
 
+#include <config.h>
 #include <errno.h>
-#include <tty.h>
 #include <interrupt.h>
+#include <kernel.h>
+#include <pool.h>
+#include <tty.h>
 
 //
 // line discipline tty operations
 //
-static int tty_ldisc_open(struct tty *);
-static int tty_ldisc_close(struct tty *);
-static int tty_ldisc_read(struct tty *tty, char *buf, size_t count);
-static ssize_t tty_ldisc_write(struct tty *, const char *buf, size_t count);
-static int tty_ldisc_ioctl(struct tty *, unsigned int num, unsigned long arg);
-static void tty_ldisc_recv(struct tty *, char *buf, size_t count);
-static size_t tty_ldisc_recv_room(struct tty *);
-static void tty_ldisc_clear(struct tty *tty);
+static int n_tty_open(struct tty *);
+static int n_tty_close(struct tty *);
+static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count);
+static ssize_t n_tty_write(struct tty *, const char *buf, size_t count);
+static int n_tty_ioctl(struct tty *, unsigned int num, unsigned long arg);
+static void n_tty_recv(struct tty *, char *buf, size_t count);
+static size_t n_tty_recv_room(struct tty *);
+static void n_tty_clear(struct tty *tty);
 
-struct tty_ldisc n_tty = {
-    .num = N_TTY,
+static struct tty_ldisc n_tty = {
+    .ldisc_num = N_TTY,
     .name = "n_tty",
-    .open = tty_ldisc_open,
-    .close = tty_ldisc_close,
-    .read = tty_ldisc_read,
-    .write = tty_ldisc_write,
-    .ioctl = tty_ldisc_ioctl,
-    .recv = tty_ldisc_recv,
-    .recv_room = tty_ldisc_recv_room,
-    .clear = tty_ldisc_clear
+    .open = n_tty_open,
+    .close = n_tty_close,
+    .read = n_tty_read,
+    .write = n_tty_write,
+    .clear = n_tty_clear,
+    .flush = NULL,  // TODO:
+    .ioctl = n_tty_ioctl,
+    .recv = n_tty_recv,
+    .recv_room = n_tty_recv_room,
 };
 
 struct n_tty_ldisc_data {
     struct ring iring;
     char _iring_buf[TTY_BUFFER_SIZE];
 };
-static struct n_tty_ldisc_data _n_tty_data;
 
-// void tty_ldisc_init(struct tty *tty)
-// {
-//     tty_register_ldisc(tty, N_TTY, &n_tty);
-// }
+static struct n_tty_ldisc_data _n_tty_data_pool[NR_TTY];
+static pool_t n_tty_data_pool;
 
-static int tty_ldisc_open(struct tty *tty)
+void init_n_tty(void)
+{
+    n_tty_data_pool = create_pool(
+        "n_tty_data", _n_tty_data_pool,
+        NR_TTY, sizeof(struct n_tty_ldisc_data));
+
+    if (tty_register_ldisc(N_TTY, &n_tty)) {
+        panic("unable to register N_TTY line discipline!");
+    }
+}
+
+static int n_tty_open(struct tty *tty)
 {
     if (!tty || !tty->ldisc) {
         return -EINVAL;
     }
 
-    // TODO: buffer needs to be dynamically allocated,
-    // CANNOT exist in singleton struct
-    ring_init(&_n_tty_data.iring, _n_tty_data._iring_buf, TTY_BUFFER_SIZE);
-    tty->ldisc_data = &_n_tty_data;
+    struct n_tty_ldisc_data *data = pool_alloc(n_tty_data_pool);
+    if (!data) {
+        panic("unable to allocate N_TTY line discipline data from pool");
+    }
+
+    ring_init(&data->iring, data->_iring_buf, TTY_BUFFER_SIZE);
+    tty->ldisc_data = data;
     return 0;
 }
 
-static int tty_ldisc_close(struct tty *tty)
+static int n_tty_close(struct tty *tty)
 {
+    // TODO: free pool item
     return -ENOSYS;
 }
 
-void tty_ldisc_clear(struct tty *tty)
+void n_tty_clear(struct tty *tty)
 {
     if (!tty || !tty->ldisc_data) {
         return;
@@ -88,18 +104,7 @@ void tty_ldisc_clear(struct tty *tty)
     ring_clear(&ldisc_data->iring);
 }
 
-static void n_tty_clear(struct tty *tty)
-{
-    if (!tty || !tty->ldisc_data) {
-        return;
-    }
-
-    struct n_tty_ldisc_data *ldisc_data;
-    ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
-    ring_clear(&ldisc_data->iring);
-}
-
-static int tty_ldisc_read(struct tty *tty, char *buf, size_t count)
+static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
 {
     if (!tty || !buf) {
         return -EINVAL;
@@ -109,7 +114,7 @@ static int tty_ldisc_read(struct tty *tty, char *buf, size_t count)
     }
 
     char c;
-    int nread;
+    ssize_t nread;
     uint32_t flags;
 
     struct n_tty_ldisc_data *ldisc_data;
@@ -132,7 +137,7 @@ static int tty_ldisc_read(struct tty *tty, char *buf, size_t count)
     return nread;
 }
 
-static ssize_t tty_ldisc_write(struct tty *tty, const char *buf, size_t count)
+static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t count)
 {
     if (!tty || !buf) {
         return -EINVAL;
@@ -169,12 +174,12 @@ static ssize_t tty_ldisc_write(struct tty *tty, const char *buf, size_t count)
     return nwritten;
 }
 
-static int tty_ldisc_ioctl(struct tty *tty, unsigned int num, unsigned long arg)
+static int n_tty_ioctl(struct tty *tty, unsigned int num, unsigned long arg)
 {
     return -ENOSYS;
 }
 
-static void tty_ldisc_recv(struct tty *tty, char *buf, size_t count)
+static void n_tty_recv(struct tty *tty, char *buf, size_t count)
 {
     if (!tty || !buf) {
         return;
@@ -220,7 +225,7 @@ static void tty_ldisc_recv(struct tty *tty, char *buf, size_t count)
     }
 }
 
-static size_t tty_ldisc_recv_room(struct tty *tty)
+static size_t n_tty_recv_room(struct tty *tty)
 {
     struct n_tty_ldisc_data *ldisc_data;
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;

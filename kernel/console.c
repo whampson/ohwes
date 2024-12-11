@@ -57,6 +57,7 @@ static void console_tty_write_char(struct tty *, char c);
 static size_t console_tty_write_room(struct tty *);
 
 struct tty_driver console_driver = {
+    .major = TTY_MAJOR,
     .name = "console",
     .open = console_tty_open,
     .close = console_tty_close,
@@ -207,8 +208,6 @@ static uint16_t xy2pos(uint16_t ncols, uint16_t x, uint16_t y);
 // ----------------------------------------------------------------------------
 // initialization
 
-extern void init_kb(const struct boot_info *info);
-
 void init_vga(
     const struct boot_info *info, uint8_t fb_select,
     uint16_t *cursor_x, uint16_t *cursor_y)
@@ -269,6 +268,11 @@ void init_console(const struct boot_info *info)
         for(;;);
     }
 
+    // register the console driver
+    if (tty_register_driver(&console_driver)) {
+        panic("unable to register console driver!");
+    }
+
     // initialize virtual consoles
     for (int i = 1; i <= NR_CONSOLE; i++) {
         struct console *cons = get_console(i);
@@ -278,12 +282,13 @@ void init_console(const struct boot_info *info)
         erase(cons, 2);
     }
 
+    // restore console state from boot
     struct console *cons = get_console(SYSTEM_CONSOLE);
     cons->cursor.x = cursor_x;
     cons->cursor.y = cursor_y;
     cons->cursor.shape = g_vga->orig_cursor_shape;
 
-    // do a proper 'switch' to the initial console
+    // do a proper 'switch' to the initial virtual console
     int ret = switch_console(SYSTEM_CONSOLE);
     if (ret != 0) {
         panic("failed to initialize system console!");
@@ -293,7 +298,8 @@ void init_console(const struct boot_info *info)
     // create a restore point
     save_console(cons);
 
-    kprint("\e4\e6");   // enable blink, show cursor
+    // enable blink, show cursor
+    kprint("\e4\e6");
 
 #if PRINT_LOGO
     kprint( // safe to print now, so let's print a bird with a blinking eye lol
@@ -321,17 +327,10 @@ void init_console(const struct boot_info *info)
                                             `                                           \n\
     \e[0m\n"); //https://ascii.co.uk/art/raven
 #endif
-
-    // get the keyboard working
-    init_kb(info);
-
-    // TODO:
-    // tty_register_driver(TTY_MAJOR, "console", &console_driver);
 }
 
 // ----------------------------------------------------------------------------
 // public functions
-
 
 void console_defaults(struct console *cons)
 {

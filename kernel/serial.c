@@ -396,6 +396,7 @@ static int serial_ioctl(struct tty *, unsigned int cmd, unsigned long arg);
 static size_t serial_write_room(struct tty *);
 
 struct tty_driver serial_driver = {
+    .major = TTYS_MAJOR,
     .name = "serial",
     .open = serial_open,
     .close = serial_close,
@@ -484,6 +485,10 @@ static size_t serial_write_room(struct tty *tty)
 
 void init_serial(void)
 {
+    if (tty_register_driver(&serial_driver)) {
+        panic("unable to register serial driver!");
+    }
+
     for (int i = 0; i < countof(s_comports); i++) {
         init_com_port(s_comports[i]);
     }

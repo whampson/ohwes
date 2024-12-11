@@ -19,17 +19,20 @@
  * =============================================================================
  */
 
+#include <boot.h>
+#include <chdev.h>
 #include <config.h>
 #include <errno.h>
-#include <chdev.h>
 #include <fs.h>
-#include <tty.h>
-#include <queue.h>
 #include <ohwes.h>
+#include <pool.h>
+#include <queue.h>
+#include <tty.h>
 
-// struct tty_driver *tty_drivers;   // TODO: linked list?
+static struct list_node tty_drivers;                // linked list of TTY drivers
+static struct tty_ldisc g_ldiscs[NR_LDISC] = { };   // TTY line disciplines
 
-static struct termios default_termios = {
+static struct termios tty_default_termios = {
     .c_line = N_TTY,
     .c_iflag = ICRNL,
     .c_oflag = OPOST | ONLCR,
@@ -45,7 +48,7 @@ static ssize_t tty_read(struct file *, char *buf, size_t count);
 static ssize_t tty_write(struct file *, const char *buf, size_t count);
 static int tty_ioctl(struct file *, unsigned int num, unsigned long arg);
 
-struct file_ops tty_fops = {
+static struct file_ops tty_fops = {
     .open = tty_open,
     .close = tty_close,
     .read = tty_read,
@@ -53,25 +56,49 @@ struct file_ops tty_fops = {
     .ioctl = tty_ioctl,
 };
 
-extern struct tty_ldisc n_tty;
-
 struct tty g_ttys[NR_TTY + NR_SERIAL];
-struct tty_ldisc *g_ldiscs[NR_LDISC] =
-{
-    &n_tty
-};
 
-void tty_register_driver(uint16_t major, const char *name, struct tty_driver *driver)
+int tty_register_driver(struct tty_driver *driver)
 {
-    panic("implement me!");
+    if (!driver) {
+        return -EINVAL;
+    }
+
+    int error = register_chdev(driver->major, driver->name, &tty_fops);
+    if (error < 0) {
+        return error;
+    }
+
+    list_add_tail(&tty_drivers, &driver->list);
+    return 0;
 }
 
-void tty_register_ldisc(struct tty *tty, int num, struct tty_ldisc *ldisc)
+int tty_register_ldisc(int ldsic_num, struct tty_ldisc *ldisc)
 {
-    panic("implement me!");
+    if (ldsic_num < 0 || ldsic_num >= NR_LDISC || !ldisc) {
+        return -EINVAL;
+    }
+
+    g_ldiscs[ldsic_num] = *ldisc;
+    return 0;
 }
 
 // ----------------------------------------------------------------------------
+
+extern void init_n_tty(void);
+extern void init_serial(void);
+extern void init_console(const struct boot_info *info);
+extern void init_kb(const struct boot_info *info);
+
+void init_tty(const struct boot_info *info)
+{
+    list_init(&tty_drivers);
+
+    init_n_tty();
+    init_serial();
+    init_console(info);
+    init_kb(info);
+}
 
 extern struct tty_driver console_driver;
 extern struct tty_driver serial_driver;
@@ -121,11 +148,10 @@ static int tty_open(struct inode *inode, struct file *file)
     tty->index = index;
     snprintf(tty->name, countof(tty->name), "%s%d", tty->driver.name, index);
 
-    tty->driver.default_termios = default_termios; // TODO: move this to driver init
-    tty->termios = tty->driver.default_termios;
+    tty->termios = tty_default_termios;
 
     // open line discipline
-    tty->ldisc = g_ldiscs[N_TTY];
+    tty->ldisc = &g_ldiscs[N_TTY];
     if (!tty->ldisc->open) {
         return -ENXIO;
     }
@@ -148,7 +174,7 @@ static int tty_open(struct inode *inode, struct file *file)
 
     // TODO: this prints a blank line sometimes...
     char buf[64];
-    snprintf(buf, sizeof(buf), "%s\n", tty->name);
+    snprintf(buf, sizeof(buf), "opened %s\n", tty->name);
     tty->ldisc->write(tty, buf, strlen(buf));
 
 open_done:

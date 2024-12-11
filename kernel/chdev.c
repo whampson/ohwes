@@ -24,7 +24,6 @@
 #include <ohwes.h>
 
 struct chdev {
-    uint16_t major;
     const char *name;
     struct file_ops *fops;
 };
@@ -37,12 +36,7 @@ struct file_ops chdev_ops = {
 
 extern struct file_ops tty_fops;
 
-struct chdev g_chdevs[MAX_CHDEV] =
-{
-    { .major = 0, },    // position-dependent; major must match index!
-    { .major = TTY_MAJOR,  .fops = &tty_fops, .name = "tty",  },
-    { .major = TTYS_MAJOR, .fops = &tty_fops, .name = "ttyS", },
-};
+struct chdev g_chdevs[MAX_CHDEV] = { };
 
 struct inode g_chdev_inodes[MAX_CHDEV_INODES] =
 {
@@ -60,6 +54,21 @@ struct inode g_chdev_inodes[MAX_CHDEV_INODES] =
     { .device = 0 },    // position-independent; end sentinel is device=0
 };
 
+int register_chdev(uint16_t major, const char *name, struct file_ops *fops)
+{
+    if (major == 0 || major >= MAX_CHDEV || !name || !fops) {
+        return -EINVAL;
+    }
+
+    if (g_chdevs[major].fops && g_chdevs[major].fops != fops) {
+        return -EBUSY;
+    }
+
+    g_chdevs[major].name = name;
+    g_chdevs[major].fops = fops;
+    return 0;
+}
+
 struct file_ops * get_chdev_fops(dev_t device)
 {
     uint16_t major = _DEV_MAJ(device);
@@ -68,10 +77,6 @@ struct file_ops * get_chdev_fops(dev_t device)
     }
 
     struct chdev *chdev = &g_chdevs[major];
-    if (chdev->major != major) {
-        return NULL;
-    }
-
     return chdev->fops;
 }
 
