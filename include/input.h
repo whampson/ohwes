@@ -26,12 +26,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define isctrl(k)               (((k) == KEY_LCTRL || (k) == KEY_RCTRL))
-#define isshift(k)              (((k) == KEY_LSHIFT || (k) == KEY_RSHIFT))
-#define isalt(k)                (((k) == KEY_LALT || (k) == KEY_RALT))
-#define ismeta(k)               (((k) == KEY_LWIN || (k) == KEY_RWIN))
-#define iskpnum(k)              ((k) >= KEY_KP0 && (k) <= KEY_KP9)
-#define isfnkey(k)              ((k) >= KEY_F1 && (k) <= KEY_F12)
+#define is_ctrl(k)              (((k) == KEY_LCTRL || (k) == KEY_RCTRL))
+#define is_shift(k)             (((k) == KEY_LSHIFT || (k) == KEY_RSHIFT))
+#define is_alt(k)               (((k) == KEY_LALT || (k) == KEY_RALT))
+#define is_meta(k)              (((k) == KEY_LWIN || (k) == KEY_RWIN))
+#define is_kpnum(k)             ((k) >= KEY_KP0 && (k) <= KEY_KP9)
+#define is_fnkey(k)             ((k) >= KEY_F1 && (k) <= KEY_F12)
+#define is_sysrq(k)             ((k) == KEY_SYSRQ)
+
 struct key_event
 {
     uint16_t keycode;

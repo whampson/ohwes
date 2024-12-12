@@ -57,19 +57,19 @@ struct kb {
     bool sc3_support;           // can do scancode set 3
 
     // scancode state
-    bool e0;
-    bool e1;
+    bool e0     : 1;
+    bool e1     : 1;
 
     // keyboard state
     int ctrl;
     int alt;
     int shift;
     int meta;
-    bool numlk;
-    bool capslk;
-    bool scrlk;
-    int altcode;
-    bool has_altcode;
+    int numlk;
+    int capslk;
+    int scrlk;
+    int sysrq;
+    char altchar;
 
     // // key event buffer
     // struct ring eventq;            // TODO: make queue w/ generic type
@@ -83,14 +83,17 @@ struct kb {
 
 struct kb g_kb = { };
 
-static const char g_keymap[256];
-static const char g_keymap_shift[128];
-static const uint8_t g_scanmap1[128];
-static const uint8_t g_scanmap1_e0[128];
+static const char keymap[256];
+static const char keymap_shift[128];
+static const uint8_t scanmap[128];
+static const uint8_t scanmap_e0[128];
 
 #if PRINT_EVENTS
 static const char * g_keynames[122];
 #endif
+
+static void sysrq(char c);
+static void hard_reset(void);
 
 static void update_leds(void);
 static void kb_interrupt(int irq_num);
@@ -136,7 +139,6 @@ void init_kb(const struct boot_info *info)
     // initialize keyboard
     kb_selftest();
     kb_ident();
-    update_leds();
     kb_typematic(TYPEMATIC_BYTE);
 
     // detect supported scancode sets
@@ -157,6 +159,8 @@ void init_kb(const struct boot_info *info)
     ps2_cmd(PS2_CMD_P1ON);
     kb_sendcmd(PS2KB_CMD_SCANON);
     ps2_flush();
+
+    update_leds();
 
     // register ISR and unmask IRQ1 on the PIC
     irq_register(IRQ_KEYBOARD, kb_interrupt);
@@ -297,7 +301,7 @@ static void kb_interrupt(int irq_num)
     }
 
     // translate the scancode to a virtual key
-    key = (g_kb.e0) ? g_scanmap1_e0[sc] : g_scanmap1[sc];
+    key = (g_kb.e0) ? scanmap_e0[sc] : scanmap[sc];
 
     // end E0 escape sequence (should only be one byte)
     if (g_kb.e0) {
@@ -366,12 +370,17 @@ static void kb_interrupt(int irq_num)
     handle_modifier(key, shift, KEY_LSHIFT, KEY_RSHIFT);
     handle_modifier(key, alt, KEY_LALT, KEY_RALT);
     handle_modifier(key, meta, KEY_LWIN, KEY_RWIN);
+    handle_modifier(key, sysrq, KEY_SYSRQ, 0);
 
     // submit alt code upon release of ALT key
-    if (isalt(key) && release && g_kb.has_altcode) {
-        kb_putq(g_kb.altcode);
-        g_kb.has_altcode = false;
-        g_kb.altcode = 0;
+    if (is_alt(key) && release && g_kb.altchar) {
+        kb_putq(g_kb.altchar);
+        g_kb.altchar = 0;
+        goto record_key_event;
+    }
+
+    // we don't care about key break events after this point
+    if (release) {
         goto record_key_event;
     }
 
@@ -380,46 +389,35 @@ static void kb_interrupt(int irq_num)
     //
 
     // CTRL+ALT+DEL: system reboot
-    switch (key) {
-        case KEY_DELETE:
-        case KEY_KPDOT:
-            if (g_kb.ctrl && g_kb.alt) {
-                ps2_cmd(PS2_CMD_SYSRESET);
-                for (;;);
-            }
-            break;
+    if (g_kb.ctrl && g_kb.alt && (key == KEY_DELETE || key == KEY_KPDOT)) {
+        hard_reset();
+        panic("unable to shut down -- please hard-reset your computer");
+        for (;;);
     }
 
 #ifdef DEBUG
     if (g_kb.ctrl && g_kb.alt) {
-        if (isfnkey(key)) {
+        if (is_fnkey(key)) {
             g_crash_kernel = key - KEY_F1 + 1;
         }
     }
 #endif
 
-    // TODO: CTRL+SCRLK = print kernel output buffer
-    // TOOD: SYSRQ = something cool (debug menu?)
+    // TODO: CTRL+SCRLK = print kernel output buffer?
+
 
     // ALT+<FN>: switch terminal
-    if (g_kb.alt && !g_kb.ctrl) {
-        if (isfnkey(key) && !release) {
-            int cons = key - KEY_F1 + 1;
-            switch_console(cons);
-            goto done;
-        }
+    if (g_kb.alt && !g_kb.ctrl && is_fnkey(key)) {
+        int cons = key - KEY_F1 + 1;
+        assert(cons >= 1 && cons <= 12);
+        switch_console(cons);
+        goto done;
     }
 
     // ALT+<NUMPAD>: handle character code entry (if NumLk on)
-    if (g_kb.alt && !release && iskpnum(key)) {
-        g_kb.has_altcode = true;
-        g_kb.altcode *= 10;
-        g_kb.altcode += (key - KEY_KP0);
-        goto record_key_event;
-    }
-
-    // end if it's a break event since they don't generate characters
-    if (release) {
+    if (g_kb.alt && is_kpnum(key)) {
+        g_kb.altchar *= 10;
+        g_kb.altchar += (key - KEY_KP0);
         goto record_key_event;
     }
 
@@ -429,8 +427,8 @@ static void kb_interrupt(int irq_num)
 
     // map key to character
     c = (g_kb.shift && key >= 0x20 && key <= 0x60)
-        ? g_keymap_shift[key & 0x7F]
-        : g_keymap[key & 0xFF];
+        ? keymap_shift[key & 0x7F]
+        : keymap[key & 0xFF];
     if (c == '\0') {
         goto record_key_event;
     }
@@ -465,7 +463,6 @@ static void kb_interrupt(int irq_num)
             case KEY_F10:   s = "\e[21~"; break;
             case KEY_F11:   s = "\e[23~"; break;
             case KEY_F12:   s = "\e[24~"; break;
-            // TODO: sysrq? pause? break?
             default:        s = "\0"; break;
         }
         while (*s != '\0') {
@@ -494,6 +491,12 @@ static void kb_interrupt(int irq_num)
         }
     }
 
+    // sysrq handling
+    if (g_kb.sysrq) {
+        sysrq(c);
+        goto done;
+    }
+
     // handle caps lock
     if (g_kb.capslk && !g_kb.alt) {
         if (isupper(c)) {
@@ -504,12 +507,10 @@ static void kb_interrupt(int irq_num)
         }
     }
 
-    // handle alt
+    // put the character in the queue
     if (g_kb.alt) {
         kb_putq('\e');
     }
-
-    // put the character in the queue
     kb_putq(c);
 
 record_key_event:
@@ -533,6 +534,34 @@ done:
     // re-enable keyboard interrupts from controller
     ps2_cmd(PS2_CMD_P1ON);
     restore_flags(flags);
+}
+
+static void sysrq(char c)
+{
+    switch (c) {
+        case 'b':   // reboot
+            hard_reset();
+            break;
+        case 'c':   // crash
+            load_ss(0x00);  // TODO: CTRL+ALT+DEL does not work here!
+            break;
+        case 'h':   // help
+            kprint("\nSYSRQ:\n");
+            kprint("  b: hard reboot\n");
+            kprint("  c: crash\n");
+            kprint("  h: help\n");
+            break;
+    }
+}
+
+static void hard_reset(void)
+{
+    // first, try resetting via the PS/2 controller
+    ps2_cmd(PS2_CMD_SYSRESET);
+
+    // if that didn't work, triple fault
+    struct table_desc idt_desc = { .limit = 0, .base = 0 };
+    __lidt(idt_desc);   // yoink away the IDT :D
 }
 
 static bool kb_selftest(void)
@@ -775,7 +804,7 @@ void kb_wrport(uint8_t data)
     restore_flags(flags);
 }
 
-static const char g_keymap[256] =
+static const char keymap[256] =
 {
 /*00-0F*/  0,0,0,0,0,0,0,0,0x7F,'\t','\r',0xE0,0xE0,0xE0,0xE0,0xE0,
 /*10-1F*/  0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0xE0,0,0,0,0,'\e',0,0,0,0,
@@ -795,7 +824,7 @@ static const char g_keymap[256] =
 /*F0-FF*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 };
 
-static const char g_keymap_shift[128] =
+static const char keymap_shift[128] =
 {
 /*00-0F*/  0,0,0,0,0,0,0,0,0x7F,'\t','\r',0,0,0,0,0,
 /*10-1F*/  0,0,0,0,0,0,0,0,0,0,0,'\e',0,0,0,0,
@@ -807,7 +836,7 @@ static const char g_keymap_shift[128] =
 /*70-7F*/  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 };
 
-static const uint8_t g_scanmap1[128] =
+static const uint8_t scanmap[128] =
 {
 /*00-07*/  0,KEY_ESCAPE,KEY_1,KEY_2,KEY_3,KEY_4,KEY_5,KEY_6,
 /*08-0F*/  KEY_7,KEY_8,KEY_9,KEY_0,KEY_MINUS,KEY_EQUAL,KEY_BACKSPACE,KEY_TAB,
@@ -827,7 +856,7 @@ static const uint8_t g_scanmap1[128] =
 /*78-7F*/  0,0,0,0,0,0,0,0,
 };
 
-static const uint8_t g_scanmap1_e0[128] =
+static const uint8_t scanmap_e0[128] =
 {
 /*00-07*/  0,0,0,0,0,0,0,0,
 /*08-0F*/  0,0,0,0,0,0,0,0,
