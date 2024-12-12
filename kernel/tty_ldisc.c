@@ -197,7 +197,7 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
         if (L_ECHO(tty)) {
             if (L_ECHOCTL(tty) && iscntrl(c)) {
                 tty->driver.write_char(tty, '^');
-                tty->driver.write_char(tty, c + 0x40);
+                tty->driver.write_char(tty, c ^ 0x40);
             }
             else {
                 tty->driver.write_char(tty, c);

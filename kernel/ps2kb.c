@@ -478,7 +478,7 @@ static void kb_interrupt(int irq_num)
     if (g_kb.ctrl) {
         switch (key) {
             case KEY_2: c = '@'; break;
-            case KEY_7: c = '^'; break;
+            case KEY_6: c = '^'; break;
             case KEY_LEFTBRACKET: c = '['; break;
             case KEY_BACKSLASH: c = '\\'; break;
             case KEY_RIGHTBRACKET: c = ']'; break;
