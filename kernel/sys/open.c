@@ -20,58 +20,13 @@
  */
 
 #include <config.h>
-#include <ohwes.h>
+#include <chdev.h>
 #include <errno.h>
+#include <pool.h>
+#include <ohwes.h>
+#include <string.h>
 #include <syscall.h>
 #include <task.h>
-#include <chdev.h>
-#include <string.h>
-
-#define MAX_PATH    256
-
-struct file fd_pool[64];    // TODO: dynamically alloc
-uint64_t fd_mask;
-
-static struct file * find_next_fd(void)
-{
-    struct file *file;
-    int index = -1;
-
-    if (fd_mask == 0) {
-        index = 0;
-    }
-    else {
-        // TODO: bit scan forward
-        uint64_t mask = fd_mask;
-        for (int i = 0; i < countof(fd_pool); i++, mask >>= 1) {
-            if (mask & 1) {
-                index = i;
-                break;
-            }
-        }
-    }
-
-    if (index < 0 || index >= countof(fd_pool)) {
-        return NULL;
-    }
-
-    file = &fd_pool[index];
-    zeromem(file, sizeof(struct file));
-
-    fd_mask |= (1ULL << index);
-    return file;
-}
-
-static void free_fd(struct file *file)
-{
-    // lol this is the worst
-    for (int i = 0; i < countof(fd_pool); i++) {
-        if (file == &fd_pool[i]) {
-            fd_mask &= (1ULL << i);
-            break;
-        }
-    }
-}
 
 __syscall int sys_open(const char *name, int flags)
 {
@@ -101,13 +56,13 @@ __syscall int sys_open(const char *name, int flags)
         goto done;
     }
 
-    file = find_next_fd();
-    if (file == NULL) {
+    ret = alloc_fd(&file);
+    if (ret == ENOMEM) {
         ret = -EMFILE;  // Too many open files in system
         goto done;
     }
 
-    inode = find_file(file, name);
+    inode = find_inode(file, name);
     if (!inode) {
         ret = -ENOENT;  // File not found
         goto done;

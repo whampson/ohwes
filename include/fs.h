@@ -61,6 +61,9 @@ struct file {
 };
 
 
-struct inode * find_file(struct file *file, const char *name);
+int alloc_fd(struct file **file);
+void free_fd(struct file *file);
+
+struct inode * find_inode(struct file *file, const char *name);
 
 #endif // __FS_H

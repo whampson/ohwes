@@ -40,6 +40,8 @@ static struct termios tty_default_termios = {
     .c_lflag = ECHO | ECHOCTL
 };
 
+static void default_write_char(struct tty *tty, char c);
+
 //
 // tty file operations
 //
@@ -61,6 +63,14 @@ int tty_register_driver(struct tty_driver *driver)
 {
     if (!driver) {
         return -EINVAL;
+    }
+
+    if (!driver->write) {
+        return -EINVAL;
+    }
+
+    if (!driver->write_char) {
+        driver->write_char = default_write_char;
     }
 
     int error = register_chdev(driver->major, driver->name, &tty_fops);
@@ -259,4 +269,9 @@ static int tty_ioctl(struct file *file, unsigned int num, unsigned long arg)
 {
     // TODO: forward ioctl to ldisc and driver
     return -ENOSYS;
+}
+
+static void default_write_char(struct tty *tty, char c)
+{
+    tty->driver.write(tty, &c, 1);
 }

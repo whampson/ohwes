@@ -364,8 +364,9 @@ struct com_port {
     bool open;                  // port is in use
     uint8_t num;                // port number
     uint16_t io_port;           // I/O base port number
+    struct tty *tty;            // TTY
 
-    struct ring oq;       // --> to device
+    struct ring oq;             // --> to device
     char _obuf[COM_BUFFER_SIZE];
 
     // register shadows
@@ -445,7 +446,13 @@ static int serial_open(struct tty *tty)
         return ret;
     }
 
-    return com_open(com);
+    ret = com_open(com);
+    if (ret < 0) {
+        return ret;
+    }
+
+    com->tty = tty;
+    return 0;
 }
 
 static int serial_close(struct tty *tty)
@@ -457,6 +464,7 @@ static int serial_close(struct tty *tty)
         return ret;
     }
 
+    com->tty = NULL;
     return com_close(com);
 }
 
@@ -692,8 +700,7 @@ static void com_interrupt(struct com_port *com)
                 assert(com->lsr.data_ready);
                 while (com->lsr.data_ready) {
                     data = com_read(com, COM_REG_RX);
-                    // TODO: put into line discipline
-                    console_write(get_console(com->num), &data, 1);
+                    com->tty->ldisc->recv(com->tty, &data, 1);
                     com->lsr._value = com_read(com, COM_REG_LSR);
                 }
                 break;

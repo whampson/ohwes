@@ -19,6 +19,7 @@
  * =============================================================================
  */
 
+#include <errno.h>
 #include <kernel.h>
 #include <fs.h>
 #include <list.h>
@@ -27,6 +28,7 @@
 
 #define MAX_NR_INODES       64
 #define MAX_NR_DENTRIES     64
+#define MAX_NR_OPEN         64
 
 static struct list_node inodes;
 static struct inode _inode_pool[MAX_NR_INODES];
@@ -35,6 +37,9 @@ static pool_t inode_pool;
 static struct list_node dentries;
 static struct dentry _dentry_pool[MAX_NR_DENTRIES];
 static pool_t dentry_pool;
+
+static struct file _file_pool[MAX_NR_OPEN];
+static pool_t file_pool;
 
 extern struct file_ops chdev_ops;
 
@@ -50,6 +55,11 @@ void init_fs(void)
     dentry_pool = create_pool("dentries", _dentry_pool, MAX_NR_DENTRIES, sizeof(struct dentry));
     if (!inode_pool) {
         panic("failed to create dentry pool!");
+    }
+
+    file_pool = create_pool("files", _file_pool, MAX_NR_OPEN, sizeof(struct file));
+    if (!inode_pool) {
+        panic("failed to create file pool!");
     }
 
     // create TTY dentries
@@ -85,7 +95,7 @@ void init_fs(void)
     }
 }
 
-struct inode * find_file(struct file *file, const char *name)
+struct inode * find_inode(struct file *file, const char *name)
 {
     struct dentry *dentry;
     struct inode *inode;
@@ -108,4 +118,29 @@ struct inode * find_file(struct file *file, const char *name)
     inode = dentry->inode;
     file->fops = inode->fops;
     return inode;
+}
+
+
+int alloc_fd(struct file **file)
+{
+    if (!file) {
+        return -EINVAL;
+    }
+
+    struct file *f = pool_alloc(file_pool);
+    if (!f) {
+        return -ENOMEM;
+    }
+
+    *file = f;
+    return 0;
+}
+
+void free_fd(struct file *file)
+{
+    if (!file) {
+        return;
+    }
+
+    pool_free(file_pool, file);
 }
