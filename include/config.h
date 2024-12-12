@@ -59,14 +59,6 @@
 #endif
 
 //
-// Counts of Things
-// ----------------------------------------------------------------------------
-
-#define NR_CONSOLE          7           // number of virtual consoles
-#define NR_TTY              NR_CONSOLE  // number of TTY devices
-#define NR_SERIAL           4           // number of serial ports
-
-//
 // VGA Stuff
 // ----------------------------------------------------------------------------
 // http://www.ctyme.com/intr/rb-0069.htm

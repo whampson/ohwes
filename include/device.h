@@ -32,9 +32,5 @@ typedef uint32_t dev_t;     // device id
 #define __mkdev(maj,min)    ((((min) & 0xFFFF) << 16) | ((maj) & 0xFFFF))
 
 #define TTY_MAJOR           1
-#define TTYS_MAJOR          2
-// #define KBD_MAJOR           3
-// #define RTC_MAJOR           4
-// #define PCSPK_MAJOR         5
 
 #endif // __DEVICE_H

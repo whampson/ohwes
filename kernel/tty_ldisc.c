@@ -20,10 +20,12 @@
  */
 
 #include <config.h>
+#include <ctype.h>
 #include <errno.h>
 #include <interrupt.h>
 #include <kernel.h>
 #include <pool.h>
+#include <queue.h>
 #include <tty.h>
 
 //
@@ -39,7 +41,7 @@ static size_t n_tty_recv_room(struct tty *);
 static void n_tty_clear(struct tty *tty);
 
 static struct tty_ldisc n_tty = {
-    .ldisc_num = N_TTY,
+    .disc = N_TTY,
     .name = "n_tty",
     .open = n_tty_open,
     .close = n_tty_close,
@@ -56,16 +58,10 @@ struct n_tty_ldisc_data {
     struct ring iring;
     char _iring_buf[TTY_BUFFER_SIZE];
 };
-
-static struct n_tty_ldisc_data _n_tty_data_pool[NR_TTY];
-static pool_t n_tty_data_pool;
+static struct n_tty_ldisc_data ldisc_data[NR_TTY];
 
 void init_n_tty(void)
 {
-    n_tty_data_pool = create_pool(
-        "n_tty_data", _n_tty_data_pool,
-        NR_TTY, sizeof(struct n_tty_ldisc_data));
-
     if (tty_register_ldisc(N_TTY, &n_tty)) {
         panic("unable to register N_TTY line discipline!");
     }
@@ -77,11 +73,7 @@ static int n_tty_open(struct tty *tty)
         return -EINVAL;
     }
 
-    struct n_tty_ldisc_data *data = pool_alloc(n_tty_data_pool);
-    if (!data) {
-        panic("unable to allocate N_TTY line discipline data from pool");
-    }
-
+    struct n_tty_ldisc_data *data = &ldisc_data[_DEV_MIN(tty->device)];
     ring_init(&data->iring, data->_iring_buf, TTY_BUFFER_SIZE);
     tty->ldisc_data = data;
     return 0;
@@ -194,7 +186,6 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
 
     uint32_t flags;
     struct n_tty_ldisc_data *ldisc_data;
-
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
 
     for (int i = 0; i < count; i++) {
@@ -202,6 +193,15 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
         if (ring_full(&ldisc_data->iring)) {
             tty->driver.write_char(tty, '\a');  // beep!
             break;
+        }
+        if (L_ECHO(tty)) {
+            if (L_ECHOCTL(tty) && iscntrl(c)) {
+                tty->driver.write_char(tty, '^');
+                tty->driver.write_char(tty, c + 0x40);
+            }
+            else {
+                tty->driver.write_char(tty, c);
+            }
         }
         if (c == '\r') {
             if (I_IGNCR(tty)) {

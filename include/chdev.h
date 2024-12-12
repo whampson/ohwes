@@ -31,7 +31,4 @@
 
 int register_chdev(uint16_t major, const char *name, struct file_ops *fops);
 
-struct file_ops * get_chdev_fops(dev_t device);
-struct inode * get_chdev_inode(uint16_t major, uint16_t minor); // TODO: dev_t or major/minor?
-
 #endif // __CHDEV_H

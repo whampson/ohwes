@@ -22,12 +22,28 @@
 #ifndef __FS_H
 #define __FS_H
 
+#include <list.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <device.h>
 
+#define DENTRY_NAME_LENGTH  32
+
+#define MODE_CHRDEV     (1 << 0)
+typedef uint32_t mode_t;
+
 struct inode {
-    uint32_t device;
+    mode_t mode;
+    dev_t device;
+
+    struct list_node inode_list;
+    struct file_ops *fops;
+};
+
+struct dentry {
+    char name[DENTRY_NAME_LENGTH];
+    struct list_node dentry_list;
+    struct inode *inode;
 };
 
 struct file;
@@ -41,7 +57,10 @@ struct file_ops {
 
 struct file {
     struct file_ops *fops;
-    void *private_data;
+    void *private_data;     // TODO: needed?
 };
+
+
+struct inode * find_file(struct file *file, const char *name);
 
 #endif // __FS_H

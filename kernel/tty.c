@@ -30,13 +30,14 @@
 #include <tty.h>
 
 static struct list_node tty_drivers;                // linked list of TTY drivers
-static struct tty_ldisc g_ldiscs[NR_LDISC] = { };   // TTY line disciplines
+static struct tty_ldisc ldiscs[NR_LDISC] = { };     // TTY line disciplines
+static struct tty ttys[NR_TTY] = { };               // TTY structs
 
 static struct termios tty_default_termios = {
-    .c_line = N_TTY,
+    .c_line = N_TTY,        // TODO: necessary?
     .c_iflag = ICRNL,
     .c_oflag = OPOST | ONLCR,
-    .c_lflag = ECHO
+    .c_lflag = ECHO | ECHOCTL
 };
 
 //
@@ -56,8 +57,6 @@ static struct file_ops tty_fops = {
     .ioctl = tty_ioctl,
 };
 
-struct tty g_ttys[NR_TTY + NR_SERIAL];
-
 int tty_register_driver(struct tty_driver *driver)
 {
     if (!driver) {
@@ -69,7 +68,7 @@ int tty_register_driver(struct tty_driver *driver)
         return error;
     }
 
-    list_add_tail(&tty_drivers, &driver->list);
+    list_add_tail(&tty_drivers, &driver->driver_list);
     return 0;
 }
 
@@ -79,7 +78,22 @@ int tty_register_ldisc(int ldsic_num, struct tty_ldisc *ldisc)
         return -EINVAL;
     }
 
-    g_ldiscs[ldsic_num] = *ldisc;
+    ldiscs[ldsic_num] = *ldisc;
+    return 0;
+}
+
+int get_tty(dev_t device, struct tty **tty)
+{
+    if (_DEV_MAJ(device) != TTY_MAJOR || !tty) {
+        return -EINVAL;
+    }
+
+    int index = _DEV_MIN(device);
+    if (index < 1 || index >= NR_TTY) {
+        return -ENODEV;
+    }
+
+    *tty = &ttys[index];
     return 0;
 }
 
@@ -94,75 +108,60 @@ void init_tty(const struct boot_info *info)
 {
     list_init(&tty_drivers);
 
+    for (int i = 1; i < NR_TTY; i++) {
+        ttys[i].device = __mkdev(TTY_MAJOR, i);
+    }
+
     init_n_tty();
     init_serial();
     init_console(info);
     init_kb(info);
 }
 
-extern struct tty_driver console_driver;
-extern struct tty_driver serial_driver;
-
-static int tty_open(struct inode *inode, struct file *file)
+int do_tty_open(struct tty *tty)
 {
     int ret;
-    struct tty *tty;
-    uint16_t index;
-
-    if (!inode) {
-        return -EINVAL;
-    }
-
-    tty = NULL;
-    switch (_DEV_MAJ(inode->device)) {
-        case TTY_MAJOR:
-            index = _DEV_MIN(inode->device);
-            assert(index > 0); // TODO: tty0 should represent current process's TTY
-            if ((index - 1) >= NR_TTY) {
-                return -ENXIO;
-            }
-            tty = &g_ttys[index - 1];
-            tty->driver = console_driver;  // TODO: get from tty_drivers list
-            break;
-        case TTYS_MAJOR:
-            index = _DEV_MIN(inode->device);
-            if (index >= NR_SERIAL) {
-                return -ENXIO;
-            }
-            tty = &g_ttys[NR_TTY + index];
-            tty->driver = serial_driver;   // TODO: get from tty_drivers list
-            break;
-    }
-
-    if (!tty) {
-        panic("invalid tty device!");
-        return -ENXIO;
-    }
+    struct tty_driver *driver;
+    struct list_node *n;
 
     if (tty->open) {
-        ret = 0;
-        goto open_done;
+        return 0;       // TTY already open, no action needed
     }
 
-    tty->major = _DEV_MAJ(inode->device);
-    tty->index = index;
-    snprintf(tty->name, countof(tty->name), "%s%d", tty->driver.name, index);
-
+    // associate termios
     tty->termios = tty_default_termios;
 
-    // open line discipline
-    tty->ldisc = &g_ldiscs[N_TTY];
+    // associate and open line discipline
+    tty->ldisc = &ldiscs[N_TTY];
     if (!tty->ldisc->open) {
-        return -ENXIO;
+        return -ENOSYS; // no open fn registered on line discipline! (panic?)
     }
     ret = tty->ldisc->open(tty);
     if (ret) {
         return ret;
     }
 
+    // locate driver for device
+    driver = NULL;
+    for (list_iterator(&tty_drivers, n)) {
+        struct tty_driver *d = list_item(n, struct tty_driver, driver_list);
+        if (_DEV_MAJ(tty->device) != d->major) {
+            continue;
+        }
+        if (_DEV_MIN(tty->device) >= d->minor_start &&
+            _DEV_MIN(tty->device) < d->minor_start + d->count) {
+            driver = d;
+            break;
+        }
+    }
+    if (!driver) {
+        return -ENXIO;  // no TTY driver registered for device!
+    }
+    tty->driver = *driver;
+
     // open the tty driver
     if (!tty->driver.open) {
-        return -ENXIO;
+        return -ENOSYS;
     }
     ret = tty->driver.open(tty);
     if (ret) {
@@ -172,20 +171,38 @@ static int tty_open(struct inode *inode, struct file *file)
     // TODO: need to ensure things get closed if something fails
     // after something else has been opened.
 
-    // TODO: this prints a blank line sometimes...
-    char buf[64];
-    snprintf(buf, sizeof(buf), "opened %s\n", tty->name);
-    tty->ldisc->write(tty, buf, strlen(buf));
+    tty->open = true;
+    return ret;
+}
 
-open_done:
+static int tty_open(struct inode *inode, struct file *file)
+{
+    int ret;
+    struct tty *tty;
+
+    if (!inode) {
+        return -EINVAL;
+    }
+
+    // locate TTY device
+    ret = get_tty(inode->device, &tty);
+    if (ret < 0) {
+        return -ENODEV; // not a TTY device
+    }
+
+    // open the TTY device
+    ret = do_tty_open(tty);
+    if (ret < 0) {
+        return ret;
+    }
+
     // set file state
     if (file) {
         file->fops = &tty_fops;
         file->private_data = tty;
     }
 
-    tty->open = true;
-    return ret;
+    return 0;
 }
 
 static int tty_close(struct file *file)

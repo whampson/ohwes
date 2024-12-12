@@ -8,6 +8,7 @@ SOURCES := \
     console.c \
     cpu.c \
     crash.c \
+    fs.c \
     i8042.c \
     irq.c \
     list.c \

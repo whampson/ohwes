@@ -38,6 +38,7 @@
 #include <syscall.h>
 
 extern void init_cpu(const struct boot_info *info);
+extern void init_fs(void);
 extern void init_mm(const struct boot_info *info);
 extern void init_pic(void);
 extern void init_timer(void);
@@ -75,7 +76,7 @@ __fastcall void start_kernel(const struct boot_info *info)
     memcpy(g_boot, info, sizeof(struct boot_info));
     info = g_boot;  // reassign local ptr so we don't use the wrong one below
 
-    // init the output terminal by printing something to it
+    // init the early terminal by printing something to it
     kprint("\n\e[0;1m%s %s '%s'\n", OS_NAME, OS_VERSION, OS_MONIKER);
     kprint("built %s %s using GCC %s by %s\e[0m\n",
         __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
@@ -97,12 +98,11 @@ __fastcall void start_kernel(const struct boot_info *info)
     irq_register(IRQ_RTC, debug_interrupt);   // CTRL+ALT+FN to crash kernel
 #endif
 
-    // get the console and tty working for real
-    init_tty(info);
+    // setup the file system
+    init_fs();
 
-    // init_fs();
-    // init_tasks();
-    // TODO: basic tests
+    // get the console and tty subsystem working for real
+    init_tty(info);
 
     kprint("entering user mode...\n");
     usermode(__phys_to_virt(USER_STACK));

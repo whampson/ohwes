@@ -23,7 +23,7 @@
 #include <pool.h>
 #include <errno.h>
 
-#define DEBUG_POOL  1
+#define CHATTY_POOL  1
 
 struct chunk {
     struct chunk *next;     // next chunk in chain
@@ -83,7 +83,7 @@ pool_t create_pool(const char *name, void *addr, size_t capacity, size_t item_si
     chunk->next = NULL;
     p->valid = true;
 
-#if DEBUG_POOL
+#if CHATTY_POOL
     kprint("pool: '%s' created: id=%d range=0x%x-0x%x capacity=%d chunk_size=0x%x\n",
         name, get_pool_index(p), get_pool_base(p), get_pool_limit(p), capacity,
         get_chunk_size(p));
@@ -103,7 +103,7 @@ int destroy_pool(pool_t pool)
     zeromem(p, sizeof(struct pool));
     p->valid = false;
 
-#if DEBUG_POOL
+#if CHATTY_POOL
     kprint("pool: '%s' destroyed\n", get_pool_name(pool), get_pool_index(pool))
 #endif
 
@@ -123,7 +123,7 @@ void * pool_alloc(pool_t pool)
         return NULL;        // no more space! D:
     }
 
-#if DEBUG_POOL
+#if CHATTY_POOL
     kprint("pool: %s: chunk allocated at 0x%x\n", get_pool_name(p), free_chunk);
 #endif
 
@@ -148,7 +148,7 @@ int pool_free(pool_t pool, void *item)
     // TODO: could do some math here to ensure the ptr points to the actual data
     // and not the next chunk pointer... or some other chunk
 
-#if DEBUG_POOL
+#if CHATTY_POOL
     kprint("pool: %s: freed chunk at 0x%x\n", get_pool_name(pool), free_chunk);
 #endif
 

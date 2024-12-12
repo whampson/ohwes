@@ -31,6 +31,9 @@
 #include <queue.h>
 #include <tty.h>
 
+#define SERIAL_MIN          (NR_CONSOLE+1)
+#define SERIAL_MAX          (SERIAL_MIN+NR_SERIAL)
+
 //
 // TODO: ditch the 'COM' nomenclature?
 //  what could we use in favor? serial? ttyS? uart? rs232? rs?
@@ -396,13 +399,17 @@ static int serial_ioctl(struct tty *, unsigned int cmd, unsigned long arg);
 static size_t serial_write_room(struct tty *);
 
 struct tty_driver serial_driver = {
-    .major = TTYS_MAJOR,
-    .name = "serial",
+    .name = "ttyS",
+    .major = TTY_MAJOR,
+    .minor_start = SERIAL_MIN,
+    .count = NR_SERIAL,
     .open = serial_open,
     .close = serial_close,
     .ioctl = serial_ioctl,
     .write = serial_write,
     .write_room = serial_write_room,
+    .write_char = NULL, // TODO
+    .flush = NULL,      // TODO
 };
 
 static int tty_get_com(struct tty *tty, struct com_port **com)
@@ -411,14 +418,21 @@ static int tty_get_com(struct tty *tty, struct com_port **com)
         return -EINVAL;
     }
 
-    if (tty->major != TTYS_MAJOR) {
-        return -ENXIO;
-    }
-    if (tty->index < 0 || tty->index >= NR_SERIAL) {
-        return -ENXIO;
+    if (_DEV_MAJ(tty->device) != TTY_MAJOR) {
+        return -ENODEV; // not a TTY device
     }
 
-    *com = get_com(tty->index + 1);  // TODO: consistent indexing
+    int index = _DEV_MIN(tty->device);
+    if (index < SERIAL_MIN || index > SERIAL_MAX) {
+        return -ENODEV; // TTY device is not a COM port
+    }
+
+    struct com_port *c = get_com(index - SERIAL_MIN + 1);
+    if (!c) {
+        panic("device %d,%d is not a COM port", _DEV_MAJ(tty->device), index);
+    }
+
+    *com = c;
     return 0;
 }
 
@@ -449,6 +463,10 @@ static int serial_close(struct tty *tty)
 static int serial_write(struct tty *tty, const char *buf, size_t count)
 {
     struct com_port *com;
+
+    if (!buf) {
+        return -EINVAL;
+    }
 
     int ret = tty_get_com(tty, &com);
     if (ret < 0) {
@@ -517,7 +535,10 @@ static void init_com_port(int port)
 
 static struct com_port * get_com(int port)
 {
-    panic_assert(port > 0 && port <= NR_SERIAL);
+    if (port <= 0 || port > NR_SERIAL) {
+        return NULL;
+    }
+
     return &g_com[port - 1];
 }
 

@@ -31,6 +31,9 @@
 #include <paging.h>
 #include <x86.h>
 
+#define CONSOLE_MIN             1
+#define CONSOLE_MAX             NR_CONSOLE
+
 // TODO: need to make a distinction between a 'console':
 //   a character device that can receive input, transmit output and is
 //   physically connected to the computer (e.g. keyboard+vga or a serial device)
@@ -47,8 +50,6 @@ __data_segment static struct vga _vga = { .active_console = SYSTEM_CONSOLE };
 __data_segment struct vga *g_vga = &_vga;
 __data_segment struct console g_console[NR_CONSOLE] = { };
 
-extern struct tty *g_ttys;
-
 static int console_tty_open(struct tty *);
 static int console_tty_close(struct tty *);
 static int console_tty_ioctl(struct tty *, unsigned int cmd, unsigned long arg);
@@ -56,9 +57,11 @@ static int console_tty_write(struct tty *, const char *buf, size_t count);
 static void console_tty_write_char(struct tty *, char c);
 static size_t console_tty_write_room(struct tty *);
 
-struct tty_driver console_driver = {
+static struct tty_driver console_driver = {
+    .name = "tty",
     .major = TTY_MAJOR,
-    .name = "console",
+    .minor_start = CONSOLE_MIN,
+    .count = NR_CONSOLE,
     .open = console_tty_open,
     .close = console_tty_close,
     .ioctl = console_tty_ioctl,
@@ -68,27 +71,45 @@ struct tty_driver console_driver = {
     .flush = NULL,
 };
 
+static int tty_get_console(struct tty *tty, struct console **console)
+{
+    if (!tty || !console) {
+        return -EINVAL;
+    }
+
+    if (_DEV_MAJ(tty->device) != TTY_MAJOR) {
+        return -ENODEV; // not a TTY device
+    }
+
+    int index = _DEV_MIN(tty->device);
+    if (index < CONSOLE_MIN || index > CONSOLE_MAX) {
+        return -ENXIO;  // TTY device is not a console
+    }
+
+    struct console *cons = get_console(index);
+    if (!cons) {
+        panic("device %d,%d is not a console", _DEV_MAJ(tty->device), index);
+    }
+
+    *console = cons;
+    return 0;
+}
+
 static int console_tty_open(struct tty *tty)
 {
     struct console *cons;
 
-    if (!tty) {
-        return -EINVAL;
+    int ret = tty_get_console(tty, &cons);
+    if (ret < 0) {
+        return ret;
     }
 
-    if (tty->index < 0 || tty->index > NR_CONSOLE) {
-        panic("attempt to open a tty%d on nonexistent console!", tty->index);
-    }
-
-    cons = get_console(tty->index);
-    if (cons == NULL) {
-        return -ENXIO;  // invalid console
-    }
     if (cons->open) {
+        assert(cons->tty);
         return -EBUSY;  // console already open
     }
 
-    tty->driver_data = cons;
+    tty->driver_data = cons;    // TODO: necessary?
     cons->tty = tty;
     cons->open = true;
     return 0;
@@ -98,18 +119,14 @@ static int console_tty_close(struct tty *tty)
 {
     struct console *cons;
 
-    if (!tty) {
-        return -EINVAL;
+    int ret = tty_get_console(tty, &cons);
+    if (ret < 0) {
+        return ret;
     }
 
-    cons = get_console(tty->index);
-    if (cons == NULL) {
-        return -ENODEV;
-    }
-
-    cons->open = false;
     tty->driver_data = NULL;
     cons->tty = NULL;
+    cons->open = false;
     return 0;
 }
 
@@ -117,17 +134,16 @@ static int console_tty_write(struct tty *tty, const char *buf, size_t count)
 {
     struct console *cons;
 
-    if (!tty || !buf) {
+    if (!buf) {
         return -EINVAL;
     }
 
-    if (!tty->driver_data) {
-        return -ENXIO;
+    int ret = tty_get_console(tty, &cons);
+    if (ret < 0) {
+        return ret;
     }
 
-    // TODO: verify device driver data
-    cons = tty->driver_data;
-    int ret = console_write(cons, buf, count);
+    ret = console_write(cons, buf, count);
     if (tty->driver.flush) {
         tty->driver.flush(tty);
     }
@@ -148,11 +164,13 @@ static size_t console_tty_write_room(struct tty *tty)
 
 static void console_tty_write_char(struct tty *tty, char c)
 {
-    if (!tty || !tty->driver_data) {
+    struct console *cons;
+
+    int ret = tty_get_console(tty, &cons);
+    if (ret < 0) {
         return;
     }
 
-    struct console *cons = tty->driver_data;
     console_putchar(cons, c);
 }
 
@@ -287,6 +305,7 @@ void init_console(const struct boot_info *info)
     cons->cursor.x = cursor_x;
     cons->cursor.y = cursor_y;
     cons->cursor.shape = g_vga->orig_cursor_shape;
+    cons->framebuf = (void *) g_vga->fb_info.framebuf;
 
     // do a proper 'switch' to the initial virtual console
     int ret = switch_console(SYSTEM_CONSOLE);
@@ -362,7 +381,7 @@ void console_defaults(struct console *cons)
     save_console(cons);
 }
 
-extern int chdev_open(struct inode *inode, struct file *file);  // TEMP
+extern int do_tty_open(struct tty *tty);
 
 int switch_console(int num)
 {
@@ -375,6 +394,17 @@ int switch_console(int num)
 
     struct console *curr = current_console();
     struct console *next = get_console(num);
+    struct tty *tty = NULL;
+
+    if (get_tty(__mkdev(TTY_MAJOR, num), &tty)) {
+        panic("tty%d not found", num);
+    }
+    if (do_tty_open(tty)) {
+        panic("could not switch consoles -- unable to open tty%d", num);
+    }
+
+    curr->framebuf = get_console_fb(curr->number);
+    next->framebuf = get_console_fb(next->number);
 
     uint32_t pgdir_addr = 0;
     store_cr3(pgdir_addr);
@@ -413,17 +443,6 @@ int switch_console(int num)
 
     flush_tlb();
 
-    if (!next->open) {
-        struct inode *inode = get_chdev_inode(TTY_MAJOR, next->number);
-        if (!inode) {
-            panic("could not find inode for tty%d", next->number);
-        }
-        int status = chdev_open(inode, NULL);
-        if (status < 0) {
-            panic("tty%d failed to open with error %d", next->number, status);
-        }
-    }
-
     // update VGA state
     g_vga->active_console = curr->number;
     vga_blink_enable(curr);
@@ -445,6 +464,8 @@ struct console * current_console(void)
 
 struct console * get_console(int num)
 {
+    // 0 = current active console
+
     if (num < 0 || num > NR_CONSOLE) {
         return NULL;
     }
