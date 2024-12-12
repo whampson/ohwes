@@ -96,9 +96,7 @@ __fastcall void handle_irq(struct iregs *regs)
     bool handled = false;
 
     irq_num = ~regs->vec_num;
-    if (!IRQ_VALID(irq_num)) {
-        kprint("irq: got interrupt from unknown device IRQ %d", irq_num);
-    }
+    pic_eoi(irq_num);
 
     handled = false;
     for (int i = 0; i < MAX_ISR; i++) {
@@ -112,6 +110,4 @@ __fastcall void handle_irq(struct iregs *regs)
     if (!handled) {
         crash(regs);
     }
-
-    pic_eoi(irq_num);
 }

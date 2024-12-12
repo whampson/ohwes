@@ -105,6 +105,9 @@ static bool kb_selftest(void);
 static bool kb_setleds(uint8_t leds);
 static bool kb_typematic(uint8_t typ);
 
+static void kb_disable(void);
+static void kb_enable(void);
+
 static bool kb_sendcmd(uint8_t cmd);
 static uint8_t kb_rdport(void);
 static void kb_wrport(uint8_t data);
@@ -125,7 +128,7 @@ void init_kb(const struct boot_info *info)
 
     // disable keyboard
     ps2_flush();
-    ps2_cmd(PS2_CMD_P1OFF);
+    kb_disable();
     kb_sendcmd(PS2KB_CMD_SCANOFF);
     ps2_flush();
 
@@ -156,7 +159,7 @@ void init_kb(const struct boot_info *info)
     }
 
     // re-enable keyboard
-    ps2_cmd(PS2_CMD_P1ON);
+    kb_enable();
     kb_sendcmd(PS2KB_CMD_SCANON);
     ps2_flush();
 
@@ -233,7 +236,7 @@ static void kb_interrupt(int irq_num)
 
     // prevent keyboard from sending more interrupts
     cli_save(flags);
-    ps2_cmd(PS2_CMD_P1OFF);
+    kb_disable();
 
     // check keyboard status
     status = ps2_status();
@@ -532,22 +535,25 @@ record_key_event:
 
 done:
     // re-enable keyboard interrupts from controller
-    ps2_cmd(PS2_CMD_P1ON);
+    kb_enable();
     restore_flags(flags);
 }
 
 static void sysrq(char c)
 {
+    kb_enable();
+
     switch (c) {
         case 'b':   // reboot
             hard_reset();
             break;
         case 'c':   // crash
-            load_ss(0x00);  // TODO: CTRL+ALT+DEL does not work here!
+            __sti();
+            load_ss(0x00);
             break;
         case 'h':   // help
             kprint("\nSYSRQ:\n");
-            kprint("  b: hard reboot\n");
+            kprint("  b: reboot\n");
             kprint("  c: crash\n");
             kprint("  h: help\n");
             break;
@@ -674,6 +680,16 @@ static bool kb_typematic(uint8_t typ)
     g_kb.typematic_byte = typ;
 
     return true;
+}
+
+static void kb_disable(void)
+{
+    ps2_cmd(PS2_CMD_P1OFF);
+}
+
+static void kb_enable(void)
+{
+    ps2_cmd(PS2_CMD_P1ON);
 }
 
 bool kb_sendcmd(uint8_t cmd)
