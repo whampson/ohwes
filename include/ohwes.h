@@ -62,6 +62,8 @@ extern void pcspk_beep(int freq, int millis);  // see timer.c
 #define align(x, n)                     (((x) + (n) - 1) & ~((n) - 1))
 #define aligned(x,n)                    ((x) == align(x,n))
 
+#define ispow2(x)                       ((x) == 1 || ((x) & ((x) - 1)) == 0)
+
 //
 // CPU Privilege
 //

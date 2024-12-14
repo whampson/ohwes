@@ -21,6 +21,7 @@
 
 #include <stdarg.h>
 #include <ohwes.h>
+#include <bitops.h>
 #include <boot.h>
 #include <console.h>
 #include <config.h>
@@ -41,6 +42,7 @@ extern void init_cpu(const struct boot_info *info);
 extern void init_fs(void);
 extern void init_mm(const struct boot_info *info);
 extern void init_pic(void);
+extern void init_pools(void);
 extern void init_timer(void);
 extern void init_rtc(void);
 extern void init_tty(const struct boot_info *info);
@@ -53,6 +55,7 @@ extern void init_tty(const struct boot_info *info);
 static void print_info(const struct boot_info *info);
 
 extern void test_list(void);    // test/list_test.c
+extern void test_pool(void);    // test/pool_test.c
 
 void _start(void);  // usermode runtime entry point
 int main(void);     // usermode program entry point
@@ -89,6 +92,7 @@ __fastcall void start_kernel(const struct boot_info *info)
     // initialize static memory and setup memory manager,
     // do this as early as possible to ensure BSS is zeroed
     init_mm(info);
+    init_pools();
 
     // initialize interrupts and timers
     init_pic();
@@ -98,16 +102,18 @@ __fastcall void start_kernel(const struct boot_info *info)
     irq_register(IRQ_RTC, debug_interrupt);   // CTRL+ALT+FN to crash kernel
 #endif
 
-    // setup the file system
-    init_fs();
+    test_pool();
 
-    // get the console and tty subsystem working for real
-    init_tty(info);
+    // // setup the file system
+    // init_fs();
 
-    kprint("entering user mode...\n");
-    usermode(__phys_to_virt(USER_STACK));
+    // // get the console and tty subsystem working for real
+    // init_tty(info);
 
-    kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
+    // kprint("entering user mode...\n");
+    // usermode(__phys_to_virt(USER_STACK));
+
+    // kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
     for (;;);
 
     // for future reference...

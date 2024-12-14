@@ -13,33 +13,48 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/pool.h
- *      Created: November 18, 2024
+ *         File: kernel/test/pool_test.c
+ *      Created: December 13, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __POOL_H
-#define __POOL_H
+#include <assert.h>
+#include <string.h>
+#include <stdint.h>
+#include <list.h>
+#include <pool.h>
 
-#include <stddef.h>
+struct task {
+    uintptr_t mem_start, mem_end;
+    int pid;
+};
 
-typedef void * pool_t;
+#define NUM_TASKS 8
+static struct task _task_pool[NUM_TASKS];
+static pool_t task_pool;
 
-// // create a fixed-size pool of items of a fixed size at a known address
-// pool_t create_pool(const char *name, void *addr, size_t capacity, size_t item_size);
-// int destroy_pool(pool_t pool);
+void test_pool(void)
+{
+    // struct task *t;
 
-// void * pool_alloc(pool_t pool);
-// int pool_free(pool_t pool, void *item);
+    task_pool = create_pool("task_pool", _task_pool, sizeof(struct task), 2);
 
+    // {
+    //     t = pool_alloc(task_pool);
+    //     t->pid = 1234;
+    //     t->mem_start = 0x10000;
+    //     t->mem_end = 0x1FFFF;
+    // }
+    // {
+    //     t = pool_alloc(task_pool);
+    //     t->pid = 5678;
+    //     t->mem_start = 0x20000;
+    //     t->mem_end = 0x2FFFF;
+    // }
+    // {
+    //     t = pool_alloc(task_pool);
+    // }
 
-pool_t create_pool(const char *name, void *addr, size_t item_size, size_t capacity);
-int destroy_pool(pool_t pool);
-
-// pool_t get_pool(const char *name);
-
-void * pool_alloc(pool_t pool);
-int pool_free(pool_t pool, void *item);
-
-#endif // __POOL_H
+    destroy_pool(task_pool);
+}

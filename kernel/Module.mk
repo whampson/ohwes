@@ -27,7 +27,8 @@ SOURCES := \
     tty_ldisc.c \
     vga.c \
     sys/open.c \
-    test/list_test.c \
+    test/pool_test.c \
+    # test/list_test.c \
 
 TARGET_DEFINES := __KERNEL__
 TARGET_CFLAGS  := -nostdinc -ffreestanding

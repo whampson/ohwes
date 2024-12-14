@@ -31,36 +31,38 @@
 #define MAX_NR_OPEN         64
 
 static struct list_node inodes;
-static struct inode _inode_pool[MAX_NR_INODES];
+// static struct inode _inode_pool[MAX_NR_INODES];
 static pool_t inode_pool;
 
 static struct list_node dentries;
-static struct dentry _dentry_pool[MAX_NR_DENTRIES];
+// static struct dentry _dentry_pool[MAX_NR_DENTRIES];
 static pool_t dentry_pool;
 
-static struct file _file_pool[MAX_NR_OPEN];
+// static struct file _file_pool[MAX_NR_OPEN];
 static pool_t file_pool;
 
 extern struct file_ops chdev_ops;
 
 void init_fs(void)
 {
-    list_init(&inodes);
-    inode_pool = create_pool("inodes", _inode_pool, MAX_NR_INODES, sizeof(struct inode));
-    if (!inode_pool) {
-        panic("failed to create inode pool!");
-    }
+    // list_init(&inodes);
+    // inode_pool = create_pool("inodes", _inode_pool, MAX_NR_INODES, sizeof(struct inode));
+    // if (!inode_pool) {
+    //     panic("failed to create inode pool!");
+    // }
 
-    list_init(&dentries);
-    dentry_pool = create_pool("dentries", _dentry_pool, MAX_NR_DENTRIES, sizeof(struct dentry));
-    if (!inode_pool) {
-        panic("failed to create dentry pool!");
-    }
+    // list_init(&dentries);
+    // dentry_pool = create_pool("dentries", _dentry_pool, MAX_NR_DENTRIES, sizeof(struct dentry));
+    // if (!inode_pool) {
+    //     panic("failed to create dentry pool!");
+    // }
 
-    file_pool = create_pool("files", _file_pool, MAX_NR_OPEN, sizeof(struct file));
-    if (!inode_pool) {
-        panic("failed to create file pool!");
-    }
+    // file_pool = create_pool("files", _file_pool, MAX_NR_OPEN, sizeof(struct file));
+    // if (!inode_pool) {
+    //     panic("failed to create file pool!");
+    // }
+
+    panic("reinit pools!!");
 
     // create TTY dentries
     for (int i = 0; i < NR_TTY; i++) {
