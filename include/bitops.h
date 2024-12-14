@@ -176,14 +176,14 @@ static inline int bit_scan_forward(volatile void *addr, unsigned int size)
     int index;
     __asm__ volatile (
         "                                   \n\
-    _loop:                                  \n\
+    1:                                      \n\
         incl    %%ecx                       \n\
         testl   %%edx, %%edx                \n\
-        jz      _done                       \n\
+        jz      2f                          \n\
         decl    %%edx                       \n\
         bsfl    0(%%ebx, %%ecx, 4), %%eax   \n\
-        jz      _loop                       \n\
-    _done:                                  \n\
+        jz      1b                          \n\
+    2:                                      \n\
         "
         : "=a"(index), "+c"(dword)
         : "b"(addr), "d"(size_dwords)
