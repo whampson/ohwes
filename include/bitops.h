@@ -22,32 +22,59 @@
 #ifndef __BITOPS_H
 #define __BITOPS_H
 
-#include <stdbool.h>
-
-static inline void set_bit(volatile void *addr, int index)
+/**
+ * Set a bit in a bitstring.
+ *
+ * @param addr bitstring address
+ * @param index index of the bit to set
+ */
+static inline void set_bit(volatile void *addr, unsigned int index)
 {
     volatile char *bits = (volatile char *) addr;
-    __asm__ volatile ("btsl %1, %0" : "=m"(*bits) : "Ir"(index));
+    __asm__ volatile ("btsl %1, %0" : "+m"(*bits) : "Ir"(index));
 }
 
-static inline void clear_bit(volatile void *addr, int index)
+/**
+ * Clear a bit in a bitstring.
+ *
+ * @param addr bitstring address
+ * @param index index of the bit to clear
+ */
+static inline void clear_bit(volatile void *addr, unsigned int index)
 {
     volatile char *bits = (volatile char *) addr;
-    __asm__ volatile ("btrl %1, %0" : "=m"(*bits) : "Ir"(index));
+    __asm__ volatile ("btrl %1, %0" : "+m"(*bits) : "Ir"(index));
 }
 
-static inline void flip_bit(volatile void *addr, int index)
+/**
+ * Toggle a bit in a bitstring.
+ *
+ * @param addr bitstring address
+ * @param index index of the bit to flip
+ */
+static inline void flip_bit(volatile void *addr, unsigned int index)
 {
     volatile char *bits = (volatile char *) addr;
-    __asm__ volatile ("btcl %1, %0" : "=m"(*bits) : "Ir"(index));
+    __asm__ volatile ("btcl %1, %0" : "+m"(*bits) : "Ir"(index));
 }
 
-static inline bool test_bit(volatile void *addr, int index)
+/**
+ * Get the value of a bit in a bitstring.
+ *
+ * @param addr bitstring address
+ * @param index index of the bit to test
+ * @return the bit value
+ */
+static inline int test_bit(volatile void *addr, unsigned int index)
 {
     volatile char *bits = (volatile char *) addr;
+
+    // incredibly clever usage of SBB here to extract carry flag, taken from:
+    //   https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html#OutputOperand
+    // saves us a push and a pop :)
 
     int bit;
-    __asm__ volatile ( // incredibly clever SBB usage here to extract carry flag
+    __asm__ volatile (
         "                   \n\
         btl     %2, %1      \n\
         sbb     %0, %0      \n\
@@ -59,7 +86,14 @@ static inline bool test_bit(volatile void *addr, int index)
     return bit;
 }
 
-static inline bool test_and_set_bit(volatile void *addr, int index)
+/**
+ * Set a bit in a bitstring, then return the previous value of the set bit.
+ *
+ * @param addr bitstring address
+ * @param index index of the bit to set
+ * @return the previous value of the set bit
+ */
+static inline int test_and_set_bit(volatile void *addr, unsigned int index)
 {
     volatile char *bits = (volatile char *) addr;
 
@@ -76,7 +110,15 @@ static inline bool test_and_set_bit(volatile void *addr, int index)
     return bit;
 }
 
-static inline bool test_and_clear_bit(volatile void *addr, int index)
+/**
+ * Clear a bit in a bitstring, then return the previous value of the cleared
+ * bit.
+ *
+ * @param addr bitstring address
+ * @param index index of the bit to clear
+ * @return the previous value of the cleared bit
+ */
+static inline int test_and_clear_bit(volatile void *addr, unsigned int index)
 {
     volatile char *bits = (volatile char *) addr;
 
@@ -93,7 +135,15 @@ static inline bool test_and_clear_bit(volatile void *addr, int index)
     return bit;
 }
 
-static inline bool test_and_flip_bit(volatile void *addr, int index)
+/**
+ * Toggle a bit in a bitstring, then return the previous value of the toggled
+ * bit.
+ *
+ * @param addr bitstring address
+ * @param index index of the bit to flip
+ * @return the previous value of the flipped bit
+ */
+static inline int test_and_flip_bit(volatile void *addr, unsigned int index)
 {
     volatile char *bits = (volatile char *) addr;
 
@@ -110,18 +160,39 @@ static inline bool test_and_flip_bit(volatile void *addr, int index)
     return bit;
 }
 
-static inline int bit_scan_forward(char *bits)
+/**
+ * Find the first set bit in a bitstring.
+ *
+ * @param addr bitstring address
+ * @param size number of bytes in bitstring; must be a multiple of 4 because
+ *             underlying Intel BSF instruction operates in terms of DWORDs.
+ * @return index of first set bit, or -1 if all bits are zero
+ */
+static inline int bit_scan_forward(volatile void *addr, unsigned int size)
 {
-    int index = -1;
-    __asm__ volatile ("bsfl %1, %0" : "=r"(index) : "m"(*bits));
-    return index;
-}
+    int dword = -1;
+    int size_dwords = size >> 2;
 
-static inline int bit_scan_reverse(char *bits)
-{
-    int index = -1;
-    __asm__ volatile ("bsrl %1, %0" : "=r"(index) : "m"(*bits));
-    return index;
+    int index;
+    __asm__ volatile (
+        "                                   \n\
+    _loop:                                  \n\
+        incl    %%ecx                       \n\
+        testl   %%edx, %%edx                \n\
+        jz      _done                       \n\
+        decl    %%edx                       \n\
+        bsfl    0(%%ebx, %%ecx, 4), %%eax   \n\
+        jz      _loop                       \n\
+    _done:                                  \n\
+        "
+        : "=a"(index), "+c"(dword)
+        : "b"(addr), "d"(size_dwords)
+    );
+
+    if (dword == size_dwords) {
+        return -1;
+    }
+    return (dword << 5) + index;
 }
 
 #endif // __BITOPS_H
