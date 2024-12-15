@@ -38,6 +38,7 @@
 #define ENOSYS      11  // Function not implemented
 #define ENOTTY      12  // Invalid I/O control operation
 #define ENXIO       13  // No such device or address
+#define EPERM       14  // Operation not permitted
 
 #ifndef __ASSEMBLER__
 extern int _errno;

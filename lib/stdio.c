@@ -63,7 +63,7 @@ void perror(const char *s)
 {
     printf("%s: ", s);
     switch (errno) {
-        default:      printf("Unknown error %d\n"); break;
+        default:      printf("Unknown error %d\n", errno); break;
         case 0:       puts("Success"); break;
         case EBADF:   puts("Bad file descriptor"); break;
         case EBADRQC: puts("Invalid request descriptor"); break;
@@ -78,5 +78,6 @@ void perror(const char *s)
         case ENOSYS:  puts("Function not implemented"); break;
         case ENOTTY:  puts("Invalid I/O control operation"); break;
         case ENXIO:   puts("No such device or address"); break;
+        case EPERM:   puts("Operation not permitted"); break;
     }
 }
