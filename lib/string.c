@@ -90,6 +90,22 @@ int memcmp(const void *lhs, const void *rhs, size_t count)
     return *l - *r;
 }
 
+char * strcpy(char *restrict dest, const char *restrict src)
+{
+    char *ret = dest;
+    while ((*dest++ = *src++) != '\0') { }
+
+    return ret;
+}
+
+char * strncpy(char *restrict dest, const char *restrict src, size_t count)
+{
+    char *ret = dest;
+    while (count-- && (*dest++ = *src++) != '\0') { }
+
+    return ret;
+}
+
 size_t strlen(const char *str)
 {
     size_t len = 0;
