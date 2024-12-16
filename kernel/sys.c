@@ -38,14 +38,13 @@
 //
 // User mode entry points for kernel functions.
 //
-__syscall __noreturn int sys_exit(int status)
+__syscall __noreturn void sys_exit(int status)
 {
     assert(getpl() == KERNEL_PL);
 
-    kprint("\nuser mode returned %d\n", status);
-    // idle();     // TODO: switch task, handle signals, etc.
-
-    die();
+    kprint("\nuser mode returned %d: %s\n", status, strerror(status));
+    kprint("\e[1;5;31msystem halted");
+    for (;;);
 }
 
 __syscall int sys_read(int fd, void *buf, size_t count)

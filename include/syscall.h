@@ -23,31 +23,23 @@
 #define __SYSCALL_H
 
 //
-// syscall numbers
+// System Call Numbers
+// Identifier after _SYS_ must match function prototype name exactly.
 //
-#define _sys_exit                       0
-#define _sys_read                       1
-#define _sys_write                      2
-#define _sys_open                       3
-#define _sys_close                      4
-#define _sys_ioctl                      5
-#define NR_SYSCALLS                     6
+#define _SYS_exit                       0
+#define _SYS_read                       1
+#define _SYS_write                      2
+#define _SYS_open                       3
+#define _SYS_close                      4
+#define _SYS_ioctl                      5
+#define _SYS_dup                        6
+#define _SYS_dup2                       7
+#define NR_SYSCALLS                     8
 
 #ifndef __ASSEMBLER__
 
 #include <stddef.h>
 #include <interrupt.h>
-
-//
-// syscall C function prototypes
-// symbol names must match the above _sys_* defines
-//
-extern void exit(int);
-extern int read(int, void *, size_t);
-extern int write(int, const void *, size_t);
-extern int open(const char *, int);
-extern int close(int);
-extern int ioctl(int, unsigned int, void*);
 
 //
 // syscall calling convention
@@ -72,7 +64,7 @@ int fn(p0_t p0)                                                                 
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
         : "=a"(_retval)                                                         \
-        : "a"(_sys_##fn), "b"(p0)                                               \
+        : "a"(_SYS_##fn), "b"(p0)                                               \
     );                                                                          \
     _SYSCALL_EPILOGUE;                                                          \
 }
@@ -84,7 +76,7 @@ int fn(p0_t p0, p1_t p1)                                                        
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
         : "=a"(_retval)                                                         \
-        : "a"(_sys_##fn), "b"(p0), "c"(p1)                                      \
+        : "a"(_SYS_##fn), "b"(p0), "c"(p1)                                      \
     );                                                                          \
     _SYSCALL_EPILOGUE;                                                          \
 }
@@ -96,7 +88,7 @@ int fn(p0_t p0, p1_t p1, p2_t p2)                                               
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
         : "=a"(_retval)                                                         \
-        : "a"(_sys_##fn), "b"(p0), "c"(p1), "d"(p2)                             \
+        : "a"(_SYS_##fn), "b"(p0), "c"(p1), "d"(p2)                             \
     );                                                                          \
     _SYSCALL_EPILOGUE;                                                          \
 }
@@ -108,7 +100,7 @@ int fn(p0_t p0, p1_t p1, p2_t p2, p3_t p3)                                      
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
         : "=a"(_retval)                                                         \
-        : "a"(_sys_##fn), "b"(p0), "c"(p1), "d"(p2), "S"(p3)                    \
+        : "a"(_SYS_##fn), "b"(p0), "c"(p1), "d"(p2), "S"(p3)                    \
     );                                                                          \
     _SYSCALL_EPILOGUE;                                                          \
 }
@@ -120,7 +112,7 @@ int fn(p0_t p0, p1_t p1, p2_t p2, p3_t p3, p4_t p4)                             
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
         : "=a"(_retval)                                                         \
-        : "a"(_sys_##fn), "b"(p0), "c"(p1), "d"(p2), "S"(p3), "D"(p4)           \
+        : "a"(_SYS_##fn), "b"(p0), "c"(p1), "d"(p2), "S"(p3), "D"(p4)           \
     );                                                                          \
     _SYSCALL_EPILOGUE;                                                          \
 }

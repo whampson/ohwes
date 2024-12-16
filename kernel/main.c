@@ -57,7 +57,7 @@ static void print_boot_info(void);
 extern void test_list(void);    // test/list_test.c
 extern void test_pool(void);    // test/pool_test.c
 
-void _start(void);  // usermode runtime entry point
+void init(void);
 int main(void);     // usermode program entry point
 static void usermode(uint32_t stack);
 
@@ -112,8 +112,6 @@ __fastcall void start_kernel(struct boot_info *info)
     kprint("entering user mode...\n");
     usermode(__phys_to_virt(SETUP_STACK));
 
-    for (;;);
-
     // for future reference...
     // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
 }
@@ -127,7 +125,7 @@ static void usermode(uint32_t stack)
     cli_save(eflags);
     eflags.intf = 1;        // enable interrupts
 
-    uint32_t entry = (uint32_t) _start;
+    uint32_t entry = (uint32_t) init;
 
     // ring 3 initial register context
     struct iregs regs = {};
@@ -144,29 +142,28 @@ static void usermode(uint32_t stack)
     switch_context(&regs);
 }
 
-#define SYS_CHECK(sys)                                          \
+#define CHECK(sys)                                              \
 ({                                                              \
-    ret = (sys);                                                \
-    if (ret < 0) {                                              \
-        printf(#sys ": failed with errno %d\n", errno);         \
-        goto cleanup;                                           \
+    int __ret = (sys);                                          \
+    if (__ret < 0) {                                            \
+        int __errno = errno;                                    \
+        perror(#sys);                                           \
+        _exit(__errno);                                         \
     }                                                           \
-    ret;                                                        \
+    __ret;                                                      \
 })
 
-void _start(void)
+void init(void)
 {
-    int ret;
+    // TODO: this should run in ring0 as a kernel task,
+    // then call execve("/bin/init") or similar to drop to ring3
+    // assert(getpl() == KERNEL_PL);
 
-    // TODO: open /dev/console, then call dup() to duplicate file desc
-    SYS_CHECK(open("/dev/tty1", 0));
-    SYS_CHECK(open("/dev/tty1", 0));
-    ret = main();
+    CHECK(open("/dev/tty1", 0));    // stdin
+    CHECK(dup(0));                  // stdout
+    CHECK(dup(0));                  // stderr
 
-cleanup:
-    close(1);
-    close(0);
-    exit(ret);
+    _exit(main());
 }
 
 int main(void)
@@ -175,8 +172,6 @@ int main(void)
     // Runs in ring 3.
     //
     assert(getpl() == USER_PL);
-
-    // TODO: load shell program from disk
 
     printf("\e4\e[5;33mHello from user mode!\e[m\n");
     // printf("Reading chars from stdin and echoing them to stdout... press CTRL+C to exit.\n");

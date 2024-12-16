@@ -20,7 +20,7 @@ SOURCES := \
     ps2kb.c \
     rtc.c \
     serial.c \
-    syscall.c \
+    sys.c \
     task.c \
     timer.c \
     tty.c \

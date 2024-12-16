@@ -28,6 +28,19 @@
 #include <syscall.h>
 #include <task.h>
 
+static int find_next_fd(struct task *task)
+{
+    int fd = -1;
+    for (int i = 0; i < MAX_OPEN; i++) {
+        if (task->files[i] == NULL) {
+            fd = i;
+            break;
+        }
+    }
+
+    return fd;
+}
+
 __syscall int sys_open(const char *name, int flags)
 {
     int fd;
@@ -43,20 +56,13 @@ __syscall int sys_open(const char *name, int flags)
     task = current_task();
 
     // find next available file descriptor slot in current task struct
-    fd = -1;
-    for (int i = 0; i < MAX_OPEN; i++) {
-        if (task->files[i] == NULL) {
-            fd = i;
-            break;
-        }
-    }
-
+    fd = find_next_fd(task);
     if (fd < 0) {
         ret = -ENFILE;  // Too many open files in process
         goto done;
     }
 
-    ret = alloc_fd(&file);
+    ret = alloc_fd(&file);      // TODO: should be alloc_file_struct or something
     if (ret == ENOMEM) {
         ret = -EMFILE;  // Too many open files in system
         goto done;
@@ -119,4 +125,59 @@ __syscall int sys_close(int fd)
     free_fd(file);
     current_task()->files[fd] = NULL;
     return ret;
+}
+
+static int dupfd(int fd, int newfd)
+{
+    int ret;
+    struct task *task;
+    struct file *newfile;
+    struct file *file;
+
+    if (fd < 0 || fd >= MAX_OPEN) {
+        return -EBADF;
+    }
+    if (newfd < 0 || newfd >= MAX_OPEN) {
+        return -EBADF;
+    }
+    task = current_task();
+
+    // resolve file descriptor
+    file = task->files[fd];
+    if (!file) {
+        return -EBADF;
+    }
+
+    if (newfd) {
+        // close the existing file descriptor if we specified one
+        sys_close(newfd);
+    }
+    else {
+        // otherwise locate the next free descriptor
+        newfd = find_next_fd(task);
+        if (newfd < 0) {
+            return -EMFILE;
+        }
+    }
+
+    // allocate a new file struct
+    ret = alloc_fd(&newfile);
+    if (ret == ENOMEM) {
+        return -EMFILE;  // Too many open files in system
+    }
+
+    // duplicate
+    *newfile = *file;
+    task->files[newfd] = newfile;
+    return newfd;
+}
+
+__syscall int sys_dup(int fd)
+{
+    return dupfd(fd, 0);
+}
+
+__syscall int sys_dup2(int fd, int newfd)
+{
+    return dupfd(fd, newfd);
 }

@@ -30,9 +30,10 @@ _syscall3(write, int,fd, const void*,buf, size_t,count)
 _syscall2(open, const char*,name, int,flags)
 _syscall1(close, int,fd)
 _syscall3(ioctl, int,fd, unsigned int,cmd, void*,arg)
+_syscall1(dup, int,fd);
+_syscall2(dup2, int,fd, int,newfd);
 
-void exit(int status)
+void _exit(int status)
 {
-    __asm__ volatile ("int $0x80" :: "a"(_sys_exit), "b"(status));
-    for (;;);
+    __asm__ volatile ("int $0x80" :: "a"(_SYS_exit), "b"(status));
 }
