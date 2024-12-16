@@ -64,7 +64,7 @@ static void verify_gdt(void);
 extern struct tss *g_double_fault_tss;      // crash.c
 extern __noreturn void double_fault(void);  // crash.c
 
-void init_cpu(const struct boot_info *info)
+void init_cpu(void)
 {
     init_idt();
     init_tss();

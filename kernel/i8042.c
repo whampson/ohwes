@@ -34,7 +34,7 @@
 static void wait_for_read(void);
 static void wait_for_write(void);
 
-void init_ps2(const struct boot_info *info)
+void init_ps2(void)
 {
     uint8_t cfg, resp;
     bool port2;
@@ -52,7 +52,7 @@ void init_ps2(const struct boot_info *info)
     ps2_cmd(PS2_CMD_P2ON);
     ps2_cmd(PS2_CMD_RDCFG);
     cfg = ps2_read();
-    port2 = !has_flag(cfg, PS2_CFG_P2CLKOFF) && info->hwflags.has_ps2mouse;
+    port2 = !has_flag(cfg, PS2_CFG_P2CLKOFF) && g_boot->hwflags.has_ps2mouse;
     if (!port2) {
         kprint("PS/2 mouse not detected\n");
     }

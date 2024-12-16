@@ -38,20 +38,21 @@
 #include <x86.h>
 #include <syscall.h>
 
-extern void init_cpu(const struct boot_info *info);
+extern void init_cpu(void);
 extern void init_fs(void);
-extern void init_mm(const struct boot_info *info);
+extern void init_mm(void);
 extern void init_pic(void);
 extern void init_timer(void);
 extern void init_rtc(void);
-extern void init_tty(const struct boot_info *info);
+extern void init_tty(void);
+extern void init_vga(void);
 
 // #ifdef TEST_BUILD
 // typedef int (*test_main)(void);
 // extern void tmain(void);
 // #endif
 
-static void print_info(const struct boot_info *info);
+static void print_boot_info(void);
 
 extern void test_list(void);    // test/list_test.c
 extern void test_pool(void);    // test/pool_test.c
@@ -72,25 +73,27 @@ void debug_interrupt(int irq_num);
 __data_segment static struct boot_info _boot;
 __data_segment struct boot_info *g_boot = &_boot;
 
-__fastcall void start_kernel(const struct boot_info *info)
+__fastcall void start_kernel(struct boot_info *info)
 {
     // copy boot info into kernel memory so we don't lose it
     memcpy(g_boot, info, sizeof(struct boot_info));
-    info = g_boot;  // reassign local ptr so we don't use the wrong one below
+    info = g_boot;  // reassign local ptr so we don't use overwritten buffer
 
     // init the early terminal by printing something to it
     kprint("\n\e[0;1m%s %s '%s'\n", OS_NAME, OS_VERSION, OS_MONIKER);
     kprint("built %s %s using GCC %s by %s\e[0m\n",
         __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
+    print_boot_info();
 
-    print_info(info);
+    // initialize VGA
+    init_vga();
 
     // finish setting up CPU descriptors
-    init_cpu(info);
+    init_cpu();
 
     // initialize static memory and setup memory manager,
     // do this as early as possible to ensure BSS is zeroed
-    init_mm(info);
+    init_mm();
 
     // initialize interrupts and timers
     init_pic();
@@ -103,8 +106,8 @@ __fastcall void start_kernel(const struct boot_info *info)
     // setup the file system
     init_fs();
 
-    // // get the console and tty subsystem working for real
-    init_tty(info);
+    // get the console and tty subsystem working for real
+    init_tty();
 
     kprint("entering user mode...\n");
     usermode(__phys_to_virt(SETUP_STACK));
@@ -206,31 +209,29 @@ int main(void)
     return 0;
 }
 
-static void print_info(const struct boot_info *info)
+static void print_boot_info(void)
 {
-    int nfloppies = info->hwflags.has_diskette_drive;
+    int nfloppies = g_boot->hwflags.has_diskette_drive;
     if (nfloppies) {
-        nfloppies += info->hwflags.num_other_diskette_drives;
+        nfloppies += g_boot->hwflags.num_other_diskette_drives;
     }
 
-    int nserial = info->hwflags.num_serial_ports;
-    int nparallel = info->hwflags.num_parallel_ports;
-    bool gameport = info->hwflags.has_gameport;
-    bool mouse = info->hwflags.has_ps2mouse;
-    uint32_t ebda_size = 0xA0000 - info->ebda_base;
+    int nserial = g_boot->hwflags.num_serial_ports;
+    int nparallel = g_boot->hwflags.num_parallel_ports;
+    bool gameport = g_boot->hwflags.has_gameport;
+    bool mouse = g_boot->hwflags.has_ps2mouse;
+    uint32_t ebda_size = 0xA0000 - g_boot->ebda_base;
 
     kprint("bios: %d %s, %d serial %s, %d parallel %s\n",
         nfloppies, PLURAL2(nfloppies, "floppy", "floppies"),
         nserial, PLURAL(nserial, "port"),
         nparallel, PLURAL(nparallel, "port"));
     kprint("bios: A20 mode is %s\n",
-        (info->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
-        (info->a20_method == A20_PORT92) ? "A20_PORT92" :
-        (info->a20_method == A20_BIOS) ? "A20_BIOS" :
+        (g_boot->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
+        (g_boot->a20_method == A20_PORT92) ? "A20_PORT92" :
+        (g_boot->a20_method == A20_BIOS) ? "A20_BIOS" :
         "A20_NONE");
     kprint("bios: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
-    kprint("bios: video mode is %02Xh\n", info->vga_mode & 0x7F);
-    if (info->ebda_base) kprint("bios: EBDA=%08X,%Xh\n", info->ebda_base, ebda_size);
-    // kprint("boot: stage2:\t%08X,%Xh\n", info->stage2_base, info->stage2_size);
-    // kprint("boot: kernel:\t%08X,%Xh\n", info->kernel_base, info->kernel_size);
+    kprint("bios: video mode is %02Xh\n", g_boot->vga_mode & 0x7F);
+    if (g_boot->ebda_base) kprint("bios: EBDA=%08X,%Xh\n", g_boot->ebda_base, ebda_size);
 }

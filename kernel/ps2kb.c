@@ -115,13 +115,11 @@ static void kb_wrport(uint8_t data);
 #define RIF(x)  if (!(x)) { return; }
 #define RIF_FALSE(x)  if (!(x)) { return false; }
 
-extern void init_ps2(const struct boot_info *info);
+extern void init_ps2(void);
 
-void init_kb(const struct boot_info *info)
+void init_kb(void)
 {
-    uint8_t ps2cfg;
-
-    init_ps2(info);
+    init_ps2();
 
     zeromem(&g_kb, sizeof(struct kb));
     g_kb.numlk = 1;
@@ -133,6 +131,7 @@ void init_kb(const struct boot_info *info)
     ps2_flush();
 
     // disable scancode translation
+    uint8_t ps2cfg;
     ps2_cmd(PS2_CMD_RDCFG);
     ps2cfg = ps2_read();
     ps2cfg &= ~PS2_CFG_TRANSLATE;

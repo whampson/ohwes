@@ -45,11 +45,11 @@ extern uint32_t _eh_frame_start, _eh_frame_end, _eh_frame_size;
 // see doc/mm.txt for memory map
 
 static void print_kernel_sections(void);
-static void print_memory_map(const struct boot_info *info);
+static void print_memory_map(void);
 static void print_page_info(uint32_t vaddr, const struct pginfo *page);
 static void print_page_mappings(struct mm_info *mm);
 
-static void init_bss(struct boot_info *boot_info);
+static void init_bss(void);
 
 extern void init_pools(void);
 
@@ -70,26 +70,22 @@ struct zone {
 
 #define BASELIMIT(base, size)   (base), ((base)+(size)-1)
 
-void init_mm(const struct boot_info *boot_info)
+void init_mm(void)
 {
-    print_memory_map(boot_info);
+    print_memory_map();
     print_kernel_sections();
     print_page_mappings(g_mm);
 
-    init_bss((struct boot_info *) boot_info);
+    init_bss();
     g_mm->pgdir = (void *) __phys_to_virt(KERNEL_PGDIR);
 
     init_pools();
 }
 
-static void init_bss(struct boot_info *boot_info)
+static void init_bss(void)
 {
     // zero the BSS region
-    // make sure we back up the boot info so we don't lose it!!
-    struct boot_info boot_info_copy;
-    memcpy(&boot_info_copy, boot_info, sizeof(struct boot_info));
     memset(&_bss_start, 0, (size_t) &_bss_size);
-    memcpy(boot_info, &boot_info_copy, sizeof(struct boot_info));
 }
 
 static void print_kernel_sections(void)
@@ -125,7 +121,7 @@ static void print_kernel_sections(void)
         PAGE_ALIGN((size_t) &_kernel_size) >> PAGE_SHIFT);
 }
 
-static void print_memory_map(const struct boot_info *info)
+static void print_memory_map(void)
 {
     int kb_total = 0;
     int kb_free = 0;
@@ -137,21 +133,21 @@ static void print_memory_map(const struct boot_info *info)
     int kb_free_1M = 0;     // between 1M and 16M
     int kb_free_16M = 0;    // between 1M and 4G
 
-    if (!info->mem_map) {
+    if (!g_boot->mem_map) {
         kprint("bios-e820: memory map not available\n");
-        if (info->kb_high_e801h != 0) {
-            kb_free_1M = info->kb_high_e801h;
-            kb_free_16M = (info->kb_extended << 6);
+        if (g_boot->kb_high_e801h != 0) {
+            kb_free_1M = g_boot->kb_high_e801h;
+            kb_free_16M = (g_boot->kb_extended << 6);
         }
         else {
             kprint("bios-e801: memory map not available\n");
-            kb_free_1M = info->kb_high;
+            kb_free_1M = g_boot->kb_high;
         }
-        kb_free_low = info->kb_low;
+        kb_free_low = g_boot->kb_low;
         kb_free = kb_free_low + kb_free_1M + kb_free_16M;
     }
     else {
-        const acpi_mmap_t *e = info->mem_map;
+        const acpi_mmap_t *e = g_boot->mem_map;
         while (e->type != 0)
         {
 #if PRINT_MEMORY_MAP
