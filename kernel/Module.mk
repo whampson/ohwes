@@ -39,4 +39,4 @@ TARGET_LDLIBS := \
     libc.a \
 
 # we only want the .text section right now for our hacky kernel image
-$(eval $(call make-rawbin,ohwes.sys))
+$(eval $(call make-rawbin,ohwes.sys,-R .eh_frame))
