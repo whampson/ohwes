@@ -51,7 +51,6 @@ extern void pcspk_beep(int freq, int millis);  // see timer.c
 #define beep(f,ms)                      pcspk_beep(f, ms)   // beep at frequency for millis (nonblocking)
 #define sleep(ms)                       timer_sleep(ms)     // spin for millis (blocking)
 
-#define die()                           ({ kprint("system halted"); for (;;); }) // spin forever, satisfies __noreturn
 #define spin(cond)                      while (cond) { }    // spin while cond == true, TODO: THIS NEEDS TO HAVE A TIMEOUT!!
 
 #define zeromem(p,n)                    memset(p, 0, n)

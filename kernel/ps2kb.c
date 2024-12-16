@@ -394,7 +394,6 @@ static void kb_interrupt(int irq_num)
     if (g_kb.ctrl && g_kb.alt && (key == KEY_DELETE || key == KEY_KPDOT)) {
         hard_reset();
         panic("unable to shut down -- please hard-reset your computer");
-        for (;;);
     }
 
 #ifdef DEBUG

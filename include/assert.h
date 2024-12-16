@@ -32,7 +32,6 @@
 #ifdef DEBUG
 
 #ifdef __KERNEL__
-
 extern int _kprint(const char *fmt, ...);
 
 #define assert(x) \

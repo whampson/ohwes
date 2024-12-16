@@ -361,8 +361,7 @@ __noreturn void double_fault(void)
     regs.esp = fault_tss->esp;
     regs.ss = fault_tss->ss;
 
-    crash(&regs);
-    for (;;);
+    crash(&regs); for (;;);
 }
 
 static void print_regs_and_stack(struct iregs *regs, bool print_stack)

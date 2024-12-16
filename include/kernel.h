@@ -46,7 +46,7 @@ extern int _kprint(const char *fmt, ...);
 #define panic(...) \
 do { \
     _kprint("\n\e[1;31mpanic: ");_kprint(__VA_ARGS__); _kprint("\e[0m"); \
-    for(;;); \
+    for (;;); \
 } while (0)
 #else
 #error "panic not allowed in user mode!"

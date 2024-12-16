@@ -227,7 +227,6 @@ void init_console(void)
     // make sure we have enough memory for the configured number of consoles
     if (g_vga->fb_info.size_pages - FB_SIZE_PAGES < NR_CONSOLE * FB_SIZE_PAGES) {
         panic("not enough video memory available for %d consoles! See config.h.", NR_CONSOLE);
-        for(;;);
     }
 
     // register the console driver
