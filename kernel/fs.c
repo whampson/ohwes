@@ -19,6 +19,7 @@
  * =============================================================================
  */
 
+#include <config.h>
 #include <errno.h>
 #include <kernel.h>
 #include <fs.h>
@@ -26,43 +27,37 @@
 #include <pool.h>
 #include <string.h>
 
-#define MAX_NR_INODES       64
-#define MAX_NR_DENTRIES     64
-#define MAX_NR_OPEN         64
-
 static struct list_node inodes;
-// static struct inode _inode_pool[MAX_NR_INODES];
+static struct inode _inode_pool[MAX_NR_INODES];
 static pool_t inode_pool;
 
 static struct list_node dentries;
-// static struct dentry _dentry_pool[MAX_NR_DENTRIES];
+static struct dentry _dentry_pool[MAX_NR_DENTRIES];
 static pool_t dentry_pool;
 
-// static struct file _file_pool[MAX_NR_OPEN];
+static struct file _file_pool[MAX_NR_TOTAL_OPEN];
 static pool_t file_pool;
 
 extern struct file_ops chdev_ops;
 
 void init_fs(void)
 {
-    // list_init(&inodes);
-    // inode_pool = create_pool("inodes", _inode_pool, MAX_NR_INODES, sizeof(struct inode));
-    // if (!inode_pool) {
-    //     panic("failed to create inode pool!");
-    // }
+    list_init(&inodes);
+    inode_pool = create_pool(_inode_pool, "inodes", MAX_NR_INODES, sizeof(struct inode));
+    if (!inode_pool) {
+        panic("failed to create inode pool!");
+    }
 
-    // list_init(&dentries);
-    // dentry_pool = create_pool("dentries", _dentry_pool, MAX_NR_DENTRIES, sizeof(struct dentry));
-    // if (!inode_pool) {
-    //     panic("failed to create dentry pool!");
-    // }
+    list_init(&dentries);
+    dentry_pool = create_pool(_dentry_pool, "dentries", MAX_NR_DENTRIES, sizeof(struct dentry));
+    if (!inode_pool) {
+        panic("failed to create dentry pool!");
+    }
 
-    // file_pool = create_pool("files", _file_pool, MAX_NR_OPEN, sizeof(struct file));
-    // if (!inode_pool) {
-    //     panic("failed to create file pool!");
-    // }
-
-    panic("reinit pools!!");
+    file_pool = create_pool(_file_pool, "files", MAX_NR_TOTAL_OPEN, sizeof(struct file));
+    if (!inode_pool) {
+        panic("failed to create file pool!");
+    }
 
     // create TTY dentries
     for (int i = 0; i < NR_TTY; i++) {
@@ -79,7 +74,7 @@ void init_fs(void)
 
         dentry = pool_alloc(dentry_pool);
         dentry->inode = NULL;
-        memcpy(dentry->name, name, DENTRY_NAME_LENGTH);     // TODO: strncpy??
+        strncpy(dentry->name, name, DENTRY_NAME_LENGTH);
         list_add_tail(&dentries, &dentry->dentry_list);
 
         if (i == 0) {

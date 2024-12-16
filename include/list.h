@@ -26,6 +26,7 @@
 #ifndef __LIST_H
 #define __LIST_H
 
+#include <stddef.h>
 #include <stdbool.h>
 
 /**
@@ -35,6 +36,8 @@ struct list_node {
     struct list_node *prev;
     struct list_node *next;
 };
+
+typedef struct list_node list_t;
 
 /**
  * Empty list initializer.
@@ -50,8 +53,8 @@ struct list_node {
 /**
  * Cast the list pointer to its enclosing structure.
  */
-#define list_item(ptr, type, member)    \
-    ((type *) ((char *) ptr - (size_t) (&((type *) 0)->member)))
+#define list_item(ptr, type, member) \
+    ((type *) (((char *) (ptr)) - offsetof(type, member)))
 
 /**
  * Initializes a list head by setting it's previous and next pointers to

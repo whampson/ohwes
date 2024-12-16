@@ -26,16 +26,8 @@
 
 typedef void * pool_t;
 
-// // create a fixed-size pool of items of a fixed size at a known address
-// pool_t create_pool(const char *name, void *addr, size_t capacity, size_t item_size);
-// int destroy_pool(pool_t pool);
-
-// void * pool_alloc(pool_t pool);
-// int pool_free(pool_t pool, void *item);
-
-
-pool_t create_pool(const char *name, void *addr, size_t item_size, size_t capacity);
-int destroy_pool(pool_t pool);
+pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capacity);
+void destroy_pool(pool_t pool);
 
 // pool_t get_pool(const char *name);
 

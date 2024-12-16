@@ -20,6 +20,7 @@
  */
 
 #include <bitops.h>
+#include <config.h>
 #include <errno.h>
 #include <paging.h>
 #include <ohwes.h>
@@ -28,19 +29,14 @@
 
 #define CHATTY_POOL             1
 
-// TODO: config.h
-#define MAX_NR_POOLS            32
-#define MAX_NR_POOL_ITEMS       256
-static_assert(MAX_NR_POOLS % 4 == 0,      "MAX_NR_POOLS must be a multiple of 4");
-static_assert(MAX_NR_POOL_ITEMS % 4 == 0, "MAX_NR_POOL_ITEMS must be a multiple of 4");
-
-#define POOL_MAGIC              0x6C6F6F70   // 'pool'
-#define CHUNK_MAGIC             0x6B6E6863   // 'chnk'
+#define POOL_MAGIC              'loop'      // 'pool'
+#define CHUNK_MAGIC             'knhc'      // 'chnk'
 
 struct pool;
 struct chunk {
     uint32_t magic;             // unique ID for chunk type
-    struct list_node chain;     // free list chain
+    uint32_t index;             // item slot index
+    struct list_node chain;     // chunk chain
     struct pool *pool;          // pool chunk belongs to
     void *data;                 // chunk data
 };
@@ -48,10 +44,12 @@ struct chunk {
 struct pool {
     uint32_t magic;             // unique ID for pool type
     const char *name;           // pool name
-    uintptr_t base;             // pool data base address
+    void *base;                 // pool data base address
     size_t item_size;           // pool item size
     size_t capacity;            // pool item capacity
-    struct chunk *alloc;        // current allocation pointer
+    list_t head;                // chunk chain head
+    struct chunk *chunk_base;   // chunk data base address
+    struct chunk *alloc;        // current chunk allocation pointer
 };
 
 static struct pool _pools[MAX_NR_POOLS];
@@ -61,15 +59,31 @@ static __data_segment bool _pools_initialized = false;
 static char _pool_mask[MAX_NR_POOLS>>3];    // bit[n]==1 => n'th slot free
 static char _chunk_mask[MAX_NR_POOL_ITEMS>>3];
 
-static struct pool * get_pool(pool_t pool);
+// bitmap fns require bitstrings to be in DWORDs...
+static_assert(MAX_NR_POOLS % 4 == 0,      "MAX_NR_POOLS must be a multiple of 4");
+static_assert(MAX_NR_POOL_ITEMS % 4 == 0, "MAX_NR_POOL_ITEMS must be a multiple of 4");
+
+#if DEBUG
+static void print_chunk_chain(pool_t pool);
+
+static void print_chunk_mask(void);
+static void print_pool_mask(void);
+#endif
+
+static bool ensure_capacity(size_t capacity);
+
+static struct pool * desc2pool(pool_t pool);
+static pool_t pool2desc(struct pool *pool);
+
 static unsigned int get_pool_index(pool_t pool);
 static const char * get_pool_name(pool_t pool);
-static uintptr_t get_pool_base(pool_t pool);
-static uintptr_t get_pool_limit(pool_t pool);
-static size_t get_pool_item_size(pool_t pool);
-static size_t get_pool_capacity(pool_t pool);
-static bool pool_valid(pool_t);
-static bool ensure_capacity(size_t capacity);
+static uintptr_t get_base(pool_t pool);
+static uintptr_t get_limit(pool_t pool);
+static size_t get_item_size(pool_t pool);
+static size_t get_capacity(pool_t pool);
+
+static bool pool_valid(pool_t);                     // pool desc valid?
+static bool addr_valid(pool_t pool, void *addr);    // item addr in pool range?
 
 void init_pools(void)
 {
@@ -87,7 +101,7 @@ void init_pools(void)
 #endif
 }
 
-pool_t create_pool(const char *name, void *addr, size_t item_size, size_t capacity)
+pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capacity)
 {
     int index, pool_index;
     struct pool *p;
@@ -100,6 +114,7 @@ pool_t create_pool(const char *name, void *addr, size_t item_size, size_t capaci
     if (!name || !addr) {
         return NULL;
     }
+    // TODO: verify address is in kernel space...
 
     // ensure we have space
     if (!ensure_capacity(capacity)) {
@@ -117,9 +132,10 @@ pool_t create_pool(const char *name, void *addr, size_t item_size, size_t capaci
     clear_bit(_pool_mask, pool_index);
     p->magic = POOL_MAGIC;
     p->name = name;
-    p->base = (uintptr_t) addr; // TODO: keep void* ?
+    p->base = addr;
     p->item_size = item_size;
     p->capacity = capacity;
+    list_init(&p->head);
 
     // create free list
     for (int i = 0; i < capacity; i++) {
@@ -127,87 +143,148 @@ pool_t create_pool(const char *name, void *addr, size_t item_size, size_t capaci
         clear_bit(_chunk_mask, index);  // 0 means in-use
         chunk = &_chunks[index];
         chunk->magic = CHUNK_MAGIC;
+        chunk->index = i;
         chunk->pool = p;
         chunk->data = NULL;
         if (i == 0) {
-            list_init(&chunk->chain);
+            p->chunk_base = chunk;
             p->alloc = chunk;
         }
-        else {
-            list_add_tail(&p->alloc->chain, &chunk->chain);
-        }
+        list_add_tail(&p->head, &chunk->chain);
     }
 
 #if CHATTY_POOL
-    kprint("pool: %08X-%08X: %s: id=%d capacity=%d item_size=%d\n",
-        get_pool_base(p), get_pool_limit(p), get_pool_name(p),
-        get_pool_index(p), get_pool_capacity(p), get_pool_item_size(p));
+    kprint("pool: %08X-%08X: %s created: index=%d capacity=%d item_size=%d\n",
+        get_base(p), get_limit(p), get_pool_name(p),
+        get_pool_index(p), get_capacity(p), get_item_size(p));
 #endif
 
-    return (pool_t) p;
+    return pool2desc(p);
 }
 
-int destroy_pool(pool_t pool)
+void destroy_pool(pool_t pool)
 {
-    // TODO
-    return 0;
+    struct pool *p;
+
+    if (!pool_valid(pool)) {
+        return;
+    }
+
+    p = desc2pool(pool);
+    for (int i = 0; i < p->capacity; i++) {
+        int chunk_index = p->chunk_base - _chunks;
+        set_bit(_chunk_mask, chunk_index + i);
+        zeromem(&_chunks[chunk_index], sizeof(struct chunk));
+    }
+
+    struct pool pool_copy = *p;
+    set_bit(_pool_mask, get_pool_index(pool));
+    zeromem(p, sizeof(struct pool));
+
+#if CHATTY_POOL
+    kprint("pool: %08X-%08X: %s destroyed\n",
+        get_base(&pool_copy), get_limit(&pool_copy), get_pool_name(&pool_copy))
+#endif
 }
 
 void * pool_alloc(pool_t pool)
 {
-    // TODO
-    return NULL;
+    struct pool *p;
+    struct chunk *chunk;
+
+    // is this a valid pool?
+    if (!pool_valid(pool)) {
+        return NULL;
+    }
+    p = pool;
+
+    // do we have any free chunks left?
+    if (list_empty(&p->head)) {
+        return NULL;
+    }
+
+    // get next free chunk, advance alloc ptr, then remove chunk from free list
+    chunk = p->alloc;
+    assert(chunk->data == NULL);
+    p->alloc = list_item(chunk->chain.next, struct chunk, chain);
+    list_remove(&chunk->chain);
+
+    // calculate data ptr from pool base using chunk index
+    chunk->data = p->base + (p->item_size * chunk->index);
+
+    // zero the memory and call it a day
+    zeromem(chunk->data, p->item_size);
+    return chunk->data;
 }
 
 int pool_free(pool_t pool, void *item)
 {
-    // TODO
+    struct pool *p;
+    struct chunk *chunk;
+    int index;
+
+    // is this a valid pool?
+    if (!pool_valid(pool) || !item) {
+        return -EINVAL;
+    }
+    p = pool;
+
+    // did the user pass a pointer that's actually in the pool?
+    if (!addr_valid(pool, item)) {
+        return -EPERM;  // access denied, address out of range
+    }
+
+    // locate the index of the item within the pool
+    index = (((char *) item) - ((char *) p->base)) / p->item_size;
+    assert(index >= 0 && index < p->capacity);
+
+    // locate the chunk data within the chunk array
+    chunk = p->chunk_base + index;
+    assert(chunk->index == index);
+    assert(chunk->data != NULL);
+
+    // free chunk by marking its data ptr invalid and adding it to free list
+    chunk->data = NULL;
+    list_add(&p->head, &chunk->chain);
+
+    // set the alloc ptr to the free chunk and call it a day
+    p->alloc = chunk;
     return 0;
 }
 
 // ----------------------------------------------------------------------------
 
-static struct pool * get_pool(pool_t pool)
+#if DEBUG
+static void print_chunk_chain(pool_t pool)
 {
-    return (struct pool *) pool;
+    struct list_node *n;
+    struct pool *p;
+
+    p = desc2pool(pool);
+    kprint("{ ");
+    for (list_iterator(&p->head, n)) {
+        struct chunk *c = list_item(n, struct chunk, chain);
+        kprint("%d ", c->index);
+    }
+    kprint("}\n");
 }
 
-static unsigned int get_pool_index(pool_t pool)
+static void print_chunk_mask(void)
 {
-    return get_pool(pool) - _pools;
+    for (int i = sizeof(_chunk_mask) - 1; i >= 0; i--) {
+        kprint("%02X", _chunk_mask[i] & 0xFF);
+    }
+    kprint("\n");
 }
 
-static const char * get_pool_name(pool_t pool)
+static void print_pool_mask(void)
 {
-    return get_pool(pool)->name;
+    for (int i = sizeof(_pool_mask) - 1; i >= 0; i--) {
+        kprint("%02X", _pool_mask[i] & 0xFF);
+    }
+    kprint("\n");
 }
-
-static uintptr_t get_pool_base(pool_t pool)
-{
-    return get_pool(pool)->base;
-}
-
-static size_t get_pool_item_size(pool_t pool)
-{
-    return get_pool(pool)->item_size;
-}
-
-static size_t get_pool_capacity(pool_t pool)
-{
-    return get_pool(pool)->capacity;
-}
-
-static uintptr_t get_pool_limit(pool_t pool)
-{
-    size_t pool_size = get_pool_item_size(pool) * get_pool_capacity(pool);
-    return get_pool_base(pool) + pool_size - 1;
-}
-
-static bool pool_valid(pool_t pool)
-{
-    unsigned int index = get_pool_index(pool);
-    return index < MAX_NR_POOLS && ((struct pool *) pool)->base;
-}
+#endif
 
 static bool ensure_capacity(size_t capacity)
 {
@@ -219,4 +296,58 @@ static bool ensure_capacity(size_t capacity)
     }
 
     return avail >= capacity;
+}
+
+static struct pool * desc2pool(pool_t pool)
+{
+    return (struct pool *) pool;
+}
+
+static pool_t pool2desc(struct pool *pool)
+{
+    return (pool_t) pool;
+}
+
+static unsigned int get_pool_index(pool_t pool)
+{
+    return desc2pool(pool) - _pools;
+}
+
+static const char * get_pool_name(pool_t pool)
+{
+    return desc2pool(pool)->name;
+}
+
+static uintptr_t get_base(pool_t pool)
+{
+    return (uintptr_t) desc2pool(pool)->base;
+}
+
+static uintptr_t get_limit(pool_t pool)
+{
+    size_t pool_size = get_item_size(pool) * get_capacity(pool);
+    return get_base(pool) + pool_size - 1;
+}
+
+static size_t get_item_size(pool_t pool)
+{
+    return desc2pool(pool)->item_size;
+}
+
+static size_t get_capacity(pool_t pool)
+{
+    return desc2pool(pool)->capacity;
+}
+
+static bool pool_valid(pool_t pool)
+{
+    return get_pool_index(pool) < MAX_NR_POOLS
+        && ((struct pool *) pool)->magic == POOL_MAGIC
+        && ((struct pool *) pool)->base != NULL;
+}
+
+static bool addr_valid(pool_t pool, void *addr)
+{
+    uintptr_t ptr = (uintptr_t) addr;
+    return ptr >= get_base(pool) && ptr <= get_limit(pool);
 }

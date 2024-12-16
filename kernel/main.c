@@ -42,7 +42,6 @@ extern void init_cpu(const struct boot_info *info);
 extern void init_fs(void);
 extern void init_mm(const struct boot_info *info);
 extern void init_pic(void);
-extern void init_pools(void);
 extern void init_timer(void);
 extern void init_rtc(void);
 extern void init_tty(const struct boot_info *info);
@@ -92,7 +91,6 @@ __fastcall void start_kernel(const struct boot_info *info)
     // initialize static memory and setup memory manager,
     // do this as early as possible to ensure BSS is zeroed
     init_mm(info);
-    init_pools();
 
     // initialize interrupts and timers
     init_pic();
@@ -102,18 +100,15 @@ __fastcall void start_kernel(const struct boot_info *info)
     irq_register(IRQ_RTC, debug_interrupt);   // CTRL+ALT+FN to crash kernel
 #endif
 
-    test_pool();
-
-    // // setup the file system
-    // init_fs();
+    // setup the file system
+    init_fs();
 
     // // get the console and tty subsystem working for real
-    // init_tty(info);
+    init_tty(info);
 
-    // kprint("entering user mode...\n");
-    // usermode(__phys_to_virt(USER_STACK));
+    kprint("entering user mode...\n");
+    usermode(__phys_to_virt(SETUP_STACK));
 
-    // kprint("\n\n\e5\e[1;5;31msystem halted.\e[0m");
     for (;;);
 
     // for future reference...
