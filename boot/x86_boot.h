@@ -25,6 +25,7 @@
 #define __X86_BOOT
 
 #include <config.h>
+#include <paging.h>
 #include <x86.h>
 
 /*----------------------------------------------------------------------------*
@@ -108,7 +109,7 @@
 #ifdef __ASSEMBLER__
   .macro PRINT str
       leaw    \str, %si
-      call    print_string          # defined in boot/stage1.S
+      call    print          # defined in boot/stage1.S
   .endm
 #endif
 

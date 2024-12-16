@@ -359,7 +359,7 @@ lba2chs:
 
 ##
 # -----------------------------------------------------------------------------
-# print_string
+# print
 # -----------------------------------------------------------------------------
 # Prints a zero-terminated string at the current curusor location and
 # advances the cursor.
@@ -370,18 +370,21 @@ lba2chs:
 # Clobbers:
 #       ax, bx, si
 ##
-.globl print_string
-print_string:
+.globl print
+print:
         xorw            %ax, %ax
         movb            $0x0E, %ah
         movw            $0x07, %bx
         lodsb
+#if E9_HACK
+        outb            %al, $0xE9
+#endif
         andb            %al, %al
-        jz              _print_string_done
+        jz              _print_done
         int             $0x10
-        jmp             print_string
+        jmp             print
 
-_print_string_done:
+_print_done:
         ret
 
 ##
