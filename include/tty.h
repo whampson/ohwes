@@ -32,6 +32,7 @@
 #include <device.h>
 #include <list.h>
 #include <stddef.h>
+#include <unistd.h>
 
 #define TTY_BUFFER_SIZE         128
 

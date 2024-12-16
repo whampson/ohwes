@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <device.h>
+#include <unistd.h>
 
 #define DENTRY_NAME_LENGTH  32
 

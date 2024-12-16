@@ -13,26 +13,22 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/stdio.h
- *      Created: January 3, 2024
+ *         File: include/unistd.h
+ *      Created: December 16, 2024
  *       Author: Wes Hampson
- *
- * https://en.cppreference.com/w/c/io
- * https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/stdio.h.html
  * =============================================================================
  */
 
-#ifndef __STDIO_H
-#define __STDIO_H
+#ifndef __UNISTD_H
+#define __UNISTD_H
+
+#define STDIN_FILENO    0
+#define STDOUT_FILENO   1
+#define STDERR_FILENO   2
 
 #ifndef __NULL_DEFINED
 #define __NULL_DEFINED
 #define NULL ((void *)0)
-#endif
-
-#ifndef __VA_LIST_DEFINED
-#define __VA_LIST_DEFINED
-typedef __builtin_va_list va_list;
 #endif
 
 #ifndef __SIZE_T_DEFINED
@@ -40,16 +36,18 @@ typedef __builtin_va_list va_list;
 typedef __SIZE_TYPE__ size_t;
 #endif
 
-int putchar(int c);
-int puts(const char *str);
+#ifndef __SSIZE_T_DEFINED
+#define __SSIZE_T_DEFINED
+typedef signed long ssize_t;            // TODO: sys/types.h?
+#endif
 
-int printf(const char *format, ...);
-int sprintf(char *buffer, const char *format, ...);
-int snprintf(char *buffer, size_t bufsz, const char *format, ...);
+void _exit(int status);
+int close(int fd);
+int dup(int fd);
+int dup2(int fd, int newfd);
+int ioctl(int fd, unsigned int cmd, void *arg);     // TODO: sys/ioctl.h? also varargs?
+int open(const char *path, int flags);              // TOOD: fcntl.h?
+int read(int fd, void *buf, size_t count);
+int write(int fd, const void *buf, size_t count);
 
-int vprintf(const char *format, va_list args);
-int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args);
-
-void perror(const char *s);
-
-#endif // __STDIO_H
+#endif // __UNISTD_H
