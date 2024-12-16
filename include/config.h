@@ -26,13 +26,27 @@
 // General Configuration
 // ----------------------------------------------------------------------------
 
-#define MIN_KB              512     // let's see how long this lasts!
-#define PRINT_LOGO          0       // show a special logo at boot
-#define PRINT_MEMORY_MAP    1       // show BIOS memory map at boot
-#define PRINT_PAGE_MAP      0       // show initial page table mappings
-#define PRINT_IOCTL         0       // show ioctl calls
-#define E9_HACK             1       // tee console output to port 0xE9
-#define HIGHER_GROUND       0       // map kernel in high virtual address space
+#define MIN_KB              512 // let's see how long this lasts!
+#define PRINT_LOGO          0   // show a special logo at boot
+#define PRINT_MEMORY_MAP    1   // show BIOS memory map at boot
+#define PRINT_PAGE_MAP      0   // show initial page table mappings
+#define PRINT_IOCTL         0   // show ioctl calls
+#define E9_HACK             1   // tee console output to port 0xE9
+#define HIGHER_GROUND       0   // map kernel in high virtual address space
+
+//
+// Counts of Things
+// ----------------------------------------------------------------------------
+//
+#define MAX_NR_POOLS        32  // max num concurrent pools
+#define MAX_NR_POOL_ITEMS   256 // max pool memory capacity across all pools
+
+#define MAX_NR_INODES       64  // max num inodes
+#define MAX_NR_DENTRIES     64  // max num directory entries
+#define MAX_NR_TOTAL_OPEN   64  // max num open files on system
+
+#define NR_CONSOLE          7   // number of virtual consoles
+#define NR_SERIAL           4   // number of serial ports
 
 //
 // Important Memory Addresses
@@ -42,13 +56,21 @@
 // Stack base addresses are offset by +4 bytes from the written data.
 // ----------------------------------------------------------------------------
 
-#define INITIAL_STACK       0x10000
-#define INTERRUPT_STACK     0x11000
-#define USER_STACK          0x12000
-#define DOUBLE_FAULT_STACK  0x13000 // page must be present in kernel mode
-#define KERNEL_PGDIR        0x13000 // global page directory
-#define KERNEL_PGTBL        0x14000 // kernel page table
-#define KERNEL_BASE         0x15000 // kernel image load address
+#define FRAME_SIZE          PAGE_SIZE
+
+// memory regions
+#define STACK_MEMORY        0x10000
+#define STATIC_MEMORY       0x1C000
+
+// stack memory
+#define SETUP_STACK         (STACK_MEMORY+(FRAME_SIZE*0))
+#define INTERRUPT_STACK     (STACK_MEMORY+(FRAME_SIZE*1))
+#define DOUBLE_FAULT_STACK  (STACK_MEMORY+(FRAME_SIZE*2))
+
+// static memory
+#define KERNEL_PGDIR        (STATIC_MEMORY+(PAGE_SIZE*0))
+#define KERNEL_PGTBL        (STATIC_MEMORY+(PAGE_SIZE*1))
+#define KERNEL_BASE         (STATIC_MEMORY+(PAGE_SIZE*4)) // kernel image addr
 
 
 // Kernel space base virtual address. The lower 1MB of physical memory is mapped.
@@ -61,26 +83,10 @@
 //
 // VGA Stuff
 // ----------------------------------------------------------------------------
-// http://www.ctyme.com/intr/rb-0069.htm
-// https://www.stanislavs.org/helppc/int_10-0.html
+// See doc/vga.txt
 
-// Modes:
-//  - 2: 80x25,640x200,B8000,16gray
-//  - 3: 80x25,640x200,B8000,16
-//  - 7: 80x25,640x200,B0000,mono
-#define VGA_MODE            3
-
-// Fonts:
-//  - 1: text mode 80x28
-//  - 2: text mode 80x50
-//  - 4: text mode 80x25
-#define VGA_DIMENSION       1
-
-// Frame Buffer:
-//  - 0: 0xA0000-0xBFFFF 128k
-//  - 1: 0xA0000-0xAFFFF 64k
-//  - 2: 0xB0000-0xB7FFF 32k
-//  - 3: 0xB8000-0xBFFFF 32k
-#define VGA_FB_SELECT       0
+#define VGA_MODE            3       // 3 = 80x25,B8000,16color
+#define VGA_DIMENSION       1       // 1 = text mode 80x28
+#define VGA_FB_SELECT       0       // 0 = 0xA0000-0xBFFFF 128k
 
 #endif // __CONFIG_H

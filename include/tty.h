@@ -38,8 +38,6 @@
 #define N_TTY                   0
 #define NR_LDISC                1
 
-#define NR_CONSOLE              7       // number of virtual consoles
-#define NR_SERIAL               4       // number of serial ports
 #define NR_TTY                  (1+NR_CONSOLE+NR_SERIAL)    // +1 for tty0
 
 //
