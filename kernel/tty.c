@@ -111,10 +111,10 @@ int get_tty(dev_t device, struct tty **tty)
 
 extern void init_n_tty(void);
 extern void init_serial(void);
-extern void init_console(const struct boot_info *info);
-extern void init_kb(const struct boot_info *info);
+extern void init_console(void);
+extern void init_kb(void);
 
-void init_tty(const struct boot_info *info)
+void init_tty(void)
 {
     list_init(&tty_drivers);
 
@@ -124,8 +124,8 @@ void init_tty(const struct boot_info *info)
 
     init_n_tty();
     init_serial();
-    init_console(info);
-    init_kb(info);
+    init_console();
+    init_kb();
 }
 
 int do_tty_open(struct tty *tty)

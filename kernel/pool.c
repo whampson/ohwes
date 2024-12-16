@@ -162,7 +162,7 @@ pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capaci
 #if CHATTY_POOL
     kprint("pool[%d]: create: %08X-%08X capacity=%d item_size=%d %s\n",
         get_pool_index(p), get_base(p), get_limit(p),
-        get_capacity(p), get_item_size(p), get_pool_name(p));
+         get_item_size(p), get_capacity(p), get_pool_name(p));
 #endif
 
     return pool2desc(p);
