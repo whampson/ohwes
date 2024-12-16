@@ -55,20 +55,14 @@ enum csi_color {
     CSI_WHITE
 };
 
-// TODO: move to vga.c?
-struct vga {
-    uint32_t active_console;
-    uint32_t rows, cols;
-    uint16_t orig_cursor_shape;
-    struct vga_fb_info fb_info;
-};
-
 struct console_save_state {
     bool blink_on;
     char tabstops[MAX_TABSTOP];
     uint32_t attr;
     uint64_t cursor;
 };
+
+extern bool g_early_console_initialized;
 
 struct console {
     int number;                         // console I/O line number

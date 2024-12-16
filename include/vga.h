@@ -29,6 +29,20 @@
 #include <assert.h>
 #include <stdint.h>
 
+struct vga_fb_info {
+    uintptr_t framebuf;     // frame buffer physical address
+    size_t size_pages;      // frame buffer size in pages
+};
+
+struct vga {
+    uint32_t active_console;
+    uint32_t rows, cols;
+    uint16_t orig_cursor_shape;
+    struct vga_fb_info fb_info;
+};
+
+extern struct vga *g_vga;
+
 /**
  * CRT Controller Registers
  * http://www.osdever.net/FreeVGA/vga/crtcreg.htm
@@ -234,14 +248,6 @@ struct vga_cell {
     };
 };
 static_assert(sizeof(struct vga_cell) == 2, "sizeof(struct vga_cell)");
-
-/**
- * Frame buffer information.
- */
-struct vga_fb_info {
-    uintptr_t framebuf;     // frame buffer physical address
-    size_t size_pages;      // frame buffer size in pages
-};
 
 /**
  * Fill a vga_fb_info struct with the current frame buffer parameters.

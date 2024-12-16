@@ -38,6 +38,7 @@
 #include <cpu.h>
 #include <fs.h>
 #include <paging.h>
+#include <vga.h>
 
 // colors
 #define NMI_COLOR           CSI_RED
@@ -83,7 +84,6 @@ __data_segment struct crash_screen *g_crash = &_crash;
 __data_segment static struct tss _double_fault_tss = { };
 __data_segment struct tss *g_double_fault_tss = &_double_fault_tss;
 
-extern struct vga *g_vga;
 
 #if DEBUG
 extern int g_test_soft_double_fault;

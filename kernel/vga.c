@@ -19,10 +19,62 @@
  * =============================================================================
  */
 
+#include <boot.h>
+#include <console.h>
 #include <interrupt.h>
 #include <io.h>
+#include <paging.h>
 #include <vga.h>
 #include <x86.h>
+
+__data_segment static struct vga _vga = { .active_console = SYSTEM_CONSOLE };
+__data_segment struct vga *g_vga = &_vga;
+
+void init_vga(void)
+{
+    struct vga_fb_info fb_info_old, fb_info_new;
+    void *fb_old, *fb_new;
+
+    // grab text mode dimensions from boot info
+    g_vga->rows = g_boot->vga_rows;
+    g_vga->cols = g_boot->vga_cols;
+    g_vga->active_console = SYSTEM_CONSOLE;
+
+    // read the current frame buffer parameters
+    if (!vga_get_fb_info(&fb_info_old)) {
+        panic("failed to get VGA frame buffer info!");
+    }
+    if (!vga_set_fb(VGA_FB_SELECT)) {
+        panic("failed to change VGA frame buffer!");
+    }
+    if (!vga_get_fb_info(&fb_info_new)) {
+        panic("failed to get VGA frame buffer info!");
+    }
+    g_vga->fb_info = fb_info_new;
+
+    // move the old frame buffer to the new one
+    fb_old = (void *) __phys_to_virt(fb_info_old.framebuf);
+    fb_new = (void *) __phys_to_virt(fb_info_new.framebuf);
+    memmove(fb_new, fb_old, FB_SIZE_PAGES);
+
+    // // update system console frame buffer
+    get_console(SYSTEM_CONSOLE)->framebuf = fb_new;
+
+    // read cursor attributes leftover from BIOS
+    uint8_t cl_lo, cl_hi;
+    uint16_t pos;
+    cl_lo = vga_crtc_read(VGA_CRTC_REG_CL_LO);
+    cl_hi = vga_crtc_read(VGA_CRTC_REG_CL_HI);
+    pos = (cl_hi << 8) | cl_lo;
+    g_boot->cursor_col = pos % g_vga->cols;
+    g_boot->cursor_row = pos / g_vga->cols;
+    cl_lo = vga_crtc_read(VGA_CRTC_REG_CSS) & VGA_CRTC_FLD_CSS_CSS_MASK;
+    cl_hi = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
+    g_vga->orig_cursor_shape = (cl_hi << 8) | cl_lo;
+
+    kprint("frame buffer is VGA, %d pages at %08X\n",
+        g_vga->fb_info.size_pages, g_vga->fb_info.framebuf);
+}
 
 bool vga_get_fb_info(struct vga_fb_info *fb_info)
 {

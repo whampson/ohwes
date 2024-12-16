@@ -44,11 +44,8 @@
 #define is_syscon(cons)         ((cons)->number == SYSTEM_CONSOLE)
 #define is_current(cons)        ((cons) == current_console())
 
-// global vars, put them in the data segment to
-// ensure they are initialized to zero
-__data_segment static struct vga _vga = { .active_console = SYSTEM_CONSOLE };
-__data_segment struct vga *g_vga = &_vga;
-__data_segment struct console g_console[NR_CONSOLE] = { };
+__data_segment struct console _consoles[NR_CONSOLE] = { };
+__data_segment bool g_early_console_initialized = false;
 
 static int console_tty_open(struct tty *);
 static int console_tty_close(struct tty *);
@@ -220,66 +217,13 @@ static void set_fb_char(struct console *cons, uint16_t pos, char c);
 static void set_fb_attr(struct console *cons, uint16_t pos, struct _char_attr attr);
 
 // screen positioning
-static void pos2xy(uint16_t ncols, uint16_t pos, uint16_t *x, uint16_t *y);
 static uint16_t xy2pos(uint16_t ncols, uint16_t x, uint16_t y);
 
 // ----------------------------------------------------------------------------
 // initialization
 
-void init_vga(
-    const struct boot_info *info, uint8_t fb_select,
-    uint16_t *cursor_x, uint16_t *cursor_y)
+void init_console(void)
 {
-    struct vga_fb_info fb_info_old, fb_info_new;
-    void *fb_old, *fb_new;
-
-    if (!cursor_x || !cursor_y) {
-        panic("cursor pointers are null!");
-    }
-
-    // grab text mode dimensions from boot info
-    g_vga->rows = info->vga_rows;
-    g_vga->cols = info->vga_cols;
-    g_vga->active_console = SYSTEM_CONSOLE;
-
-    // read the current frame buffer parameters
-    if (!vga_get_fb_info(&fb_info_old)) {
-        panic("failed to get VGA frame buffer info!");
-    }
-    if (!vga_set_fb(fb_select)) {
-        panic("failed to change VGA frame buffer!");
-    }
-    if (!vga_get_fb_info(&fb_info_new)) {
-        panic("failed to get VGA frame buffer info!");
-    }
-    g_vga->fb_info = fb_info_new;
-
-    // move the old frame buffer to the new one
-    fb_old = (void *) __phys_to_virt(fb_info_old.framebuf);
-    fb_new = (void *) __phys_to_virt(fb_info_new.framebuf);
-    memmove(fb_new, fb_old, FB_SIZE_PAGES);
-
-    // update system console frame buffer
-    g_console->framebuf = fb_new;
-
-    // read cursor attributes leftover from BIOS
-    uint8_t cl_lo, cl_hi;
-    cl_lo = vga_crtc_read(VGA_CRTC_REG_CL_LO);
-    cl_hi = vga_crtc_read(VGA_CRTC_REG_CL_HI);
-    pos2xy(g_vga->cols, (cl_hi << 8) | cl_lo, cursor_x, cursor_y);
-    cl_lo = vga_crtc_read(VGA_CRTC_REG_CSS) & VGA_CRTC_FLD_CSS_CSS_MASK;
-    cl_hi = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
-    g_vga->orig_cursor_shape = (cl_hi << 8) | cl_lo;
-
-    kprint("frame buffer is VGA, %d pages at %08X\n",
-        g_vga->fb_info.size_pages, g_vga->fb_info.framebuf);
-}
-
-void init_console(const struct boot_info *info)
-{
-    uint16_t cursor_x, cursor_y;
-    init_vga(info, VGA_FB_SELECT, &cursor_x, &cursor_y);
-
     // make sure we have enough memory for the configured number of consoles
     if (g_vga->fb_info.size_pages - FB_SIZE_PAGES < NR_CONSOLE * FB_SIZE_PAGES) {
         panic("not enough video memory available for %d consoles! See config.h.", NR_CONSOLE);
@@ -302,8 +246,8 @@ void init_console(const struct boot_info *info)
 
     // restore console state from boot
     struct console *cons = get_console(SYSTEM_CONSOLE);
-    cons->cursor.x = cursor_x;
-    cons->cursor.y = cursor_y;
+    cons->cursor.x = g_boot->cursor_col;
+    cons->cursor.y = g_boot->cursor_row;
     cons->cursor.shape = g_vga->orig_cursor_shape;
     cons->framebuf = (void *) g_vga->fb_info.framebuf;
 
@@ -475,7 +419,7 @@ struct console * get_console(int num)
         assert(num > 0 && (num - 1) < NR_CONSOLE);
     }
 
-    struct console *cons = &g_console[num - 1];
+    struct console *cons = &_consoles[num - 1];
     if (cons->initialized) {
         assert(cons->number == num);
     }
@@ -1167,14 +1111,6 @@ static void cursor_right(struct console *cons, int n)
     else {
         cons->cursor.x = cons->cols - 1;
     }
-}
-
-static void pos2xy(uint16_t ncols, uint16_t pos, uint16_t *x, uint16_t *y)
-{
-    assert(ncols != 0);
-
-    *x = pos % ncols;
-    *y = pos / ncols;
 }
 
 static uint16_t xy2pos(uint16_t ncols, uint16_t x, uint16_t y)

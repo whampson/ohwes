@@ -31,15 +31,11 @@
 
 #define KPRINT_BUFSIZ   4096
 
-extern struct vga *g_vga;
-extern struct boot_info *g_boot;
-extern struct console g_console[NR_CONSOLE];
-
 void print_to_syscon(const char *buf, size_t count)
 {
     struct console *cons = get_console(SYSTEM_CONSOLE);
 
-    if (!g_console->initialized) {
+    if (!cons->initialized && !g_early_console_initialized) {
         // we tried to print before the console was initialized! do the bare
         // minimum initialization here so we can print safely; full
         // initialization will occur when init_console() is called
@@ -56,7 +52,7 @@ void print_to_syscon(const char *buf, size_t count)
         cons->framebuf = (void *) fb_info.framebuf;
         cons->cursor.x = g_boot->cursor_col;
         cons->cursor.y = g_boot->cursor_row;
-        cons->initialized = true; // partially true...
+        g_early_console_initialized = true;
     }
 
     for (int i = 0; i < count; i++) {
