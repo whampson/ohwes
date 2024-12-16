@@ -40,7 +40,6 @@ extern uint32_t _text_start, _text_end, _text_size;
 extern uint32_t _data_start, _data_end, _data_size;
 extern uint32_t _rodata_start, _rodata_end, _rodata_size;
 extern uint32_t _bss_start, _bss_end, _bss_size;
-extern uint32_t _eh_frame_start, _eh_frame_end, _eh_frame_size;
 
 // see doc/mm.txt for memory map
 
@@ -106,7 +105,6 @@ static void print_kernel_sections(void)
         { ".data",              &_data_start,                           &_data_end },
         { ".rodata",            &_rodata_start,                         &_rodata_end },
         { ".bss",               &_bss_start,                            &_bss_end },
-        { ".eh_frame",          &_eh_frame_start,                       &_eh_frame_end }
     };
 
     for (int i = 0; i < countof(sections); i++) {

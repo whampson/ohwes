@@ -47,43 +47,33 @@ SECTIONS
     {
         _text_start = .;
         *(.text*)
-        _text_end = .;
     }
+    _text_end = .;
     _text_size = SIZEOF(.text);
 
     .data :
     {
         _data_start = .;
         *(.data*)
-        _data_end = .;
     }
+    _data_end = .;
     _data_size = SIZEOF(.data);
 
     .rodata :
     {
         _rodata_start = .;
         *(.rodata*)
-        _rodata_end = .;
     }
+    _rodata_end = .;
     _rodata_size = SIZEOF(.rodata);
 
     .bss :
     {
         _bss_start = .;
         *(.bss*)
-        _bss_end = .;
     }
+    _bss_end = .;
     _bss_size = SIZEOF(.bss);
-
-    /* TODO: do we need this?
-             we aren't doing kernel-level exception handling... */
-    .eh_frame :
-    {
-        _eh_frame_start = .;
-        *(.eh_frame*)
-        _eh_frame_end = .;
-    }
-    _eh_frame_size = SIZEOF(.eh_frame);
 
     _kernel_end = .;
     _kernel_size = _kernel_end - _kernel_start;
