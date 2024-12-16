@@ -27,29 +27,32 @@
 #include <list.h>
 #include <pool.h>
 
-#define CHATTY_POOL             1
+#define CHATTY_POOL         1
 
-#define POOL_MAGIC              'loop'      // 'pool'
-#define CHUNK_MAGIC             'knhc'      // 'chnk'
+#define POOL_MAGIC          'loop'  // 'pool'
+#define CHUNK_MAGIC         'knhc'  // 'chnk'
+
+#define POOL_NAME_LENGTH    32
 
 struct pool;
 struct chunk {
-    uint32_t magic;             // unique ID for chunk type
-    uint32_t index;             // item slot index
-    struct list_node chain;     // chunk chain
-    struct pool *pool;          // pool chunk belongs to
-    void *data;                 // chunk data
+    uint32_t magic;                 // unique ID for chunk type
+    uint32_t index;                 // item slot index
+    struct list_node chain;         // chunk chain
+    struct pool *pool;              // pool chunk belongs to
+    void *data;                     // chunk data
 };
 
 struct pool {
-    uint32_t magic;             // unique ID for pool type
-    const char *name;           // pool name
-    void *base;                 // pool data base address
-    size_t item_size;           // pool item size
-    size_t capacity;            // pool item capacity
-    list_t head;                // chunk chain head
-    struct chunk *chunk_base;   // chunk data base address
-    struct chunk *alloc;        // current chunk allocation pointer
+    uint32_t magic;                 // unique ID for pool type
+    char name[POOL_NAME_LENGTH+1];  // pool name
+    int index;                      // pool index
+    void *base;                     // pool data base address
+    size_t item_size;               // pool item size
+    size_t capacity;                // pool item capacity
+    list_t head;                    // chunk chain head
+    struct chunk *chunk_base;       // chunk data base address
+    struct chunk *alloc;            // current chunk allocation pointer
 };
 
 static struct pool _pools[MAX_NR_POOLS];
@@ -103,7 +106,7 @@ void init_pools(void)
 
 pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capacity)
 {
-    int index, pool_index;
+    int pool_index;
     struct pool *p;
     struct chunk *chunk;
 
@@ -118,32 +121,35 @@ pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capaci
 
     // ensure we have space
     if (!ensure_capacity(capacity)) {
+        panic("not enough pool memory to create pool");
         return NULL;
     }
 
     // find a free pool slot
     pool_index = bit_scan_forward(_pool_mask, sizeof(_pool_mask));
     if (pool_index == -1) {
+        panic("max number of pools reached!");
         return NULL;
     }
 
     // setup pool descriptor
-    p = &_pools[pool_index];
     clear_bit(_pool_mask, pool_index);
+    p = &_pools[pool_index];
     p->magic = POOL_MAGIC;
-    p->name = name;
+    p->index = pool_index;
     p->base = addr;
     p->item_size = item_size;
     p->capacity = capacity;
+    strncpy(p->name, name, POOL_NAME_LENGTH);
     list_init(&p->head);
 
     // create free list
     for (int i = 0; i < capacity; i++) {
-        index = bit_scan_forward(_chunk_mask, sizeof(_chunk_mask));
-        clear_bit(_chunk_mask, index);  // 0 means in-use
-        chunk = &_chunks[index];
+        int chunk_index = bit_scan_forward(_chunk_mask, sizeof(_chunk_mask));
+        clear_bit(_chunk_mask, chunk_index);
+        chunk = &_chunks[chunk_index];
         chunk->magic = CHUNK_MAGIC;
-        chunk->index = i;
+        chunk->index = i;   // index in local pool, not global chunk pool
         chunk->pool = p;
         chunk->data = NULL;
         if (i == 0) {
@@ -154,9 +160,9 @@ pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capaci
     }
 
 #if CHATTY_POOL
-    kprint("pool: %08X-%08X: %s created: index=%d capacity=%d item_size=%d\n",
-        get_base(p), get_limit(p), get_pool_name(p),
-        get_pool_index(p), get_capacity(p), get_item_size(p));
+    kprint("pool[%d]: create: %08X-%08X capacity=%d item_size=%d %s\n",
+        get_pool_index(p), get_base(p), get_limit(p),
+        get_capacity(p), get_item_size(p), get_pool_name(p));
 #endif
 
     return pool2desc(p);
@@ -177,13 +183,13 @@ void destroy_pool(pool_t pool)
         zeromem(&_chunks[chunk_index], sizeof(struct chunk));
     }
 
-    struct pool pool_copy = *p;
+    struct pool copy = *p;
     set_bit(_pool_mask, get_pool_index(pool));
     zeromem(p, sizeof(struct pool));
 
 #if CHATTY_POOL
-    kprint("pool: %08X-%08X: %s destroyed\n",
-        get_base(&pool_copy), get_limit(&pool_copy), get_pool_name(&pool_copy))
+    kprint("pool[%d]: destroyed: %s\n",
+        get_pool_index(&copy), get_pool_name(&copy))
 #endif
 }
 
@@ -310,7 +316,7 @@ static pool_t pool2desc(struct pool *pool)
 
 static unsigned int get_pool_index(pool_t pool)
 {
-    return desc2pool(pool) - _pools;
+    return desc2pool(pool)->index;
 }
 
 static const char * get_pool_name(pool_t pool)
@@ -341,7 +347,8 @@ static size_t get_capacity(pool_t pool)
 
 static bool pool_valid(pool_t pool)
 {
-    return get_pool_index(pool) < MAX_NR_POOLS
+    return desc2pool(pool) >= &_pools[0] && desc2pool(pool) < &_pools[MAX_NR_POOLS]
+        && get_pool_index(pool) == (desc2pool(pool) - &_pools[0])
         && ((struct pool *) pool)->magic == POOL_MAGIC
         && ((struct pool *) pool)->base != NULL;
 }
