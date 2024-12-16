@@ -50,7 +50,7 @@ _setup:
         movw            %ax, %gs                # gs = 0
 
         # setup the inititial stack
-        movl            $INITIAL_STACK, %ebp
+        movl            $SETUP_STACK, %ebp
         movl            %ebp, %esp
 
         # setup paging; first 1M of physical memory will be identity mapped
@@ -221,6 +221,7 @@ boot_params_ptr:
         .long           0                       # filled in with ptr from stage2
 
 # -----------------------------------------------------------------------------
+# IDT
 
 IDT_COUNT = 256
 
@@ -230,14 +231,8 @@ _idt:
         .fill           IDT_COUNT, 8, 0
 _idt_end:
 
-        .word           0                       # align
-idt_desc:
-idt_limit:
-        .word           _idt_end - _idt - 1
-idt_ptr:
-        .long           _idt
-
 # -----------------------------------------------------------------------------
+# GDT
 
 # Global Descriptor Table
 # We load the real GDT here and not in stage2 so we can keep it in kernel space.
@@ -256,6 +251,35 @@ _gdt:
         .quad           0                       # [0x40] _TSS1_SEGMENT
 _gdt_end:
 
+# -----------------------------------------------------------------------------
+# LDT
+
+.align 8
+_ldt:
+        .quad           0
+_ldt_end:
+
+# -----------------------------------------------------------------------------
+# TSS
+
+.align 8
+_tss:
+        .fill           TSS_SIZE
+_tss_end:
+
+# -----------------------------------------------------------------------------
+# IDT Descriptor
+
+        .word           0                       # align
+idt_desc:
+idt_limit:
+        .word           _idt_end - _idt - 1
+idt_ptr:
+        .long           _idt
+
+# -----------------------------------------------------------------------------
+# GDT Descriptor
+
         .word           0                       # align
 gdt_desc:
 gdt_limit:
@@ -264,11 +288,7 @@ gdt_ptr:
         .long           _gdt
 
 # -----------------------------------------------------------------------------
-
-.align 8
-_ldt:
-        .quad           0
-_ldt_end:
+# LDT Descriptor
 
 ldt_limit:
         .long           _ldt_end - _ldt - 1
@@ -276,11 +296,7 @@ ldt_ptr:
         .long           _ldt
 
 # -----------------------------------------------------------------------------
-
-.align 8
-_tss:
-        .fill           TSS_SIZE
-_tss_end:
+# TSS Descriptor
 
 tss_limit:
         .long           _tss_end - _tss - 1

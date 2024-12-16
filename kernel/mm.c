@@ -51,6 +51,8 @@ static void print_page_mappings(struct mm_info *mm);
 
 static void init_bss(struct boot_info *boot_info);
 
+extern void init_pools(void);
+
 struct mm_info _mm = { };
 struct mm_info *g_mm = &_mm;
 
@@ -66,17 +68,18 @@ struct zone {
     pool_t free_list_pool;
 };
 
+#define BASELIMIT(base, size)   (base), ((base)+(size)-1)
+
 void init_mm(const struct boot_info *boot_info)
 {
     print_memory_map(boot_info);
     print_kernel_sections();
-
-    kprint("kernel interrupt stack at %08X\n", __phys_to_virt(INTERRUPT_STACK));
+    print_page_mappings(g_mm);
 
     init_bss((struct boot_info *) boot_info);
     g_mm->pgdir = (void *) __phys_to_virt(KERNEL_PGDIR);
 
-    print_page_mappings(g_mm);
+    init_pools();
 }
 
 static void init_bss(struct boot_info *boot_info)
@@ -94,24 +97,27 @@ static void print_kernel_sections(void)
     struct section {
         const char *name;
         void *start, *end;
-        size_t size;
     };
 
     struct section sections[] = {
-        { "kernel image:", &_kernel_start,   &_kernel_end,   (size_t) &_kernel_size },
-        { ".setup",        &_setup_start,    &_setup_end,    (size_t) &_setup_size },
-        { ".text",         &_text_start,     &_text_end,     (size_t) &_text_size },
-        { ".data",         &_data_start,     &_data_end,     (size_t) &_data_size },
-        { ".rodata",       &_rodata_start,   &_rodata_end,   (size_t) &_rodata_size },
-        { ".bss",          &_bss_start,      &_bss_end,      (size_t) &_bss_size },
-        { ".eh_frame",     &_eh_frame_start, &_eh_frame_end, (size_t) &_eh_frame_size }
+        { "setup stack",        (void *) SETUP_STACK-FRAME_SIZE,        (void *) SETUP_STACK },
+        { "interrupt stack",    (void *) INTERRUPT_STACK-FRAME_SIZE,    (void *) INTERRUPT_STACK },
+        { "page directory",     (void *) KERNEL_PGDIR,                  (void *) KERNEL_PGDIR+PAGE_SIZE },
+        { "kernel page table",  (void *) KERNEL_PGTBL,                  (void *) KERNEL_PGTBL+PAGE_SIZE },
+        { "kernel image:",      &_kernel_start,                         &_kernel_end },
+        { ".setup",             &_setup_start,                          &_setup_end },
+        { ".text",              &_text_start,                           &_text_end },
+        { ".data",              &_data_start,                           &_data_end },
+        { ".rodata",            &_rodata_start,                         &_rodata_end },
+        { ".bss",               &_bss_start,                            &_bss_end },
+        { ".eh_frame",          &_eh_frame_start,                       &_eh_frame_end }
     };
 
     for (int i = 0; i < countof(sections); i++) {
         struct section *sec = &sections[i];
         kprint("PA:%08X-%08X VA:%08X-%08X %s\n",
-            __virt_to_phys(sec->start), __virt_to_phys(sec->end),
-            sec->start, sec->end, sec->name);
+            __virt_to_phys(sec->start), __virt_to_phys(sec->end)-1,
+            sec->start, sec->end-1, sec->name);
     }
 
     kprint("kernel image is %dk bytes (%d pages)\n",
