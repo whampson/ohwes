@@ -143,11 +143,11 @@ irq_trampoline:
         jmp             handle_irq      # common IRQ handler
 
 syscall_trampoline:
+        pushl           $end_syscall
         movl            IREGS_EAX(%ecx), %eax
         cmpl            $NR_SYSCALLS, %eax
         ja              _nosys
         sti                             # allow interrupts for syscalls
-        pushl           $end_syscall
         jmp             *syscall_handlers(, %eax, 4)
 _nosys:
         movl            $-ENOSYS, %eax
@@ -194,7 +194,7 @@ exception_handlers:
 
 syscall_handlers:
         .long           sys_exit, sys_read, sys_write, sys_open, sys_close
-        .long           sys_ioctl
+        .long           sys_ioctl, sys_dup, sys_dup2
 
 
 # ----------------------------------------------------------------------------
