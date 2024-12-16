@@ -48,4 +48,6 @@ size_t strlen(const char *str);
 int strcmp(const char *lhs, const char *rhs);
 int strncmp(const char *lhs, const char *rhs, size_t count);
 
+char * strerror(int errnum);
+
 #endif // __STRING_H

@@ -22,7 +22,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
-#include <syscall.h>
+#include <unistd.h>
 
 int putchar(int c)
 {
@@ -62,22 +62,5 @@ int puts(const char *str)
 void perror(const char *s)
 {
     printf("%s: ", s);
-    switch (errno) {
-        default:      printf("Unknown error %d\n", errno); break;
-        case 0:       puts("Success"); break;
-        case EBADF:   puts("Bad file descriptor"); break;
-        case EBADRQC: puts("Invalid request descriptor"); break;
-        case EBUSY:   puts("Device or resource busy"); break;
-        case EINVAL:  puts("Invalid argument"); break;
-        case EIO:     puts("Input/output error"); break;
-        case EMFILE:  puts("Too many files open in process"); break;
-        case ENFILE:  puts("Too many files open in system"); break;
-        case ENODEV:  puts("No such device"); break;
-        case ENOENT:  puts("No such file or directory"); break;
-        case ENOMEM:  puts("Not enough memory"); break;
-        case ENOSYS:  puts("Function not implemented"); break;
-        case ENOTTY:  puts("Invalid I/O control operation"); break;
-        case ENXIO:   puts("No such device or address"); break;
-        case EPERM:   puts("Operation not permitted"); break;
-    }
+    puts(strerror(errno));
 }

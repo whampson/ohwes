@@ -19,7 +19,35 @@
  * =============================================================================
  */
 
+#include <errno.h>
+#include <stdio.h>
 #include <string.h>
+
+static char _strerr_buf[32];
+
+char * strerror(int errnum)
+{
+    switch (errnum) {
+        case 0:       return "Success";
+        case EBADF:   return "Bad file descriptor";
+        case EBADRQC: return "Invalid request descriptor";
+        case EBUSY:   return "Device or resource busy";
+        case EINVAL:  return "Invalid argument";
+        case EIO:     return "Input/output error";
+        case EMFILE:  return "Too many files open in process";
+        case ENFILE:  return "Too many files open in system";
+        case ENODEV:  return "No such device";
+        case ENOENT:  return "No such file or directory";
+        case ENOMEM:  return "Not enough memory";
+        case ENOSYS:  return "Function not implemented";
+        case ENOTTY:  return "Invalid I/O control operation";
+        case ENXIO:   return "No such device or address";
+        case EPERM:   return "Operation not permitted";
+    }
+
+    snprintf(_strerr_buf, sizeof(_strerr_buf), "Unknown error %d\n", errnum);
+    return _strerr_buf;
+}
 
 void * memcpy(void * restrict dest, const void * restrict src, size_t count)
 {
