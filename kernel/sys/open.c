@@ -28,20 +28,20 @@
 #include <syscall.h>
 #include <task.h>
 
-static int find_next_fd(struct task *task)
-{
-    int fd = -1;
-    for (int i = 0; i < MAX_OPEN; i++) {
-        if (task->files[i] == NULL) {
-            fd = i;
-            break;
-        }
-    }
+static int dupfd(int fd, int newfd);
+static int find_next_fd(struct task *task);
 
-    return fd;
+SYSCALL_DEFINE(dup, int fd)
+{
+    return dupfd(fd, 0);
 }
 
-__syscall int sys_open(const char *name, int flags)
+SYSCALL_DEFINE(dup2, int fd, int newfd)
+{
+    return dupfd(fd, newfd);
+}
+
+SYSCALL_DEFINE(open, const char *name, int flags)
 {
     int fd;
     int ret;
@@ -97,7 +97,7 @@ done:
     return ret;
 }
 
-__syscall int sys_close(int fd)
+SYSCALL_DEFINE(close, int fd)
 {
     struct file *file;
     int ret;
@@ -172,12 +172,15 @@ static int dupfd(int fd, int newfd)
     return newfd;
 }
 
-__syscall int sys_dup(int fd)
+static int find_next_fd(struct task *task)
 {
-    return dupfd(fd, 0);
-}
+    int fd = -1;
+    for (int i = 0; i < MAX_OPEN; i++) {
+        if (task->files[i] == NULL) {
+            fd = i;
+            break;
+        }
+    }
 
-__syscall int sys_dup2(int fd, int newfd)
-{
-    return dupfd(fd, newfd);
+    return fd;
 }

@@ -22,100 +22,179 @@
 #ifndef __SYSCALL_H
 #define __SYSCALL_H
 
-//
-// System Call Numbers
-// Identifier after _SYS_ must match function prototype name exactly.
-//
-#define _SYS_exit                       0
-#define _SYS_read                       1
-#define _SYS_write                      2
-#define _SYS_open                       3
-#define _SYS_close                      4
-#define _SYS_ioctl                      5
-#define _SYS_dup                        6
-#define _SYS_dup2                       7
-#define NR_SYSCALLS                     8
-
 #ifndef __ASSEMBLER__
 
 #include <stddef.h>
 #include <interrupt.h>
 
 //
-// syscall calling convention
+// Calling convention for System Calls.
 //
 #define __syscall __attribute__((regparm(0)))
 
 
-#define _SYSCALL_PROLOGUE                                                       \
-    int _retval                                                                 \
+//
+// System Call invocation methods.
+//
 
-#define _SYSCALL_EPILOGUE                                                       \
-    if (_retval < 0) {                                                          \
-        errno = -_retval;                                                       \
-        return -1;                                                              \
-    }                                                                           \
-    return _retval                                                              \
-
-#define _syscall1(fn,p0_t,p0)                                                   \
-int fn(p0_t p0)                                                                 \
-{                                                                               \
-    _SYSCALL_PROLOGUE;                                                          \
+#define syscall0(nr)                                                            \
+({                                                                              \
+    int __sysret;                                                               \
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
-        : "=a"(_retval)                                                         \
-        : "a"(_SYS_##fn), "b"(p0)                                               \
+        : "=a"(__sysret)                                                        \
+        : "a"(nr)                                                               \
     );                                                                          \
-    _SYSCALL_EPILOGUE;                                                          \
-}
+    __sysret;                                                                   \
+})
 
-#define _syscall2(fn,p0_t,p0,p1_t,p1)                                           \
-int fn(p0_t p0, p1_t p1)                                                        \
-{                                                                               \
-    _SYSCALL_PROLOGUE;                                                          \
+#define syscall1(nr,arg0)                                                       \
+({                                                                              \
+    int __sysret;                                                               \
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
-        : "=a"(_retval)                                                         \
-        : "a"(_SYS_##fn), "b"(p0), "c"(p1)                                      \
+        : "=a"(__sysret)                                                        \
+        : "a"(nr), "b"(arg0)                                                    \
     );                                                                          \
-    _SYSCALL_EPILOGUE;                                                          \
-}
+    __sysret;                                                                   \
+})
 
-#define _syscall3(fn,p0_t,p0,p1_t,p1,p2_t,p2)                                   \
-int fn(p0_t p0, p1_t p1, p2_t p2)                                               \
-{                                                                               \
-    _SYSCALL_PROLOGUE;                                                          \
+#define syscall2(nr,arg0,arg1)                                                  \
+({                                                                              \
+    int __sysret;                                                               \
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
-        : "=a"(_retval)                                                         \
-        : "a"(_SYS_##fn), "b"(p0), "c"(p1), "d"(p2)                             \
+        : "=a"(__sysret)                                                        \
+        : "a"(nr), "b"(arg0), "c"(arg1)                                         \
     );                                                                          \
-    _SYSCALL_EPILOGUE;                                                          \
-}
+    __sysret;                                                                   \
+})
 
-#define _syscall4(fn,p0_t,p0,p1_t,p1,p2_t,p2,p3_t,p3)                           \
-int fn(p0_t p0, p1_t p1, p2_t p2, p3_t p3)                                      \
-{                                                                               \
-    _SYSCALL_PROLOGUE;                                                          \
+#define syscall3(nr,arg0,arg1,arg2)                                             \
+({                                                                              \
+    int __sysret;                                                               \
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
-        : "=a"(_retval)                                                         \
-        : "a"(_SYS_##fn), "b"(p0), "c"(p1), "d"(p2), "S"(p3)                    \
+        : "=a"(__sysret)                                                        \
+        : "a"(nr), "b"(arg0), "c"(arg1), "d"(arg2)                              \
     );                                                                          \
-    _SYSCALL_EPILOGUE;                                                          \
-}
+    __sysret;                                                                   \
+})
 
-#define _syscall5(fn,p0_t,p0,p1_t,p1,p2_t,p2,p3_t,p3,p4_t,p4)                   \
-int fn(p0_t p0, p1_t p1, p2_t p2, p3_t p3, p4_t p4)                             \
-{                                                                               \
-    _SYSCALL_PROLOGUE;                                                          \
+#define syscall4(nr,arg0,arg1,arg2,arg3)                                        \
+({                                                                              \
+    int __sysret;                                                               \
     __asm__ volatile (                                                          \
         "int $0x80"                                                             \
-        : "=a"(_retval)                                                         \
-        : "a"(_SYS_##fn), "b"(p0), "c"(p1), "d"(p2), "S"(p3), "D"(p4)           \
+        : "=a"(__sysret)                                                        \
+        : "a"(nr), "b"(arg0), "c"(arg1), "d"(arg2), "S"(arg3)                   \
     );                                                                          \
-    _SYSCALL_EPILOGUE;                                                          \
+    __sysret;                                                                   \
+})
+
+#define syscall5(nr,arg0,arg1,arg2,arg3,arg4)                                   \
+({                                                                              \
+    int __sysret;                                                               \
+    __asm__ volatile (                                                          \
+        "int $0x80"                                                             \
+        : "=a"(__sysret)                                                        \
+        : "a"(nr), "b"(arg0), "c"(arg1), "d"(arg2), "S"(arg3), "D"(arg4)        \
+    );                                                                          \
+    __sysret;                                                                   \
+})
+
+
+//
+// System Call number declarations.
+//
+#include <syscall_table.h>
+
+//
+// Define the kernel side of a System Call function.
+//
+#define SYSCALL_DEFINE(name, ...) \
+    __syscall int sys_##name(__VA_ARGS__)
+
+// #ifndef __KERNEL__
+
+//
+// System Call user mode function wrappers.
+//
+
+#define __SYSCALL_PROLOGUE      \
+    int __ret
+#define __SYSCALL_INVOKE(x)     \
+    __ret = x
+#define __SYSCALL_EPILOGUE_VOID \
+do {                            \
+    if (__ret < 0) {            \
+        errno = -__ret;         \
+        __ret = -1;             \
+    }                           \
+} while (0)
+
+#define __SYSCALL_EPILOGUE      \
+    __SYSCALL_EPILOGUE_VOID;    \
+    return __ret
+
+#define SYSCALL0_LINK(type,name)                                                \
+type name(void)                                                                 \
+{                                                                               \
+    __SYSCALL_PROLOGUE;                                                         \
+    __SYSCALL_INVOKE(syscall0(_SYS_##name));                                    \
+    __SYSCALL_EPILOGUE;                                                         \
 }
+
+#define SYSCALL1_LINK(type,name,arg0_t,arg0)                                    \
+type name(arg0_t arg0)                                                          \
+{                                                                               \
+    __SYSCALL_PROLOGUE;                                                         \
+    __SYSCALL_INVOKE(syscall1(_SYS_##name,arg0));                               \
+    __SYSCALL_EPILOGUE;                                                         \
+}
+
+#define SYSCALL1_LINK_VOID(name,arg0_t,arg0)                                    \
+void name(arg0_t arg0)                                                          \
+{                                                                               \
+    __SYSCALL_PROLOGUE;                                                         \
+    __SYSCALL_INVOKE(syscall1(_SYS_##name,arg0));                               \
+    __SYSCALL_EPILOGUE_VOID;                                                    \
+}
+
+
+#define SYSCALL2_LINK(type,name,arg0_t,arg0,arg1_t,arg1)                        \
+type name(arg0_t arg0, arg1_t arg1)                                             \
+{                                                                               \
+    __SYSCALL_PROLOGUE;                                                         \
+    __SYSCALL_INVOKE(syscall2(_SYS_##name,arg0,arg1));                          \
+    __SYSCALL_EPILOGUE;                                                         \
+}
+
+#define SYSCALL3_LINK(type,name,arg0_t,arg0,arg1_t,arg1,arg2_t,arg2)            \
+type name(arg0_t arg0, arg1_t arg1, arg2_t arg2)                                \
+{                                                                               \
+    __SYSCALL_PROLOGUE;                                                         \
+    __SYSCALL_INVOKE(syscall3(_SYS_##name,arg0,arg1,arg2));                     \
+    __SYSCALL_EPILOGUE;                                                         \
+}
+
+#define SYSCALL4_LINK(type,name,arg0_t,arg0,arg1_t,arg1,arg2_t,arg2,arg3_t,arg3)\
+type name(arg0_t arg0, arg1_t arg1, arg2_t arg2, arg3_t arg3)                   \
+{                                                                               \
+    __SYSCALL_PROLOGUE;                                                         \
+    __SYSCALL_INVOKE(syscall4(_SYS_##name,arg0,arg1,arg2,arg3));                \
+    __SYSCALL_EPILOGUE;                                                         \
+}
+
+#define SYSCALL5_LINK(type,name,arg0_t,arg0,arg1_t,arg1,arg2_t,arg2,arg3_t,arg3,arg4_t,arg4)\
+type name(arg0_t arg0, arg1_t arg1, arg2_t arg2, arg3_t arg3, arg4_t arg4)      \
+{                                                                               \
+    __SYSCALL_PROLOGUE;                                                         \
+    __SYSCALL_INVOKE(syscall5(_SYS_##name,arg0,arg1,arg2,arg3,arg4));           \
+    __SYSCALL_EPILOGUE;                                                         \
+}
+
+// #endif  // __KERNEL__
 
 #endif  // __ASSEMBLER__
 

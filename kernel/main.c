@@ -174,33 +174,12 @@ int main(void)
     assert(getpl() == USER_PL);
 
     printf("\e4\e[5;33mHello from user mode!\e[m\n");
-    // printf("Reading chars from stdin and echoing them to stdout... press CTRL+C to exit.\n");
-
-    // char c;
-    // while (read(STDIN_FILENO, &c, 1) && c != 3) {
-    //     write(STDOUT_FILENO, &c, 1);
-    // }
-
-    int tty2 = open("/dev/tty2", 0);
-    if (tty2 < 0) {
-        perror("open(/dev/tty2)");
-        return errno;
-    }
-
-    int ttyS0 = open("/dev/ttyS0", 0);
-    if (ttyS0 < 0) {
-        perror("open(/dev/ttyS0)");
-        return errno;
-    }
 
     char c;
-    while (read(tty2, &c, 1) && c != 3) {
-        if (write(ttyS0, &c, 1) < 0) {
-            perror("write(/dev/ttyS0)");
-        }
+    while (read(STDIN_FILENO, &c, 1) && c != 3) {
+        write(STDOUT_FILENO, &c, 1);
     }
 
-    // close(fd);
     return 0;
 }
 

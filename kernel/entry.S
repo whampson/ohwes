@@ -18,6 +18,10 @@
 #       Author: Wes Hampson
 # =============================================================================
 
+####
+# Kernel Mode Entry Points
+####
+
 .text
 .code32
 
@@ -131,24 +135,24 @@ recv_interrupt:
         jmp             exception_trampoline
 
 exception_trampoline:
-        pushl           $end_exception
+        pushl           $return_from_exception
         cmpl            $NR_EXCEPTIONS, %eax
         ja              _noint
-        jmp             *exception_handlers(, %eax, 4)  # handle exception
+        jmp             *exception_table(, %eax, 4)  # handle exception
 _noint:
         jmp             crash
 
 irq_trampoline:
-        pushl           $end_irq
+        pushl           $return_from_irq
         jmp             handle_irq      # common IRQ handler
 
 syscall_trampoline:
-        pushl           $end_syscall
+        pushl           $return_from_syscall
         movl            IREGS_EAX(%ecx), %eax
         cmpl            $NR_SYSCALLS, %eax
         ja              _nosys
         sti                             # allow interrupts for syscalls
-        jmp             *syscall_handlers(, %eax, 4)
+        jmp             *syscall_table(, %eax, 4)
 _nosys:
         movl            $-ENOSYS, %eax
         ret
@@ -162,11 +166,11 @@ switch_context:
         cli
         movl            %ecx, %esp      # fastcall param
                                         # fallthrough...
-end_exception:
-end_irq:
+return_from_exception:
+return_from_irq:
         cli
         movl            IREGS_EAX(%esp), %eax
-end_syscall:
+return_from_syscall:
         cli
         movl            IREGS_EBP(%esp), %ebp
         movl            IREGS_EDI(%esp), %edi
@@ -184,18 +188,19 @@ end_syscall:
         iret
 
 # ----------------------------------------------------------------------------
-# tables, etc.
+# tables
 
-exception_handlers:
+exception_table:
         .long           crash, crash, crash, crash, crash, crash, crash, crash
         .long           crash, crash, crash, crash, crash, crash, crash, crash
         .long           crash, crash, crash, crash, crash, crash, crash, crash
         .long           crash, crash, crash, crash, crash, crash, crash, crash
 
-syscall_handlers:
-        .long           sys_exit, sys_read, sys_write, sys_open, sys_close
-        .long           sys_ioctl, sys_dup, sys_dup2
+syscall_table:
+        #include <syscall_table.h>
+_syscall_table_end:
 
+NR_SYSCALLS = (_syscall_table_end - syscall_table) >> 2
 
 # ----------------------------------------------------------------------------
 # Below are thunk routines for all valid entries in the IDT.

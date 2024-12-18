@@ -21,19 +21,22 @@
 
 #include <errno.h>
 #include <syscall.h>
+#include <unistd.h>
 
 //
-// system call linkage
+// System Call Linkage
 //
-_syscall3(read, int,fd, void*,buf, size_t,count)
-_syscall3(write, int,fd, const void*,buf, size_t,count)
-_syscall2(open, const char*,name, int,flags)
-_syscall1(close, int,fd)
-_syscall3(ioctl, int,fd, unsigned int,cmd, void*,arg)
-_syscall1(dup, int,fd);
-_syscall2(dup2, int,fd, int,newfd);
 
-void _exit(int status)
-{
-    __asm__ volatile ("int $0x80" :: "a"(_SYS_exit), "b"(status));
-}
+// #ifndef __KERNEL__
+
+SYSCALL1_LINK_VOID(_exit, int,status)
+SYSCALL1_LINK(int,close, int,fd)
+SYSCALL1_LINK(int,dup, int,fd)
+SYSCALL2_LINK(int,dup2, int,fd, int,newfd)
+SYSCALL3_LINK(int,ioctl, int,fd, unsigned int,cmd, unsigned long,arg)
+SYSCALL2_LINK(int,open, const char*,path, int,flags)
+SYSCALL3_LINK(int,read, int,fd, char*,buf, size_t,count)
+SYSCALL3_LINK(int,write, int,fd, const char*,buf, size_t,count)
+
+
+// #endif

@@ -34,11 +34,7 @@
 // corruption in the event of a task switch.
 // !!!!!!!
 
-
-//
-// User mode entry points for kernel functions.
-//
-__syscall __noreturn void sys_exit(int status)
+SYSCALL_DEFINE(_exit, int status)
 {
     assert(getpl() == KERNEL_PL);
 
@@ -47,7 +43,7 @@ __syscall __noreturn void sys_exit(int status)
     for (;;);
 }
 
-__syscall int sys_read(int fd, void *buf, size_t count)
+SYSCALL_DEFINE(read, int fd, const char *buf, size_t count)
 {
     struct file *f;
 
@@ -67,7 +63,7 @@ __syscall int sys_read(int fd, void *buf, size_t count)
     return f->fops->read(f, buf, count);
 }
 
-__syscall int sys_write(int fd, const void *buf, size_t count)
+SYSCALL_DEFINE(write, int fd, const void *buf, size_t count)
 {
     struct file *f;
 
@@ -87,7 +83,7 @@ __syscall int sys_write(int fd, const void *buf, size_t count)
     return f->fops->write(f, buf, count);
 }
 
-__syscall int sys_ioctl(int fd, unsigned int num, unsigned long arg)
+SYSCALL_DEFINE(ioctl, int fd, unsigned int num, unsigned long arg)
 {
     uint32_t seq;
     uint32_t code;
