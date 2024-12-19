@@ -1,12 +1,12 @@
 # debug build toggle and params
 DEBUG           := 1
 DEBUGOPT        := 1
-TEST_BUILD      := 0
+# TEST_BUILD      := 0
 CFLAGS          := -Wall -Werror
 
-ifeq "${TEST_BUILD}" "1"
-  DEFINES += TEST_BUILD
-endif
+# ifeq "${TEST_BUILD}" "1"
+#   DEFINES += TEST_BUILD
+# endif
 ifeq "${DEBUG}" "1"
   ASFLAGS += -g
   CFLAGS += -g
@@ -21,6 +21,9 @@ TARGET_DIR := bin
 BUILD_DIR  := obj
 SCRIPT_DIR := scripts
 
+# source modules
+SUBMAKEFILES := src/ohwes.mk
+
 # floppy disk stuff
 define FLOPPY_FORMAT_CMDS
 	mkdosfs -s 1 -S 512 /dev/fd0
@@ -30,6 +33,7 @@ define FLOPPY_COPY_CMDS
 	$(foreach file,${DISK_FILES},cp ${file} ${DISK_MOUNT}/;)
 	ls -l ${DISK_MOUNT}
 endef
+
 BOOTSECT    := ${TARGET_DIR}/boot/boot.bin
 DISK_IMAGE  := ${TARGET_DIR}/ohwes.img
 DISK_MOUNT  := /a
@@ -38,15 +42,9 @@ DISK_FILES  := \
     ${TARGET_DIR}/boot/boot.sys \
     ${TARGET_DIR}/ohwes.sys
 
-ifeq "${TEST_BUILD}" "1"
-  DISK_FILES += ${TARGET_DIR}/test.exe
-endif
+# -----------------------------------------------------------------------------
 
-
-SUBMAKEFILES := \
-    ohwes.mk \
-
-.PHONY: all ohwes tools test
+.PHONY: all ohwes tools
 .PHONY: img floppy format-floppy
 .PHONY: run run-bochs debug debug-boot debug-setup
 .PHONY: clean clean-tools nuke
@@ -90,9 +88,6 @@ debug-boot: img
 
 debug-setup: img
 	${SCRIPT_DIR}/run.sh qemu ${DISK_IMAGE} debug-setup
-
-
-
 
 floppy: ohwes
 	${FLOPPY_COPY_CMDS}

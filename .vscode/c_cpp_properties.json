@@ -10,7 +10,7 @@
         {
             "name": "OH-WES Kernel [Win32]",
             "includePath": [
-                "${workspaceFolder}/include/*"
+                "${workspaceFolder}/src/include/*"
             ],
             "defines": [
                 "__KERNEL__",
@@ -18,7 +18,7 @@
                 "TEST_BUILD"
             ],
             "forcedInclude": [
-                "${workspaceFolder}/include/compiler.h"
+                "${workspaceFolder}/src/include/i386/compiler.h"
             ],
             "compilerPath": "${workspaceFolder}/build/i686-elf-tools/bin/i686-elf-gcc",
             "cStandard": "c11",
@@ -33,7 +33,7 @@
         {
             "name": "OH-WES Kernel [macOS]",
             "includePath": [
-                "${workspaceFolder}/include/*"
+                "${workspaceFolder}/src/include/*"
             ],
             "defines": [
                 "__KERNEL__",
@@ -41,7 +41,7 @@
                 "TEST_BUILD"
             ],
             "forcedInclude": [
-                "${workspaceFolder}/include/compiler.h"
+                "${workspaceFolder}/src/include/i386/compiler.h"
             ],
             "compilerPath": "/usr/local/bin/i686-elf-gcc",
             "cStandard": "c11",
