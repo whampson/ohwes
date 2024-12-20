@@ -637,10 +637,12 @@ void debug_interrupt(int irq_num)   // TODO: call this vis sysreq...
             idt[EXCEPTION_DE].trap.p = 0;   // remove divide error trap (1)
             idt[EXCEPTION_NP].trap.p = 0;   // remove seg not present trap (2)
             __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
+            break;
         }
         case 12: {  // F12 - triple fault
             struct table_desc idt_desc = { .limit = 0, .base = 0 };
             __lidt(idt_desc);   // yoink away the IDT :D
+            break;
         }
     }
     g_crash_kernel = 0;
