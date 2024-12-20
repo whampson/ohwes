@@ -121,9 +121,6 @@ void soft_double_fault(struct iregs *regs)
 
 __fastcall void crash(struct iregs *regs)
 {
-    struct console *cons;
-    struct tty *tty;
-
     uint16_t mask;
     bool die = true;
 
@@ -132,6 +129,10 @@ __fastcall void crash(struct iregs *regs)
     // basic info collection
     // -------------------------------------------------------------------------
     //
+
+    // current console info
+    struct console *cons = current_console();
+    struct tty *tty = cons->tty;
 
     // was it an IRQ?
     bool irq = (regs->vec_num < 0);
@@ -271,7 +272,7 @@ __fastcall void crash(struct iregs *regs)
     char old_fb[FB_SIZE];
     struct console_save_state saved_console;
     memcpy(old_fb, get_console_fb(g_vga->active_console), FB_SIZE);
-    console_save(current_console(), &saved_console);
+    console_save(cons, &saved_console);
 
     assert(irq || nmi);
 
@@ -285,7 +286,9 @@ __fastcall void crash(struct iregs *regs)
         cprint("\r\n    device is misconfigured or malfunctioning. If this persists, press");
         cprint("\r\n    Ctrl+Alt+Del to restart your computer.");
         cprint("\n\n\n");
-        center_text("Press any key to continue \e6");
+        if (cons->initialized) {
+            center_text("Press any key to continue \e6");
+        }
     }
     else if (nmi) {
         die = false;
@@ -296,7 +299,9 @@ __fastcall void crash(struct iregs *regs)
         cprint("\r\n    A non-maskable interrupt was raised. If this persists, press Ctrl+Alt+Del");
         cprint("\r\n    to restart your computer.");
         cprint("\n\n\n");
-        center_text("Press any key to continue \e6");
+        if (cons->initialized) {
+            center_text("Press any key to continue \e6");
+        }
     }
     cprint("\e[0m");
 
@@ -306,9 +311,6 @@ __fastcall void crash(struct iregs *regs)
     // -------------------------------------------------------------------------
     //
 done:
-    cons = current_console();
-    tty = cons->tty;
-
     mask = pic_getmask();
     pic_setmask(0xFFFF);
     pic_unmask(IRQ_KEYBOARD);
@@ -325,7 +327,7 @@ done:
     __cli();
 
     // restore console state
-    console_restore(current_console(), &saved_console);
+    console_restore(cons, &saved_console);
     memcpy(get_console_fb(g_vga->active_console), old_fb, FB_SIZE);
     pic_setmask(mask);
 

@@ -85,12 +85,7 @@ static int tty_get_console(struct tty *tty, struct console **console)
         return -ENXIO;  // TTY device is not a console
     }
 
-    struct console *cons = get_console(index);
-    if (!cons) {
-        panic("device %d,%d is not a console", _DEV_MAJ(tty->device), index);
-    }
-
-    *console = cons;
+    *console = get_console(index);
     return 0;
 }
 
@@ -412,7 +407,7 @@ struct console * get_console(int num)
     // 0 = current active console
 
     if (num < 0 || num > NR_CONSOLE) {
-        return NULL;
+        panic("attempt to get invalid console!");
     }
 
     if (num == 0) {
@@ -651,25 +646,25 @@ static void esc(struct console *cons, char c)
         //
         case '3':       // ESC 3    disable blink
             cons->blink_on = false;
-            if (cons == current_console()) {
+            if (is_current(cons)) {
                 vga_blink_enable(cons);
             }
             break;
         case '4':       // ESC 4    enable blink
             cons->blink_on = true;
-            if (cons == current_console()) {
+            if (is_current(cons)) {
                 vga_blink_enable(cons);
             }
             break;
         case '5':       // ESC 5    hide cursor
             cons->cursor.hidden = true;
-            if (cons == current_console()) {
+            if (is_current(cons)) {
                 vga_cursor_enable(cons);
             }
             break;
         case '6':       // ESC 6    show cursor
             cons->cursor.hidden = false;
-            if (cons == current_console()) {
+            if (is_current(cons)) {
                 vga_cursor_enable(cons);
             }
             break;
