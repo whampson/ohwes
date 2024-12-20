@@ -1,4 +1,4 @@
-TARGET         := lib/kernel/drivers/char.a
+TARGET         := lib/kernel/chdev.a
 TARGET_DEFINES := __KERNEL__
 
 SOURCES := \
