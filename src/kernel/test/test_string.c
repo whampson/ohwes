@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-
-#include "tests.h"
+#include <test.h>
 
 void memcmp_demo(const char* lhs, const char* rhs, size_t sz)
 {
@@ -75,11 +74,11 @@ void test_memset(void)
     void *ret;
 
     ret = memset(buf, 'A', sizeof(buf));
-    VERIFY_ARE_EQUAL(ret, buf);
+    VERIFY_ARE_EQUAL(buf, ret);
 
     for (int i = 0; i < sizeof(buf); i++) {
         char c = buf[i];
-        VERIFY_ARE_EQUAL(c, 'A');
+        VERIFY_ARE_EQUAL('A', c);
     }
 }
 
@@ -101,7 +100,7 @@ void test_memcpy(void)
     memset(dst, 'B', sizeof(dst));
 
     ret = memcpy(dst, src, sizeof(src));
-    VERIFY_ARE_EQUAL(ret, dst);
+    VERIFY_ARE_EQUAL(dst, ret);
 
     for (int i = 0; i < sizeof(dst); i++) {
         VERIFY_ARE_EQUAL(dst[i], src[i]);
@@ -114,7 +113,7 @@ void test_memcpy(void)
     memcpy(dst, src, 0);
 
     for (int i = 0; i < sizeof(dst); i++) {
-        VERIFY_ARE_EQUAL(dst[i], 'A');
+        VERIFY_ARE_EQUAL('A', dst[i]);
     }
 }
 
@@ -271,19 +270,68 @@ void test_strncmp(void)
     #undef SETUP
 }
 
-
 void test_strlen(void)
 {
     VERIFY_ARE_EQUAL(0, strlen(""));
     VERIFY_ARE_EQUAL(13, strlen("Hello, world!"));
 }
 
-void test_strings(void)
+void test_strcpy(void)
+{
+    //
+    // assumes memset, strlen, and strcmp work
+    //
+
+    char dst[64];
+    void *ret;
+
+    memset(dst, 'A', sizeof(dst));
+
+    ret = strcpy(dst, "");
+    VERIFY_ARE_EQUAL(dst, ret);
+    VERIFY_ARE_EQUAL(0, strlen(ret));
+
+    ret = strcpy(dst, "Test");
+    VERIFY_ARE_EQUAL(dst, ret);
+    VERIFY_ARE_EQUAL(4, strlen(ret));
+    VERIFY_IS_ZERO(strcmp(dst, "Test"));
+}
+
+void test_strncpy(void)
+{
+    //
+    // assumes memset, strlen, and strcmp work
+    //
+
+    char dst[64];
+    void *ret;
+
+    memset(dst, 'A', sizeof(dst));
+
+    ret = strncpy(dst, "Test", 0);
+    VERIFY_ARE_EQUAL(dst, ret);
+    VERIFY_ARE_EQUAL(0, strlen(ret));
+
+    ret = strncpy(dst, "Test", 2);
+    VERIFY_ARE_EQUAL(dst, ret);
+    VERIFY_ARE_EQUAL(2, strlen(ret));
+    VERIFY_IS_ZERO(strcmp(dst, "Te"));
+
+    ret = strncpy(dst, "Test", 6);
+    VERIFY_ARE_EQUAL(dst, ret);
+    VERIFY_ARE_EQUAL(4, strlen(ret));
+    VERIFY_IS_ZERO(strcmp(dst, "Test"));
+}
+
+
+void test_string(void)
 {
     // memset_reference();
     // memcmp_reference();
     // strcmp_reference();
     // strlen_reference();
+
+    DECLARE_TEST("string.h");
 
     test_memset();
     test_memcpy();
@@ -292,4 +340,6 @@ void test_strings(void)
     test_strcmp();
     test_strncmp();
     test_strlen();
+    test_strcpy();
+    test_strncpy();
 }

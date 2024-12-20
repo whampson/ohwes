@@ -9,6 +9,15 @@ SOURCES := \
     ring.c \
     task.c \
 
+ifeq "${TEST_BUILD}" "1"
+SOURCES += \
+    test/test_bsf.c \
+    test/test_list.c \
+    test/test_ring.c \
+    test/test_string.c \
+
+endif
+
 TARGET_DEFINES := __KERNEL__
 TARGET_CFLAGS  := -Wno-unused-function -Wno-multichar
 TARGET_LDSCRIPT:= kernel.ld

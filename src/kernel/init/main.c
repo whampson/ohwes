@@ -56,8 +56,14 @@ extern void init_vga(void);
 
 static void print_boot_info(void);
 
-extern void test_list(void);    // test/list_test.c
-extern void test_pool(void);    // test/pool_test.c
+
+#if TEST_BUILD
+extern void test_string(void);
+extern void test_bsf(void);
+extern void test_ring(void);
+extern void test_list(void);
+extern void test_pool(void);
+#endif
 
 void init(void);
 int main(void);     // usermode program entry point
@@ -66,8 +72,6 @@ static void usermode(uint32_t stack);
 // static size_t
 //  /* it is now my duty to completely */
 //     drain_queue(struct ring *q, char *buf, size_t bufsiz);
-
-void test_bit_scan_forward(void);
 
 #ifdef DEBUG
 int g_test_soft_double_fault = 0;
@@ -89,8 +93,6 @@ __fastcall void start_kernel(struct boot_info *info)
         __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
     print_boot_info();
 
-    test_bit_scan_forward();
-
     // initialize VGA
     init_vga();
 
@@ -107,6 +109,13 @@ __fastcall void start_kernel(struct boot_info *info)
     init_rtc();
 #ifdef DEBUG
     irq_register(IRQ_RTC, debug_interrupt);   // CTRL+ALT+FN to crash kernel
+#endif
+
+#if TEST_BUILD
+    test_string();
+    test_bsf();
+    test_ring();
+    test_list();
 #endif
 
     // setup the file system
@@ -216,30 +225,4 @@ static void print_boot_info(void)
     kprint("bios: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
     kprint("bios: video mode is %02Xh\n", g_boot->vga_mode & 0x7F);
     if (g_boot->ebda_base) kprint("bios: EBDA=%08X,%Xh\n", g_boot->ebda_base, ebda_size);
-}
-
-void test_bit_scan_forward(void)
-{
-    unsigned char zeros[8];
-    zeromem(zeros, sizeof(zeros));
-    unsigned char bits[8];
-    zeromem(bits, sizeof(bits));
-
-    kprint("testing bit_scan_forward...\n");
-
-    // all zeros...
-    assert(bit_scan_forward(zeros, sizeof(zeros)) == -1);
-
-    // lsb == 1
-    bits[0] = 1;
-    assert(bit_scan_forward(bits, sizeof(bits)) == 0);
-
-    // lsb != 1
-    bits[0] = 2;
-    assert(bit_scan_forward(bits, sizeof(bits)) == 1);
-    bits[0] = 0;
-
-    // msb == 1
-    bits[7] = 0x80;
-    assert(bit_scan_forward(bits, sizeof(bits)) == 63);
 }

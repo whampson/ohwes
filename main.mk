@@ -1,12 +1,9 @@
 # debug build toggle and params
 DEBUG           := 1
 DEBUGOPT        := 1
-# TEST_BUILD      := 0
+TEST_BUILD      := 1
 CFLAGS          := -Wall -Werror
 
-# ifeq "${TEST_BUILD}" "1"
-#   DEFINES += TEST_BUILD
-# endif
 ifeq "${DEBUG}" "1"
   ASFLAGS += -g
   CFLAGS += -g
@@ -14,6 +11,9 @@ ifeq "${DEBUG}" "1"
 endif
 ifeq "${DEBUGOPT}" "1"
   CFLAGS += -Og
+endif
+ifeq "${TEST_BUILD}" "1"
+  DEFINES += TEST_BUILD
 endif
 
 # important dirs
