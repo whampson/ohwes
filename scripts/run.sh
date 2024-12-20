@@ -10,13 +10,8 @@
 # Usage: run.sh bochs bochs_config
 #        run.sh qemu disk_image [debug]
 
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    QEMU_PATH=qemu
-    BOCHS_PATH=bochs
-elif [[ "$OSTYPE" == "msys" ]]; then
-    QEMU_PATH=qemu-system-i386
-    BOCHS_PATH=bochs
-fi
+QEMU_PATH=qemu-system-i386
+BOCHS_PATH=bochs
 
 if [ "$#" -lt 2 ]; then
     echo "Usage: run.sh bochs bochs_config"
@@ -31,7 +26,7 @@ if [ "$1" = "qemu" ]; then
     QEMU_FLAGS+=" -fda $2"
     QEMU_FLAGS+=" -monitor stdio"
     QEMU_FLAGS+=" -d cpu_reset"
-    QEMU_FLAGS+=" -display gtk,zoom-to-fit=true"
+    # QEMU_FLAGS+=" -display gtk,zoom-to-fit=true"
     # QEMU_FLAGS+=" -serial telnet:127.0.0.1:50000,server=on"
     # QEMU_FLAGS+=" -serial telnet:127.0.0.1:50001,server=on"
     # QEMU_FLAGS+=" -serial COM5"
