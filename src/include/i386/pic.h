@@ -26,10 +26,12 @@
 
 #include <stdint.h>
 
-#define PIC_MASTER_CMD_PORT       0x20
-#define PIC_MASTER_DATA_PORT      0x21
-#define PIC_SLAVE_CMD_PORT        0xA0
-#define PIC_SLAVE_DATA_PORT       0xA1
+#define PIC_MASTER_CMD_PORT     0x20
+#define PIC_MASTER_DATA_PORT    0x21
+#define PIC_SLAVE_CMD_PORT      0xA0
+#define PIC_SLAVE_DATA_PORT     0xA1
+
+#define PIC_MASK_ALL            0xFFFF
 
 void pic_eoi(uint8_t irq_num);
 void pic_mask(uint8_t irq_num);

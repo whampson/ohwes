@@ -23,6 +23,7 @@
 #include <i386/io.h>
 #include <i386/pic.h>
 #include <i386/x86.h>
+#include <kernel/kernel.h>
 #include <kernel/irq.h>
 
 #define PARANOID        1
@@ -47,12 +48,10 @@
 static void pic_write_cmd(int pic, uint8_t cmd);
 static void pic_write_data(int pic, uint8_t data);
 static uint8_t pic_read_data(int pic);
+static bool pic_initialized = false;
 
 void init_pic(void)
 {
-    uint16_t mask;
-    mask = pic_getmask();  // backup the old mask
-
     // configure master PIC
     pic_write_cmd(MASTER_PIC, ICW1);
     pic_write_data(MASTER_PIC, ICW2_M);
@@ -69,11 +68,16 @@ void init_pic(void)
     pic_write_data(MASTER_PIC, OCW1_MASK_ALL & ~SLAVE_MASK);
     pic_write_data(SLAVE_PIC, OCW1_MASK_ALL);
 
-    pic_setmask(mask);  // restore mask
+    pic_initialized = true;
+    pic_setmask(PIC_MASK_ALL);  // disable all device interrupts
 }
 
 void pic_eoi(uint8_t irq_num)
 {
+    if (!pic_initialized) {
+        panic("PIC not yet initialized!");
+    }
+
     uint32_t flags;
     cli_save(flags);
 
@@ -90,6 +94,10 @@ void pic_eoi(uint8_t irq_num)
 
 void pic_mask(uint8_t irq_num)
 {
+    if (!pic_initialized) {
+        panic("PIC not yet initialized!");
+    }
+
     uint32_t flags;
     cli_save(flags);
 
@@ -110,6 +118,10 @@ void pic_mask(uint8_t irq_num)
 
 void pic_unmask(uint8_t irq_num)
 {
+    if (!pic_initialized) {
+        panic("PIC not yet initialized!");
+    }
+
     uint32_t flags;
     cli_save(flags);
 
@@ -130,6 +142,10 @@ void pic_unmask(uint8_t irq_num)
 
 uint16_t pic_getmask(void)
 {
+    if (!pic_initialized) {
+        panic("PIC not yet initialized!");
+    }
+
     uint32_t flags;
     cli_save(flags);
 
@@ -144,6 +160,10 @@ uint16_t pic_getmask(void)
 
 void pic_setmask(uint16_t mask)
 {
+    if (!pic_initialized) {
+        panic("PIC not yet initialized!");
+    }
+
     uint32_t flags;
     cli_save(flags);
 
