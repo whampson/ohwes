@@ -41,6 +41,11 @@
 #     __LDSCRIPT__ defined and are stored with the '-gen' suffix in the target's
 #     intermediate object directory.
 #
+# 19 Dec 24:
+#   - Added LDFLAGS_POST and TARGET_LDFLAGS_POST to allow linker flags to appear
+#     after the respective list of link libaries.
+#   - Rearranged the ordering of linker flags so TARGET_* flags appear before
+#     global flags.
 
 # ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
 # Caution: Don't edit this Makefile! Create your own main.mk and other
@@ -119,8 +124,10 @@ define add-target
         $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS} \
                 $${${1}_GENLDSCRIPT} $${${1}_MAKEFILES}
 	    @mkdir -p $$(dir $$@)
-	    $$(strip $${${1}_LINKER} -o $$@ $${${1}_OBJECTS} $${LDLIBS} \
-	        $${${1}_LDLIBS} $${LDFLAGS} $${${1}_LDFLAGS} $$(addprefix -T,$${${1}_GENLDSCRIPT}))
+	    $$(strip $${${1}_LINKER} -o $$@ $${${1}_OBJECTS} \
+	        $${${1}_LDFLAGS} $${${1}_LDLIBS} $${${1}_LDFLAGS_POST} \
+		$${LDFLAGS} $${LDLIBS} $${LDFLAGS_POST} \
+		$$(addprefix -T,$${${1}_GENLDSCRIPT}))
 	    $${${1}_POSTMAKE}
 
         $${${1}_GENLDSCRIPT}: $${${1}_LDSCRIPT} $${${1}_OBJECTS}
@@ -210,6 +217,7 @@ define include-submakefile
     TARGET_DEFINES      :=
     TARGET_INCLUDES     :=
     TARGET_LDFLAGS      :=
+    TARGET_LDFLAGS_POST :=
     TARGET_LDLIBS       :=
     TARGET_LDSCRIPT     :=
     TARGET_LINKER       :=
@@ -268,6 +276,7 @@ define include-submakefile
         TARGET_INCLUDES         := $$(call CANONICAL_PATH,$${TARGET_INCLUDES})
         $${TARGET}_INCLUDES     := $${TARGET_INCLUDES}
         $${TARGET}_LDFLAGS      := $${TARGET_LDFLAGS}
+        $${TARGET}_LDFLAGS_POST := $${TARGET_LDFLAGS_POST}
         $${TARGET}_LDLIBS       := $$(addprefix $${TARGET_DIR}/,$${TARGET_LDLIBS})
         TARGET_LDSCRIPT         := $$(call QUALIFY_PATH,$${DIR},$${TARGET_LDSCRIPT})
         TARGET_LDSCRIPT         := $$(call CANONICAL_PATH,$${TARGET_LDSCRIPT})
@@ -295,6 +304,7 @@ define include-submakefile
         TARGET_INCLUDES         := $$(call CANONICAL_PATH,$${TARGET_INCLUDES})
         $${TARGET}_INCLUDES     += $${TARGET_INCLUDES}
         $${TARGET}_LDFLAGS      += $${TARGET_LDFLAGS}
+        $${TARGET}_LDFLAGS_POST += $${TARGET_LDFLAGS_POST}
         $${TARGET}_LDLIBS       += $${TARGET_LDLIBS}
         $${TARGET}_POSTCLEAN    += $${TARGET_POSTCLEAN}
         $${TARGET}_POSTMAKE     += $${TARGET_POSTMAKE}
