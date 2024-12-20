@@ -170,29 +170,28 @@ static inline int test_and_flip_bit(volatile void *addr, unsigned int index)
  */
 static inline int bit_scan_forward(volatile void *addr, unsigned int size)
 {
-    int dword = -1;
-    int size_dwords = size >> 2;
+    int dword_index = -1;
+    int dword_count = size >> 2;
+    int bit_index;
 
-    int index;
     __asm__ volatile (
         "                                   \n\
     1:                                      \n\
         incl    %%ecx                       \n\
-        testl   %%edx, %%edx                \n\
-        jz      2f                          \n\
         decl    %%edx                       \n\
+        js      2f                          \n\
         bsfl    0(%%ebx, %%ecx, 4), %%eax   \n\
         jz      1b                          \n\
     2:                                      \n\
         "
-        : "=a"(index), "+c"(dword)
-        : "b"(addr), "d"(size_dwords)
+        : "=a"(bit_index), "+c"(dword_index), "+d"(dword_count)
+        : "b"(addr)
     );
 
-    if (dword == size_dwords) {
+    if (dword_count < 0) {
         return -1;
     }
-    return (dword << 5) + index;
+    return (dword_index << 5) + bit_index;
 }
 
 #endif // __BITOPS_H

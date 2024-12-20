@@ -67,6 +67,8 @@ static void usermode(uint32_t stack);
 //  /* it is now my duty to completely */
 //     drain_queue(struct ring *q, char *buf, size_t bufsiz);
 
+void test_bit_scan_forward(void);
+
 #ifdef DEBUG
 int g_test_soft_double_fault = 0;
 void debug_interrupt(int irq_num);
@@ -86,6 +88,8 @@ __fastcall void start_kernel(struct boot_info *info)
     kprint("built %s %s using GCC %s by %s\e[0m\n",
         __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
     print_boot_info();
+
+    test_bit_scan_forward();
 
     // initialize VGA
     init_vga();
@@ -212,4 +216,30 @@ static void print_boot_info(void)
     kprint("bios: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
     kprint("bios: video mode is %02Xh\n", g_boot->vga_mode & 0x7F);
     if (g_boot->ebda_base) kprint("bios: EBDA=%08X,%Xh\n", g_boot->ebda_base, ebda_size);
+}
+
+void test_bit_scan_forward(void)
+{
+    unsigned char zeros[8];
+    zeromem(zeros, sizeof(zeros));
+    unsigned char bits[8];
+    zeromem(bits, sizeof(bits));
+
+    kprint("testing bit_scan_forward...\n");
+
+    // all zeros...
+    assert(bit_scan_forward(zeros, sizeof(zeros)) == -1);
+
+    // lsb == 1
+    bits[0] = 1;
+    assert(bit_scan_forward(bits, sizeof(bits)) == 0);
+
+    // lsb != 1
+    bits[0] = 2;
+    assert(bit_scan_forward(bits, sizeof(bits)) == 1);
+    bits[0] = 0;
+
+    // msb == 1
+    bits[7] = 0x80;
+    assert(bit_scan_forward(bits, sizeof(bits)) == 63);
 }
