@@ -14,7 +14,7 @@ TARGET_CFLAGS  := -Wno-unused-function -Wno-multichar
 TARGET_LDSCRIPT:= kernel.ld
 
 MODULES := \
-    drivers/char \
+    chdev \
     init \
     fs \
     mm \
@@ -22,17 +22,13 @@ MODULES := \
 SUBMAKEFILES := $(addsuffix /Module.mk,${MODULES})
 
 TARGET_LDLIBS := \
-    lib/kernel/${ARCH}.a \
-    lib/kernel/drivers/char.a \
-    lib/kernel/init.a \
-    lib/kernel/fs.a \
-    lib/kernel/mm.a \
     lib/libc.a \
+    lib/kernel/${ARCH}.a \
+    $(addsuffix .a,$(addprefix lib/kernel/,${MODULES}))
 
-TARGET_LDFLAGS := \
-    -Wl,--start-group \
-    $(addprefix ${TARGET_DIR}/,${TARGET_LDLIBS}) \
-    -Wl,--end-group
+# allow the above libraries to be searched multiple times for symbols
+TARGET_LDFLAGS      := -Wl,--start-group
+TARGET_LDFLAGS_POST := -Wl,--end-group
 
 RAWBIN_ARGS := -R .eh_frame	# no .eh_frame gobbledygook
 $(eval $(call make-rawbin,ohwes.sys,${RAWBIN_ARGS}))
