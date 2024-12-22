@@ -51,6 +51,7 @@ do {                                                                            
 
 #define _EMPTY_MSG      ""
 #define _EXPACT_MSG     "EXPECTED: %d, ACTUAL: %d"
+#define _VALUE_MSG      "VALUE: %d"
 
 
 #define VERIFY_IS_TRUE(x)                                                       \
@@ -70,28 +71,28 @@ do {                                                                            
 #define VERIFY_IS_ZERO(x)                                                       \
 do {                                                                            \
     if ((x) != 0) {                                                             \
-        _FAIL_TEST("VERIFY_IS_ZERO", _EMPTY_MSG, x);                            \
+        _FAIL_TEST("VERIFY_IS_ZERO", _VALUE_MSG, x);                            \
     }                                                                           \
 } while (0)
 
 #define VERIFY_IS_NOT_ZERO(x)                                                   \
 do {                                                                            \
     if ((x) == 0) {                                                             \
-        _FAIL_TEST("VERIFY_IS_NOT_ZERO", _EMPTY_MSG, x);                        \
+        _FAIL_TEST("VERIFY_IS_NOT_ZERO", _VALUE_MSG, x);                        \
     }                                                                           \
 } while (0)
 
 #define VERIFY_IS_NULL(x)                                                       \
 do {                                                                            \
     if ((x) != NULL) {                                                          \
-        _FAIL_TEST("VERIFY_IS_NULL", _EMPTY_MSG, x);                            \
+        _FAIL_TEST("VERIFY_IS_NULL", _VALUE_MSG, x);                            \
     }                                                                           \
 } while (0)
 
 #define VERIFY_IS_NOT_NULL(x)                                                   \
 do {                                                                            \
     if ((x) == NULL) {                                                          \
-        _FAIL_TEST("VERIFY_IS_NOT_NULL", _EMPTY_MSG, x);                        \
+        _FAIL_TEST("VERIFY_IS_NOT_NULL", _VALUE_MSG, x);                        \
     }                                                                           \
 } while (0)
 

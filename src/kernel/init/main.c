@@ -118,6 +118,7 @@ __fastcall void start_kernel(struct boot_info *info)
     test_bsf();
     test_ring();
     test_list();
+    test_pool();
 #endif
 
     // setup the file system
