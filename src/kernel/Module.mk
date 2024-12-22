@@ -11,6 +11,7 @@ SOURCES := \
 
 ifeq "${TEST_BUILD}" "1"
 SOURCES += \
+    test/test.c \
     test/test_bsf.c \
     test/test_list.c \
     test/test_pool.c \

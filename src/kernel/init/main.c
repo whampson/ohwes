@@ -39,7 +39,6 @@
 #include <kernel/kernel.h>
 #include <kernel/ohwes.h>
 
-
 extern void init_cpu(void);
 extern void init_fs(void);
 extern void init_mm(void);
@@ -49,22 +48,11 @@ extern void init_timer(void);
 extern void init_tty(void);
 extern void init_vga(void);
 
-// #ifdef TEST_BUILD
-// typedef int (*test_main)(void);
-// extern void tmain(void);
-// #endif
+#if TEST_BUILD
+extern void run_tests(void);
+#endif
 
 static void print_boot_info(void);
-
-
-#if TEST_BUILD
-extern void test_string(void);
-extern void test_printf(void);
-extern void test_bsf(void);
-extern void test_ring(void);
-extern void test_list(void);
-extern void test_pool(void);
-#endif
 
 void init(void);
 int main(void);     // usermode program entry point
@@ -113,12 +101,7 @@ __fastcall void start_kernel(struct boot_info *info)
 #endif
 
 #if TEST_BUILD
-    test_string();
-    test_printf();
-    test_bsf();
-    test_ring();
-    test_list();
-    test_pool();
+    run_tests();
 #endif
 
     // setup the file system

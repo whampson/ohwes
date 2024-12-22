@@ -27,32 +27,33 @@
 
 #if __KERNEL__
 #include <kernel/kernel.h>
+#define tprint(...) kprint("test: " __VA_ARGS__)
+#else
+#error "Please define test macros for user mode!"
+#endif
+
+#define _GRN(s)     "\e[32m" s "\e[0m"
+#define _YLW(s)     "\e[1;33m" s "\e[0m"
+#define _RED(s)     "\e[31m" s "\e[0m"
 
 #define DECLARE_TEST(description)                                               \
 do {                                                                            \
-    kprint("test: %s\n", description);                                          \
+    tprint("%s\n", description);                                                \
 } while (0)
 
 #define _FAIL_TEST(fn,msg,...)                                                  \
 do {                                                                            \
-    kprint("\n\e[1;30m" __FILE__ ":" STRINGIFY_LITERAL(__LINE__) ":");          \
-    kprint("\n\e[1;31m*** TEST FAILED ***");                                    \
-    kprint("\n\e[1;33m" fn "(" #__VA_ARGS__ ")");                               \
-    kprint("\n\e[22;37m" msg, __VA_ARGS__);                                     \
-    kprint("\e[0m");                                                            \
+    tprint("\n\e[1;30m" __FILE__ ":" STRINGIFY_LITERAL(__LINE__) ":");          \
+    tprint("\n\e[1;31m*** TEST FAILED ***");                                    \
+    tprint("\n\e[1;33m" fn "(" #__VA_ARGS__ ")");                               \
+    tprint("\n\e[22;37m" msg, __VA_ARGS__);                                     \
+    tprint("\e[0m");                                                            \
     for (;;);                                                                   \
 } while (0)
-
-#else
-
-#error "User mode defines!"
-
-#endif
 
 #define _EMPTY_MSG      ""
 #define _EXPACT_MSG     "EXPECTED: %d, ACTUAL: %d"
 #define _VALUE_MSG      "VALUE: %d"
-
 
 #define VERIFY_IS_TRUE(x)                                                       \
 do {                                                                            \
