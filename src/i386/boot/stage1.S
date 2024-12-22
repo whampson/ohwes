@@ -194,6 +194,7 @@ _find_file_done:
 #     - ASSUMES FILE IS NOT FRAGMENTED! In order to preserve space, this
 #       function does not read the cluster map, so a fragmented file cannot be
 #       loaded.
+#     - ASSUMES CLUSTER SIZE = 1 SECTOR.
 #
 # Inputs:
 #       es:bx - destination buffer
@@ -217,9 +218,9 @@ load_file:
         decl            %ecx                    # calculate num clusters to read
         shrl            $SECTOR_SHIFT, %ecx     #  nsectors=((nbytes-1)/512)+1
         incw            %cx
-        xchgw           %ax, %cx                # convert nclusters to nsectors
-        mulb            sectors_per_cluster     #  nclusters=(nsectors*spt)
-        xchgw           %ax, %cx
+        // xchgw           %ax, %cx                # convert nclusters to nsectors
+        // mulb            sectors_per_cluster     #  nclusters=(nsectors*spt)
+        // xchgw           %ax, %cx
         addw            first_cluster, %ax      # calculate abs. sector address
 
         call            load_sectors            # read it in!
