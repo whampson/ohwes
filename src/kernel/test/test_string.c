@@ -276,6 +276,18 @@ void test_strlen(void)
     VERIFY_ARE_EQUAL(13, strlen("Hello, world!"));
 }
 
+void test_strnlen(void)
+{
+    // zero length string with zero limit
+    VERIFY_ARE_EQUAL(0, strnlen("", 0));
+
+    // string with smaller limit
+    VERIFY_ARE_EQUAL(2, strnlen("Test", 2));
+
+    // string with larger limit
+    VERIFY_ARE_EQUAL(4, strnlen("Test", 8));
+}
+
 void test_strcpy(void)
 {
     //
@@ -283,7 +295,7 @@ void test_strcpy(void)
     //
 
     char dst[64];
-    void *ret;
+    char *ret;
 
     memset(dst, 'A', sizeof(dst));
 
@@ -304,25 +316,55 @@ void test_strncpy(void)
     //
 
     char dst[64];
-    void *ret;
+    char *ret;
 
     memset(dst, 'A', sizeof(dst));
 
-    ret = strncpy(dst, "Test", 0);
-    VERIFY_ARE_EQUAL(dst, ret);
-    VERIFY_ARE_EQUAL(0, strlen(ret));
+    // TODO: len=0 case? do nothing I presume...
 
+    // count < strlen(src)
     ret = strncpy(dst, "Test", 2);
     VERIFY_ARE_EQUAL(dst, ret);
-    VERIFY_ARE_EQUAL(2, strlen(ret));
-    VERIFY_IS_ZERO(strcmp(dst, "Te"));
+    VERIFY_IS_ZERO(strncmp(dst, "Te", 2));
 
-    ret = strncpy(dst, "Test", 6);
+    // count > strlen(src)
+    ret = strncpy(dst, "Test", 8);
     VERIFY_ARE_EQUAL(dst, ret);
     VERIFY_ARE_EQUAL(4, strlen(ret));
     VERIFY_IS_ZERO(strcmp(dst, "Test"));
+
+    // should be some zero padding in dest buffer...
+    for (int i = 4; i < 8; i++) {
+        VERIFY_IS_ZERO(dst[i]);
+    }
 }
 
+void test_strcat(void)
+{
+    // assumes strcpy and strcmp works
+
+    char dst[64];
+    char *ret;
+
+    strcpy(dst, "Test");
+    ret = strcat(dst, "icles");
+
+    VERIFY_IS_ZERO(strcmp("Testicles", ret));
+}
+
+void test_strncat(void)
+{
+    // assumes strcpy and strcmp works
+
+    char dst[64];
+    char *ret;
+
+    strcpy(dst, "Test");
+    ret = strncat(dst, "ingrid", 3);
+    ret = strncat(dst, " strncat!", 32);
+
+    VERIFY_IS_ZERO(strcmp("Testing strncat!", ret));
+}
 
 void test_string(void)
 {
@@ -340,6 +382,9 @@ void test_string(void)
     test_strcmp();
     test_strncmp();
     test_strlen();
+    test_strnlen();
     test_strcpy();
     test_strncpy();
+    test_strcat();
+    test_strncat();
 }

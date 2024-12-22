@@ -49,57 +49,67 @@ char * strerror(int errnum)
     return _strerr_buf;
 }
 
-void * memcpy(void * restrict dest, const void * restrict src, size_t count)
+void * memcpy(void *restrict dst, const void * restrict src, size_t count)
 {
-    char *d = dest;
+    // TODO: could be optimized to copy DWORDs...
+    //       or use __builtin_memcpy?
+
+    char *d = dst;
     const char *s = src;
 
     while (count--) {
         *d++ = *s++;
     }
 
-    return dest;
+    return dst;
 }
 
-void * memmove(void *dest, const void *src, size_t count)
+void * mempcpy(void *restrict dst, const void * restrict src, size_t count)
 {
-    char *d = dest;
+    memcpy(dst, src, count);
+    return &((char *) dst)[count];
+}
+
+
+void * memmove(void *dst, const void *src, size_t count)
+{
+    char *d = dst;
     const char *s = src;
 
-    if (src == dest) {
-        return dest;
+    if (src == dst) {
+        return dst;
     }
 
     // left overlap, copy forwards from head
-    if (dest < src && dest + count > src) {
+    if (dst < src && dst + count > src) {
         while (count--) {
             *d++ = *s++;
         }
 
-        return dest;
+        return dst;
     }
 
     // right overlap, copy backwards from tail
-    else if (src < dest && src + count > dest) {
+    else if (src < dst && src + count > dst) {
         d += count; s += count;
         while (count--) {
             *--d = *--s;    // evil
         }
-        return dest;
+        return dst;
     }
 
     // no overlap
-    return memcpy(dest, src, count);
+    return memcpy(dst, src, count);
 }
 
-void * memset(void *dest, int c, size_t count)
+void * memset(void *dst, int c, size_t count)
 {
-    char *d = dest;
+    char *d = dst;
     while (count--) {
         *d++ = (char) c;
     }
 
-    return dest;
+    return dst;
 }
 
 int memcmp(const void *lhs, const void *rhs, size_t count)
@@ -118,26 +128,49 @@ int memcmp(const void *lhs, const void *rhs, size_t count)
     return *l - *r;
 }
 
-char * strcpy(char *restrict dest, const char *restrict src)
+char * strcpy(char *restrict dst, const char *restrict src)
 {
-    char *ret = dest;
-    while ((*dest++ = *src++) != '\0') { }
-
-    return ret;
+    stpcpy(dst, src);
+    return dst;
 }
 
-char * strncpy(char *restrict dest, const char *restrict src, size_t count)
+char * stpcpy(char *restrict dst, const char *restrict src)
 {
-    char *ret = dest;
-    while (count-- && (*dest++ = *src++) != '\0') { }
+    // https://man7.org/linux/man-pages/man3/strcat.3.html
 
-    return ret;
+    char *p = mempcpy(dst, src, strlen(src));
+    *p = '\0';
+    return p;
+}
+
+char * strncpy(char *restrict dst, const char *restrict src, size_t count)
+{
+    stpncpy(dst, src, count);
+    return dst;
+}
+
+char * stpncpy(char *restrict dst, const char *restrict src, size_t count)
+{
+    // https://man7.org/linux/man-pages/man3/strncpy.3.html
+
+    size_t len = strnlen(src, count);
+    return memset(mempcpy(dst, src, len), 0, count - len);
 }
 
 size_t strlen(const char *str)
 {
     size_t len = 0;
-    while (*str++) {
+    while ((*str++) != '\0') {
+        len++;
+    }
+
+    return len;
+}
+
+size_t strnlen(const char *str, size_t maxlen)
+{
+    size_t len = 0;
+    while (maxlen-- && (*str++) != '\0') {
         len++;
     }
 
@@ -168,4 +201,20 @@ int strncmp(const char *lhs, const char *rhs, size_t count)
     }
 
     return diff;
+}
+
+char * strcat(char *restrict dst, const char *restrict src)
+{
+    // https://man7.org/linux/man-pages/man3/strcat.3.html
+
+    stpcpy(dst + strlen(dst), src);
+    return dst;
+}
+
+char * strncat(char *restrict dst, const char *restrict src, size_t count)
+{
+    // https://man7.org/linux/man-pages/man3/strncat.3.html
+
+    stpcpy(mempcpy(dst + strlen(dst), src, strnlen(src, count)), "");
+    return dst;
 }
