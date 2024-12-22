@@ -1,22 +1,25 @@
-
+#include <errno.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <syscall.h>
 #include "test.h"
 
+#if __KERNEL__
+#include <kernel/kernel.h>
+#define _console_write      _kprint
+#else
 #define _console_write      _wr
-
 void _wr(const char *msg)
 {
     const char *a = msg;
     while (*a != '\0')
     {
-        write(stdout_fd, a++, 1);
+        write(STDOUT_FILENO, a++, 1);
     }
 }
+#endif
 
 void printf_reference()
 {
@@ -57,6 +60,8 @@ void printf_reference()
 
 void test_printf(void)
 {
+    DECLARE_TEST("sprintf");
+
     // printf_reference();
 
     char buf[256];
@@ -118,7 +123,7 @@ void test_printf(void)
 
     // snprintf return value is num chars that would've been printed had limit
     //   not been reached
-    TEST_SNPRINTF(-EINVAL, "", 0, NULL);  // NULL ok if n==0
+    TEST_SNPRINTF(0, "", 0, NULL);  // NULL ok if n==0
     TEST_SNPRINTF(3, "a", 1, "abc");
     TEST_SNPRINTF(3, "abc", 3, "abc");
     TEST_SNPRINTF(3, "", 0, "abc");

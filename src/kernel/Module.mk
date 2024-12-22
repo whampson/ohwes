@@ -13,6 +13,7 @@ ifeq "${TEST_BUILD}" "1"
 SOURCES += \
     test/test_bsf.c \
     test/test_list.c \
+    test/test_printf.c \
     test/test_ring.c \
     test/test_string.c \
 

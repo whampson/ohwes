@@ -59,6 +59,7 @@ static void print_boot_info(void);
 
 #if TEST_BUILD
 extern void test_string(void);
+extern void test_printf(void);
 extern void test_bsf(void);
 extern void test_ring(void);
 extern void test_list(void);
@@ -113,6 +114,7 @@ __fastcall void start_kernel(struct boot_info *info)
 
 #if TEST_BUILD
     test_string();
+    test_printf();
     test_bsf();
     test_ring();
     test_list();
