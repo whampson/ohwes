@@ -41,7 +41,7 @@
 
 #define COM_BUFFER_SIZE     16
 #define LOOPBACK_TEST       0
-#define DEBUG_SERIAL        0
+#define CHATTY_SERIAL       0
 
 //
 // Physical Serial Ports
@@ -369,6 +369,8 @@ struct com_port {
     struct ring oq;             // --> to device
     char _obuf[COM_BUFFER_SIZE];
 
+    char _ibuf[COM_BUFFER_SIZE];
+
     // register shadows
     struct iir iir;             // interrupt indicator register
     struct ier ier;             // interrupt enable register
@@ -628,12 +630,14 @@ static int com_open(struct com_port *com)
     com_write(com, COM_REG_IER, com->ier._value);
     com->ier._value = com_read(com, COM_REG_IER);
 
+#if CHATTY_SERIAL
     // print port info
     kprint("com%d: port=%Xh div=%d fcr=%02Xh lcr=%02Xh mcr=%02Xh ier=%02Xh\n",
         com->num, (int) com->io_port,
         (int) com->baud_divisor, (int) com->fcr._value,
         (int) com->lcr._value, (int) com->mcr._value,
         (int) com->ier._value);
+#endif
 
     com->open = true;
     return 0;
@@ -694,7 +698,7 @@ static void com_interrupt(struct com_port *com)
 
         switch (com->iir.priority) {
             case PRIORITY_RXREADY:
-#if DEBUG_SERIAL
+#if CHATTY_SERIAL
                 kprint("com%d: rx_ready\n", com->num);
 #endif
                 assert(com->lsr.data_ready);
@@ -705,14 +709,14 @@ static void com_interrupt(struct com_port *com)
                 }
                 break;
             case PRIORITY_TXREADY:
-#if DEBUG_SERIAL
+#if CHATTY_SERIAL
                 kprint("com%d: tx_ready\n", com->num);
 #endif
                 assert(com->lsr.tx_ready);
                 com_flush(com);
                 break;
             case PRIORITY_LINE:
-#if DEBUG_SERIAL
+#if CHATTY_SERIAL
                 if (com->lsr.overrun_error) {
                     kprint("\e[1;31mcom%d: overrun error\e[0m\n", com->num);
                 }
@@ -736,7 +740,7 @@ static void com_interrupt(struct com_port *com)
                 break;
             case PRIORITY_MODEM:
 
-#if DEBUG_SERIAL
+#if CHATTY_SERIAL
                 if (com->msr._value) {
                     kprint("com%d: modem status:%s%s%s%s%s%s%s%s\n", com->num,
                             com->msr.clear_to_send ? " cts" : "",
