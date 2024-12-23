@@ -41,7 +41,7 @@
 
 #define COM_BUFFER_SIZE     16
 #define LOOPBACK_TEST       0
-#define DEBUG_SERIAL        1
+#define DEBUG_SERIAL        0
 
 //
 // Physical Serial Ports

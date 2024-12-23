@@ -60,6 +60,9 @@ struct n_tty_ldisc_data {
 };
 static struct n_tty_ldisc_data ldisc_data[NR_TTY];
 
+static void opost(struct tty *tty, char c);
+static void echo(struct tty *tty, char c);
+
 void init_n_tty(void)
 {
     if (tty_register_ldisc(N_TTY, &n_tty)) {
@@ -147,15 +150,11 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t count)
     for (int i = 0; i < count; i++) {
         char c = buf[i];
         if (O_OPOST(tty)) {
-             if (c == '\r' && O_OCRNL(tty)) {
-                c = '\n';
-            }
-            if (c == '\n' && O_ONLCR(tty)) {
-                tty->driver.write_char(tty, '\r');
-            }
+            opost(tty, c);
         }
-
-        tty->driver.write_char(tty, c);
+        else {
+            tty->driver.write_char(tty, c); // TODO: what if this fails?
+        }
         nwritten++; // only count chars written from input buf
     }
 
@@ -190,19 +189,6 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
 
     for (int i = 0; i < count; i++) {
         char c = buf[i];
-        if (ring_full(&ldisc_data->iring)) {
-            tty->driver.write_char(tty, '\a');  // beep!
-            break;
-        }
-        if (L_ECHO(tty)) {
-            if (L_ECHOCTL(tty) && iscntrl(c)) {
-                tty->driver.write_char(tty, '^');
-                tty->driver.write_char(tty, c ^ 0x40);
-            }
-            else {
-                tty->driver.write_char(tty, c);
-            }
-        }
         if (c == '\r') {
             if (I_IGNCR(tty)) {
                 continue;
@@ -215,8 +201,16 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
             c = '\r';
         }
 
+        if (L_ECHO(tty)) {
+            if (ring_full(&ldisc_data->iring)) {
+                tty->driver.write_char(tty, '\a');  // input buffer full... beep!
+                break;
+            }
+            echo(tty, c);
+        }
+
         cli_save(flags);
-        ring_put(&ldisc_data->iring, buf[i]);
+        ring_put(&ldisc_data->iring, c);
         restore_flags(flags);
     }
 
@@ -231,4 +225,34 @@ static size_t n_tty_recv_room(struct tty *tty)
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
 
     return ring_length(&ldisc_data->iring) - ring_count(&ldisc_data->iring);
+}
+
+static void opost(struct tty *tty, char c)
+{
+    int space = tty->driver.write_room(tty);
+    if (!space) {
+        return;
+    }
+
+    if (O_OPOST(tty)) {
+        if (c == '\r' && O_OCRNL(tty)) {
+            c = '\n';
+        }
+        if (c == '\n' && O_ONLCR(tty)) {
+            tty->driver.write_char(tty, '\r');
+        }
+    }
+
+    tty->driver.write_char(tty, c);
+}
+
+static void echo(struct tty *tty, char c)
+{
+    if (L_ECHOCTL(tty) && iscntrl(c) && c != '\t' && c != '\n') {
+        tty->driver.write_char(tty, '^');
+        tty->driver.write_char(tty, c ^ 0x40);
+    }
+    else {
+        opost(tty, c);
+    }
 }

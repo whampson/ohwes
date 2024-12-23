@@ -178,9 +178,13 @@ int main(void)
 
     printf("\e4\e[5;33mHello from user mode!\e[m\n");
 
+    printf("Opening /dev/ttyS0...\n");
+    int fd = CHECK(open("/dev/ttyS0", 0));
+
     char c;
-    while (read(STDIN_FILENO, &c, 1) && c != 3) {
+    while (read(fd, &c, 1) && c != 3) {
         write(STDOUT_FILENO, &c, 1);
+        // write(fd, &c, 1);
     }
 
     return 0;
