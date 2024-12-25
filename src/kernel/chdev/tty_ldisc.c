@@ -24,7 +24,6 @@
 #include <i386/interrupt.h>
 #include <kernel/config.h>
 #include <kernel/kernel.h>
-#include <kernel/pool.h>
 #include <kernel/queue.h>
 #include <kernel/tty.h>
 
@@ -84,7 +83,7 @@ static int n_tty_open(struct tty *tty)
 
 static int n_tty_close(struct tty *tty)
 {
-    // TODO: free pool item
+    // TODO: flush etc.
     return -ENOSYS;
 }
 
@@ -167,6 +166,7 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t count)
 
 static int n_tty_ioctl(struct tty *tty, unsigned int num, unsigned long arg)
 {
+    // TODO
     return -ENOSYS;
 }
 

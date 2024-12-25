@@ -181,12 +181,28 @@ int main(void)
     printf("Opening /dev/ttyS0...\n");
     int fd = CHECK(open("/dev/ttyS0", 0));
 
+    // char buf[65];
+    // zeromem(buf, sizeof(buf));
+    // for (int i = 0; i < sizeof(buf) - 1; i++) {
+    //     buf[i] = 'a' + (i % 26);
+    // }
+
+    // int nwritten;
+    // nwritten = write(fd, buf, sizeof(buf));
+    // printf("wrote %d bytes to COM port\n", nwritten);
+
     char c;
-    while (read(fd, &c, 1) && c != 3) {
-        write(STDOUT_FILENO, &c, 1);
-        // write(fd, &c, 1);
+    while (read(STDIN_FILENO, &c, 1) && c != 3) {
+        write(fd, &c, 1);
     }
 
+    // char c;
+    // while (read(fd, &c, 1) && c != 3) {
+    //     write(STDOUT_FILENO, &c, 1);
+    //     // write(fd, &c, 1);
+    // }
+
+    close(fd);
     return 0;
 }
 

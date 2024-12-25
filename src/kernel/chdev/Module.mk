@@ -1,5 +1,6 @@
 TARGET         := lib/kernel/chdev.a
 TARGET_DEFINES := __KERNEL__
+TARGET_CFLAGS  := -Wno-unused-function
 
 SOURCES := \
     chdev.c \

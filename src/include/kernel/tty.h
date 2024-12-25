@@ -103,8 +103,12 @@ struct tty_driver {
     int     (*ioctl)(struct tty *, unsigned int cmd, unsigned long arg);
     int     (*write)(struct tty *, const char *buf, size_t count);
     void    (*write_char)(struct tty *, char c);
-    size_t  (*write_room)(struct tty *);
-    void    (*flush)(struct tty *);
+    size_t  (*write_room)(struct tty *);    // query space in write buffer
+    void    (*flush)(struct tty *);         // flush write buffer
+    void    (*stop)(struct tty *);          // stop transmitting chars
+    void    (*start)(struct tty *);         // start transmitting chars
+    void    (*throttle)(struct tty *);      // stop receiving chars (tell transmitter to stop)
+    void    (*unthrottle)(struct tty *);    // start receiving chars (tell transmitter to start)
 };
 
 //
