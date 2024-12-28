@@ -96,7 +96,7 @@ static void print_kernel_sections(void)
 
     struct section sections[] = {
         { "setup stack",        (void *) SETUP_STACK-FRAME_SIZE,        (void *) SETUP_STACK },
-        { "interrupt stack",    (void *) INTERRUPT_STACK-FRAME_SIZE,    (void *) INTERRUPT_STACK },
+        { "interrupt stacks",   (void *) INT_STACK_LIMIT,               (void *) INT_STACK_BASE },
         { "page directory",     (void *) KERNEL_PGDIR,                  (void *) KERNEL_PGDIR+PAGE_SIZE },
         { "kernel page table",  (void *) KERNEL_PGTBL,                  (void *) KERNEL_PGTBL+PAGE_SIZE },
         { "kernel image:",      &_kernel_start,                         &_kernel_end },
@@ -114,6 +114,7 @@ static void print_kernel_sections(void)
             sec->start, sec->end-1, sec->name);
     }
 
+    kprint("kernel stack space allows for %d nested interrupts\n", NR_INT_STACKS);
     kprint("kernel image is %dk bytes (%d pages)\n",
         align((size_t) &_kernel_size, 1024) >> 10,
         PAGE_ALIGN((size_t) &_kernel_size) >> PAGE_SHIFT);

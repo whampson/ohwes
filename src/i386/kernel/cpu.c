@@ -64,6 +64,26 @@ static void verify_gdt(void);
 extern struct tss *g_double_fault_tss;      // crash.c
 extern __noreturn void double_fault(void);  // crash.c
 
+// this is a bit of a janky way of managing kernel stacks
+// but it'll work for now
+void push_kernel_stack(void)
+{
+    struct tss *tss = get_tss();
+    tss->esp0 -= FRAME_SIZE;
+    if (tss->esp0 <= INT_STACK_LIMIT) {
+        panic("too many nested interrupts!");
+    }
+}
+
+void pop_kernel_stack(void)
+{
+    struct tss *tss = get_tss();
+    tss->esp0 += FRAME_SIZE;
+    if (tss->esp0 > INT_STACK_BASE) {
+        panic("kernel stack underflow");
+    }
+}
+
 void init_cpu(void)
 {
     init_idt();
@@ -107,7 +127,7 @@ static void init_tss(void)
     // system call TSS
     struct tss *tss = get_tss_from_gdt(_TSS0_SEGMENT);
     zeromem(tss, TSS_SIZE);
-    tss->esp0 = __phys_to_virt(INTERRUPT_STACK);
+    tss->esp0 = __phys_to_virt(INT_STACK_BASE);
     tss->ss0 = KERNEL_DS;
 
     // double fault TSS, used to force a stack switch

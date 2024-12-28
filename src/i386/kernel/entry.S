@@ -147,15 +147,28 @@ irq_trampoline:
         jmp             handle_irq      # common IRQ handler
 
 syscall_trampoline:
-        pushl           $return_from_syscall
         movl            IREGS_EAX(%ecx), %eax
         cmpl            $NR_SYSCALLS, %eax
         ja              _nosys
-        sti                             # allow interrupts for syscalls
-        jmp             *syscall_table(, %eax, 4)
+        jmp             sys_enter
 _nosys:
         movl            $-ENOSYS, %eax
-        ret
+        jmp             return_from_syscall
+
+sys_enter:
+        pushl           $sys_leave
+        pushl           %eax
+        call            push_kernel_stack       # make sure any nested interrupt uses a different kernel stack!
+        popl            %eax
+        sti
+        jmp             *syscall_table(, %eax, 4)
+
+sys_leave:
+        cli
+        pushl           %eax
+        call            pop_kernel_stack
+        popl            %eax
+        jmp             return_from_syscall
 
 # ----------------------------------------------------------------------------
 # interrupt return / task switch
@@ -168,10 +181,8 @@ switch_context:
                                         # fallthrough...
 return_from_exception:
 return_from_irq:
-        cli
         movl            IREGS_EAX(%esp), %eax
 return_from_syscall:
-        cli
         movl            IREGS_EBP(%esp), %ebp
         movl            IREGS_EDI(%esp), %edi
         movl            IREGS_ESI(%esp), %esi
