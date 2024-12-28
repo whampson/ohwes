@@ -42,7 +42,7 @@ SYSCALL_DEFINE(dup2, int fd, int newfd)
     return dupfd(fd, newfd);
 }
 
-SYSCALL_DEFINE(open, const char *name, int flags)
+SYSCALL_DEFINE(open, const char *name, int oflag)
 {
     int fd;
     int ret;
@@ -50,6 +50,11 @@ SYSCALL_DEFINE(open, const char *name, int flags)
     struct task *task;
     struct file *file;
     struct inode *inode;
+
+    const int req_oflag_mask = oflag & (O_RDONLY | O_WRONLY | O_RDWR);
+    if ((req_oflag_mask & (req_oflag_mask - 1)) != 0) {
+        return -EINVAL; // must specify exactly one of O_RDONLY, O_WRONLY, or O_RDWR
+    }
 
     assert(getpl() == KERNEL_PL);
     cli_save(cli_flags); // prevent task switch
@@ -68,6 +73,7 @@ SYSCALL_DEFINE(open, const char *name, int flags)
         ret = -EMFILE;  // Too many open files in system
         goto done;
     }
+    file->f_oflag = oflag;
 
     inode = find_inode(file, name);
     if (!inode) {

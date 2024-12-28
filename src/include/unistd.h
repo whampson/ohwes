@@ -46,7 +46,7 @@ int close(int fd);
 int dup(int fd);
 int dup2(int fd, int newfd);
 int ioctl(int fd, unsigned int cmd, unsigned long arg); // TODO: sys/ioctl.h?
-int open(const char *name, int flags);                  // TOOD: fcntl.h?
+int open(const char *name, int oflag);                  // TOOD: fcntl.h?
 int read(int fd, void *buf, size_t count);
 int write(int fd, const void *buf, size_t count);
 

@@ -56,7 +56,14 @@ struct file_ops {
     int     (*ioctl)(struct file *, unsigned int, unsigned long);
 };
 
+// TODO: fcntl.h
+#define O_RDONLY    0b0000
+#define O_WRONLY    0b0001
+#define O_RDWR      0b0010
+#define O_NONBLOCK  0b0100
+
 struct file {
+    uint32_t f_oflag;
     struct file_ops *fops;
     void *private_data;     // TODO: needed?
 };
