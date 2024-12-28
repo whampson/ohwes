@@ -69,10 +69,6 @@ int tty_register_driver(struct tty_driver *driver)
         return -EINVAL;
     }
 
-    if (!driver->write_char) {
-        driver->write_char = default_write_char;
-    }
-
     int error = register_chdev(driver->major, driver->name, &tty_fops);
     if (error < 0) {
         return error;
@@ -167,7 +163,10 @@ int do_tty_open(struct tty *tty)
     if (!driver) {
         return -ENXIO;  // no TTY driver registered for device!
     }
+
+    // associate driver with TTY
     tty->driver = *driver;
+    tty->line = _DEV_MIN(tty->device) - tty->driver.minor_start;
 
     // open the tty driver
     if (!tty->driver.open) {
@@ -181,7 +180,10 @@ int do_tty_open(struct tty *tty)
     // TODO: need to ensure things get closed if something fails
     // after something else has been opened.
 
+    // TODO: might be better to use a single 'flags' word
+    // so we can clear flags in aggregate (and not miss any)
     tty->open = true;
+    tty->throttled = false;
     return ret;
 }
 
@@ -190,7 +192,7 @@ static int tty_open(struct inode *inode, struct file *file)
     int ret;
     struct tty *tty;
 
-    if (!inode) {
+    if (!inode || !file) {
         return -EINVAL;
     }
 
@@ -207,10 +209,9 @@ static int tty_open(struct inode *inode, struct file *file)
     }
 
     // set file state
-    if (file) {
-        file->fops = &tty_fops;
-        file->private_data = tty;
-    }
+    tty->file = file;
+    file->fops = &tty_fops;
+    file->private_data = tty;
 
     return 0;
 }
@@ -269,9 +270,4 @@ static int tty_ioctl(struct file *file, unsigned int num, unsigned long arg)
 {
     // TODO: forward ioctl to ldisc and driver
     return -ENOSYS;
-}
-
-static void default_write_char(struct tty *tty, char c)
-{
-    tty->driver.write(tty, &c, 1);
 }

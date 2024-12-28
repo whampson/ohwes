@@ -30,11 +30,8 @@
 #include <kernel/console.h>
 #include <kernel/chdev.h>
 #include <kernel/kernel.h>
+#include <kernel/tty.h>
 #include <kernel/vga.h>
-
-
-#define CONSOLE_MIN             1
-#define CONSOLE_MAX             NR_CONSOLE
 
 // TODO: need to make a distinction between a 'console':
 //   a character device that can receive input, transmit output and is
@@ -66,7 +63,6 @@ static struct tty_driver console_driver = {
     .ioctl = console_tty_ioctl,
     .write = console_tty_write,
     ./* in the */write_room/* with black curtains*/ = console_tty_write_room,
-    .write_char = console_tty_write_char,
     .flush = NULL,
 };
 
@@ -154,18 +150,6 @@ static int console_tty_ioctl(
 static size_t console_tty_write_room(struct tty *tty)
 {
     return -ENOSYS;
-}
-
-static void console_tty_write_char(struct tty *tty, char c)
-{
-    struct console *cons;
-
-    int ret = tty_get_console(tty, &cons);
-    if (ret < 0) {
-        return;
-    }
-
-    console_putchar(cons, c);
 }
 
 // ----------------------------------------------------------------------------

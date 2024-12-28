@@ -34,19 +34,18 @@
 // print debugging info
 #define CHATTY_COM          1
 
-// TTY device minor numbers
-#define SERIAL_MIN          (NR_CONSOLE+1)
-#define SERIAL_MAX          (SERIAL_MIN+NR_SERIAL)
-
 // enable for slower inb/outb operations
-#define SLOW_IO             1
+#define SLOW_IO             0
 
 // character counts
 #define FIFO_DEPTH          16      // hardware FIFO depth
-#define RECV_MAX            128     // max chars to receive per interrupt
+#define RECV_MAX            64      // max chars to receive per interrupt
+#define XMIT_MAX            16      // max chars to send per interrupt
 
 // check if a COM register returned a bad value
-#define err_chk(x)        ((x) == 0 || (x) == 0xFF)
+#define ERR_CHK(x)          ((x) == 0 || (x) == 0xFF)
+
+#define COM_WARN(...)       kprint("\e[1;33m"); kprint(__VA_ARGS__); kprint("\e[0m");
 
 //
 // COM port state
@@ -90,6 +89,32 @@ struct com _com_ports[NR_SERIAL];
 static void serial_interrupt(int irq_num);
 static void com_interrupt(struct com *com);
 
+static int serial_open(struct tty *);
+static int serial_close(struct tty *);
+static int serial_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg);
+static void serial_flush(struct tty *);
+static int serial_write(struct tty *tty, const char *buf, size_t count);
+static size_t serial_write_room(struct tty *);
+static void serial_throttle(struct tty *);
+static void serial_unthrottle(struct tty *);
+
+struct tty_driver serial_driver = {
+    .name = "ttyS",
+    .major = TTY_MAJOR,
+    .minor_start = SERIAL_MIN,
+    .count = NR_SERIAL,
+    .open = serial_open,
+    .close = serial_close,
+    .ioctl = serial_ioctl,
+    .flush = serial_flush,
+    .write = serial_write,
+    .write_room = serial_write_room,
+    .throttle = serial_throttle,
+    .unthrottle = serial_unthrottle,
+    // .start = serial_start,
+    // .stop = serial_stop
+};
+
 static uint8_t com_in(struct com *com, uint8_t reg);
 static void com_out(struct com *com, uint8_t reg, uint8_t data);
 
@@ -97,8 +122,7 @@ static void shadow(struct com *com);
 static bool set_baud(struct com *com, enum baud_rate baud);
 static bool set_mode(struct com *com,
     enum word_length wls, enum parity parity, enum stop_bits stb);
-static bool set_fifo(struct com *com,
-    bool enabled, enum receiver_trigger depth);
+static void set_fifo(struct com *com, bool enabled, enum recv_trig depth);
 
 static void tx_enable(struct com *com);
 static void tx_disable(struct com *com);
@@ -124,7 +148,7 @@ static int tty_get_com(struct tty *tty, struct com **com)
     }
 
     if (_DEV_MAJ(tty->device) != TTY_MAJOR) {
-        return -ENODEV; // not a TTY device
+        return -ENODEV; // char device is not a TTY
     }
 
     int index = _DEV_MIN(tty->device);
@@ -136,6 +160,53 @@ static int tty_get_com(struct tty *tty, struct com **com)
     *com = get_com(com_index);
     return 0;
 }
+
+void init_serial(void)
+{
+    struct com *com;
+
+    if (tty_register_driver(&serial_driver)) {
+        panic("unable to register serial driver!");
+    }
+
+    for (int i = 1; i <= NR_SERIAL; i++) {
+        // locate and init com struct
+        com = get_com(i);
+        zeromem(com, sizeof(struct com));
+        com->num = i;
+        switch (i) {
+            case 1: com->io_port = COM1_PORT; break;
+            case 2: com->io_port = COM2_PORT; break;
+            case 3: com->io_port = COM3_PORT; break;
+            case 4: com->io_port = COM4_PORT; break;
+            default: panic("assign port for COM%d!", i);
+        }
+
+        // collect initial register state
+        shadow(com);
+        if (com->ier._value == 0xFF) {
+            continue;
+        }
+
+        // sanity check: try storing a value in scratch reg
+        com_out(com, UART_SCR, 0);
+        com_out(com, UART_SCR, 0x55);
+        if (com_in(com, UART_SCR) != 0x55) {
+            kprint("com%d: error: probe failed\n", com->num);
+            continue;
+        }
+
+        com->valid = true;
+        kprint("com%d: detected on port %Xh\n", com->num, com->io_port);
+    }
+
+    irq_register(IRQ_COM1, serial_interrupt);
+    irq_unmask(IRQ_COM1);
+
+    irq_register(IRQ_COM2, serial_interrupt);
+    irq_unmask(IRQ_COM2);
+}
+
 
 static int serial_open(struct tty *tty)
 {
@@ -176,9 +247,7 @@ static int serial_open(struct tty *tty)
     }
 
     // enable FIFOs and set default trigger level (1 byte)
-    if (!set_fifo(com, true, RCVR_TRIG_1)) {
-        ret = -EIO; goto done;
-    }
+    set_fifo(com, true, RCVR_TRIG_14);
 
     // set modem control
     com->mcr._value = 0;
@@ -190,14 +259,13 @@ static int serial_open(struct tty *tty)
     // enable interrupts
     com->ier._value = 0;
     com->ier.rda = 1;   // interrupt when data ready to read
-    // com->ier.thre = 1;  // interrupt when ready to send next char
     com->ier.rls = 1;   // interrupt when line status changes
     com->ier.ms = 1;    // interrupt when modem status changes
     com_out(com, UART_IER, com->ier._value);
 
     // collect final register state
     shadow(com);
-    if (err_chk(com->ier._value) || err_chk(com->mcr._value)) {
+    if (ERR_CHK(com->ier._value) || ERR_CHK(com->mcr._value)) {
         ret = -EIO; goto done;
     }
 
@@ -297,6 +365,7 @@ static int serial_write(struct tty *tty, const char *buf, size_t count)
         tx_enable(com);
     }
 
+    // enable interrupts and return
     restore_flags(flags);
     return ret;
 }
@@ -319,69 +388,43 @@ static size_t serial_write_room(struct tty *tty)
     return room;
 }
 
-
-struct tty_driver serial_driver = {
-    .name = "ttyS",
-    .major = TTY_MAJOR,
-    .minor_start = SERIAL_MIN,
-    .count = NR_SERIAL,
-    .open = serial_open,
-    .close = serial_close,
-    .ioctl = serial_ioctl,
-    .flush = serial_flush,
-    .write = serial_write,
-    .write_room = serial_write_room,
-    // .throttle = serial_throttle,
-    // .unthrottle = serial_unthrottle,
-    // .start = serial_start,
-    // .stop = serial_stop
-};
-
-void init_serial(void)
+static void serial_throttle(struct tty *tty)
 {
+    uint32_t flags;
     struct com *com;
 
-    if (tty_register_driver(&serial_driver)) {
-        panic("unable to register serial driver!");
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return;
     }
 
-    for (int i = 1; i <= NR_SERIAL; i++) {
-        // locate and init com struct
-        com = get_com(i);
-        zeromem(com, sizeof(struct com));
-        com->num = i;
-        switch (i) {
-            case 1: com->io_port = COM1_PORT; break;
-            case 2: com->io_port = COM2_PORT; break;
-            case 3: com->io_port = COM3_PORT; break;
-            case 4: com->io_port = COM4_PORT; break;
-            default: panic("assign port for COM%d!", i);
-        }
-
-        // collect initial register state
-        shadow(com);
-        if (com->ier._value == 0xFF) {
-            continue;
-        }
-
-        // sanity check: try storing a value in scratch reg
-        com_out(com, UART_SCR, 0);
-        com_out(com, UART_SCR, 0x55);
-        if (com_in(com, UART_SCR) != 0x55) {
-            kprint("com%d: error: probe failed\n", com->num);
-            continue;
-        }
-
-        com->valid = true;
-        kprint("com%d: detected on port %Xh\n", com->num, com->io_port);
-    }
-
-    irq_register(IRQ_COM1, serial_interrupt);
-    irq_unmask(IRQ_COM1);
-
-    irq_register(IRQ_COM2, serial_interrupt);
-    irq_unmask(IRQ_COM2);
+    // TODO: ensure termios permits throttling
+    cli_save(flags);
+    com->mcr.rts = 0;
+    // com_out(com, UART_TX, 0x13);    // XOFF
+    com_out(com, UART_MCR, com->mcr._value);
+    restore_flags(flags);
 }
+
+static void serial_unthrottle(struct tty *tty)
+{
+    uint32_t flags;
+    struct com *com;
+
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return;
+    }
+
+    // TODO: ensure termios permits throttling
+    cli_save(flags);
+    com->mcr.rts = 1;
+    com_out(com, UART_MCR, com->mcr._value);
+    // com_out(com, UART_TX, 0x11);    // XON
+    restore_flags(flags);
+}
+
+// ----------------------------------------------------------------------------
 
 static uint8_t com_in(struct com *com, uint8_t reg)
 {
@@ -447,7 +490,7 @@ static bool set_baud(struct com *com, enum baud_rate baud)
     com->baud_divisor |= com_in(com, UART_DLM) << 8;
 
     // if readback failed, we might have a bad COM port
-    if (err_chk(com->baud_divisor) ) {
+    if (ERR_CHK(com->baud_divisor) ) {
         kprint("com%d: error: unable to set baud rate (div=%Xh)\n", com->num, baud);
         return false;
     }
@@ -472,7 +515,7 @@ static bool set_mode(struct com *com,
 
     // readback for sanity
     lcr_rdbk = com_in(com, UART_LCR);
-    if (err_chk(lcr_rdbk) || lcr_rdbk != lcr._value) {
+    if (ERR_CHK(lcr_rdbk) || lcr_rdbk != lcr._value) {
         kprint("com%d: error: unable to set line control (lcr=%Xh, lcr_rdbk=%Xh)\n",
             com->num, lcr._value, lcr_rdbk);
         return false;
@@ -481,11 +524,9 @@ static bool set_mode(struct com *com,
     return true;
 }
 
-static bool set_fifo(struct com *com,
-    bool enabled, enum receiver_trigger depth)
+static void set_fifo(struct com *com, bool enabled, enum recv_trig depth)
 {
     struct fcr fcr;
-    uint8_t fcr_rdbk;
 
     // program FIFO control register
     fcr._value = 0;
@@ -496,16 +537,6 @@ static bool set_fifo(struct com *com,
         fcr.trig = depth;
     }
     com_out(com, UART_FCR, fcr._value);
-
-    // readback for sanity
-    fcr_rdbk = com_in(com, UART_FCR);
-    if (err_chk(fcr_rdbk)) {
-        kprint("com%d: error: unable to set FIFO mode (fcr=%Xh, fcr_rdbk=%Xh)\n",
-            com->num, fcr._value, fcr_rdbk);
-        return false;
-    }
-
-    return true;
 }
 
 static void tx_enable(struct com *com)
@@ -529,8 +560,8 @@ static void tx_disable(struct com *com)
 static void modem_status(struct com *com)
 {
 #if CHATTY_COM
-    if (com->msr._value) {
-        kprint("com%d: modem status:%s%s%s%s%s%s%s%s\n", com->num,
+    if (com->msr._value & 0x0F) {
+        COM_WARN("com%d: modem status:%s%s%s%s%s%s%s%s\n", com->num,
             com->msr.cts  ? " cts"  : "",
             com->msr.dsr  ? " dsr"  : "",
             com->msr.dcd  ? " dcd"  : "",
@@ -560,7 +591,7 @@ static void line_status(struct com *com)
 
 #if CHATTY_COM
     if (com->lsr._value & 0x1E) {
-        kprint("com%d: line status:%s%s%s%s\n",
+        COM_WARN("com%d: line status:%s%s%s%s\n",
             com->lsr.oe  ? " overrun" : "",
             com->lsr.pe  ? " parity"  : "",
             com->lsr.fe  ? " framing" : "",
@@ -573,12 +604,14 @@ static void send_chars(struct com *com)
 {
     int count;
 
+    // nothing to send? disable transmitter and quit
     if (ring_empty(&com->tx_ring)) {
         tx_disable(com);
         return;
     }
 
-    count = FIFO_DEPTH;
+    // send chars
+    count = XMIT_MAX;
     while (count > 0) {
         com_out(com, UART_TX, ring_get(&com->tx_ring));
         if (ring_empty(&com->tx_ring)) {
@@ -586,6 +619,7 @@ static void send_chars(struct com *com)
         }
     }
 
+    // nothing left to send? disable transmitter
     if (ring_empty(&com->tx_ring)) {
         tx_disable(com);
     }
@@ -601,25 +635,36 @@ static void recv_chars(struct com *com)
     // was there a timeout?
     if (com->iir.timeout) {
         com->n_timeout++;
-#if CHATTY_CO
-        kprint("com%d: timeout!\n", com->num);
+#if CHATTY_COM
+        COM_WARN("com%d: timeout!\n", com->num);
 #endif
     }
 
-    // receive chars
+    // receive chars while data ready
     count = RECV_MAX;
     do {
-        // read-in character
+        // check line status
+        line_status(com);
+
+        // accept char and put it in the ldisc
         c = com_in(com, UART_RX);
         ldisc->recv(tty, &c, 1);
 
-        // check line status
-        line_status(com);
+        // read new line status
         com->lsr._value = com_in(com, UART_LSR);
     } while (com->lsr.dr && --count);
 
+    if (count <= 0) {
+        COM_WARN("com%d: read-in max chars during interrupt!\n", com->num);
+    }
+
     // check line status one last time
     line_status(com);
+
+    // flush any pending chars if the transmitter isn't doing anything
+    if (com->lsr.thre || com->lsr.temt) {
+        send_chars(com);
+    }
 }
 
 static void com_interrupt(struct com *com)
@@ -642,7 +687,9 @@ static void com_interrupt(struct com *com)
 
 static void serial_interrupt(int irq_num)
 {
+    //
     // common interrupt handler for all COM ports
+    //
 
     assert(irq_num == IRQ_COM1 || irq_num == IRQ_COM2);
     struct com *com;

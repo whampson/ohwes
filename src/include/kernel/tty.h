@@ -34,12 +34,19 @@
 #include <kernel/device.h>
 #include <kernel/list.h>
 
-#define TTY_BUFFER_SIZE         128
+#define TTY_BUFFER_SIZE         1024
+#define TTY_THROTTLE_THRESH     128
 
 #define N_TTY                   0
 #define NR_LDISC                1
 
 #define NR_TTY                  (1+NR_CONSOLE+NR_SERIAL)    // +1 for tty0
+
+// TTY device minor numbers
+#define CONSOLE_MIN             1
+#define CONSOLE_MAX             NR_CONSOLE
+#define SERIAL_MIN              (NR_CONSOLE+1)
+#define SERIAL_MAX              (SERIAL_MIN+NR_SERIAL)
 
 //
 // Line Discipline Behavior
@@ -102,7 +109,6 @@ struct tty_driver {
     int     (*close)(struct tty *);
     int     (*ioctl)(struct tty *, unsigned int cmd, unsigned long arg);
     int     (*write)(struct tty *, const char *buf, size_t count);
-    void    (*write_char)(struct tty *, char c);
     size_t  (*write_room)(struct tty *);    // query space in write buffer
     void    (*flush)(struct tty *);         // flush write buffer
     void    (*stop)(struct tty *);          // stop transmitting chars
@@ -118,8 +124,12 @@ struct tty_driver {
 // job or session).
 //
 struct tty {
-    bool open;                      // is the TTY device currently open?
     dev_t device;                   // device major/minor numbers
+    bool open;                      // is the TTY device currently open?
+    bool throttled;                 // is the receiver channel throttled?
+    int line;                       // device line number
+
+    struct file *file;              // connected file description
 
     struct tty_ldisc *ldisc;        // line discipline
     struct tty_driver driver;       // low-level device driver

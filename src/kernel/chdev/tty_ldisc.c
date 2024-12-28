@@ -54,13 +54,14 @@ static struct tty_ldisc n_tty = {
 };
 
 struct n_tty_ldisc_data {
-    struct ring iring;
-    char _iring_buf[TTY_BUFFER_SIZE];
+    struct ring rx_ring;
+    char _rxbuf[TTY_BUFFER_SIZE];
 };
 static struct n_tty_ldisc_data ldisc_data[NR_TTY];
 
-static void opost(struct tty *tty, char c);
-static void echo(struct tty *tty, char c);
+static int opost(struct tty *tty, char c);
+static int echo(struct tty *tty, char c);
+static void write_char(struct tty *tty, char c);
 
 void init_n_tty(void)
 {
@@ -76,7 +77,7 @@ static int n_tty_open(struct tty *tty)
     }
 
     struct n_tty_ldisc_data *data = &ldisc_data[_DEV_MIN(tty->device)];
-    ring_init(&data->iring, data->_iring_buf, TTY_BUFFER_SIZE);
+    ring_init(&data->rx_ring, data->_rxbuf, TTY_BUFFER_SIZE);
     tty->ldisc_data = data;
     return 0;
 }
@@ -95,11 +96,15 @@ void n_tty_clear(struct tty *tty)
 
     struct n_tty_ldisc_data *ldisc_data;
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
-    ring_clear(&ldisc_data->iring);
+    ring_clear(&ldisc_data->rx_ring);
 }
 
 static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
 {
+    struct n_tty_ldisc_data *ldisc_data;
+    uint32_t flags;
+    char *ptr;
+
     if (!tty || !buf) {
         return -EINVAL;
     }
@@ -107,61 +112,76 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
         return -ENXIO;
     }
 
-    char c;
-    ssize_t nread;
-    uint32_t flags;
-
-    struct n_tty_ldisc_data *ldisc_data;
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
+    ptr = buf;
 
-    nread = 0;
-    while (count--) {
+    while (count > 0) {
         // block until a character appears
-        // TODO: allow nonblocking input
-        while (ring_empty(&ldisc_data->iring)) { }
+        while (ring_empty(&ldisc_data->rx_ring)) {
+            // ...unless we specified O_NONBLOCK
+            if (tty->file->f_oflag & O_NONBLOCK) {
+                if ((ptr - buf) > 0) {
+                    return ptr - buf;
+                }
+                return -EAGAIN; // operation would block
+            }
+        }
 
+        // grab the character
         cli_save(flags);
-        c = ring_get(&ldisc_data->iring);
+        *ptr = ring_get(&ldisc_data->rx_ring);
         restore_flags(flags);
+        ptr++; count--;
 
-        *buf++ = c;
-        nread++;
+        // check if we need to throttle the channel
+        if (n_tty_recv_room(tty) >= TTY_THROTTLE_THRESH) {
+            if (tty->throttled && tty->driver.unthrottle) {
+                tty->driver.unthrottle(tty);
+                tty->throttled = false;
+            }
+        }
     }
 
-    return nread;
+    return ptr - buf;
 }
 
 static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t count)
 {
+    ssize_t ret;
+    const char *ptr;
+
     if (!tty || !buf) {
         return -EINVAL;
     }
-
-    if (!tty->driver.write_char) {
-        return -EIO;
+    if (!tty->driver.write) {
+        return -EIO;    // TODO: correct return value?
     }
 
-    // TODO: need a write buffer, fill it up then send it to driver->write() until
-    // source buffer is drained; don't send char-by-char (let the driver do that)
-
-    ssize_t nwritten = 0;
-
-    for (int i = 0; i < count; i++) {
-        char c = buf[i];
+    ptr = buf; ret = 0;
+    while (count > 0) {
         if (O_OPOST(tty)) {
-            opost(tty, c);
+            ret = opost(tty, *ptr);
+            if (ret < 0) {  // returns -1 if no chars in buffer
+                ret = 0;
+                break;
+            }
+            ptr++; count--;
         }
         else {
-            tty->driver.write_char(tty, c); // TODO: what if this fails?
+            ret = tty->driver.write(tty, ptr, count);
+            if (ret < 0) {
+                break;
+            }
+            count -= ret;
+            ptr += ret;
         }
-        nwritten++; // only count chars written from input buf
     }
 
     if (tty->driver.flush) {
         tty->driver.flush(tty);
     }
 
-    return nwritten;
+    return (ret >= 0) ? ptr - buf : ret;
 }
 
 static int n_tty_ioctl(struct tty *tty, unsigned int num, unsigned long arg)
@@ -172,6 +192,11 @@ static int n_tty_ioctl(struct tty *tty, unsigned int num, unsigned long arg)
 
 static void n_tty_recv(struct tty *tty, char *buf, size_t count)
 {
+    uint32_t flags;
+    struct n_tty_ldisc_data *ldisc_data;
+    char *ptr;
+    char c;
+
     if (!tty || !buf) {
         return;
     }
@@ -179,16 +204,13 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
         return;
     }
 
-    if (!tty->driver.write_char) {
-        return;
-    }
-
-    uint32_t flags;
-    struct n_tty_ldisc_data *ldisc_data;
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
+    ptr = buf;
 
-    for (int i = 0; i < count; i++) {
-        char c = buf[i];
+    while (count > 0) {
+        c = *ptr;
+
+        // handle CR and NL translation
         if (c == '\r') {
             if (I_IGNCR(tty)) {
                 continue;
@@ -201,37 +223,58 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
             c = '\r';
         }
 
+        // handle character echo
         if (L_ECHO(tty)) {
-            if (ring_full(&ldisc_data->iring)) {
-                tty->driver.write_char(tty, '\a');  // input buffer full... beep!
-                break;
+            if (n_tty_recv_room(tty) <= 1) {
+                write_char(tty, '\a');  // beep!
+                return;
             }
-            echo(tty, c);
+            else {
+                echo(tty, c);
+            }
         }
 
+        // add char to buffer
         cli_save(flags);
-        ring_put(&ldisc_data->iring, c);
+        ring_put(&ldisc_data->rx_ring, c);
         restore_flags(flags);
-    }
+        ptr++; count--;
 
-    if (tty->driver.flush) {
-        tty->driver.flush(tty);
+        // flush any echoed chars
+        if (tty->driver.flush) {
+            tty->driver.flush(tty);
+        }
+
+        // throttle the receiver channel if we're approaching capacity
+        if (n_tty_recv_room(tty) < TTY_THROTTLE_THRESH) {
+            if (!tty->throttled && tty->driver.throttle) {
+                tty->driver.throttle(tty);
+                tty->throttled = true;
+            }
+        }
     }
 }
 
 static size_t n_tty_recv_room(struct tty *tty)
 {
+    uint32_t flags;
+    size_t room;
     struct n_tty_ldisc_data *ldisc_data;
+
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
 
-    return ring_length(&ldisc_data->iring) - ring_count(&ldisc_data->iring);
+    cli_save(flags);
+    room = ring_length(&ldisc_data->rx_ring) - ring_count(&ldisc_data->rx_ring);
+    restore_flags(flags);
+
+    return room;
 }
 
-static void opost(struct tty *tty, char c)
+static int opost(struct tty *tty, char c)
 {
-    int space = tty->driver.write_room(tty);
-    if (!space) {
-        return;
+    size_t room = tty->driver.write_room(tty);
+    if (room < 1) {
+        return -1;
     }
 
     if (O_OPOST(tty)) {
@@ -239,20 +282,35 @@ static void opost(struct tty *tty, char c)
             c = '\n';
         }
         if (c == '\n' && O_ONLCR(tty)) {
-            tty->driver.write_char(tty, '\r');
+            if (room < 2) {
+                return -1;
+            }
+            write_char(tty, '\r');
         }
     }
 
-    tty->driver.write_char(tty, c);
+    write_char(tty, c);
+    return 0;
 }
 
-static void echo(struct tty *tty, char c)
+static int echo(struct tty *tty, char c)
 {
+    size_t room;
+
     if (L_ECHOCTL(tty) && iscntrl(c) && c != '\t' && c != '\n') {
-        tty->driver.write_char(tty, '^');
-        tty->driver.write_char(tty, c ^ 0x40);
+        room = tty->driver.write_room(tty);
+        if (room < 2) {
+            return -1;
+        }
+        write_char(tty, '^');
+        write_char(tty, c ^ 0x40);
+        return 0;
     }
-    else {
-        opost(tty, c);
-    }
+
+    return opost(tty, c);
+}
+
+static void write_char(struct tty *tty, char c)
+{
+    tty->driver.write(tty, &c, 1);
 }

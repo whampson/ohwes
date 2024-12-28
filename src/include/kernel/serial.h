@@ -98,7 +98,7 @@ enum priority {
 //
 // Receiver Interrupt Trigger Levels
 //
-enum receiver_trigger {
+enum recv_trig {
     RCVR_TRIG_1,                    // Interrupt when 1 byte received
     RCVR_TRIG_4,                    // Interrupt when 4 bytes received
     RCVR_TRIG_8,                    // Interrupt when 8 bytes received
@@ -218,6 +218,7 @@ enum baud_rate {
     BAUD_1200   = 96,
     BAUD_600    = 192,
     BAUD_300    = 384,
+    BAUD_200    = 576,
     BAUD_150    = 768,
     BAUD_134_5  = 857,
     BAUD_110    = 1047,
@@ -229,43 +230,6 @@ enum baud_rate {
 // ----------------------------------------------------------------------------
 // UART registers in struct form.
 //
-
-//
-// Line Control Register
-//
-struct lcr {
-    union {
-        struct {
-            uint8_t word_length : 2;    // Word Length Select; see word_length enum
-            uint8_t stop_bits   : 1;    // Stop Bit Select; see stop_bits enum
-            uint8_t parity      : 3;    // Parity Select; see parity enum
-            uint8_t break_cntl  : 1;    // Transmit Break
-            uint8_t dlab        : 1;    // Divisor Latch Access
-        };
-        uint8_t _value;
-    };
-};
-static_assert(sizeof(struct lcr) == 1, "sizeof(struct lcr)");
-
-//
-// Line Status Register
-//
-struct lsr {
-    union {
-        struct {
-            uint8_t dr          : 1;    // Received data ready to be fetched
-            uint8_t oe          : 1;    // Receive buffer overrun
-            uint8_t pe          : 1;    // Parity error detected in received data
-            uint8_t fe          : 1;    // Invalid stop bit in received data
-            uint8_t brk         : 1;    // Raised when data input is held low for longer than one word
-            uint8_t thre        : 1;    // Transmitter holding register empty; ready to transmit
-            uint8_t temt        : 1;    // Transmitter idle; nothing is transmitting
-            uint8_t fifo        : 1;    // In FIFO mode, indicates an error on one of the chars in the FIFO
-        };
-        uint8_t _value;
-    };
-};
-static_assert(sizeof(struct lsr) == 1, "sizeof(struct lsr)");
 
 //
 // Interrupt Enable Register
@@ -311,12 +275,29 @@ struct fcr {
             uint8_t tx_reset    : 1;    // Clear transmitter FIFO
             uint8_t dma         : 1;    // Enable DMA mode
             uint8_t             : 2;    // (reserved)
-            uint8_t trig        : 2;    // FIFO depth; see receiver_trigger enum
+            uint8_t trig        : 2;    // FIFO depth; see recv_trig enum
         };
         uint8_t _value;
     };
 };
 static_assert(sizeof(struct fcr) == 1, "sizeof(struct fcr)");
+
+//
+// Line Control Register
+//
+struct lcr {
+    union {
+        struct {
+            uint8_t word_length : 2;    // Word Length Select; see word_length enum
+            uint8_t stop_bits   : 1;    // Stop Bit Select; see stop_bits enum
+            uint8_t parity      : 3;    // Parity Select; see parity enum
+            uint8_t break_cntl  : 1;    // Transmit Break
+            uint8_t dlab        : 1;    // Divisor Latch Access
+        };
+        uint8_t _value;
+    };
+};
+static_assert(sizeof(struct lcr) == 1, "sizeof(struct lcr)");
 
 //
 // Modem Control Register
@@ -334,6 +315,26 @@ struct mcr {
     };
 };
 static_assert(sizeof(struct mcr) == 1, "sizeof(struct mcr)");
+
+//
+// Line Status Register
+//
+struct lsr {
+    union {
+        struct {
+            uint8_t dr          : 1;    // Received data ready to be fetched
+            uint8_t oe          : 1;    // Receive buffer overrun
+            uint8_t pe          : 1;    // Parity error detected in received data
+            uint8_t fe          : 1;    // Invalid stop bit in received data
+            uint8_t brk         : 1;    // Raised when data input is held low for longer than one word
+            uint8_t thre        : 1;    // Transmitter holding register empty; ready to transmit
+            uint8_t temt        : 1;    // Transmitter idle; nothing is transmitting
+            uint8_t fifo        : 1;    // In FIFO mode, indicates an error on one of the chars in the FIFO
+        };
+        uint8_t _value;
+    };
+};
+static_assert(sizeof(struct lsr) == 1, "sizeof(struct lsr)");
 
 //
 // Modem Status Register

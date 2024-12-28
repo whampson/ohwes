@@ -162,9 +162,9 @@ void init(void)
 
     putchar('a');
 
-    CHECK(open("/dev/tty1", 0));    // stdin
-    CHECK(dup(0));                  // stdout
-    CHECK(dup(0));                  // stderr
+    CHECK(open("/dev/tty1", O_RDWR));   // stdin
+    CHECK(dup(0));                      // stdout
+    CHECK(dup(0));                      // stderr
 
     _exit(main());
 }
@@ -179,28 +179,28 @@ int main(void)
     printf("\e4\e[5;33mHello from user mode!\e[m\n");
 
     printf("Opening /dev/ttyS0...\n");
-    int fd = CHECK(open("/dev/ttyS0", 0));
-
-    // char buf[65];
-    // zeromem(buf, sizeof(buf));
-    // for (int i = 0; i < sizeof(buf) - 1; i++) {
-    //     buf[i] = 'a' + (i % 26);
-    // }
-
-    // int nwritten;
-    // nwritten = write(fd, buf, sizeof(buf));
-    // printf("wrote %d bytes to COM port\n", nwritten);
+    int fd = CHECK(open("/dev/ttyS0", O_RDWR /*| O_NONBLOCK*/));
 
     char c;
-    while (read(STDIN_FILENO, &c, 1) && c != 3) {
-        write(fd, &c, 1);
-    }
+    /*char buf[4096+1];
+    while (read(STDIN_FILENO, &c, 1) > 0) {
+        if (c == 0x03) {
+            break;
+        }
+        if (c != '\n') {
+            continue;
+        }
 
-    // char c;
-    // while (read(fd, &c, 1) && c != 3) {
-    //     write(STDOUT_FILENO, &c, 1);
-    //     // write(fd, &c, 1);
-    // }
+        ssize_t count;
+        while ((count = read(fd, buf, sizeof(buf) - 1)) > 0) {
+            printf("%.*s", count, buf);
+            printf("\n> read %d chars from /dev/ttyS0 <\n", count);
+        }
+    }*/
+    while (read(fd, &c, 1) && c != 3) {
+        write(STDOUT_FILENO, &c, 1);
+        // write(fd, &c, 1);
+    }
 
     close(fd);
     return 0;
