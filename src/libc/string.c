@@ -29,6 +29,7 @@ char * strerror(int errnum)
 {
     switch (errnum) {
         case 0:       return "Success";
+        case EAGAIN:  return "Resource unavailable, try again";
         case EBADF:   return "Bad file descriptor";
         case EBADRQC: return "Invalid request descriptor";
         case EBUSY:   return "Device or resource busy";
