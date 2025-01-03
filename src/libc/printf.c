@@ -35,18 +35,31 @@
 // printf family spec:
 // https://en.cppreference.com/w/c/io/fprintf
 
-#define NUM_BUFSIZ 64
+#define PRINTF_BUFSIZ   1024
+#define NUM2STR_BUFSIZ  64
+
+// lengths
+enum {
+    L_DEFAULT,  // no length specified
+    L_HH,       // 'hh',byte
+    L_H,        // 'h', short
+    L_L,        // 'l', long
+    L_LL,       // 'll',long long
+    L_J,        // 'j', intmax_t
+    L_Z,        // 'z', size_t
+    L_T         // 't', ptrdiff_t
+};
 
 struct printf_state
 {
     va_list args;               // format arguments
     char *buffer;               // sprintf/snprintf buffer
-    size_t snprintf_avail;      // snprintf num chars available in buffer
+    size_t buffer_avail;        // snprintf num chars available in buffer
 };
 
 typedef int (*printf_fn)(struct printf_state *, char);
 
-static int _console_putc(struct printf_state *state, char c);
+static int _printf_putc(struct printf_state *state, char c);
 static int _sprintf_putc(struct printf_state *state, char c);
 static int _snprintf_putc(struct printf_state *state, char c);
 
@@ -62,16 +75,29 @@ int printf(const char *format, ...)
 {
     int nwritten;
     va_list args;
+
+    va_start(args, format);
+    nwritten = vprintf(format, args);
+    va_end(args);
+
+    return nwritten;
+}
+
+int vprintf(const char *format, va_list args)
+{
+    int nwritten;
     struct printf_state state = { };
+    char buffer[PRINTF_BUFSIZ];
 
     if (format == NULL) {
         return -EINVAL;
     }
 
-    va_start(args, format);
     state.args = args;
-    nwritten = _doprintf(format, &state, _console_putc);
-    va_end(args);
+    state.buffer = buffer;
+    state.buffer_avail = sizeof(buffer);
+    nwritten = _doprintf(format, &state, _printf_putc);
+    write(STDOUT_FILENO, buffer, nwritten); // flush!
 
     return nwritten;
 }
@@ -85,18 +111,22 @@ int sprintf(char *buffer, const char *format, ...)
 {
     int nwritten;
     va_list args;
-    struct printf_state state = { };
 
     va_start(args, format);
-
-    state.args = args;
-    state.buffer = buffer;
-    state.buffer[0] = '\0';
-    nwritten = _doprintf(format, &state, _sprintf_putc);
-
+    nwritten = vsprintf(buffer, format, args);
     va_end(args);
 
     return nwritten;
+}
+
+int vsprintf(char *buffer, const char *format, va_list args)
+{
+    struct printf_state state = { };
+
+    state.args = args;
+    state.buffer = buffer;  // better be large enough! TODO: should alloc local
+                            // buffer here and page fault if exceeded
+    return _doprintf(format, &state, _sprintf_putc);
 }
 
 /**
@@ -109,29 +139,14 @@ int sprintf(char *buffer, const char *format, ...)
 */
 int snprintf(char *buffer, size_t bufsz, const char *format, ...)
 {
-    int nlength;
+    int nwritten;
     va_list args;
-    struct printf_state state = { };
 
     va_start(args, format);
-
-    state.args = args;
-    state.buffer = buffer;
-    state.buffer[0] = '\0';
-    state.snprintf_avail = bufsz;
-    nlength = _doprintf(format, &state, _snprintf_putc);
-
+    nwritten = vsnprintf(buffer, bufsz, format ,args);
     va_end(args);
 
-    return nlength;
-}
-
-int vprintf(const char *format, va_list args)
-{
-    struct printf_state state = { };
-
-    state.args = args;
-    return _doprintf(format, &state, _console_putc);
+    return nwritten;
 }
 
 int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args)
@@ -140,17 +155,29 @@ int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args)
 
     state.args = args;
     state.buffer = buffer;
-    state.buffer[0] = '\0';
-    state.snprintf_avail = bufsz;
+    state.buffer_avail = bufsz;
     return _doprintf(format, &state, _snprintf_putc);
 }
 
-static int _console_putc(struct printf_state *state, char c)
+static int _printf_putc(struct printf_state *state, char c)
 {
     (void) state;
 
-    // TODO: send in chunks to minimize syscalls
-    return write(STDOUT_FILENO, &c, 1);
+    if (!state->buffer_avail) {
+        // write the current buffer to stdout
+        write(STDERR_FILENO, state->buffer, PRINTF_BUFSIZ);
+
+        // and reuse it for the next chunk
+        state->buffer_avail = PRINTF_BUFSIZ;
+        state->buffer -= state->buffer_avail;
+        c = '*';
+        write(STDOUT_FILENO, &c, 1);
+        for(;;);
+    }
+
+    // fill up the buffer; caller, don't forget to flush!
+    state->buffer_avail--;
+    return _sprintf_putc(state, c);
 }
 
 static int _sprintf_putc(struct printf_state *state, char c)
@@ -163,13 +190,14 @@ static int _sprintf_putc(struct printf_state *state, char c)
 
 static int _snprintf_putc(struct printf_state *state, char c)
 {
-    if (state->snprintf_avail > 0) {
-        state->snprintf_avail--;
+    if (state->buffer_avail > 0) {
+        // add char if there's space
+        state->buffer_avail--;
         _sprintf_putc(state, c);
     }
 
-    // always return 1 so we can keep track of the number of chars that would've
-    // been written if the buffer was large enough
+    // always return 1 to keep track of chars that would've been written if
+    // buffer was large enough
     return 1;
 }
 
@@ -181,14 +209,16 @@ static int _doprintf(
     int nwritten = 0;
     int retval = 0;
 
+    // where the magic happens
+
 #define _putchar(c) \
-    do { \
-        retval = (*putc)(state, c); \
-        if (retval < 0) { \
-            goto done; \
-        } \
-        nwritten += retval; \
-    } while(0)
+do { \
+    retval = (*putc)(state, c); \
+    if (retval < 0) { \
+        goto done; \
+    } \
+    nwritten += retval; \
+} while(0)
 
     const char *format_start = format;
 
@@ -211,7 +241,9 @@ static int _doprintf(
         register char c = 0;
         register char *p = NULL;
         char sign_char = 0;
-        char buf[NUM_BUFSIZ];
+
+        char num2str[NUM2STR_BUFSIZ ];
+
         uintmax_t num = 0;
 
         //
@@ -291,18 +323,7 @@ static int _doprintf(
         //
         // length modifier
         //
-        enum {
-            L_DEFAULT,  // no length specified
-            L_HH,       // 'hh',byte
-            L_H,        // 'h', short
-            L_L,        // 'l', long
-            L_LL,       // 'll',long long
-            L_J,        // 'j', intmax_t
-            L_Z,        // 'z', size_t
-            L_T         // 't', ptrdiff_t
-        };
         int length = L_DEFAULT;
-
         parse = true;
         while (parse) {
             bool match = true;
@@ -473,7 +494,8 @@ static int _doprintf(
         static char digits[]     = "0123456789abcdefghijklmnopqrstuvwxyz";
         static char digits_cap[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-        p = &buf[NUM_BUFSIZ-1];
+
+        p = &num2str[NUM2STR_BUFSIZ-1];
         while (num) {
             if (capital) {
                 *p-- = digits_cap[num % radix];
@@ -483,7 +505,9 @@ static int _doprintf(
             }
             num /= radix;
         }
-        len = &buf[NUM_BUFSIZ] - (p+1);
+
+        len = &num2str[NUM2STR_BUFSIZ] - (p+1);
+
 
         // count the number of zeros needed for precision
         // keep track of total string length
@@ -555,7 +579,7 @@ static int _doprintf(
         }
 
         // write stringifed number
-        while (++p != &buf[NUM_BUFSIZ]) {
+        while (++p != &num2str[NUM2STR_BUFSIZ]) {
             _putchar(*p);                     // next, the number itself...
         }
 
@@ -570,8 +594,8 @@ static int _doprintf(
 
     retval = nwritten;
 
+#undef _putchar
+
 done:
     return retval;
-
-#undef _putchar
 }
