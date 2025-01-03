@@ -63,6 +63,9 @@ clean-all: clean clean-tools
 nuke:
 	${RM} -r ${TARGET_DIR} ${BUILD_DIR}
 
+nuke-obj:
+	${RM} -r ${BUILD_DIR}
+
 tools:
 	@${MAKE} -C tools
 
