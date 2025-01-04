@@ -97,7 +97,6 @@ __fastcall void handle_irq(struct iregs *regs)
     bool handled = false;
 
     irq_num = ~regs->vec_num;
-    pic_eoi(irq_num);
 
     handled = false;
     for (int i = 0; i < MAX_ISR; i++) {
@@ -108,6 +107,7 @@ __fastcall void handle_irq(struct iregs *regs)
         }
     }
 
+    pic_eoi(irq_num);
     if (!handled) {
         crash(regs);
     }
