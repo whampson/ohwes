@@ -497,11 +497,13 @@ int rtc_open(struct file **file, int flags)
     (void) flags;
 
     // *file = &rtc_file;
+    assert(!"implement me!");
     return -ENOSYS;
 }
 
 int rtc_close(struct file *file)
 {
+    assert(!"implement me!");
     return -ENOSYS;
 }
 

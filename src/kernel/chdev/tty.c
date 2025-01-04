@@ -140,6 +140,7 @@ int do_tty_open(struct tty *tty)
     // associate and open line discipline
     tty->ldisc = &ldiscs[N_TTY];
     if (!tty->ldisc->open) {
+        assert(!"where's ldisc->open??");
         return -ENOSYS; // no open fn registered on line discipline! (panic?)
     }
     ret = tty->ldisc->open(tty);
@@ -170,6 +171,7 @@ int do_tty_open(struct tty *tty)
 
     // open the tty driver
     if (!tty->driver.open) {
+        assert(!"where's driver.open??");
         return -ENOSYS;
     }
     ret = tty->driver.open(tty);
@@ -219,6 +221,7 @@ static int tty_open(struct inode *inode, struct file *file)
 static int tty_close(struct file *file)
 {
     // TODO: flush buffers, close ldisc, close/detach, driver
+    assert(!"implement me!");
     return -ENOSYS;
 }
 
@@ -238,6 +241,7 @@ static ssize_t tty_read(struct file *file, char *buf, size_t count)
         return -ENXIO;
     }
     if (!tty->ldisc->read) {
+        assert(!"where's ldisc->read??");
         return -ENOSYS;
     }
 
@@ -260,6 +264,7 @@ static ssize_t tty_write(struct file *file, const char *buf, size_t count)
         return -ENXIO;
     }
     if (!tty->ldisc->write) {
+        assert(!"where's ldisc->write??");
         return -ENOSYS;
     }
 
@@ -269,5 +274,5 @@ static ssize_t tty_write(struct file *file, const char *buf, size_t count)
 static int tty_ioctl(struct file *file, unsigned int num, unsigned long arg)
 {
     // TODO: forward ioctl to ldisc and driver
-    return -ENOSYS;
+    return -ENOTTY;
 }
