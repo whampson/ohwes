@@ -179,7 +179,7 @@ int main(void)
     printf("\e4\e[5;33mHello from user mode!\e[m\n");
 
     printf("Opening /dev/ttyS0...\n");
-    int fd = CHECK(open("/dev/ttyS0", O_RDWR /*| O_NONBLOCK*/));
+    int fd = CHECK(open("/dev/ttyS0", O_RDWR | O_NONBLOCK));
 
     char c;
     /*char buf[4096+1];
@@ -197,9 +197,12 @@ int main(void)
             printf("\n> read %d chars from /dev/ttyS0 <\n", count);
         }
     }*/
-    while (read(fd, &c, 1) && c != 3) {
+    ssize_t ret;
+    while ((ret = read(fd, &c, 1)) && c != 3) {
+        if (ret == -EAGAIN) {
+            continue;
+        }
         write(STDOUT_FILENO, &c, 1);
-        // write(fd, &c, 1);
     }
 
     close(fd);
