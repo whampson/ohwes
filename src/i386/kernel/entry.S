@@ -152,7 +152,7 @@ syscall_trampoline:
         ja              _nosys
         jmp             sys_enter
 _nosys:
-        movl            $-ENOSYS, %eax
+        movl            $-ENOSYS, %eax          # ENOSYS = no such syscall exists
         jmp             return_from_syscall
 
 sys_enter:

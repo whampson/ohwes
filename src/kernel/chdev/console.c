@@ -43,7 +43,7 @@
 #define is_syscon(cons)         ((cons)->number == SYSTEM_CONSOLE)
 #define is_current(cons)        ((cons) == current_console())
 
-__data_segment struct console _consoles[NR_CONSOLE] = { };
+__data_segment struct console g_consoles[NR_CONSOLE] = { };
 __data_segment bool g_early_console_initialized = false;
 
 static int console_tty_open(struct tty *);
@@ -144,12 +144,14 @@ static int console_tty_write(struct tty *tty, const char *buf, size_t count)
 static int console_tty_ioctl(
     struct tty *tty, unsigned int cmd, unsigned long arg)
 {
-    return -ENOSYS;
+    return -ENOTTY;
 }
 
 static size_t console_tty_write_room(struct tty *tty)
 {
-    return -ENOSYS;
+    // we can write the frame buffer forever...
+    // return something sufficiently large to satisfy ldisc logic
+    return 4096;
 }
 
 // ----------------------------------------------------------------------------
@@ -399,7 +401,7 @@ struct console * get_console(int num)
         assert(num > 0 && (num - 1) < NR_CONSOLE);
     }
 
-    struct console *cons = &_consoles[num - 1];
+    struct console *cons = &g_consoles[num - 1];
     if (cons->initialized) {
         assert(cons->number == num);
     }
@@ -453,28 +455,6 @@ int console_write(struct console *cons, const char *buf, size_t count)
     return nwritten;
 }
 
-int console_getchar(struct console *cons)
-{
-    char c;
-
-    if (!cons) {
-        return -EINVAL;
-    }
-    if (!cons->tty || !cons->tty->ldisc) {
-        return -ENXIO;
-    }
-    if (!cons->tty->ldisc->read) {
-        return -ENOSYS;
-    }
-
-    int ret = cons->tty->ldisc->read(cons->tty, &c, 1);
-    if (ret < 0) {
-        return ret;
-    }
-
-    return c;
-}
-
 extern void pcspk_beep(int freq, int millis);  // see timer.c
 #define beep(f,ms) pcspk_beep(f, ms)   // beep at frequency for millis (nonblocking)
 
@@ -484,7 +464,6 @@ int console_putchar(struct console *cons, char c)
     bool update_attr = false;
     bool update_cursor_pos = true;
     uint16_t char_pos;
-
     uint32_t flags;
     cli_save(flags);
 
@@ -512,10 +491,9 @@ int console_putchar(struct console *cons, char c)
     }
 
     // control characters
-    // TODO: allow disabling of these to print glyphs?
     switch (c) {
         case '\a':      // ^G - BEL - beep!
-            beep(BELL_FREQ, BELL_TIME);
+            beep(BELL_FREQ, BELL_TIME);         // TODO: ioctl to control beep tone/time
             break;
         case '\b':      // ^H - BS - backspace
             backspace(cons);
