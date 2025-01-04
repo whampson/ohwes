@@ -92,6 +92,12 @@ debug-boot: img
 debug-setup: img
 	${SCRIPT_DIR}/run.sh qemu ${DISK_IMAGE} debug-setup
 
+debug-nobreak: img
+	${SCRIPT_DIR}/run.sh qemu ${DISK_IMAGE} debug-nobreak
+
+debug-nogdb: img
+	${SCRIPT_DIR}/run.sh qemu ${DISK_IMAGE} debug-nogdb
+
 floppy: ohwes
 	${FLOPPY_COPY_CMDS}
 
