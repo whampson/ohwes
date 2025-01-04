@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/drivers/char/tty_ldisc.c
+ *         File: kernel/drivers/chdev/tty_ldisc.c
  *      Created: December 10, 2024
  *       Author: Wes Hampson
  * =============================================================================
@@ -85,6 +85,7 @@ static int n_tty_open(struct tty *tty)
 static int n_tty_close(struct tty *tty)
 {
     // TODO: flush etc.
+    assert(!"implement me!");
     return -ENOSYS;
 }
 
@@ -103,37 +104,42 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
 {
     struct n_tty_ldisc_data *ldisc_data;
     uint32_t flags;
+    size_t nremain;
     char *ptr;
+    int ret;
 
     if (!tty || !buf) {
         return -EINVAL;
     }
     if (!tty->ldisc_data) {
+        assert(!"where's the ldsic data??");
         return -ENXIO;
     }
+
+    cli_save(flags);
 
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
     ptr = buf;
 
+    ret = 0;
     while (count > 0) {
-        // block until a character appears
-        while (ring_empty(&ldisc_data->rx_ring)) {
-            // ...unless we specified O_NONBLOCK
+        nremain = ring_count(&ldisc_data->rx_ring);
+        if (!nremain) {
             if (tty->file->f_oflag & O_NONBLOCK) {
-                if ((ptr - buf) > 0) {
-                    return ptr - buf;
+                if ((ptr - buf) == 0) {
+                    ret = -EAGAIN;  // operation would block
+                    break;
                 }
-                return -EAGAIN; // operation would block
+                break;
             }
+            continue;
         }
 
         // grab the character
-        cli_save(flags);
         *ptr = ring_get(&ldisc_data->rx_ring);
-        restore_flags(flags);
         ptr++; count--;
 
-        // check if we need to throttle the channel
+        // check if we can unthrottle
         if (n_tty_recv_room(tty) >= TTY_THROTTLE_THRESH) {
             if (tty->throttled && tty->driver.unthrottle) {
                 tty->driver.unthrottle(tty);
@@ -142,7 +148,8 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
         }
     }
 
-    return ptr - buf;
+    restore_flags(flags);
+    return (ret < 0) ? ret : ptr - buf;
 }
 
 static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t count)
@@ -187,7 +194,7 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t count)
 static int n_tty_ioctl(struct tty *tty, unsigned int num, unsigned long arg)
 {
     // TODO
-    return -ENOSYS;
+    return -ENOTTY;
 }
 
 static void n_tty_recv(struct tty *tty, char *buf, size_t count)
@@ -226,7 +233,7 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
         // handle character echo
         if (L_ECHO(tty)) {
             if (n_tty_recv_room(tty) <= 1) {
-                write_char(tty, '\a');  // beep!
+                write_char(tty, '\a');  // we're full... beep!!
                 return;
             }
             else {
@@ -239,18 +246,18 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
         ring_put(&ldisc_data->rx_ring, c);
         restore_flags(flags);
         ptr++; count--;
+    }
 
-        // flush any echoed chars
-        if (tty->driver.flush) {
-            tty->driver.flush(tty);
-        }
+    // flush any echoed chars
+    if (tty->driver.flush) {
+        tty->driver.flush(tty);
+    }
 
-        // throttle the receiver channel if we're approaching capacity
-        if (n_tty_recv_room(tty) < TTY_THROTTLE_THRESH) {
-            if (!tty->throttled && tty->driver.throttle) {
-                tty->driver.throttle(tty);
-                tty->throttled = true;
-            }
+    // throttle the receiver channel if we're approaching capacity
+    if (n_tty_recv_room(tty) < TTY_THROTTLE_THRESH) {
+        if (!tty->throttled && tty->driver.throttle) {
+            tty->driver.throttle(tty);
+            tty->throttled = true;
         }
     }
 }
