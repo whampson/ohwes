@@ -49,16 +49,16 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef void (*irq_handler)(int irq_num);
+typedef void (*irq_handler)(int irq);
 
-void irq_mask(int irq_num);
-void irq_unmask(int irq_num);
+void irq_mask(int irq);
+void irq_unmask(int irq);
 
 uint16_t irq_getmask(void);
 void irq_setmask(uint16_t mask);
 
-void irq_register(int irq_num, irq_handler func);
-void irq_unregister(int irq_num, irq_handler func);
+void irq_register(int irq, irq_handler func);
+void irq_unregister(int irq, irq_handler func);
 
 #endif // __ASSEMBLER__
 

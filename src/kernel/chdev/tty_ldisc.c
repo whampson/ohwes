@@ -116,8 +116,6 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
         return -ENXIO;
     }
 
-    cli_save(flags);
-
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
     ptr = buf;
 
@@ -132,12 +130,14 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
                 }
                 break;
             }
-            continue;
+            continue;   // spin until a char appears, TODO: timeout?
         }
 
         // grab the character
+        cli_save(flags);
         *ptr = ring_get(&ldisc_data->rx_ring);
         ptr++; count--;
+        restore_flags(flags);
 
         // check if we can unthrottle
         if (n_tty_recv_room(tty) >= TTY_THROTTLE_THRESH) {
@@ -148,7 +148,6 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
         }
     }
 
-    restore_flags(flags);
     return (ret < 0) ? ret : ptr - buf;
 }
 
@@ -218,16 +217,20 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
         c = *ptr;
 
         // handle CR and NL translation
-        if (c == '\r') {
-            if (I_IGNCR(tty)) {
-                continue;
-            }
-            if (I_ICRNL(tty)) {
-                c = '\n';
-            }
-        }
-        else if (c == '\n' && I_INLCR(tty)) {
-            c = '\r';
+        switch (c) {
+            case '\r':
+                if (I_IGNCR(tty)) {
+                    continue;
+                }
+                if (I_ICRNL(tty)) {
+                    c = '\n';
+                }
+                break;
+            case '\n':
+                if (I_INLCR(tty)) {
+                    c = '\r';
+                }
+                break;
         }
 
         // handle character echo
@@ -285,14 +288,20 @@ static int opost(struct tty *tty, char c)
     }
 
     if (O_OPOST(tty)) {
-        if (c == '\r' && O_OCRNL(tty)) {
-            c = '\n';
-        }
-        if (c == '\n' && O_ONLCR(tty)) {
-            if (room < 2) {
-                return -1;
-            }
-            write_char(tty, '\r');
+        switch (c) {
+            case '\r':
+                if (O_OCRNL(tty)) {
+                    c = '\n';
+                }
+                break;
+            case '\n':
+                if (O_ONLCR(tty)) {
+                    if (room < 2) {
+                        return -1;
+                    }
+                    write_char(tty, '\r');
+                }
+                break;
         }
     }
 

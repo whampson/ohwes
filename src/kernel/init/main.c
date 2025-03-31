@@ -62,11 +62,6 @@ static void usermode(uint32_t stack);
 //  /* it is now my duty to completely */
 //     drain_queue(struct ring *q, char *buf, size_t bufsiz);
 
-#ifdef DEBUG
-int g_test_soft_double_fault = 0;
-void debug_interrupt(int irq_num);
-#endif
-
 __data_segment static struct boot_info _boot;
 __data_segment struct boot_info *g_boot = &_boot;
 
@@ -96,9 +91,6 @@ __fastcall void start_kernel(struct boot_info *info)
     init_pic();
     init_timer();
     init_rtc();
-#ifdef DEBUG
-    irq_register(IRQ_RTC, debug_interrupt);   // CTRL+ALT+FN to crash kernel
-#endif
 
 #if TEST_BUILD
     run_tests();

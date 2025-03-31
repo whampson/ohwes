@@ -23,7 +23,6 @@
 // Very Linux-like
 //
 // The TTY demystified - https://www.linusakesson.net/programming/tty/
-// Serial Drivers - https://www.linux.it/~rubini/docs/serial/serial.html
 //
 
 #ifndef __TTY_H
@@ -33,14 +32,12 @@
 #include <unistd.h>
 #include <kernel/device.h>
 #include <kernel/list.h>
+#include <kernel/termios.h>
+
+#define NR_TTY                  (1+NR_CONSOLE+NR_SERIAL)    // +1 for tty0
 
 #define TTY_BUFFER_SIZE         1024
 #define TTY_THROTTLE_THRESH     128
-
-#define N_TTY                   0
-#define NR_LDISC                1
-
-#define NR_TTY                  (1+NR_CONSOLE+NR_SERIAL)    // +1 for tty0
 
 // TTY device minor numbers
 #define CONSOLE_MIN             1
@@ -48,47 +45,27 @@
 #define SERIAL_MIN              (NR_CONSOLE+1)
 #define SERIAL_MAX              (SERIAL_MIN+NR_SERIAL)
 
-//
-// Line Discipline Behavior
-//
-struct termios {
-    uint32_t c_iflag;           // input mode flags
-    uint32_t c_oflag;           // output mode flags
-    uint32_t c_cflag;           // control flags
-    uint32_t c_lflag;           // local mode flags
-    uint32_t c_line;            // line discipline
-};
-
-// c_iflag
-#define ICRNL   (1 << 0)        // map CR to NL (unless IGNCR is set)
-#define INLCR   (1 << 1)        // map NL to CR
-#define IGNCR   (1 << 2)        // ignore carriage return
-
-// c_oflag
-#define OPOST   (1 << 0)        // enable post processing
-#define OCRNL   (1 << 1)        // map CR to NL
-#define ONLCR   (1 << 2)        // convert NL to CR-NL
-
-// c_lflag
-#define ECHO    (1 << 0)        // echo input characters
-#define ECHOCTL (1 << 1)        // if ECHO set, echo control characters as ^X
-
+// handy macros for working with termios flags
 #define _I_FLAG(tty,f)          ((tty)->termios.c_iflag & (f))
 #define _O_FLAG(tty,f)          ((tty)->termios.c_oflag & (f))
 #define _C_FLAG(tty,f)          ((tty)->termios.c_cflag & (f))
 #define _L_FLAG(tty,f)          ((tty)->termios.c_lflag & (f))
 
+// termios input flag macros
 #define I_ICRNL(tty)            _I_FLAG(tty, ICRNL)
 #define I_INLCR(tty)            _I_FLAG(tty, INLCR)
 #define I_IGNCR(tty)            _I_FLAG(tty, IGNCR)
 
+// termios output flag macros
 #define O_OPOST(tty)            _O_FLAG(tty, OPOST)
 #define O_ONLCR(tty)            _O_FLAG(tty, ONLCR)
 #define O_OCRNL(tty)            _O_FLAG(tty, OCRNL)
 
+// termios local flag macros
 #define L_ECHO(tty)             _L_FLAG(tty, ECHO)
 #define L_ECHOCTL(tty)          _L_FLAG(tty, ECHOCTL)
 
+// type shit
 struct tty;
 struct tty_ldisc;
 

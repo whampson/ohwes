@@ -189,7 +189,7 @@ void destroy_pool(pool_t pool)
 
 #if CHATTY_POOL
     kprint("pool[%d]: destroyed: %s\n",
-        get_pool_index(&copy), get_pool_name(&copy))
+        get_pool_index(&copy), get_pool_name(&copy));
 #endif
 }
 

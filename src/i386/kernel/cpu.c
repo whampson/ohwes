@@ -61,10 +61,10 @@ static void init_tss(void);
 
 static void verify_gdt(void);
 
-extern struct tss *g_double_fault_tss;      // crash.c
-extern __noreturn void double_fault(void);  // crash.c
+extern struct tss *g_double_fault_tss;          // crash.c
+extern __noreturn void _do_double_fault(void);  // crash.c
 
-// this is a bit of a janky way of managing kernel stacks
+// TODO: this is a bit of a janky way of managing kernel stacks
 // but it'll work for now
 void push_kernel_stack(void)
 {
@@ -138,7 +138,7 @@ static void init_tss(void)
     struct tss *crash_tss = get_tss_from_gdt(_TSS1_SEGMENT);
     assert(crash_tss == g_double_fault_tss);
     zeromem(crash_tss, TSS_SIZE);
-    crash_tss->eip = (uint32_t) double_fault;
+    crash_tss->eip = (uint32_t) _do_double_fault;
     crash_tss->esp = __phys_to_virt(DOUBLE_FAULT_STACK);
     crash_tss->ebp = __phys_to_virt(DOUBLE_FAULT_STACK);
     crash_tss->cs = KERNEL_CS;

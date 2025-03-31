@@ -95,7 +95,7 @@ static_assert(INT_STACK_LIMIT >= DOUBLE_FAULT_STACK, "Interrupt stacks overlap c
 
 #define _VGA_80x28 1
 #define _VGA_80x50 2
-#define _VGA_80x25 3
+#define _VGA_80x25 4
 
 
 #define VGA_MODE            3       // 3 = 80x25,B8000,16color

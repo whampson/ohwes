@@ -85,6 +85,10 @@ struct kb {
 
 struct kb g_kb = { };
 
+#ifdef DEBUG
+extern int g_test_crash;  // crash.c
+#endif
+
 static const char keymap[256];
 static const char keymap_shift[128];
 static const uint8_t scanmap[128];
@@ -401,7 +405,7 @@ static void kb_interrupt(int irq_num)
 #ifdef DEBUG
     if (g_kb.ctrl && g_kb.alt) {
         if (is_fnkey(key)) {
-            g_crash_kernel = key - KEY_F1 + 1;
+            g_test_crash = key - KEY_F1 + 1;
         }
     }
 #endif

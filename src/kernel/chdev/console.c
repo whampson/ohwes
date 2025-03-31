@@ -303,7 +303,6 @@ void console_defaults(struct console *cons)
     cons->cursor.hidden = false;
     cons->csi_defaults.attr = cons->attr;
     cons->csi_defaults.cursor = cons->cursor;
-    // erase(cons, 2);
     save_console(cons);
 }
 
@@ -454,9 +453,6 @@ int console_write(struct console *cons, const char *buf, size_t count)
     }
     return nwritten;
 }
-
-extern void pcspk_beep(int freq, int millis);  // see timer.c
-#define beep(f,ms) pcspk_beep(f, ms)   // beep at frequency for millis (nonblocking)
 
 int console_putchar(struct console *cons, char c)
 {
@@ -864,6 +860,7 @@ static void csi_m(struct console *cons, char p)
 static void reset(struct console *cons)
 {
     console_defaults(cons);
+    erase(cons, 2);
     if (is_current(cons)) {
         vga_blink_enable(cons);
         vga_cursor_enable(cons);

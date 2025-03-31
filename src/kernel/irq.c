@@ -21,27 +21,74 @@
 
 #include <stddef.h>
 #include <stdio.h>
+#include <i386/bitops.h>
 #include <i386/pic.h>
 #include <i386/interrupt.h>
 #include <kernel/irq.h>
 #include <kernel/ohwes.h>
 
-#define MAX_ISR 8
+#define MAX_ISR             8   // max ISR handlers per IRQ line
+#define SPURIOUS_THRESH     3   // show warning screen every n spurious interrupts
 
-#define IRQ_VALID(n) ((n) >= 0 && (n) < NR_IRQS)
+#define IRQ_VALID(n)        ((n) >= 0 && (n) < NR_IRQS)
+#define IRQ_MASKED(n)       (irq_getmask() & (1 << (n)))
 
-irq_handler isr_map[NR_IRQS][MAX_ISR];
+struct irq_stats {
+    int spur_pic0;
+    int spur_pic1;
+};
 
-__fastcall void crash(struct iregs *regs); // crash.c
+static struct irq_stats _irqstats;
+struct irq_stats *g_irqstats = &_irqstats;
 
-void irq_mask(int irq_num)
+static irq_handler _isr_map[NR_IRQS][MAX_ISR];
+
+__fastcall void handle_irq(struct iregs *regs)
 {
-    pic_mask(irq_num);
+    int irq = ~regs->vec_num;
+    bool handled = false;
+    bool masked = IRQ_MASKED(irq);
+
+    if ((irq == 7 && masked) || (irq == 15 && masked)) {
+        bool pic0 = irq == 7;
+        int count = (pic0)
+            ? (++g_irqstats->spur_pic0)
+            : (++g_irqstats->spur_pic1);
+
+        beep(1675, 100);
+        kprint_wrn("** spurious irq%d (%d) **", irq, count);
+        if ((count % SPURIOUS_THRESH) == 0) {
+            crash(regs);
+        }
+        return;     // no EOI for spurious IRQs
+    }
+
+    if (!masked) {
+        for (int i = 0; i < MAX_ISR; i++) {
+            irq_handler isr = _isr_map[irq][i];
+            if (isr != NULL) {
+                isr(irq);
+                handled = true;
+            }
+        }
+    }
+
+    pic_eoi(irq);
+    if (!handled) {
+        kprint_wrn("** unhandled irq%d **", irq);
+        beep(1675, 100);
+        crash(regs);
+    }
 }
 
-void irq_unmask(int irq_num)
+void irq_mask(int irq)
 {
-    pic_unmask(irq_num);
+    pic_mask(irq);
+}
+
+void irq_unmask(int irq)
+{
+    pic_unmask(irq);
 }
 
 uint16_t irq_getmask(void)
@@ -54,61 +101,38 @@ void irq_setmask(uint16_t mask)
     pic_setmask(mask);
 }
 
-void irq_register(int irq_num, irq_handler func)
+void irq_register(int irq, irq_handler func)
 {
-    assert(IRQ_VALID(irq_num));
+    assert(IRQ_VALID(irq));
 
     bool registered = false;
     for (int i = 0; i < MAX_ISR; i++) {
-        if (isr_map[irq_num][i] == NULL) {
-            isr_map[irq_num][i] = func;
+        if (_isr_map[irq][i] == NULL) {
+            _isr_map[irq][i] = func;
             registered = true;
             break;
         }
     }
 
     if (!registered) {
-        kprint("irq: maximum number of handlers already registered for IRQ %d\n", irq_num);    // kwarn?
+        kprint("irq: maximum number of handlers already registered for IRQ %d\n", irq);    // kwarn?
     }
 }
 
-void irq_unregister(int irq_num, irq_handler func)
+void irq_unregister(int irq, irq_handler func)
 {
-    assert(IRQ_VALID(irq_num));
+    assert(IRQ_VALID(irq));
 
     bool unregistered = false;
     for (int i = 0; i < MAX_ISR; i++) {
-        if (isr_map[irq_num][i] == func) {
-            isr_map[irq_num][i] = NULL;
+        if (_isr_map[irq][i] == func) {
+            _isr_map[irq][i] = NULL;
             unregistered = true;
             break;
         }
     }
 
     if (!unregistered) {
-        kprint("irq: handler %08X not registered for IRQ %d\n", func, irq_num);
-    }
-}
-
-__fastcall void handle_irq(struct iregs *regs)
-{
-    int irq_num;
-    irq_handler handler;
-    bool handled = false;
-
-    irq_num = ~regs->vec_num;
-
-    handled = false;
-    for (int i = 0; i < MAX_ISR; i++) {
-        handler = isr_map[irq_num][i];
-        if (handler != NULL) {
-            handler(irq_num);
-            handled = true;
-        }
-    }
-
-    pic_eoi(irq_num);
-    if (!handled) {
-        crash(regs);
+        kprint("irq: handler %08X not registered for IRQ %d\n", func, irq);
     }
 }

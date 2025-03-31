@@ -140,7 +140,7 @@ exception_trampoline:
         ja              _noint
         jmp             *exception_table(, %eax, 4)  # handle exception
 _noint:
-        jmp             crash
+        jmp             _crash
 
 irq_trampoline:
         pushl           $return_from_irq
@@ -202,10 +202,10 @@ return_from_syscall:
 # tables
 
 exception_table:
-        .long           crash, crash, crash, crash, crash, crash, crash, crash
-        .long           crash, crash, crash, crash, crash, crash, crash, crash
-        .long           crash, crash, crash, crash, crash, crash, crash, crash
-        .long           crash, crash, crash, crash, crash, crash, crash, crash
+        .long   _crash, _crash, _crash, _crash, _crash, _crash, _crash, _crash
+        .long   _crash, _crash, _crash, _crash, _crash, _crash, _crash, _crash
+        .long   _crash, _crash, _crash, _crash, _crash, _crash, _crash, _crash
+        .long   _crash, _crash, _crash, _crash, _crash, _crash, _crash, _crash
 
 syscall_table:
         #include <i386/syscall_table.h>

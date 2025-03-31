@@ -28,29 +28,37 @@
 #define USER_DS                         0x2B
 #define _LDT_SEGMENT                    0x30
 #define _TSS0_SEGMENT                   0x38
-#define _TSS1_SEGMENT                    0x40
+#define _TSS1_SEGMENT                   0x40
 
 #ifndef __KERNEL__
 #error "Kernel-only defines live here!"
 #endif
 
-#ifndef __ASSEMBLER__
+#if !defined(__ASSEMBLER__) && defined(__KERNEL__)
 
 #include <assert.h>
+#include <i386/interrupt.h>
 #include <kernel/task.h>
 
-extern int _kprint(const char *fmt, ...);
-#define kprint(...) _kprint(__VA_ARGS__);
+extern void pcspk_beep(int hz, int ms);                     // see timer.c
+extern int _kprint(const char *fmt, ...);                   // print.c
+extern __fastcall void _crash(struct iregs *regs);   // crash.c
 
-#if __KERNEL__
+#define kprint(...) _kprint(__VA_ARGS__)
+#define beep(hz,ms) pcspk_beep(hz, ms)   // beep at hz for millis (nonblocking)
+#define crash(regs) _crash(regs)
+
+#define kprint_wrn(...)     \
+    kprint("\n\e[1;33mwarn: "); kprint(__VA_ARGS__); kprint("\e[0m");
+#define kprint_err(...)     \
+    kprint("\n\e[31merror: ");  kprint(__VA_ARGS__); kprint("\e[0m");
+// #define kprint_dbg()
+
 #define panic(...) \
 do { \
-    _kprint("\n\e[1;31mpanic: ");_kprint(__VA_ARGS__); _kprint("\e[0m"); \
+    kprint("\n\e[1;31mpanic: ");kprint(__VA_ARGS__); kprint("\e[0m"); \
     for (;;); \
 } while (0)
-#else
-#error "panic not allowed in user mode!"
-#endif
 
 #define panic_assert(x) \
 do { \
@@ -62,14 +70,10 @@ do { \
 
 // #define kernel_task() get_task(0)
 
-#ifdef DEBUG
-extern int g_crash_kernel;
-#endif
-
 
 #define _IOC_CONSOLE    'c'     // VGA Console IOCTL code
 #define _IOC_RTC        'r'     // RTC IOCTL code
 
-#endif  // __ASSEMBLER__
+#endif  // !defined(__ASSEMBLER__) && defined(__KERNEL__)
 
 #endif  // __KERNEL_H

@@ -29,15 +29,15 @@
 #include <kernel/queue.h>
 #include <kernel/tty.h>
 
-static struct list_node tty_drivers;                // linked list of TTY drivers
-static struct tty_ldisc ldiscs[NR_LDISC] = { };     // TTY line disciplines
-static struct tty ttys[NR_TTY] = { };               // TTY structs
+static struct list_node tty_drivers;            // linked list of TTY drivers
+static struct tty_ldisc ldiscs[NR_LDISC] = { }; // TTY line disciplines
+static struct tty ttys[NR_TTY] = { };           // TTY structs
 
-static struct termios tty_default_termios = {
-    .c_line = N_TTY,        // TODO: necessary?
-    .c_iflag = ICRNL,
-    .c_oflag = OPOST | ONLCR,
-    .c_lflag = ECHO | ECHOCTL
+static struct termios default_termios = {
+    .c_line = N_TTY,
+    .c_iflag = 0,//ICRNL,
+    .c_oflag = 0,//OPOST|ONLCR,
+    .c_lflag = ECHO,
 };
 
 static void default_write_char(struct tty *tty, char c);
@@ -135,7 +135,7 @@ int do_tty_open(struct tty *tty)
     }
 
     // associate termios
-    tty->termios = tty_default_termios;
+    tty->termios = default_termios;
 
     // associate and open line discipline
     tty->ldisc = &ldiscs[N_TTY];

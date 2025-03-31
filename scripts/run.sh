@@ -67,6 +67,13 @@ if [ "$1" = "qemu" ]; then
         QEMU_FLAGS+=" -S -s"
     fi
 
+    echo "$QEMU" ${QEMU_FLAGS[*]}
+    if [ $DEBUG_MODE -eq 0 ]; then
+        "$QEMU" $QEMU_FLAGS
+    else
+        "$QEMU" $QEMU_FLAGS &
+    fi
+
     # this is so bad lol
     if [ $DEBUG_MODE = 1 ]; then
         # kernel debug params
@@ -115,13 +122,6 @@ if [ "$1" = "qemu" ]; then
     else
         # no initial GDB
         DEBUG_MODE=0
-    fi
-
-    echo "$QEMU" ${QEMU_FLAGS[*]}
-    if [ $DEBUG_MODE -eq 0 ]; then
-        "$QEMU" $QEMU_FLAGS
-    else
-        "$QEMU" $QEMU_FLAGS &
     fi
 
     # if [ $? -ne 0 ]; then

@@ -86,7 +86,7 @@ void pic_eoi(uint8_t irq_num)
         pic_write_cmd(MASTER_PIC, OCW2_EOI | IRQ_SLAVE);
     }
     else {
-        pic_write_cmd(MASTER_PIC, OCW2_EOI | irq_num);
+        pic_write_cmd(MASTER_PIC, OCW2_EOI | (irq_num & 0x7));
     }
 
     restore_flags(flags);

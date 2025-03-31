@@ -23,6 +23,7 @@
 
 #include <i386/interrupt.h>
 #include <i386/io.h>
+#include <i386/pic.h>
 #include <i386/x86.h>
 #include <kernel/irq.h>
 #include <kernel/ohwes.h>
@@ -65,11 +66,12 @@ struct pit_state * get_pit(void)
     return &_pit;
 }
 
+#ifdef DEBUG
+extern void _crash_key_proc(int irq_num);
+#endif
+
 static uint16_t calculate_divisor(int freq);
 static void timer_interrupt(int irq_num);
-static void pcspk_on(void);
-static void pcspk_off(void);
-
 void init_timer(void)
 {
     uint8_t mode;
@@ -91,7 +93,13 @@ void init_timer(void)
     outb(PIT_PORT_CHAN0, (div >> 8) & 0xFF);
 
     irq_register(IRQ_TIMER, timer_interrupt);
+
+#ifdef DEBUG        // CTRL+ALT+FN to crash kernel
+    irq_register(IRQ_TIMER, _crash_key_proc);
+#endif
+
     irq_unmask(IRQ_TIMER);
+    pic_unmask(IRQ_TIMER);
 }
 
 static uint16_t calculate_divisor(int freq)
@@ -127,6 +135,24 @@ void timer_sleep(int millis)
     restore_flags(flags);
 }
 
+void pcspk_on(void)
+{
+    uint8_t data;
+
+    data = inb(0x61);
+    data |= 0x03;
+    outb(0x61, data);
+}
+
+void pcspk_off(void)
+{
+    uint8_t data;
+
+    data = inb(0x61);
+    data &= ~0x03;
+    outb(0x61, data);
+}
+
 void pcspk_beep(int freq, int millis)
 {
     uint32_t flags;
@@ -151,24 +177,6 @@ void pcspk_beep(int freq, int millis)
     }
 
     restore_flags(flags);
-}
-
-static void pcspk_on(void)
-{
-    uint8_t data;
-
-    data = inb(0x61);
-    data |= 0x03;
-    outb(0x61, data);
-}
-
-static void pcspk_off(void)
-{
-    uint8_t data;
-
-    data = inb(0x61);
-    data &= ~0x03;
-    outb(0x61, data);
 }
 
 static void timer_interrupt(int irq_num)

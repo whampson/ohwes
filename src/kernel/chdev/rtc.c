@@ -31,7 +31,7 @@
 #include <kernel/rtc.h>
 #include <kernel/fs.h>
 
-#define CHATTY_RTC              0
+#define CHATTY_RTC              1
 
 //
 // RTC Register Ports
