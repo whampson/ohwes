@@ -69,6 +69,7 @@ struct console {
     int state;                          // current control state
     bool initialized;                   // console can be used
     bool open;                          // console is currently attached
+    bool printing;                      // console is currently printing
 
     struct tty *tty;
 

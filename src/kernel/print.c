@@ -33,8 +33,10 @@
 
 void print_to_syscon(const char *buf, size_t count)
 {
-    struct console *cons = get_console(SYSTEM_CONSOLE);
+    struct console *cons;
+    const char *p;
 
+    cons = get_console(SYSTEM_CONSOLE);
     if (!cons->initialized && !g_early_console_initialized) {
         // we tried to print before the console was initialized! do the bare
         // minimum initialization here so we can print safely; full
@@ -55,12 +57,17 @@ void print_to_syscon(const char *buf, size_t count)
         g_early_console_initialized = true;
     }
 
-    for (int i = 0; i < count; i++) {
-        char c = buf[i];
-        if (c == '\n') {
-            console_putchar(cons, '\r');    // TODO: kprint ldisc/termios?
+    p = buf;
+    while (p < buf + count) {
+        if (*p == '\n') {
+            // if console is busy, keep trying til it's not...
+            // TODO: THIS IS BAD for interrupt handlers. We need to
+            // move the write into a deferred routine. Is this how
+            // the TTY flip buffer thing works on linux?
+            // TODO: kprint ldisc/termios?
+            while (console_putchar(cons, '\r') == 0);
         }
-        console_putchar(cons, c);
+        p += console_putchar(cons, *p);
     }
 
     g_boot->cursor_col = cons->cursor.x;

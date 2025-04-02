@@ -21,6 +21,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <i386/bitops.h>
 #include <i386/boot.h>
 #include <i386/interrupt.h>
 #include <i386/io.h>
@@ -441,17 +442,18 @@ void console_restore(struct console *cons, struct console_save_state *save)
 
 int console_write(struct console *cons, const char *buf, size_t count)
 {
-    size_t nwritten;
+    const char *p;
 
     if (!cons || !buf) {
         return -EINVAL;
     }
 
-    nwritten = 0;
-    for (int i = 0; i < count; i++) {
-        nwritten += console_putchar(cons, buf[i]);
+    p = buf;
+    while (p < buf + count) {
+        p += console_putchar(cons, *p);
     }
-    return nwritten;
+
+    return count;
 }
 
 int console_putchar(struct console *cons, char c)
@@ -460,8 +462,11 @@ int console_putchar(struct console *cons, char c)
     bool update_attr = false;
     bool update_cursor_pos = true;
     uint16_t char_pos;
-    uint32_t flags;
-    cli_save(flags);
+
+    // prevent reentrancy
+    if (test_and_set_bit(&cons->printing, 0)) {
+        return 0;
+    }
 
 #if E9_HACK
     if (is_syscon(cons)) {
@@ -561,7 +566,7 @@ write_vga:
     }
 
 done:
-    restore_flags(flags);
+    clear_bit(&cons->printing, 0);
     return 1;
 }
 
