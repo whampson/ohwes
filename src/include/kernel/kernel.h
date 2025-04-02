@@ -73,6 +73,7 @@ do { \
 
 #define _IOC_CONSOLE    'c'     // VGA Console IOCTL code
 #define _IOC_RTC        'r'     // RTC IOCTL code
+#define _IOC_TTY        't'     // TTY IOCTL code
 
 #endif  // !defined(__ASSEMBLER__) && defined(__KERNEL__)
 

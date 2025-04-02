@@ -22,6 +22,9 @@
 #ifndef __TERMIOS_H
 #define __TERMIOS_H
 
+#include <kernel/ioctl.h>
+#include <kernel/kernel.h>
+
 typedef unsigned int    tcflag_t;
 typedef unsigned char   cc_t;
 
@@ -43,14 +46,22 @@ struct termios {
 #define ICRNL   (1 << 0)        // map CR to NL (unless IGNCR is set)
 #define INLCR   (1 << 1)        // map NL to CR
 #define IGNCR   (1 << 2)        // ignore carriage return
+#define IXON    (1 << 3)        // enable software flow control on input
+#define IXOFF   (1 << 4)        // enable software flow control on output
 
 // c_oflag: output modes
 #define OPOST   (1 << 0)        // enable post processing
 #define OCRNL   (1 << 1)        // map CR to NL
 #define ONLCR   (1 << 2)        // convert NL to CR-NL
 
+// c_cflag: control modes
+#define CRTSCTS (1 << 0)        // enable RTS/CTS flow control
+
 // c_lflag: local modes
 #define ECHO    (1 << 0)        // echo input characters
 #define ECHOCTL (1 << 1)        // if ECHO set, echo control characters as ^C
+
+#define TCGETS  _IOCTL_R(_IOC_TTY,0x01,struct termios *)
+#define TCSETS  _IOCTL_W(_IOC_TTY,0x02,struct termios *)
 
 #endif  // __TERMIOS_H

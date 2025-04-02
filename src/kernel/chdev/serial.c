@@ -37,8 +37,9 @@
 
 // print debugging info
 #define CHATTY_COM          1
+#define PRINT_TX_ENABLE     0
 #define PRINT_LINE_STATUS   1
-#define PRINT_MODEM_STATUS  0
+#define PRINT_MODEM_STATUS  1
 #define PRINT_TIMEOUT       0
 
 // enable for slower inb/outb operations
@@ -48,7 +49,7 @@
 #define FIFO_DEPTH          16          // hardware FIFO depth (assumed)
 #define RECV_MAX            128         // max chars to receive per interrupt
 #define XMIT_MAX            FIFO_DEPTH  // max chars to send per interrupt
-#define INTR_MAX            1           // max num passes per interrupt
+#define INTR_MAX            16          // max num passes per interrupt
 
 // check if a COM register returned a bad value
 #define ERR_CHK(x)          ((x) == 0 || (x) == 0xFF)
@@ -67,6 +68,16 @@ enum {
     COM4 = 4,
 };
 
+struct com_stats {
+    uint32_t n_overrun;         // overrun error count
+    uint32_t n_parity;          // parity error count
+    uint32_t n_framing;         // framing error count
+    uint32_t n_timeout;         // timeout error count
+    uint32_t n_break;           // break interrupt count
+    uint32_t n_tx, n_rx;        // chars transmitted/received count
+    uint32_t n_xchar;           // control chars transmitted
+};
+
 //
 // COM port state
 //
@@ -79,11 +90,11 @@ struct com {
     // flags
     bool valid  : 1;            // port exists and is usable
     bool open   : 1;            // port is currently in use
-    bool needs_flush : 1;       // flag indicating chars need to be sent
 
     // buffers
     struct ring tx_ring;        // output queue
     char _txbuf[TTY_BUFFER_SIZE];
+    char xchar;                 // high-priority control character
 
     // register shadows
     struct iir iir;             // interrupt indicator register
@@ -95,11 +106,7 @@ struct com {
     uint16_t baud_divisor;      // baud rate divisor
 
     // statistics
-    uint32_t n_overrun;         // overrun error count
-    uint32_t n_parity;          // parity error count
-    uint32_t n_framing;         // framing error count
-    uint32_t n_timeout;         // timeout error count
-    uint32_t n_break;           // break interrupt count
+    struct com_stats stats;
 };
 struct com g_com[NR_SERIAL];
 
@@ -116,8 +123,10 @@ static int serial_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg);
 static void serial_flush(struct tty *);
 static int serial_write(struct tty *tty, const char *buf, size_t count);
 static size_t serial_write_room(struct tty *);
-static void serial_throttle(struct tty *);
 static void serial_unthrottle(struct tty *);
+static void serial_throttle(struct tty *);
+static void serial_start(struct tty *);
+static void serial_stop(struct tty *);
 
 struct tty_driver serial_driver = {
     .name = "ttyS",
@@ -132,8 +141,8 @@ struct tty_driver serial_driver = {
     .write_room = serial_write_room,
     .throttle = serial_throttle,
     .unthrottle = serial_unthrottle,
-    // .start = serial_start,
-    // .stop = serial_stop
+    .start = serial_start,
+    .stop = serial_stop
 };
 
 static void com_interrupt(struct com *com);
@@ -259,6 +268,7 @@ static int serial_open(struct tty *tty)
 
     // initialize ring buffer
     ring_init(&com->tx_ring, com->_txbuf, sizeof(com->_txbuf));
+    com->xchar = 0;
 
     // disable all interrupts
     com_out(com, UART_IER, 0);
@@ -274,7 +284,7 @@ static int serial_open(struct tty *tty)
     }
 
     // enable FIFOs and set default trigger level (14 bytes)
-    set_fifo(com, true, RCVR_TRIG_1);
+    set_fifo(com, true, RCVR_TRIG_14);
 
     // set modem control
     com->mcr._value = 0;
@@ -296,11 +306,23 @@ static int serial_open(struct tty *tty)
     com->ier.ms = 1;    // interrupt when modem status changes
     com_out(com, UART_IER, com->ier._value);
 
+    // reset statistics
+    zeromem(&com->stats, sizeof(struct com_stats));
+
     // collect final register state
     shadow_regs(com);
     if (ERR_CHK(com->ier._value) || ERR_CHK(com->mcr._value)) {
         ret = -EIO; goto done;
     }
+
+    // TODO: this should be on the RTC, not the PIT;
+    //       PIT is reserved for critical system things (sched, dbg stuff...)
+    //       but the RTC is broken right now
+    // irq_register(IRQ_TIMER, com_timer);        // TODO: TEMP hopefully...
+
+    tty->driver_data = com;
+    com->tty = tty;
+    com->open = true;
 
 #if CHATTY_COM
     kprint("com%d: opened, port=%Xh div=%d lcr=%02Xh mcr=%02Xh iir=%02Xh ier=%02Xh\n",
@@ -309,15 +331,6 @@ static int serial_open(struct tty *tty)
         (int) com->lcr._value, (int) com->mcr._value,
         (int) com->iir._value, (int) com->ier._value);
 #endif
-
-    // // TODO: this should be on the RTC, not the PIT;
-    // //       PIT is reserved for critical system things (sched, dbg stuff...)
-    // //       but the RTC is broken right now
-    // irq_register(IRQ_TIMER, com_timer);        // TODO: TEMP hopefully...
-
-    tty->driver_data = com;
-    com->tty = tty;
-    com->open = true;
 
 done:
     restore_flags(flags);
@@ -357,11 +370,9 @@ static void serial_flush(struct tty *tty)
         return;
     }
 
-    // enable transmitter if there are chars to send
     cli_save(flags);
-    if (!ring_empty(&com->tx_ring)) {
-        com->needs_flush = true;
-        // tx_enable(com); // let the resulting interrupt take care of writing the port
+    if (!ring_empty(&com->tx_ring) && !tty->stopped && !tty->hw_stopped) {
+        tx_enable(com);
     }
     restore_flags(flags);
 }
@@ -407,6 +418,10 @@ static int serial_write(struct tty *tty, const char *buf, size_t count)
     }
 #endif
 
+    if (!ring_empty(&com->tx_ring) && !tty->stopped && !tty->hw_stopped) {
+        tx_enable(com);
+    }
+
     // enable interrupts and return
     restore_flags(flags);
     return ptr - buf;
@@ -430,35 +445,9 @@ static size_t serial_write_room(struct tty *tty)
     return room;
 }
 
-static void serial_throttle(struct tty *tty)
-{
-    //
-    // TODO: 1/3/25 disabled for now...
-    //
-
-    // uint32_t flags;
-    struct com *com;
-
-    int ret = tty_get_com(tty, &com);
-    if (ret < 0) {
-        return;
-    }
-
-    // // TODO: ensure termios permits throttling
-    // cli_save(flags);
-    // com->mcr.rts = 0;
-    // // com_out(com, UART_TX, 0x13);    // XOFF
-    // com_out(com, UART_MCR, com->mcr._value);
-    // restore_flags(flags);
-}
-
 static void serial_unthrottle(struct tty *tty)
 {
-    //
-    // TODO: 1/3/25 disabled for now...
-    //
-
-    // uint32_t flags;
+    uint32_t flags;
     struct com *com;
 
     int ret = tty_get_com(tty, &com);
@@ -466,12 +455,90 @@ static void serial_unthrottle(struct tty *tty)
         return;
     }
 
-    // // TODO: ensure termios permits throttling
-    // cli_save(flags);
-    // com->mcr.rts = 1;
-    // com_out(com, UART_MCR, com->mcr._value);
-    // // com_out(com, UART_TX, 0x11);    // XON
-    // restore_flags(flags);
+    cli_save(flags);
+    if (I_IXOFF(tty)) {
+#if CHATTY_COM
+        COM_WARN("com%d: IXOFF: tx START_CHAR\n", com->num);
+#endif
+        com->xchar = START_CHAR(tty);
+        tx_enable(com);
+    }
+    if (C_CRTSCTS(tty)) {
+#if CHATTY_COM
+        COM_WARN("com%d: rts=1\n", com->num);
+#endif
+        com->mcr.rts = 1;
+    }
+    com_out(com, UART_MCR, com->mcr._value);
+    restore_flags(flags);
+}
+
+static void serial_throttle(struct tty *tty)
+{
+    uint32_t flags;
+    struct com *com;
+
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return;
+    }
+
+    cli_save(flags);
+    if (I_IXOFF(tty)) {
+#if CHATTY_COM
+        COM_WARN("com%d: IXOFF: tx STOP_CHAR\n", com->num);
+#endif
+        com->xchar = STOP_CHAR(tty);
+        tx_enable(com);
+    }
+    if (C_CRTSCTS(tty)) {
+#if CHATTY_COM
+        COM_WARN("com%d: rts=0\n", com->num);
+#endif
+        com->mcr.rts = 0;
+    }
+    com_out(com, UART_MCR, com->mcr._value);
+    restore_flags(flags);
+}
+
+static void serial_start(struct tty *tty)
+{
+    uint32_t flags;
+    struct com *com;
+
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return;
+    }
+
+#if CHATTY_COM
+    COM_WARN("com%d: starting...\n", com->num);
+#endif
+
+    cli_save(flags);
+    if (!ring_empty(&com->tx_ring)) {
+        tx_enable(com);
+    }
+    restore_flags(flags);
+}
+
+static void serial_stop(struct tty *tty)
+{
+    uint32_t flags;
+    struct com *com;
+
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return;
+    }
+
+#if CHATTY_COM
+    COM_WARN("com%d: stopping...\n", com->num);
+#endif
+
+    cli_save(flags);
+    tx_disable(com);
+    restore_flags(flags);
 }
 
 // ----------------------------------------------------------------------------
@@ -591,21 +658,27 @@ static void set_fifo(struct com *com, bool enabled, enum recv_trig depth)
     com_out(com, UART_FCR, fcr._value);
 }
 
-// static void tx_enable(struct com *com)
-// {
-//     if (!com->ier.thre) {
-//         com->ier.thre = 1;
-//         com_out(com, UART_IER, com->ier._value);
-//     }
-// }
+static void tx_enable(struct com *com)
+{
+    if (!com->ier.thre) {
+#if CHATTY_COM && PRINT_TX_ENABLE
+        COM_WARN("com%d: tx enable\n", com->num);
+#endif
+        com->ier.thre = 1;
+        com_out(com, UART_IER, com->ier._value);
+    }
+}
 
-// static void tx_disable(struct com *com)
-// {
-//     if (com->ier.thre) {
-//         com->ier.thre = 0;
-//         com_out(com, UART_IER, com->ier._value);
-//     }
-// }
+static void tx_disable(struct com *com)
+{
+    if (com->ier.thre) {
+#if CHATTY_COM && PRINT_TX_ENABLE
+        COM_WARN("com%d: tx disable\n", com->num);
+#endif
+        com->ier.thre = 0;
+        com_out(com, UART_IER, com->ier._value);
+    }
+}
 
 static void modem_status(struct com *com)
 {
@@ -622,21 +695,38 @@ static void modem_status(struct com *com)
             com->msr.dcd  ? " dcd"  : "");
     }
 #endif
+
+    if (C_CRTSCTS(com->tty)) {
+        if (com->tty->hw_stopped) {
+            if (com->msr.cts) {
+                COM_WARN("com%d: CTS tx start\n");
+                com->tty->hw_stopped = false;
+                tx_disable(com);
+            }
+        }
+        else {
+            if (!com->msr.cts) {
+                COM_WARN("com%d: CTS tx stop\n");
+                com->tty->hw_stopped = true;
+                tx_enable(com);
+            }
+        }
+    }
 }
 
 static void line_status(struct com *com)
 {
     if (com->lsr.oe) {
-        com->n_overrun++;
+        com->stats.n_overrun++;
     }
     if (com->lsr.pe) {
-        com->n_parity++;
+        com->stats.n_parity++;
     }
     if (com->lsr.fe) {
-        com->n_framing++;
+        com->stats.n_framing++;
     }
     if (com->lsr.brk) {
-        com->n_break++;
+        com->stats.n_break++;
     }
 
 #if CHATTY_COM && PRINT_LINE_STATUS
@@ -655,19 +745,16 @@ static void send_chars(struct com *com)
     char c;
     int count;
 
-    com->needs_flush = false;
-
-    // nothing to send? disable transmitter and quit
-    if (ring_empty(&com->tx_ring)) {
-        // tx_disable(com);
-        return;
+    // transmit high-priority control char
+    if (com->xchar) {
+        com_out(com, UART_TX, com->xchar);
+        com->xchar = 0;
+        com->stats.n_xchar++;
     }
 
-    // tx_enable(com);
-
-    com->lsr._value = com_in(com, UART_LSR);
-    if (!com->lsr.thre) {
-        COM_WARN("com%d: attempt to send while transmitter full!\n", com->num);
+    // no chars to send or output stopped? do nothing
+    if (ring_empty(&com->tx_ring) || com->tty->stopped || com->tty->hw_stopped) {
+        tx_disable(com);
         return;
     }
 
@@ -676,16 +763,17 @@ static void send_chars(struct com *com)
     do {
         c = ring_get(&com->tx_ring);
         com_out(com, UART_TX, c);
+        com->stats.n_tx++;
         if (ring_empty(&com->tx_ring)) {
             break;
         }
     } while (--count > 0);
 
-    // // nothing left to send? disable transmitter
-    // if (ring_empty(&com->tx_ring)) {
-    //     // tx_disable(com);    // TODO: track transmitter state?
-    //     return;
-    // }
+    // nothing left to send? disable transmitter
+    if (ring_empty(&com->tx_ring)) {
+        tx_disable(com);    // TODO: track transmitter state?
+        return;
+    }
 }
 
 static void recv_chars(struct com *com)
@@ -697,7 +785,7 @@ static void recv_chars(struct com *com)
 
     // was there a timeout?
     if (com->iir.timeout) {
-        com->n_timeout++;
+        com->stats.n_timeout++;
 #if CHATTY_COM && PRINT_TIMEOUT
         COM_WARN("com%d: timeout!\n", com->num);
 #endif
@@ -715,6 +803,7 @@ static void recv_chars(struct com *com)
         // accept char and put it in the ldisc
         c = com_in(com, UART_RX);
         ldisc->recv(tty, &c, 1);
+        com->stats.n_rx++;
 
         // read new line status, continue receiving while data is available
         com->lsr._value = com_in(com, UART_LSR);
@@ -745,23 +834,24 @@ static void com_interrupt(struct com *com)
     com->ier._value = com_in(com, UART_IER);
     com->lcr._value = com_in(com, UART_LCR);
     com->mcr._value = com_in(com, UART_MCR);
-    com->lsr._value = com_in(com, UART_LSR);
-    com->msr._value = com_in(com, UART_MSR);
 
     npass = 0;
     do {
-        // check status first
-        modem_status(com);
+        // check line status
+        com->lsr._value = com_in(com, UART_LSR);
         line_status(com);
 
-        // handle rx/tx
+        // handle rx
         if (com->iir.id == ID_RDA || com->iir.timeout || com->lsr.dr) {
             recv_chars(com);
         }
 
-        com->lsr._value = com_in(com, UART_LSR);
+        // check modem status
+        com->msr._value = com_in(com, UART_MSR);
+        modem_status(com);
 
-        if (/*com->iir.id == ID_THRE ||*/ com->lsr.thre /*|| com->needs_flush*/) {
+        // handle tx
+        if (com->iir.id == ID_THRE || com->lsr.thre) {
             send_chars(com);
         }
 
@@ -771,15 +861,14 @@ static void com_interrupt(struct com *com)
         }
 
         // reread for next iteration
-        com->lsr._value = com_in(com, UART_LSR);
         com->iir._value = com_in(com, UART_IIR);
     } while (com->iir.no_int == 0);
 
-// #if CHATTY_COM
-//     if (npass == INTR_MAX) {
-//         COM_WARN("com%d: max interrupt passes reached!\n", com->num);
-//     }
-// #endif
+#if CHATTY_COM
+    if (npass == INTR_MAX) {
+        COM_WARN("com%d: max interrupt passes reached!\n", com->num);
+    }
+#endif
 }
 
 #define _do_com_irq(port)   \
@@ -811,13 +900,21 @@ static void com_timer(int irq_num)
 {
     (void) irq_num; // TODO: need proper timer infrastructure lol
 
-    // check the port state on a timer because sometimes
-    // we miss CPU interrupts during transmission... so, to
-    // ensure the read fifo doesn't get hung up and the entire
-    // transaction grind to a halt, we periodically check UARTs
-    // for pending interrupts
-    _do_com_irq(COM1);
-    _do_com_irq(COM3);
-    _do_com_irq(COM2);
-    _do_com_irq(COM4);
+    // // check the port state on a timer because sometimes
+    // // we miss CPU interrupts during transmission... so, to
+    // // ensure the read fifo doesn't get hung up and the entire
+    // // transaction grind to a halt, we periodically check UARTs
+    // // for pending interrupts
+    // _do_com_irq(COM1);
+    // _do_com_irq(COM3);
+    // _do_com_irq(COM2);
+    // _do_com_irq(COM4);
+
+    struct com *com1 = get_com(COM1);
+    // do {
+        shadow_regs(com1);
+        if (com1->lsr.thre) {
+            send_chars(com1);
+        }
+    // } while (!ring_empty(&com1->tx_ring));
 }

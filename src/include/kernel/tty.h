@@ -55,15 +55,23 @@
 #define I_ICRNL(tty)            _I_FLAG(tty, ICRNL)
 #define I_INLCR(tty)            _I_FLAG(tty, INLCR)
 #define I_IGNCR(tty)            _I_FLAG(tty, IGNCR)
+#define I_IXON(tty)             _I_FLAG(tty, IXON)
+#define I_IXOFF(tty)            _I_FLAG(tty, IXOFF)
 
 // termios output flag macros
 #define O_OPOST(tty)            _O_FLAG(tty, OPOST)
 #define O_ONLCR(tty)            _O_FLAG(tty, ONLCR)
 #define O_OCRNL(tty)            _O_FLAG(tty, OCRNL)
 
+// termios control flag macros
+#define C_CRTSCTS(tty)          _C_FLAG(tty, CRTSCTS)
+
 // termios local flag macros
 #define L_ECHO(tty)             _L_FLAG(tty, ECHO)
 #define L_ECHOCTL(tty)          _L_FLAG(tty, ECHOCTL)
+
+#define STOP_CHAR(tty)          0x13    // TODO: tty->termios.c_cc[VSTOP]
+#define START_CHAR(tty)         0x11    // TODO: tty->termios.c_cc[VSTART]
 
 // type shit
 struct tty;
@@ -88,10 +96,10 @@ struct tty_driver {
     int     (*write)(struct tty *, const char *buf, size_t count);
     size_t  (*write_room)(struct tty *);    // query space in write buffer
     void    (*flush)(struct tty *);         // flush write buffer
-    void    (*stop)(struct tty *);          // stop transmitting chars
-    void    (*start)(struct tty *);         // start transmitting chars
     void    (*throttle)(struct tty *);      // stop receiving chars (tell transmitter to stop)
     void    (*unthrottle)(struct tty *);    // start receiving chars (tell transmitter to start)
+    void    (*stop)(struct tty *);          // stop transmitting chars
+    void    (*start)(struct tty *);         // start transmitting chars
 };
 
 //
@@ -104,6 +112,8 @@ struct tty {
     dev_t device;                   // device major/minor numbers
     bool open;                      // is the TTY device currently open?
     bool throttled;                 // is the receiver channel throttled?
+    bool stopped;                   // is transmitter channel stopped? (XON/XOFF)
+    bool hw_stopped;                // is transmitter stopped? (CTS/RTS)
     int line;                       // device line number
 
     struct file *file;              // connected file description

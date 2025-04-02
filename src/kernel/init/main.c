@@ -38,6 +38,7 @@
 #include <kernel/irq.h>
 #include <kernel/kernel.h>
 #include <kernel/ohwes.h>
+#include <kernel/termios.h>
 
 extern void init_cpu(void);
 extern void init_fs(void);
@@ -173,28 +174,26 @@ int main(void)
     printf("Opening /dev/ttyS0...\n");
     int fd = CHECK(open("/dev/ttyS0", O_RDWR | O_NONBLOCK));
 
-    char c;
-    /*char buf[4096+1];
-    while (read(STDIN_FILENO, &c, 1) > 0) {
-        if (c == 0x03) {
-            break;
-        }
-        if (c != '\n') {
-            continue;
-        }
+    struct termios tio;
+    ioctl(fd, TCGETS, (unsigned long) &tio);
+    tio.c_iflag |= (ICRNL | IXON | IXOFF);
+    tio.c_oflag |= (OPOST | ONLCR);
+    tio.c_cflag |= (CRTSCTS);
+    tio.c_lflag |= (ECHO | ECHOCTL);
+    ioctl(fd, TCSETS, (unsigned long) &tio);
 
-        ssize_t count;
-        while ((count = read(fd, buf, sizeof(buf) - 1)) > 0) {
-            printf("%.*s", count, buf);
-            printf("\n> read %d chars from /dev/ttyS0 <\n", count);
-        }
-    }*/
+    // ioctl(STDOUT_FILENO, TCGETS, (unsigned long) &tio);
+    // tio.c_oflag |= (OPOST | ONLCR);
+    // ioctl(STDOUT_FILENO, TCSETS, (unsigned long) &tio);
+
     ssize_t ret;
-    while ((ret = read(fd, &c, 1)) && c != 3) {
+    // char c;
+    char cbuf[128];
+    while ((ret = read(fd, cbuf, sizeof(cbuf)))/* && c != 3*/) {
         if (ret == -EAGAIN) {
             continue;
         }
-        write(STDOUT_FILENO, &c, 1);
+        write(STDOUT_FILENO, cbuf, ret);
     }
 
     close(fd);

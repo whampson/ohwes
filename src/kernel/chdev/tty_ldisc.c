@@ -62,6 +62,10 @@ static struct n_tty_ldisc_data ldisc_data[NR_TTY];
 static int opost(struct tty *tty, char c);
 static int echo(struct tty *tty, char c);
 static void write_char(struct tty *tty, char c);
+static void unthrottle_tty(struct tty *tty);
+static void throttle_tty(struct tty *tty);
+static void start_tty(struct tty *tty);
+static void stop_tty(struct tty *tty);
 
 void init_n_tty(void)
 {
@@ -141,10 +145,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
 
         // check if we can unthrottle
         if (n_tty_recv_room(tty) >= TTY_THROTTLE_THRESH) {
-            if (tty->throttled && tty->driver.unthrottle) {
-                tty->driver.unthrottle(tty);
-                tty->throttled = false;
-            }
+            unthrottle_tty(tty);
         }
     }
 
@@ -216,6 +217,18 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
     while (count > 0) {
         c = *ptr;
 
+        // handle software flow control
+        if (I_IXON(tty)) {
+            if (c == START_CHAR(tty)) {
+                start_tty(tty);
+                return;
+            }
+            if (c == STOP_CHAR(tty)) {
+                stop_tty(tty);
+                return;
+            }
+        }
+
         // handle CR and NL translation
         switch (c) {
             case '\r':
@@ -258,10 +271,7 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
 
     // throttle the receiver channel if we're approaching capacity
     if (n_tty_recv_room(tty) < TTY_THROTTLE_THRESH) {
-        if (!tty->throttled && tty->driver.throttle) {
-            tty->driver.throttle(tty);
-            tty->throttled = true;
-        }
+        throttle_tty(tty);
     }
 }
 
@@ -329,4 +339,52 @@ static int echo(struct tty *tty, char c)
 static void write_char(struct tty *tty, char c)
 {
     tty->driver.write(tty, &c, 1);
+}
+
+static void unthrottle_tty(struct tty *tty)
+{
+    if (!tty->throttled) {
+        return;
+    }
+
+    tty->throttled = false;
+    if (tty->driver.unthrottle) {
+        tty->driver.unthrottle(tty);
+    }
+}
+
+static void throttle_tty(struct tty *tty)
+{
+    if (tty->throttled) {
+        return;
+    }
+
+    tty->throttled = true;
+    if (tty->driver.throttle) {
+        tty->driver.throttle(tty);
+    }
+}
+
+static void start_tty(struct tty *tty)
+{
+    if (!tty->stopped) {
+        return;
+    }
+
+    tty->stopped = false;
+    if (tty->driver.start) {
+        tty->driver.start(tty);
+    }
+}
+
+static void stop_tty(struct tty *tty)
+{
+    if (tty->stopped) {
+        return;
+    }
+
+    tty->stopped = true;
+    if (tty->driver.stop) {
+        tty->driver.stop(tty);
+    }
 }

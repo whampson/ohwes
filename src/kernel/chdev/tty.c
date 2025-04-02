@@ -35,9 +35,9 @@ static struct tty ttys[NR_TTY] = { };           // TTY structs
 
 static struct termios default_termios = {
     .c_line = N_TTY,
-    .c_iflag = 0,//ICRNL,
-    .c_oflag = 0,//OPOST|ONLCR,
-    .c_lflag = ECHO,
+    .c_iflag = ICRNL | IXON,
+    .c_oflag = OPOST | ONLCR,
+    .c_lflag = ECHO | ECHOCTL,
 };
 
 static void default_write_char(struct tty *tty, char c);
@@ -186,6 +186,8 @@ int do_tty_open(struct tty *tty)
     // so we can clear flags in aggregate (and not miss any)
     tty->open = true;
     tty->throttled = false;
+    tty->stopped = false;
+    tty->hw_stopped = false;
     return ret;
 }
 
@@ -273,6 +275,32 @@ static ssize_t tty_write(struct file *file, const char *buf, size_t count)
 
 static int tty_ioctl(struct file *file, unsigned int num, unsigned long arg)
 {
-    // TODO: forward ioctl to ldisc and driver
-    return -ENOTTY;
+    int ret;
+    struct tty *tty;
+
+    if (!file) {
+        return -EINVAL;
+    }
+
+    // TODO: check device ID (ENODEV if not a TTY)
+    // TODO: verify type with magic number check or something
+    tty = (struct tty *) file->private_data;
+
+    ret = 0;
+    switch (num) {
+        case TCGETS:
+            copy_to_user((void *) arg, &tty->termios, sizeof(struct termios));
+            ret = 0;
+            break;
+        case TCSETS:
+            // TODO: flush buffers, prevent new input, etc.
+            copy_from_user(&tty->termios, (void *) arg, sizeof(struct termios));
+            ret = 0;
+        default:
+            // TODO: forward ioctl to ldisc and driver
+            ret = -ENOTTY;
+            break;
+    }
+
+    return ret;
 }
