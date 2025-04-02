@@ -29,17 +29,18 @@
 #define EBADF       2   // Bad file descriptor
 #define EBADRQC     3   // Invalid request descriptor
 #define EBUSY       4   // Device or resource busy
-#define EINVAL      5   // Invalid argument
-#define EIO         6   // Input/output error
-#define EMFILE      7   // Too many files open in process
-#define ENFILE      8   // Too many files open in system
-#define ENODEV      9   // No such device
-#define ENOENT      10   // No such file or directory
-#define ENOMEM      11  // Not enough memory
-#define ENOSYS      12  // Function not implemented
-#define ENOTTY      13  // Invalid I/O control operation
-#define ENXIO       14  // No such device or address
-#define EPERM       15  // Operation not permitted
+#define EFAULT      5   // Bad address
+#define EINVAL      6   // Invalid argument
+#define EIO         7   // Input/output error
+#define EMFILE      8   // Too many files open in process
+#define ENFILE      9   // Too many files open in system
+#define ENODEV      10  // No such device
+#define ENOENT      11  // No such file or directory
+#define ENOMEM      12  // Not enough memory
+#define ENOSYS      13  // Function not implemented
+#define ENOTTY      14  // Invalid I/O control operation
+#define ENXIO       15  // No such device or address
+#define EPERM       16  // Operation not permitted
 
 #ifndef __ASSEMBLER__
 extern int _errno;

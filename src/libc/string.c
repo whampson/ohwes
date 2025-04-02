@@ -33,6 +33,7 @@ char * strerror(int errnum)
         case EBADF:   return "Bad file descriptor";
         case EBADRQC: return "Invalid request descriptor";
         case EBUSY:   return "Device or resource busy";
+        case EFAULT:  return "Bad address";
         case EINVAL:  return "Invalid argument";
         case EIO:     return "Input/output error";
         case EMFILE:  return "Too many files open in process";
