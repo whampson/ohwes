@@ -31,7 +31,7 @@
 static inline void set_bit(volatile void *addr, unsigned int index)
 {
     volatile char *bits = (volatile char *) addr;
-    __asm__ volatile ("btsl %1, %0" : "+m"(*bits) : "Ir"(index));
+    __asm__ volatile ("lock btsl %1, %0" : "+m"(*bits) : "Ir"(index));
 }
 
 /**
@@ -43,7 +43,7 @@ static inline void set_bit(volatile void *addr, unsigned int index)
 static inline void clear_bit(volatile void *addr, unsigned int index)
 {
     volatile char *bits = (volatile char *) addr;
-    __asm__ volatile ("btrl %1, %0" : "+m"(*bits) : "Ir"(index));
+    __asm__ volatile ("lock btrl %1, %0" : "+m"(*bits) : "Ir"(index));
 }
 
 /**
@@ -55,7 +55,7 @@ static inline void clear_bit(volatile void *addr, unsigned int index)
 static inline void flip_bit(volatile void *addr, unsigned int index)
 {
     volatile char *bits = (volatile char *) addr;
-    __asm__ volatile ("btcl %1, %0" : "+m"(*bits) : "Ir"(index));
+    __asm__ volatile ("lock btcl %1, %0" : "+m"(*bits) : "Ir"(index));
 }
 
 /**
@@ -76,7 +76,7 @@ static inline int test_bit(volatile void *addr, unsigned int index)
     int bit;
     __asm__ volatile (
         "                   \n\
-        btl     %2, %1      \n\
+   lock btl     %2, %1      \n\
         sbb     %0, %0      \n\
         "
         : "=r"(bit)
@@ -100,7 +100,7 @@ static inline int test_and_set_bit(volatile void *addr, unsigned int index)
     int bit;
     __asm__ volatile (
         "                   \n\
-        btsl    %2, %1      \n\
+   lock btsl    %2, %1      \n\
         sbb     %0, %0      \n\
         "
         : "=r"(bit), "=m"(*bits)
@@ -125,7 +125,7 @@ static inline int test_and_clear_bit(volatile void *addr, unsigned int index)
     int bit;
     __asm__ volatile (
         "                   \n\
-        btrl    %2, %1      \n\
+   lock btrl    %2, %1      \n\
         sbb     %0, %0      \n\
         "
         : "=r"(bit), "=m"(*bits)
@@ -150,7 +150,7 @@ static inline int test_and_flip_bit(volatile void *addr, unsigned int index)
     int bit;
     __asm__ volatile (
         "                   \n\
-        btcl    %2, %1      \n\
+   lock btcl    %2, %1      \n\
         sbb     %0, %0      \n\
         "
         : "=r"(bit), "=m"(*bits)
