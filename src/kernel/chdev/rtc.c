@@ -26,6 +26,7 @@
 #include <i386/io.h>
 #include <i386/x86.h>
 #include <kernel/kernel.h>
+#include <kernel/ioctls.h>
 #include <kernel/irq.h>
 #include <kernel/ohwes.h>
 #include <kernel/rtc.h>
@@ -555,29 +556,34 @@ int rtc_ioctl(struct file *file, unsigned int num, void *arg)
 
         case RTC_IRQP_GET:
             rate = get_rate();
-            copy_to_user(arg, &rate, sizeof(unsigned char));
+            if (!copy_to_user(arg, &rate, sizeof(unsigned char))) {
+                return -EFAULT;
+            }
             break;
 
         case RTC_IRQP_SET:
-            copy_from_user(&rate, arg, sizeof(unsigned char));
-            ret = set_rate(rate);
-            break;
+            if (!copy_from_user(&rate, arg, sizeof(unsigned char))) {
+                return -EFAULT;
+            }
+            return set_rate(rate);
 
         case RTC_TIME_GET: __fallthrough;
         case RTC_ALARM_GET:
             get_time(&time, num == RTC_ALARM_GET);
-            copy_to_user(arg, &time, sizeof(struct rtc_time));
+            if (!copy_to_user(arg, &time, sizeof(struct rtc_time))) {
+                return -EFAULT;
+            }
             break;
 
         case RTC_TIME_SET: __fallthrough;
         case RTC_ALARM_SET:
-            copy_from_user(&time, arg, sizeof(struct rtc_time));
-            ret = set_time(&time, num == RTC_ALARM_SET);
-            break;
+            if (!copy_from_user(&time, arg, sizeof(struct rtc_time))) {
+                return -EFAULT;
+            }
+            return set_time(&time, num == RTC_ALARM_SET);
 
         default:
-            ret = -ENOTTY;
-            break;
+            return -ENOTTY;
     }
 
     return ret;

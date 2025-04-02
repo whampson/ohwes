@@ -24,6 +24,7 @@
 #include <kernel/chdev.h>
 #include <kernel/config.h>
 #include <kernel/fs.h>
+#include <kernel/ioctls.h>
 #include <kernel/ohwes.h>
 #include <kernel/pool.h>
 #include <kernel/queue.h>
@@ -58,6 +59,12 @@ static struct file_ops tty_fops = {
     .write = tty_write,
     .ioctl = tty_ioctl,
 };
+
+//
+// ioctl fns
+//
+static int get_termios(struct tty *tty, struct termios *user_termios);
+static int set_termios(struct tty *tty, const struct termios *user_termios);
 
 int tty_register_driver(struct tty_driver *driver)
 {
@@ -285,22 +292,49 @@ static int tty_ioctl(struct file *file, unsigned int num, unsigned long arg)
     // TODO: check device ID (ENODEV if not a TTY)
     // TODO: verify type with magic number check or something
     tty = (struct tty *) file->private_data;
-
     ret = 0;
+
     switch (num) {
         case TCGETS:
-            copy_to_user((void *) arg, &tty->termios, sizeof(struct termios));
-            ret = 0;
-            break;
+            kprint("TCGETS\n");
+            return get_termios(tty, (struct termios *) arg);
+
         case TCSETS:
-            // TODO: flush buffers, prevent new input, etc.
-            copy_from_user(&tty->termios, (void *) arg, sizeof(struct termios));
-            ret = 0;
-        default:
-            // TODO: forward ioctl to ldisc and driver
-            ret = -ENOTTY;
-            break;
+            kprint("TCSETS\n");
+            return set_termios(tty, (const struct termios *) arg);
+    }
+
+    // forward to driver and ldisc
+    ret = -ENOTTY;
+    if (tty->driver.ioctl) {
+        ret = tty->driver.ioctl(tty, num, arg);
+        if (ret != -ENOTTY) {
+            return ret;
+        }
+    }
+    if (tty->ldisc->ioctl) {
+        ret = tty->ldisc->ioctl(tty, num, arg);
+        if (ret != -ENOTTY) {
+            return ret;
+        }
     }
 
     return ret;
+}
+
+static int get_termios(struct tty *tty, struct termios *user_termios)
+{
+    if (!copy_to_user(user_termios, &tty->termios, sizeof(struct termios))) {
+        return -EFAULT;
+    }
+    return 0;
+}
+
+static int set_termios(struct tty *tty, const struct termios *user_termios)
+{
+    // TODO: flush buffers, prevent new input, etc. before overwriting termios
+    if (!copy_from_user(&tty->termios, user_termios, sizeof(struct termios))) {
+        return -EFAULT;
+    }
+    return 0;
 }

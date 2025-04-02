@@ -25,26 +25,38 @@
 #ifdef __KERNEL__
 #include <string.h>
 
-#define validate_user_address(addr,count)       \
-do {                                            \
-    /* TODO... */                               \
-    /* Raise an exception or something if invalid... */ \
-    if (!addr) {                                \
-        panic("user supplied null address!");   \
-    }                                           \
-} while (0)
+static inline bool validate_user_address(const void *addr, size_t nbytes)
+{
+    // TODO: userspace bounds check
+    if (!addr) {
+        return false;
+    }
 
-#define copy_to_user(u_dst,k_src,count)         \
-do {                                            \
-    validate_user_address(u_dst, count);        \
-    memcpy(u_dst, k_src, count);                \
-} while (0)
+    return true;
+}
 
-#define copy_from_user(k_dst,u_src,count)       \
-do {                                            \
-    validate_user_address(u_src, count);        \
-    memcpy(k_dst, u_src, count);                \
-} while (0)
+static inline bool copy_to_user(void *u_dst, const void *k_src, size_t nbytes)
+{
+    if (!validate_user_address(u_dst, nbytes)) {
+        return false;
+    }
+
+    // TODO: userspace address conversion
+    memcpy(u_dst, k_src, nbytes);
+    return true;
+}
+
+
+static inline bool copy_from_user(void *k_dst, const void *u_src, size_t nbytes)
+{
+    if (!validate_user_address(u_src, nbytes)) {
+        return false;
+    }
+
+    // TODO: userspace address conversion
+    memcpy(k_dst, u_src, nbytes);
+    return true;
+}
 
 #endif // __KERNEL__
 

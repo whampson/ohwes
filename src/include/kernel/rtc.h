@@ -63,20 +63,4 @@ struct rtc_time {
 
 #define rate2hz(r)      (32768 >> ((r) - 1))
 
-//
-// RTC IOCTL functions
-//
-#define RTC_IRQP_ENABLE     _IOCTL  (_IOC_RTC,0x01)                   // Periodic Interrupt Enable
-#define RTC_IRQP_DISABLE    _IOCTL  (_IOC_RTC,0x02)                   // Periodic Interrupt Disable
-#define RTC_IRQP_GET        _IOCTL_R(_IOC_RTC,0x03,char)              // Get Periodic Interrupt Rate
-#define RTC_IRQP_SET        _IOCTL_W(_IOC_RTC,0x04,char)              // Set Periodic Interrupt Rate
-#define RTC_UPDATE_ENABLE   _IOCTL  (_IOC_RTC,0x05)                   // Time Update Interrupt Enable
-#define RTC_UPDATE_DISABLE  _IOCTL  (_IOC_RTC,0x06)                   // Time Update Interrupt Disable
-#define RTC_TIME_GET        _IOCTL_R(_IOC_RTC,0x07,struct rtc_time)   // Get RTC Time
-#define RTC_TIME_SET        _IOCTL_W(_IOC_RTC,0x08,struct rtc_time)   // Set RTC Time
-#define RTC_ALARM_ENABLE    _IOCTL  (_IOC_RTC,0x09)                   // Alarm Interrupt Enable
-#define RTC_ALARM_DISABLE   _IOCTL  (_IOC_RTC,0x0A)                   // Alarm Interrupt Disable
-#define RTC_ALARM_GET       _IOCTL_R(_IOC_RTC,0x0B,struct rtc_time)   // Get Alarm Time
-#define RTC_ALARM_SET       _IOCTL_W(_IOC_RTC,0x0C,struct rtc_time)   // Set Alarm Time
-
 #endif // __RTC_H
