@@ -89,6 +89,19 @@ void init_cpu(void)
     init_idt();
     init_tss();
     verify_gdt();
+
+    struct cpuid cpuid;
+    bool has_cpuid = get_cpu_info(&cpuid);
+    if (has_cpuid) {
+        kprint("cpu: %s family=%02xh model=%02xh step=%02xh type=%02xh level=%02xh ext=%02xh\n",
+            cpuid.vendor_id, cpuid.family, cpuid.model, cpuid.stepping, cpuid.type,
+            cpuid.level, cpuid.level_extended);
+        kprint("cpu: index=%02x");
+        if (cpuid.level_extended >= 0x80000004) {
+            kprint(" name=%s", cpuid.brand_name);
+        }
+        kprint("\n");
+    }
 }
 
 void init_idt(void)
