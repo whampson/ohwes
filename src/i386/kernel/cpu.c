@@ -93,12 +93,15 @@ void init_cpu(void)
     struct cpuid cpuid;
     bool has_cpuid = get_cpu_info(&cpuid);
     if (has_cpuid) {
-        kprint("cpu: %s family=%02xh model=%02xh step=%02xh type=%02xh level=%02xh ext=%02xh\n",
-            cpuid.vendor_id, cpuid.family, cpuid.model, cpuid.stepping, cpuid.type,
-            cpuid.level, cpuid.level_extended);
-        kprint("cpu: index=%02x");
+        kprint("cpu: vendor=%s level=%02xh", cpuid.vendor_id, cpuid.level);
+        if (cpuid.level >= 1) {
+            kprint(" family=%02xh model=%02xh step=%02xh",
+                cpuid.family, cpuid.model, cpuid.stepping);
+            kprint("\ncpu: type=%02xh index=%02xh ext=%02xh",
+                cpuid.type, cpuid.brand_index, cpuid.level_extended);
+        }
         if (cpuid.level_extended >= 0x80000004) {
-            kprint(" name=%s", cpuid.brand_name);
+            kprint("\ncpu: name='%s'", cpuid.brand_name);
         }
         kprint("\n");
     }
