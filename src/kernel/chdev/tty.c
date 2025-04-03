@@ -65,6 +65,7 @@ static struct file_ops tty_fops = {
 //
 static int get_termios(struct tty *tty, struct termios *user_termios);
 static int set_termios(struct tty *tty, const struct termios *user_termios);
+static int tiocsti(struct tty *tty, const char *user_char);
 
 int tty_register_driver(struct tty_driver *driver)
 {
@@ -302,6 +303,10 @@ static int tty_ioctl(struct file *file, unsigned int num, unsigned long arg)
         case TCSETS:
             kprint("TCSETS\n");
             return set_termios(tty, (const struct termios *) arg);
+
+        case TIOCSTI:
+            kprint("TIOCSTI\n");
+            return tiocsti(tty, (const char *) arg);
     }
 
     // forward to driver and ldisc
@@ -336,5 +341,16 @@ static int set_termios(struct tty *tty, const struct termios *user_termios)
     if (!copy_from_user(&tty->termios, user_termios, sizeof(struct termios))) {
         return -EFAULT;
     }
+    return 0;
+}
+
+static int tiocsti(struct tty *tty, const char *user_char)
+{
+    char c;
+    if (!copy_from_user(&c, user_char, sizeof(char))) {
+        return -EFAULT;
+    }
+
+    tty->ldisc->recv(tty, &c, 1);
     return 0;
 }

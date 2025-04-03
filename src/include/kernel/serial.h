@@ -191,6 +191,8 @@ enum parity {
 #define UART_MSR_RI         0x40    // Ring Indicator
 #define UART_MSR_DCD        0x80    // Data Carrier Detect
 
+#define UART_MSR_ANY_DELTA  0x0F    // mask for delta bits
+
 //
 // COM Port Baud Rates
 //
@@ -224,6 +226,23 @@ enum baud_rate {
     BAUD_110    = 1047,
     BAUD_75     = 1536,
     BAUD_50     = 2304,
+};
+
+//
+// Line and Modem Statistics
+//
+struct serial_stats {
+    uint32_t n_overrun;         // overrun error count
+    uint32_t n_parity;          // parity error count
+    uint32_t n_framing;         // framing error count
+    uint32_t n_timeout;         // timeout error count
+    uint32_t n_break;           // break interrupt count
+    uint32_t n_tx, n_rx;        // chars transmitted/received count
+    uint32_t n_xchar;           // control chars transmitted
+    uint32_t n_cts;             // clear-to-send count
+    uint32_t n_dsr;             // data set ready count
+    uint32_t n_ring;            // ring count
+    uint32_t n_dcd;             // data carrier detect count
 };
 
 //

@@ -38,6 +38,8 @@
 #define TCSETS              _IOCTL_W(_IOC_TTY,0x02,const struct termios *)      // Get termios
 #define TIOCMGET            _IOCTL_R(_IOC_TTY,0x03,int *)                       // Get modem status bits
 #define TIOCMSET            _IOCTL_W(_IOC_TTY,0x04,const int *)                 // Set modem status bits
+#define TIOCGICOUNT         _IOCTL_W(_IOC_TTY,0x05,struct serial_stats *)       // Get serial line interrupt counts
+#define TIOCSTI             _IOCTL_R(_IOC_TTY,0x06,const char *)                // Put char into input buffer
 
 //
 // RTC IOCTL functions

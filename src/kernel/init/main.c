@@ -35,9 +35,11 @@
 #include <i386/x86.h>
 #include <kernel/console.h>
 #include <kernel/config.h>
+#include <kernel/ioctls.h>
 #include <kernel/irq.h>
 #include <kernel/kernel.h>
 #include <kernel/ohwes.h>
+#include <kernel/serial.h>
 #include <kernel/termios.h>
 
 extern void init_cpu(void);
@@ -186,15 +188,37 @@ int main(void)
     // tio.c_oflag |= (OPOST | ONLCR);
     // ioctl(STDOUT_FILENO, TCSETS, (unsigned long) &tio);
 
+
     ssize_t ret;
-    // char c;
-    char cbuf[128];
-    while ((ret = read(fd, cbuf, sizeof(cbuf)))/* && c != 3*/) {
+    char c;
+
+    c = 'X';
+    ioctl(fd, TIOCSTI, (unsigned long) &c);
+
+    while ((ret = read(fd, &c, 1)) && c != 3) {
         if (ret == -EAGAIN) {
             continue;
         }
-        write(STDOUT_FILENO, cbuf, ret);
+        write(STDOUT_FILENO, &c, 1);
     }
+
+    int serial;
+    ioctl(fd, TIOCMGET, (unsigned long) &serial);   // TODO: make arg void*
+    printf("serial=%xh\n", serial);
+    if (serial & TIOCM_DTR) {
+        puts("TIOCM_DTR is set");
+    }
+    else {
+        puts("TIOCM_DTR is not set");
+    }
+
+    struct serial_stats stats;
+    ioctl(fd, TIOCGICOUNT, (unsigned long) &stats);
+    printf("tx:%d rx:%d xc:%d or:%d pr:%d fr:%d tm:%d bk:%d\n",
+        stats.n_tx, stats.n_rx, stats.n_xchar, stats.n_overrun,
+        stats.n_parity, stats.n_framing, stats.n_timeout, stats.n_break);
+    printf("cts:%d dsr:%d ri:%d dcd:%d\n",
+        stats.n_cts, stats.n_dsr, stats.n_ring, stats.n_dcd);
 
     close(fd);
     return 0;
