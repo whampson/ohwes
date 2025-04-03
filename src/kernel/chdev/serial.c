@@ -306,7 +306,6 @@ static int serial_open(struct tty *tty)
         ret = -EIO; goto done;
     }
 
-    tty->driver_data = com;
     com->tty = tty;
     com->open = true;
 
@@ -334,7 +333,6 @@ static int serial_close(struct tty *tty)
 
     // TODO: flush, etc.
 
-    tty->driver_data = NULL;
     com->tty = NULL;
     com->open = false;
     return 0;
@@ -342,16 +340,17 @@ static int serial_close(struct tty *tty)
 
 static int serial_ioctl(struct tty *tty, unsigned int cmd, void *arg)
 {
+    int ret;
     struct com *com;
 
     if (!tty) {
         return -EINVAL;
     }
 
-    // TODO: check device ID (ENODEV if not a COM)
-    // TODO: verify type with magic number check or something
-    com = (struct com *) tty->driver_data;
-    (void) com;
+    ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return ret;
+    }
 
     switch (cmd) {
         case TIOCMGET:
@@ -681,12 +680,23 @@ static int get_modem_info(struct com *com, int *user_info)
 
 static int set_modem_info(struct com *com, const int *user_info)
 {
-    int status;
-    if (!copy_from_user(&status, user_info, sizeof(int))) {
+    int info;
+    uint32_t flags;
+
+    if (!copy_from_user(&info, user_info, sizeof(int))) {
         return -EFAULT;
     }
 
-    // TODO: set control
+    com->mcr._value &= ~(UART_MCR_DTR | UART_MCR_RTS | UART_MCR_OUT1 | UART_MCR_OUT2);
+    com->mcr._value |= ((info & TIOCM_DTR) ? UART_MCR_DTR : 0)
+                    |  ((info & TIOCM_RTS) ? UART_MCR_RTS : 0)
+                    |  ((info & TIOCM_OUT1)? UART_MCR_OUT1: 0)
+                    |  ((info & TIOCM_OUT2)? UART_MCR_OUT2: 0);
+
+    cli_save(flags);
+    com_out(com, UART_MCR, com->mcr._value);
+    restore_flags(flags);
+
     return 0;
 }
 

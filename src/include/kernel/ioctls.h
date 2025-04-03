@@ -34,28 +34,28 @@
 //
 // TTY IOCTL functions
 //
-#define TCGETS              _IOCTL_R(_IOC_TTY,0x01,struct termios *)            // Set termios
-#define TCSETS              _IOCTL_W(_IOC_TTY,0x02,const struct termios *)      // Get termios
-#define TIOCMGET            _IOCTL_R(_IOC_TTY,0x03,int *)                       // Get modem status bits
-#define TIOCMSET            _IOCTL_W(_IOC_TTY,0x04,const int *)                 // Set modem status bits
-#define TIOCGICOUNT         _IOCTL_W(_IOC_TTY,0x05,struct serial_stats *)       // Get serial line interrupt counts
-#define TIOCSTI             _IOCTL_R(_IOC_TTY,0x06,const char *)                // Put char into input buffer
+#define TCGETS              _IOCTL_R(_IOC_TTY,0x01,struct termios)              // Set termios
+#define TCSETS              _IOCTL_W(_IOC_TTY,0x02,const struct termios)        // Get termios
+#define TIOCMGET            _IOCTL_R(_IOC_TTY,0x03,int)                         // Get modem control/status bits
+#define TIOCMSET            _IOCTL_W(_IOC_TTY,0x04,const int)                   // Set modem control bits
+#define TIOCGICOUNT         _IOCTL_W(_IOC_TTY,0x05,struct serial_stats)         // Get serial line interrupt counts
+#define TIOCSTI             _IOCTL_R(_IOC_TTY,0x06,const char)                  // Put char into input buffer
 
 //
 // RTC IOCTL functions
 //
-#define RTC_IRQP_ENABLE     _IOCTL  (_IOC_RTC,0x01)                   // Periodic Interrupt Enable
-#define RTC_IRQP_DISABLE    _IOCTL  (_IOC_RTC,0x02)                   // Periodic Interrupt Disable
-#define RTC_IRQP_GET        _IOCTL_R(_IOC_RTC,0x03,char)              // Get Periodic Interrupt Rate
-#define RTC_IRQP_SET        _IOCTL_W(_IOC_RTC,0x04,char)              // Set Periodic Interrupt Rate
-#define RTC_UPDATE_ENABLE   _IOCTL  (_IOC_RTC,0x05)                   // Time Update Interrupt Enable
-#define RTC_UPDATE_DISABLE  _IOCTL  (_IOC_RTC,0x06)                   // Time Update Interrupt Disable
-#define RTC_TIME_GET        _IOCTL_R(_IOC_RTC,0x07,struct rtc_time)   // Get RTC Time
-#define RTC_TIME_SET        _IOCTL_W(_IOC_RTC,0x08,struct rtc_time)   // Set RTC Time
-#define RTC_ALARM_ENABLE    _IOCTL  (_IOC_RTC,0x09)                   // Alarm Interrupt Enable
-#define RTC_ALARM_DISABLE   _IOCTL  (_IOC_RTC,0x0A)                   // Alarm Interrupt Disable
-#define RTC_ALARM_GET       _IOCTL_R(_IOC_RTC,0x0B,struct rtc_time)   // Get Alarm Time
-#define RTC_ALARM_SET       _IOCTL_W(_IOC_RTC,0x0C,struct rtc_time)   // Set Alarm Time
+#define RTC_IRQP_ENABLE     _IOCTL  (_IOC_RTC,0x01)                             // Periodic Interrupt Enable
+#define RTC_IRQP_DISABLE    _IOCTL  (_IOC_RTC,0x02)                             // Periodic Interrupt Disable
+#define RTC_IRQP_GET        _IOCTL_R(_IOC_RTC,0x03,char)                        // Get Periodic Interrupt Rate
+#define RTC_IRQP_SET        _IOCTL_W(_IOC_RTC,0x04,char)                        // Set Periodic Interrupt Rate
+#define RTC_UPDATE_ENABLE   _IOCTL  (_IOC_RTC,0x05)                             // Time Update Interrupt Enable
+#define RTC_UPDATE_DISABLE  _IOCTL  (_IOC_RTC,0x06)                             // Time Update Interrupt Disable
+#define RTC_TIME_GET        _IOCTL_R(_IOC_RTC,0x07,struct rtc_time)             // Get RTC Time
+#define RTC_TIME_SET        _IOCTL_W(_IOC_RTC,0x08,struct rtc_time)             // Set RTC Time
+#define RTC_ALARM_ENABLE    _IOCTL  (_IOC_RTC,0x09)                             // Alarm Interrupt Enable
+#define RTC_ALARM_DISABLE   _IOCTL  (_IOC_RTC,0x0A)                             // Alarm Interrupt Disable
+#define RTC_ALARM_GET       _IOCTL_R(_IOC_RTC,0x0B,struct rtc_time)             // Get Alarm Time
+#define RTC_ALARM_SET       _IOCTL_W(_IOC_RTC,0x0C,struct rtc_time)             // Set Alarm Time
 
 
 #endif // __IOCTLS_H

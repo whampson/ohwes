@@ -32,7 +32,7 @@
 #define PRINT_LOGO          0   // show a special logo at boot
 #define PRINT_MEMORY_MAP    1   // show BIOS memory map at boot
 #define PRINT_PAGE_MAP      0   // show initial page table mappings
-#define PRINT_IOCTL         0   // show ioctl calls
+#define PRINT_IOCTL         1   // show ioctl calls
 #define E9_HACK             1   // tee console output to port 0xE9
 #define HIGHER_GROUND       0   // map kernel in high virtual address space
 

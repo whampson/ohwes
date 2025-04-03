@@ -100,7 +100,6 @@ static int console_tty_open(struct tty *tty)
         return -EBUSY;  // console already open
     }
 
-    tty->driver_data = cons;    // TODO: necessary?
     cons->tty = tty;
     cons->open = true;
     return 0;
@@ -115,7 +114,6 @@ static int console_tty_close(struct tty *tty)
         return ret;
     }
 
-    tty->driver_data = NULL;
     cons->tty = NULL;
     cons->open = false;
     return 0;

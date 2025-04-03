@@ -122,9 +122,8 @@ struct tty {
     struct tty_driver driver;       // low-level device driver
     struct termios termios;         // input/output behavior
 
-    // private per-instance driver data
+    // private per-instance data
     void *ldisc_data;
-    void *driver_data;  // TODO: needed?
 };
 
 //
