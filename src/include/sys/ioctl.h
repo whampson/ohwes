@@ -13,39 +13,15 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/include/unistd.h
- *      Created: December 16, 2024
+ *         File: src/include/sys/ioctl.h
+ *      Created: April 3, 2025
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __UNISTD_H
-#define __UNISTD_H
+#ifndef __SYS_IOCTL_H
+#define __SYS_IOCTL_H
 
-#define STDIN_FILENO    0
-#define STDOUT_FILENO   1
-#define STDERR_FILENO   2
+int ioctl(int fd, int op, ...);
 
-#ifndef __NULL_DEFINED
-#define __NULL_DEFINED
-#define NULL ((void *)0)
-#endif
-
-#ifndef __SIZE_T_DEFINED
-#define __SIZE_T_DEFINED
-typedef __SIZE_TYPE__ size_t;
-#endif
-
-#ifndef __SSIZE_T_DEFINED
-#define __SSIZE_T_DEFINED
-typedef signed long ssize_t;
-#endif
-
-void _exit(int status);
-int close(int fd);
-int dup(int fd);
-int dup2(int fd, int newfd);
-int read(int fd, void *buf, size_t count);
-int write(int fd, const void *buf, size_t count);
-
-#endif // __UNISTD_H
+#endif // __SYS_IOCTL_H

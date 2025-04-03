@@ -20,6 +20,7 @@
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <string.h>
 #include <i386/syscall.h>
 #include <i386/x86.h>

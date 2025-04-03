@@ -20,6 +20,7 @@
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <i386/syscall.h>
 #include <i386/paging.h>
 #include <i386/x86.h>
@@ -84,7 +85,7 @@ SYSCALL_DEFINE(write, int fd, const void *buf, size_t count)
     return f->fops->write(f, buf, count);
 }
 
-SYSCALL_DEFINE(ioctl, int fd, unsigned int num, void *arg)
+SYSCALL_DEFINE(ioctl, int fd, int op, void *arg)
 {
     uint32_t seq;
     uint32_t code;
@@ -101,17 +102,18 @@ SYSCALL_DEFINE(ioctl, int fd, unsigned int num, void *arg)
         return -ENOSYS;
     }
 
-    seq = (num & _IOCTL_SEQMASK) >> _IOCTL_SEQSHIFT;
-    code = (num & _IOCTL_CODEMASK) >> _IOCTL_CODESHIFT;
-    size = (num & _IOCTL_SIZEMASK) >> _IOCTL_SIZESHIFT;
-    dir = (num & _IOCTL_DIRMASK) >> _IOCTL_DIRSHIFT;
+    seq  = (op & _IOCTL_SEQMASK)  >> _IOCTL_SEQSHIFT;
+    code = (op & _IOCTL_CODEMASK) >> _IOCTL_CODESHIFT;
+    size = (op & _IOCTL_SIZEMASK) >> _IOCTL_SIZESHIFT;
+    dir  = (op & _IOCTL_DIRMASK)  >> _IOCTL_DIRSHIFT;
 
 #if PRINT_IOCTL
     kprint("ioctl: 0x%08X (seq=%d,code=%d,size=%d%s)\n",
-        num, seq, code, size,
-        ((dir & _IOCTL_READ) && (dir & _IOCTL_WRITE)) ? ",dir=rw," : // yeesh...
-            (dir & _IOCTL_READ) ? ",dir=r" :
-                (dir & _IOCTL_WRITE) ? ",dir=w" : "");
+        op, seq, code, size,
+        (dir & _IOCTL_READ) && (dir & _IOCTL_WRITE) ? ",dir=rw" :
+        (dir & _IOCTL_READ)                         ? ",dir=r"  :
+        (dir & _IOCTL_WRITE)                        ? ",dir=w"  :
+        "");
 #else
     (void) seq;
     (void) code;
@@ -129,9 +131,31 @@ SYSCALL_DEFINE(ioctl, int fd, unsigned int num, void *arg)
         return -EINVAL;
     }
 
-    // TODO: validate size encoded in num
+    // TODO: validate size encoded in op
     // TODO: validate buffer address and range
     // TODO: validate device number
 
-    return f->fops->ioctl(f, num, arg);
+    return f->fops->ioctl(f, op, arg);
+}
+
+SYSCALL_DEFINE(fcntl, int fd, int op, void *arg)
+{
+    struct file *f;
+
+    assert(getpl() == KERNEL_PL);
+
+    if (fd < 0 || fd >= MAX_OPEN || !(f = current_task()->files[fd])) {
+        return -EBADF;
+    }
+
+    switch (op) {
+        case F_GETFL:
+            return f->f_oflag;
+        case F_SETFL:
+            f->f_oflag = (uint32_t) arg;
+            return 0;
+
+    }
+
+    return -EINVAL;
 }

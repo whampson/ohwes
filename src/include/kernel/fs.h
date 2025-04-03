@@ -53,21 +53,14 @@ struct file_ops {
     int     (*close)(struct file *);
     ssize_t (*read)(struct file *, char *, size_t);
     ssize_t (*write)(struct file *, const char *, size_t);
-    int     (*ioctl)(struct file *, unsigned int, void *);
+    int     (*ioctl)(struct file *, int, void *);
 };
-
-// TODO: fcntl.h
-#define O_RDONLY    0b0000
-#define O_WRONLY    0b0001
-#define O_RDWR      0b0010
-#define O_NONBLOCK  0b0100
 
 struct file {
     uint32_t f_oflag;
     struct file_ops *fops;
     void *private_data;     // TODO: needed?
 };
-
 
 int alloc_fd(struct file **file);
 void free_fd(struct file *file);

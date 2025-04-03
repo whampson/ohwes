@@ -13,39 +13,24 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/include/unistd.h
- *      Created: December 16, 2024
+ *         File: src/include/fcntl.h
+ *      Created: April 3, 2025
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __UNISTD_H
-#define __UNISTD_H
+#ifndef __FCNTL_H
+#define __FCNTL_H
 
-#define STDIN_FILENO    0
-#define STDOUT_FILENO   1
-#define STDERR_FILENO   2
+#define F_GETFL     1
+#define F_SETFL     2
 
-#ifndef __NULL_DEFINED
-#define __NULL_DEFINED
-#define NULL ((void *)0)
-#endif
+#define O_RDONLY    0b0000
+#define O_WRONLY    0b0001
+#define O_RDWR      0b0010
+#define O_NONBLOCK  0b0100
 
-#ifndef __SIZE_T_DEFINED
-#define __SIZE_T_DEFINED
-typedef __SIZE_TYPE__ size_t;
-#endif
+int fcntl(int fd, int op, ...);
+int open(const char *name, int oflag);
 
-#ifndef __SSIZE_T_DEFINED
-#define __SSIZE_T_DEFINED
-typedef signed long ssize_t;
-#endif
-
-void _exit(int status);
-int close(int fd);
-int dup(int fd);
-int dup2(int fd, int newfd);
-int read(int fd, void *buf, size_t count);
-int write(int fd, const void *buf, size_t count);
-
-#endif // __UNISTD_H
+#endif // __FCNTL_H

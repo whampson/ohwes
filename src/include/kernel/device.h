@@ -22,9 +22,7 @@
 #ifndef __DEVICE_H
 #define __DEVICE_H
 
-#include <stdint.h>
-
-typedef uint32_t dev_t;     // device id
+#include <sys/types.h>
 
 #define _DEV_MAJ(id)        ((id) & 0xFFFF)
 #define _DEV_MIN(id)        (((id) >> 16) & 0xFFFF)

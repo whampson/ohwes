@@ -26,6 +26,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <fcntl.h>
 #include <i386/boot.h>
 #include <i386/interrupt.h>
 #include <i386/pic.h>

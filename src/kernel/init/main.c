@@ -21,6 +21,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <i386/bitops.h>
@@ -41,6 +42,7 @@
 #include <kernel/ohwes.h>
 #include <kernel/serial.h>
 #include <kernel/termios.h>
+#include <sys/ioctl.h>
 
 extern void init_cpu(void);
 extern void init_fs(void);
@@ -173,53 +175,91 @@ int main(void)
 
     printf("\e4\e[5;33mHello from user mode!\e[m\n");
 
+    // open TTY serial port
     printf("Opening /dev/ttyS0...\n");
     int fd = CHECK(open("/dev/ttyS0", O_RDWR | O_NONBLOCK));
 
-    struct termios tio;
-    ioctl(fd, TCGETS, &tio);
-    tio.c_iflag |= (ICRNL | IXON | IXOFF);
-    tio.c_oflag |= (OPOST | ONLCR);
-    tio.c_cflag |= (CRTSCTS);
-    tio.c_lflag |= (ECHO | ECHOCTL);
-    ioctl(fd, TCSETS, &tio);
+    // set serial TTY termios flags
+    //  disable local echo, enable flow control
+    struct termios serial_tio;
+    ioctl(fd, TCGETS, &serial_tio);
+    serial_tio.c_iflag |= (ICRNL | IXON | IXOFF);
+    serial_tio.c_oflag |= (OPOST | ONLCR);
+    serial_tio.c_cflag |= (CRTSCTS);
+    serial_tio.c_lflag &= ~(ECHO | ECHOCTL);
+    ioctl(fd, TCSETS, &serial_tio);
 
-    // ioctl(STDOUT_FILENO, TCGETS, (unsigned long) &tio);
-    // tio.c_oflag |= (OPOST | ONLCR);
-    // ioctl(STDOUT_FILENO, TCSETS, (unsigned long) &tio);
+    // set stdin termios flags to disable local echo
+    struct termios stdin_tio, orig_tio;
+    ioctl(STDIN_FILENO, TCGETS, &orig_tio);
+    stdin_tio = orig_tio;
+    stdin_tio.c_lflag &= ~(ECHO | ECHOCTL);
+    ioctl(STDIN_FILENO, TCSETS, &stdin_tio);
 
+    // set stdin to nonblocking
+    int orig_cntl;
+    orig_cntl = fcntl(STDIN_FILENO, F_GETFL, NULL);
+    fcntl(STDIN_FILENO, F_SETFL, orig_cntl | O_NONBLOCK);
 
-    ssize_t ret;
-    char c;
+    ssize_t ret0, ret1;
+    char c0, c1;
 
-    c = 'X';
-    ioctl(fd, TIOCSTI, &c);
-    c = 3;
-    ioctl(fd, TIOCSTI, &c);
+    // // TEST: add char to TTY input buffer
+    // c0 = 'X';
+    // ioctl(fd, TIOCSTI, &c0);
+    // c0 = 3;
+    // ioctl(fd, TIOCSTI, &c0);
 
-    while ((ret = read(fd, &c, 1)) && c != 3) {
-        if (ret == -EAGAIN) {
-            continue;
+    printf("Waiting for serial input... press CTRL+C to end.\n");
+    do {
+        // read serial TTY, nonblocking
+        ret0 = read(fd, &c0, 1);
+        if (ret0 < 0 && ret0 != -EAGAIN) {
+            perror("read(TTY): ");
+            break;
         }
-        write(STDOUT_FILENO, &c, 1);
-    }
+
+        // read stdin, nonblocking
+        ret1 = read(STDIN_FILENO, &c1, 1);
+        if (ret1 <0 && ret1 != -EAGAIN) {
+            perror("read(stdin): ");
+            break;
+        }
+
+        // write received chars from serial TTY to stdout
+        if (ret0 != -EAGAIN) {
+            write(STDOUT_FILENO, &c0, 1);
+        }
+
+        // write received chars from stdin to serial TTY
+        if (ret1 != -EAGAIN) {
+            write(fd, &c1, 1);
+        }
+    } while (c0 != 3 && c1 != 3);   // quit if CTRL+C pressed on either end
+
+    // restore stdin termios
+    ioctl(STDIN_FILENO, TCSETS, &orig_tio);
+
+    // restore stdin flags
+    fcntl(STDIN_FILENO, F_SETFL, orig_cntl);
 
     int modem;
     ioctl(fd, TIOCMGET, &modem);
     printf("modem=%xh\n", modem);
     if (modem & TIOCM_DTR) {
-        puts("TIOCM_DTR is set");
+        puts("  TIOCM_DTR is set");
     }
     else {
-        puts("TIOCM_DTR is not set");
+        puts("  TIOCM_DTR is not set");
     }
 
     struct serial_stats stats;
     ioctl(fd, TIOCGICOUNT, &stats);
-    printf("tx:%d rx:%d xc:%d or:%d pr:%d fr:%d tm:%d bk:%d\n",
+    printf("serial stats:\n");
+    printf("  tx:%d rx:%d xc:%d or:%d pr:%d fr:%d tm:%d bk:%d\n",
         stats.n_tx, stats.n_rx, stats.n_xchar, stats.n_overrun,
         stats.n_parity, stats.n_framing, stats.n_timeout, stats.n_break);
-    printf("cts:%d dsr:%d ri:%d dcd:%d\n",
+    printf("  cts:%d dsr:%d ri:%d dcd:%d\n",
         stats.n_cts, stats.n_dsr, stats.n_ring, stats.n_dcd);
 
     close(fd);

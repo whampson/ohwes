@@ -106,7 +106,7 @@
 int rtc_open(struct file **file, int flags);
 int rtc_close(struct file *file);
 int rtc_read(struct file *file, char *buf, size_t count);
-int rtc_ioctl(struct file *file, unsigned int num, void *arg);
+int rtc_ioctl(struct file *file, int op, void *arg);
 
 static void rtc_interrupt(int irq_num);
 
@@ -537,7 +537,7 @@ int rtc_read(struct file *file, char *buf, size_t count)
     return sizeof(uint32_t);
 }
 
-int rtc_ioctl(struct file *file, unsigned int num, void *arg)
+int rtc_ioctl(struct file *file, int op, void *arg)
 {
     int ret;
     unsigned char rate;
@@ -546,7 +546,7 @@ int rtc_ioctl(struct file *file, unsigned int num, void *arg)
     (void) file;
 
     ret = 0;
-    switch (num) {
+    switch (op) {
         case RTC_ALARM_DISABLE: clear_mode(REG_B_AIE); break;
         case RTC_ALARM_ENABLE: set_mode(REG_B_AIE); break;
         case RTC_IRQP_DISABLE: clear_mode(REG_B_PIE); break;
@@ -569,7 +569,7 @@ int rtc_ioctl(struct file *file, unsigned int num, void *arg)
 
         case RTC_TIME_GET: __fallthrough;
         case RTC_ALARM_GET:
-            get_time(&time, num == RTC_ALARM_GET);
+            get_time(&time, op == RTC_ALARM_GET);
             if (!copy_to_user(arg, &time, sizeof(struct rtc_time))) {
                 return -EFAULT;
             }
@@ -580,7 +580,7 @@ int rtc_ioctl(struct file *file, unsigned int num, void *arg)
             if (!copy_from_user(&time, arg, sizeof(struct rtc_time))) {
                 return -EFAULT;
             }
-            return set_time(&time, num == RTC_ALARM_SET);
+            return set_time(&time, op == RTC_ALARM_SET);
 
         default:
             return -ENOTTY;

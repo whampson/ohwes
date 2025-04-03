@@ -92,7 +92,7 @@ struct tty_driver {
     // interface functions
     int     (*open)(struct tty *);
     int     (*close)(struct tty *);
-    int     (*ioctl)(struct tty *, unsigned int cmd, void *arg);
+    int     (*ioctl)(struct tty *, int op, void *arg);
     int     (*write)(struct tty *, const char *buf, size_t count);
     size_t  (*write_room)(struct tty *);    // query space in write buffer
     void    (*flush)(struct tty *);         // flush write buffer
@@ -143,7 +143,7 @@ struct tty_ldisc {
     ssize_t (*write)(struct tty *, const char *buf, size_t count);
     void    (*flush)(struct tty *);
     void    (*clear)(struct tty *);
-    int     (*ioctl)(struct tty *, unsigned int cmd, void *arg);
+    int     (*ioctl)(struct tty *, int op, void *arg);
 
     // called from below (interrupt)
     void    (*recv)(struct tty *, char *buf, size_t count);

@@ -50,7 +50,7 @@ static int tty_open(struct inode *, struct file *);
 static int tty_close(struct file *);
 static ssize_t tty_read(struct file *, char *buf, size_t count);
 static ssize_t tty_write(struct file *, const char *buf, size_t count);
-static int tty_ioctl(struct file *, unsigned int num, void *arg);
+static int tty_ioctl(struct file *, int op, void *arg);
 
 static struct file_ops tty_fops = {
     .open = tty_open,
@@ -281,7 +281,7 @@ static ssize_t tty_write(struct file *file, const char *buf, size_t count)
     return tty->ldisc->write(tty, buf, count);
 }
 
-static int tty_ioctl(struct file *file, unsigned int num, void *arg)
+static int tty_ioctl(struct file *file, int op, void *arg)
 {
     int ret;
     struct tty *tty;
@@ -295,7 +295,7 @@ static int tty_ioctl(struct file *file, unsigned int num, void *arg)
     tty = (struct tty *) file->private_data;
     ret = 0;
 
-    switch (num) {
+    switch (op) {
         case TCGETS:
             return get_termios(tty, (struct termios *) arg);
 
@@ -309,13 +309,13 @@ static int tty_ioctl(struct file *file, unsigned int num, void *arg)
     // forward to driver and ldisc
     ret = -ENOTTY;
     if (tty->driver.ioctl) {
-        ret = tty->driver.ioctl(tty, num, arg);
+        ret = tty->driver.ioctl(tty, op, arg);
         if (ret != -ENOTTY) {
             return ret;
         }
     }
     if (tty->ldisc->ioctl) {
-        ret = tty->ldisc->ioctl(tty, num, arg);
+        ret = tty->ldisc->ioctl(tty, op, arg);
         if (ret != -ENOTTY) {
             return ret;
         }
