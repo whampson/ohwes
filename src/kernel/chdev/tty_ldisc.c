@@ -34,7 +34,7 @@ static int n_tty_open(struct tty *);
 static int n_tty_close(struct tty *);
 static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count);
 static ssize_t n_tty_write(struct tty *, const char *buf, size_t count);
-static int n_tty_ioctl(struct tty *, unsigned int num, unsigned long arg);
+static int n_tty_ioctl(struct tty *, unsigned int num, void *arg);
 static void n_tty_recv(struct tty *, char *buf, size_t count);
 static size_t n_tty_recv_room(struct tty *);
 static void n_tty_clear(struct tty *tty);
@@ -191,7 +191,7 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t count)
     return (ret >= 0) ? ptr - buf : ret;
 }
 
-static int n_tty_ioctl(struct tty *tty, unsigned int num, unsigned long arg)
+static int n_tty_ioctl(struct tty *tty, unsigned int num, void *arg)
 {
     // TODO
     return -ENOTTY;

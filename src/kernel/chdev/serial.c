@@ -103,7 +103,7 @@ struct com g_com[NR_SERIAL];
 
 static int serial_open(struct tty *);
 static int serial_close(struct tty *);
-static int serial_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg);
+static int serial_ioctl(struct tty *tty, unsigned int cmd, void *arg);
 static void serial_flush(struct tty *);
 static int serial_write(struct tty *tty, const char *buf, size_t count);
 static size_t serial_write_room(struct tty *);
@@ -340,7 +340,7 @@ static int serial_close(struct tty *tty)
     return 0;
 }
 
-static int serial_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
+static int serial_ioctl(struct tty *tty, unsigned int cmd, void *arg)
 {
     struct com *com;
 

@@ -84,7 +84,7 @@ SYSCALL_DEFINE(write, int fd, const void *buf, size_t count)
     return f->fops->write(f, buf, count);
 }
 
-SYSCALL_DEFINE(ioctl, int fd, unsigned int num, unsigned long arg)
+SYSCALL_DEFINE(ioctl, int fd, unsigned int num, void *arg)
 {
     uint32_t seq;
     uint32_t code;

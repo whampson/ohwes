@@ -50,7 +50,7 @@ static int tty_open(struct inode *, struct file *);
 static int tty_close(struct file *);
 static ssize_t tty_read(struct file *, char *buf, size_t count);
 static ssize_t tty_write(struct file *, const char *buf, size_t count);
-static int tty_ioctl(struct file *, unsigned int num, unsigned long arg);
+static int tty_ioctl(struct file *, unsigned int num, void *arg);
 
 static struct file_ops tty_fops = {
     .open = tty_open,
@@ -281,7 +281,7 @@ static ssize_t tty_write(struct file *file, const char *buf, size_t count)
     return tty->ldisc->write(tty, buf, count);
 }
 
-static int tty_ioctl(struct file *file, unsigned int num, unsigned long arg)
+static int tty_ioctl(struct file *file, unsigned int num, void *arg)
 {
     int ret;
     struct tty *tty;

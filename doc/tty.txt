@@ -121,7 +121,7 @@ int  (*write)(struct tty *, const char *buf, size_t count);
     output buffering. Returns the number of characters sent to the device, or a
     negative value if an error occurred.
 
-int  (*ioctl)(struct tty *, unsigned int cmd, unsigned long arg);
+int  (*ioctl)(struct tty *, unsigned int cmd, void *arg);
 
     Called when the user requests an ioctl on the line discipline.
 

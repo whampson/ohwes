@@ -177,12 +177,12 @@ int main(void)
     int fd = CHECK(open("/dev/ttyS0", O_RDWR | O_NONBLOCK));
 
     struct termios tio;
-    ioctl(fd, TCGETS, (unsigned long) &tio);
+    ioctl(fd, TCGETS, &tio);
     tio.c_iflag |= (ICRNL | IXON | IXOFF);
     tio.c_oflag |= (OPOST | ONLCR);
     tio.c_cflag |= (CRTSCTS);
     tio.c_lflag |= (ECHO | ECHOCTL);
-    ioctl(fd, TCSETS, (unsigned long) &tio);
+    ioctl(fd, TCSETS, &tio);
 
     // ioctl(STDOUT_FILENO, TCGETS, (unsigned long) &tio);
     // tio.c_oflag |= (OPOST | ONLCR);
@@ -193,7 +193,7 @@ int main(void)
     char c;
 
     c = 'X';
-    ioctl(fd, TIOCSTI, (unsigned long) &c);
+    ioctl(fd, TIOCSTI, &c);
 
     while ((ret = read(fd, &c, 1)) && c != 3) {
         if (ret == -EAGAIN) {
@@ -203,7 +203,7 @@ int main(void)
     }
 
     int serial;
-    ioctl(fd, TIOCMGET, (unsigned long) &serial);   // TODO: make arg void*
+    ioctl(fd, TIOCMGET, &serial);
     printf("serial=%xh\n", serial);
     if (serial & TIOCM_DTR) {
         puts("TIOCM_DTR is set");
@@ -213,7 +213,7 @@ int main(void)
     }
 
     struct serial_stats stats;
-    ioctl(fd, TIOCGICOUNT, (unsigned long) &stats);
+    ioctl(fd, TIOCGICOUNT, &stats);
     printf("tx:%d rx:%d xc:%d or:%d pr:%d fr:%d tm:%d bk:%d\n",
         stats.n_tx, stats.n_rx, stats.n_xchar, stats.n_overrun,
         stats.n_parity, stats.n_framing, stats.n_timeout, stats.n_break);

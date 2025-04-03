@@ -49,7 +49,7 @@ __data_segment bool g_early_console_initialized = false;
 
 static int console_tty_open(struct tty *);
 static int console_tty_close(struct tty *);
-static int console_tty_ioctl(struct tty *, unsigned int cmd, unsigned long arg);
+static int console_tty_ioctl(struct tty *, unsigned int cmd, void *arg);
 static int console_tty_write(struct tty *, const char *buf, size_t count);
 static void console_tty_write_char(struct tty *, char c);
 static size_t console_tty_write_room(struct tty *);
@@ -143,7 +143,7 @@ static int console_tty_write(struct tty *tty, const char *buf, size_t count)
 }
 
 static int console_tty_ioctl(
-    struct tty *tty, unsigned int cmd, unsigned long arg)
+    struct tty *tty, unsigned int cmd, void *arg)
 {
     return -ENOTTY;
 }
