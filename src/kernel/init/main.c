@@ -194,6 +194,8 @@ int main(void)
 
     c = 'X';
     ioctl(fd, TIOCSTI, &c);
+    c = 3;
+    ioctl(fd, TIOCSTI, &c);
 
     while ((ret = read(fd, &c, 1)) && c != 3) {
         if (ret == -EAGAIN) {
@@ -202,10 +204,10 @@ int main(void)
         write(STDOUT_FILENO, &c, 1);
     }
 
-    int serial;
-    ioctl(fd, TIOCMGET, &serial);
-    printf("serial=%xh\n", serial);
-    if (serial & TIOCM_DTR) {
+    int modem;
+    ioctl(fd, TIOCMGET, &modem);
+    printf("modem=%xh\n", modem);
+    if (modem & TIOCM_DTR) {
         puts("TIOCM_DTR is set");
     }
     else {

@@ -355,13 +355,12 @@ static int serial_ioctl(struct tty *tty, unsigned int cmd, void *arg)
 
     switch (cmd) {
         case TIOCMGET:
-            kprint("TIOCMGET\n");
             return get_modem_info(com, (int *) arg);
+
         case TIOCMSET:
-            kprint("TIOCMSET\n");
             return set_modem_info(com, (const int * ) arg);
+
         case TIOCGICOUNT:
-            kprint("TIOCGICOUNT\n");
             return get_modem_stats(com, (struct serial_stats *) arg);
     }
 
@@ -520,7 +519,7 @@ static void serial_start(struct tty *tty)
     }
 
 #if CHATTY_COM
-    COM_WARN("com%d: starting...\n", com->num);
+    COM_WARN("com%d: rx XON, starting...\n", com->num);
 #endif
 
     cli_save(flags);
@@ -541,7 +540,7 @@ static void serial_stop(struct tty *tty)
     }
 
 #if CHATTY_COM
-    COM_WARN("com%d: stopping...\n", com->num);
+    COM_WARN("com%d: rx XOFF, stopping...\n", com->num);
 #endif
 
     cli_save(flags);
@@ -667,9 +666,6 @@ static int get_modem_info(struct com *com, int *user_info)
     ctl = com->mcr._value;
     restore_flags(flags);
 
-    kprint("dtr=%d\n", com->mcr.dtr);
-    kprint("uart_mcr_dtr=%xh\n", ctl & UART_MCR_DTR);
-
     result = 0;
     result |= ((ctl & UART_MCR_DTR)  ? TIOCM_DTR  : 0)
            |  ((ctl & UART_MCR_RTS)  ? TIOCM_RTS  : 0)
@@ -680,7 +676,6 @@ static int get_modem_info(struct com *com, int *user_info)
            |  ((sts & UART_MSR_RI)   ? TIOCM_RI   : 0)
            |  ((sts & UART_MSR_DSR)  ? TIOCM_DSR  : 0);
 
-    kprint("result=%xh\n", result);
     return copy_to_user(user_info, &result, sizeof(int));
 }
 

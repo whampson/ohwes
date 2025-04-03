@@ -297,15 +297,12 @@ static int tty_ioctl(struct file *file, unsigned int num, void *arg)
 
     switch (num) {
         case TCGETS:
-            kprint("TCGETS\n");
             return get_termios(tty, (struct termios *) arg);
 
         case TCSETS:
-            kprint("TCSETS\n");
             return set_termios(tty, (const struct termios *) arg);
 
         case TIOCSTI:
-            kprint("TIOCSTI\n");
             return tiocsti(tty, (const char *) arg);
     }
 
