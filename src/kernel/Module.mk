@@ -3,6 +3,7 @@ TARGET_EXE := ohwes.sys
 
 SOURCES := \
     crash.c \
+    io.c \
     irq.c \
     list.c \
     print.c \

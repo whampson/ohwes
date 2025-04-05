@@ -19,8 +19,8 @@
  * =============================================================================
  */
 
-#ifndef __IO_H
-#define __IO_H
+#ifndef __I386_IO_H
+#define __I386_IO_H
 
 #include <stdint.h>
 
@@ -123,4 +123,4 @@ do {                                                                        \
 } while(0)
 
 
-#endif /* __IO_H */
+#endif // __I386_IO_H

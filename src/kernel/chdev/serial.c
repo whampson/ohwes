@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <i386/interrupt.h>
 #include <i386/io.h>
+#include <kernel/io.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
 #include <kernel/ohwes.h>
@@ -76,8 +77,9 @@ struct com {
     struct tty *tty;            // TTY
 
     // flags
-    bool valid  : 1;            // port exists and is usable
-    bool open   : 1;            // port is currently in use
+    bool valid      : 1;        // port exists and is usable
+    bool open       : 1;        // port is currently in use
+    bool reserved   : 1;        // port exists, but is reserved by another driver
 
     // buffers
     struct ring tx_ring;        // output queue
@@ -208,6 +210,14 @@ void init_serial(void)
             default: panic("assign port for COM%d!", i);
         }
 
+        if (reserve_io_range(com->io_port, 8, "serial") < 0) {
+            // serial port is reserved by another driver (e.g. debug interface)
+            com->reserved = true;
+            kprint("com%d: I/O port %Xh reserved, not usable as TTY device\n",
+                com->num, com->io_port);
+            continue;
+        }
+
         // collect initial register state
         shadow_regs(com);
         if (com->ier._value == 0xFF) {
@@ -244,6 +254,10 @@ static int serial_open(struct tty *tty)
     ret = tty_get_com(tty, &com);
     if (ret < 0) {
         return ret;
+    }
+
+    if (com->reserved) {
+        return -EBUSY;  // port reserved by another driver (e.g. serial debug interface)
     }
 
     if (com->open) {
