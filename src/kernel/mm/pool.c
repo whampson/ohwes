@@ -115,21 +115,21 @@ pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capaci
     }
 
     if (!name || !addr) {
-        return NULL;
+        return INVALID_POOL;
     }
     // TODO: verify address is in kernel space...
 
     // ensure we have space
     if (!ensure_capacity(capacity)) {
         panic("not enough pool memory to create pool");
-        return NULL;
+        return INVALID_POOL;
     }
 
     // find a free pool slot
     pool_index = bit_scan_forward(_pool_mask, sizeof(_pool_mask));
     if (pool_index == -1) {
         panic("max number of pools reached!");
-        return NULL;
+        return INVALID_POOL;
     }
 
     // setup pool descriptor
@@ -191,6 +191,26 @@ void destroy_pool(pool_t pool)
     kprint("pool[%d]: destroyed: %s\n",
         get_pool_index(&copy), get_pool_name(&copy));
 #endif
+}
+
+pool_t find_pool(const char *name)
+{
+    struct pool *p;
+
+    // TODO: optimize this by scanning chunks of allocated regions?
+
+    p = NULL;
+    for (int i = 0; i < MAX_NR_POOLS; i++) {
+        if (test_bit(_pool_mask, i)) {
+            continue;
+        }
+        p = &_pools[i];
+        if (strcmp(name, p->name) == 0) {
+            break;
+        }
+    }
+
+    return pool2desc(p);
 }
 
 void * pool_alloc(pool_t pool)

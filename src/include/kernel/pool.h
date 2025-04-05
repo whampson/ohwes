@@ -26,12 +26,31 @@
 
 typedef void * pool_t;
 
+#define INVALID_POOL ((pool_t) NULL)
+
+/**
+ * Create a new pool.
+ */
 pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capacity);
+
+/**
+ * Destroy an existing pool.
+ */
 void destroy_pool(pool_t pool);
 
-// pool_t get_pool(const char *name);
+/**
+ * Get an existing pool by name.
+ */
+pool_t find_pool(const char *name);
 
+/**
+ * Allocate an item within a given pool.
+*/
 void * pool_alloc(pool_t pool);
+
+/**
+ * Free an item from a given pool.
+ */
 int pool_free(pool_t pool, void *item);
 
 #endif // __POOL_H
