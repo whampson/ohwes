@@ -76,7 +76,7 @@ static inline int test_bit(volatile void *addr, unsigned int index)
     int bit;
     __asm__ volatile (
         "                   \n\
-   lock btl     %2, %1      \n\
+        btl     %2, %1      \n\
         sbb     %0, %0      \n\
         "
         : "=r"(bit)

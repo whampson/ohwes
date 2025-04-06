@@ -36,6 +36,10 @@
 #define E9_HACK             1   // tee console output to port 0xE9
 #define HIGHER_GROUND       0   // map kernel in high virtual address space
 
+#define SERIAL_DEBUGGING    1   // enable debugging over COM1 port
+#define DEBUG_PORT          COM1_PORT
+#define DEBUG_BAUD          BAUD_9600
+
 //
 // Counts of Things
 // ----------------------------------------------------------------------------
@@ -101,6 +105,6 @@ static_assert(INT_STACK_LIMIT >= DOUBLE_FAULT_STACK, "Interrupt stacks overlap c
 
 #define VGA_MODE            3       // 3 = 80x25,B8000,16color
 #define VGA_FB_SELECT       0       // 0 = 0xA0000-0xBFFFF 128k
-#define VGA_DIMENSION      _VGA_80x50
+#define VGA_DIMENSION      _VGA_80x28
 
 #endif // __CONFIG_H

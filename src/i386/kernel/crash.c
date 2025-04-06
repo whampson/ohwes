@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/crash.c
+ *         File: i386/kernel/crash.c
  *      Created: February 13, 2024
  *       Author: Wes Hampson
  * =============================================================================
@@ -91,6 +91,10 @@ int g_test_crash = 0;
 int g_test_soft_double_fault = 0;
 #endif
 
+#if SERIAL_DEBUGGING
+extern void gdb_main(struct iregs *regs);
+#endif
+
 extern void pcspk_on(void);
 extern void pcspk_off(void);
 
@@ -135,14 +139,6 @@ __fastcall void _crash(struct iregs *regs)
     // basic info collection
     // -------------------------------------------------------------------------
     //
-
-    // for drawing later
-    const int NumConsoleRows = (g_vga->rows) ? g_vga->rows : DEFAULT_VGA_ROWS;
-    const int OffsetFromBottom = (NumConsoleRows-CRASH_DUMP_OFFSET)-STACK_ROWS;
-
-    // current console info
-    struct console *cons = current_console();
-    struct tty *tty = cons->tty;
 
     // was it an IRQ?
     bool irq = (regs->vec_num < 0);
@@ -198,6 +194,18 @@ __fastcall void _crash(struct iregs *regs)
     _regs_copy.esp = esp;
     regs = &_regs_copy;
 
+#if SERIAL_DEBUGGING
+    if (regs->vec_num == EXCEPTION_DB || regs->vec_num == EXCEPTION_BP) {
+        // route debugbreak and breakpoint exceptions to GDB
+        gdb_main(regs);
+        return;
+    }
+#endif
+
+    // current console info
+    struct console *cons = current_console();
+    struct tty *tty = cons->tty;
+
     // reentrancy check
     if (g_crash->reentrant) {
         // If we end up here, we hit an exception while trying to show the
@@ -216,6 +224,10 @@ __fastcall void _crash(struct iregs *regs)
         __asm__ volatile (".short 0x0A0F");
     }
 #endif
+
+    // for drawing later
+    const int NumConsoleRows = (g_vga->rows) ? g_vga->rows : DEFAULT_VGA_ROWS;
+    const int OffsetFromBottom = (NumConsoleRows-CRASH_DUMP_OFFSET)-STACK_ROWS;
 
     //
     // -------------------------------------------------------------------------
@@ -511,7 +523,12 @@ static void cprint(const char *fmt, ...)
 static void set_background(int bg)
 {
     g_crash->bg_color = bg;
-    cprint("\e5\e[0H\e[4%dm\e[2J", bg);
+    // cprint("\e5\e[0H\e[4%dm\e[2J", bg);
+    cprint("\e5");
+    for (int i = 0; i < g_vga->rows; i++) {
+        cprint("\n");
+    }
+    cprint("\e[0H\e[4%dm\e[2J", bg);
 }
 
 static void print_banner(const char *banner)

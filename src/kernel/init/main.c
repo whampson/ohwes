@@ -44,14 +44,21 @@
 #include <kernel/termios.h>
 #include <sys/ioctl.h>
 
+#include <kernel/pool.h>
+
 extern void init_cpu(void);
 extern void init_fs(void);
+extern void init_io(void);
 extern void init_mm(void);
 extern void init_pic(void);
 extern void init_rtc(void);
 extern void init_timer(void);
 extern void init_tty(void);
 extern void init_vga(void);
+
+#if SERIAL_DEBUGGING
+extern void init_gdb(void);
+#endif
 
 #if TEST_BUILD
 extern void run_tests(void);
@@ -82,15 +89,17 @@ __fastcall void start_kernel(struct boot_info *info)
         __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
     print_boot_info();
 
-    // initialize VGA
-    init_vga();
-
     // finish setting up CPU descriptors
     init_cpu();
 
     // initialize static memory and setup memory manager,
     // do this as early as possible to ensure BSS is zeroed
     init_mm();
+    init_io();
+
+#if SERIAL_DEBUGGING
+    init_gdb();
+#endif
 
     // initialize interrupts and timers
     init_pic();
@@ -101,11 +110,16 @@ __fastcall void start_kernel(struct boot_info *info)
     run_tests();
 #endif
 
+    // initialize VGA
+    init_vga();
+
     // setup the file system
     init_fs();
 
     // get the console and tty subsystem working for real
     init_tty();
+
+    __asm__ volatile ("int $3");
 
     kprint("entering user mode...\n");
     usermode(__phys_to_virt(SETUP_STACK));
