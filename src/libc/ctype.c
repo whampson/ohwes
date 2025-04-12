@@ -91,6 +91,15 @@ int isxdigit(int c)
         || (c >= 'a' && c <= 'f');
 }
 
+int toxdigit(int c)
+{
+    c &= 0xF;
+    if (c > 9) {
+        return (c - 0xA) + 'a';
+    }
+    return c + '0';
+}
+
 int tolower(int c)
 {
     if (isupper(c)) {

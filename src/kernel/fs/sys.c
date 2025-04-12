@@ -41,7 +41,7 @@ SYSCALL_DEFINE(_exit, int status)
     assert(getpl() == KERNEL_PL);
 
     kprint("\nuser mode returned %d: %s\n", status, strerror(status));
-    kprint("\e[1;5;31msystem halted");
+    kprint("\e[1;5;31msystem halted\e[0m");
     for (;;);
 }
 

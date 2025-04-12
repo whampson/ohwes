@@ -34,8 +34,9 @@
 #include <i386/ps2.h>
 #include <i386/syscall.h>
 #include <i386/x86.h>
-#include <kernel/console.h>
 #include <kernel/config.h>
+#include <kernel/console.h>
+#include <kernel/debug.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
 #include <kernel/kernel.h>
@@ -119,7 +120,7 @@ __fastcall void start_kernel(struct boot_info *info)
     // get the console and tty subsystem working for real
     init_tty();
 
-    __asm__ volatile ("int $3");
+    __dbgbrk();
 
     kprint("entering user mode...\n");
     usermode(__phys_to_virt(SETUP_STACK));

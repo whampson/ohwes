@@ -28,6 +28,7 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <i386/boot.h>
+#include <i386/gdbstub.h>
 #include <i386/interrupt.h>
 #include <i386/pic.h>
 #include <i386/cpu.h>
@@ -91,9 +92,7 @@ int g_test_crash = 0;
 int g_test_soft_double_fault = 0;
 #endif
 
-#if SERIAL_DEBUGGING
-extern void gdb_main(struct iregs *regs);
-#endif
+static void _do_break(struct iregs *regs);
 
 extern void pcspk_on(void);
 extern void pcspk_off(void);
@@ -194,13 +193,12 @@ __fastcall void _crash(struct iregs *regs)
     _regs_copy.esp = esp;
     regs = &_regs_copy;
 
-#if SERIAL_DEBUGGING
+
     if (regs->vec_num == EXCEPTION_DB || regs->vec_num == EXCEPTION_BP) {
         // route debugbreak and breakpoint exceptions to GDB
-        gdb_main(regs);
+        _do_break(regs);
         return;
     }
-#endif
 
     // current console info
     struct console *cons = current_console();
@@ -371,6 +369,50 @@ done:
     pic_setmask(pic_mask);
 
     g_crash->reentrant = false;
+}
+
+static void _do_break(struct iregs *regs)
+{
+    struct gdb_state state = { };
+
+    kprint("\n*** %s ***\nRegisters:\n",
+        (regs->vec_num == 3) ? "BREAKPOINT" : "DEBUG_BREAK");
+    kprint("   eax: %08x\n", regs->eax);
+    kprint("   ebx: %08x\n", regs->ebx);
+    kprint("   ecx: %08x\n", regs->ecx);
+    kprint("   edx: %08x\n", regs->edx);
+    kprint("   esi: %08x\n", regs->esi);
+    kprint("   edi: %08x\n", regs->edi);
+    kprint("   ebp: %08x\n", regs->ebp);
+    kprint("   esp: %08x\n", regs->esp);
+    kprint("   eip: %08x\n", regs->eip);
+    kprint("eflags: %08x\n", regs->eflags);
+    kprint("    cs: %04x\n", regs->cs);
+    kprint("    ds: %04x\n", regs->ds);
+    kprint("    es: %04x\n", regs->es);
+    kprint("    fs: %04x\n", regs->fs);
+    kprint("    gs: %04x\n", regs->gs);
+
+#if SERIAL_DEBUGGING
+    state.signum = GDB_SIGTRAP;
+    state.regs[GDB_REG_I386_EBX] = regs->ebx;
+    state.regs[GDB_REG_I386_ECX] = regs->ecx;
+    state.regs[GDB_REG_I386_EDX] = regs->edx;
+    state.regs[GDB_REG_I386_ESI] = regs->esi;
+    state.regs[GDB_REG_I386_EDI] = regs->edi;
+    state.regs[GDB_REG_I386_EBP] = regs->ebp;
+    state.regs[GDB_REG_I386_EAX] = regs->eax;
+    state.regs[GDB_REG_I386_DS ] = regs->ds;
+    state.regs[GDB_REG_I386_ES ] = regs->es;
+    state.regs[GDB_REG_I386_FS ] = regs->fs;
+    state.regs[GDB_REG_I386_GS ] = regs->gs;
+    state.regs[GDB_REG_I386_EIP] = regs->eip;
+    state.regs[GDB_REG_I386_CS ] = regs->cs;
+    state.regs[GDB_REG_I386_EFLAGS] = regs->eflags;
+    state.regs[GDB_REG_I386_ESP] = regs->esp;
+    state.regs[GDB_REG_I386_SS ] = regs->ss;
+    gdb_main(&state);
+#endif
 }
 
 __noreturn void _do_double_fault(void)
@@ -629,7 +671,7 @@ static const char *exception_names[NR_EXCEPTIONS] =
 static_assert(countof(exception_names) == NR_EXCEPTIONS, "Bad exception_names length");
 
 #ifdef DEBUG
-void _crash_key_proc(int irq_num)   // TODO: call this vis sysreq...
+void _crash_key_proc(int irq, struct iregs *regs)   // TODO: call this vis sysreq...
 {
     int crash_type;
     if (!g_test_crash) {
@@ -638,9 +680,6 @@ void _crash_key_proc(int irq_num)   // TODO: call this vis sysreq...
 
     crash_type = g_test_crash;
     g_test_crash = 0;
-
-    // make sure keyboard interrupts can shine through
-    pic_eoi(irq_num);
 
     // pick your poison
     switch (crash_type) {

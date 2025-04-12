@@ -13,33 +13,15 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/include/ctype.h
- *      Created: December 27, 2023
+ *         File: include/kernel/debug.h
+ *      Created: April 8, 2025
  *       Author: Wes Hampson
- *
- * Character handling.
- *
- * https://en.cppreference.com/w/c/string/byte (C11)
  * =============================================================================
  */
 
-#ifndef __CTYPE_H
-#define __CTYPE_H
+#ifndef __DEBUG_H
+#define __DEBUG_H
 
-int isalnum(int c);
-int isalpha(int c);
-int isblank(int c);
-int iscntrl(int c);
-int isdigit(int c);
-int isgraph(int c);
-int islower(int c);
-int isprint(int c);
-int ispunct(int c);
-int isspace(int c);
-int isupper(int c);
-int isxdigit(int c);
-int toxdigit(int c);    // nonstandard
-int tolower(int c);
-int toupper(int c);
+#define __dbgbrk()  __asm__ volatile ("int3")
 
-#endif // __CTYPE_H
+#endif // __DEBUG_H
