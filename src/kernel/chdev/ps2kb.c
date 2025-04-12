@@ -102,7 +102,7 @@ static void sysrq(char c);
 static void hard_reset(void);
 
 static void update_leds(void);
-static void kb_interrupt(int irq_num);
+static void kb_interrupt(int irq, struct iregs *regs);
 static void kb_putq(char c);
 
 static bool kb_ident(void);
@@ -217,7 +217,7 @@ static void update_leds(void)
     }
 }
 
-static void kb_interrupt(int irq_num)
+static void kb_interrupt(int irq, struct iregs *regs)
 {
     uint32_t flags;
     uint8_t status;
@@ -233,7 +233,7 @@ static void kb_interrupt(int irq_num)
     c = '\0';
     s = NULL;
 
-    assert(irq_num == IRQ_KEYBOARD);
+    assert(irq == IRQ_KEYBOARD);
 
     //
     // Scan Code to Key Code Mapping

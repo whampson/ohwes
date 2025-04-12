@@ -67,11 +67,12 @@ struct pit_state * get_pit(void)
 }
 
 #ifdef DEBUG
-extern void _crash_key_proc(int irq_num);
+extern void _crash_key_proc(int irq, struct iregs *regs);
 #endif
 
 static uint16_t calculate_divisor(int freq);
-static void timer_interrupt(int irq_num);
+void timer_interrupt(int irq, struct iregs *regs);
+
 void init_timer(void)
 {
     uint8_t mode;
@@ -179,10 +180,10 @@ void pcspk_beep(int freq, int millis)
     restore_flags(flags);
 }
 
-static void timer_interrupt(int irq_num)
+void timer_interrupt(int irq, struct iregs *regs)
 {
     volatile struct pit_state *pit;
-    assert(irq_num == IRQ_TIMER);
+    assert(irq == IRQ_TIMER);
 
     pit = get_pit();
     pit->ticks++;       // TODO: read tick count from PIT?

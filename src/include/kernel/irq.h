@@ -49,7 +49,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef void (*irq_handler)(int irq);
+typedef void (*irq_handler)(int irq, struct iregs *regs);
 
 void irq_mask(int irq);
 void irq_unmask(int irq);

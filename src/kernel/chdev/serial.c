@@ -132,8 +132,8 @@ struct tty_driver serial_driver = {
 };
 
 static void com_interrupt(struct com *com);
-static void com1_irq(int irq_num);
-static void com2_irq(int irq_num);
+static void com1_irq(int irq, struct iregs *regs);
+static void com2_irq(int irq, struct iregs *regs);
 
 static uint8_t com_in(struct com *com, uint8_t reg);
 static void com_out(struct com *com, uint8_t reg, uint8_t data);
@@ -787,7 +787,7 @@ static void check_modem_status(struct com *com)
         if (com->tty->hw_stopped) {
             if (com->msr.cts) {
 #if CHATTY_COM
-                COM_WARN("com%d: CTS tx start\n");
+                COM_WARN("com%d: CTS tx start\n", com->num);
 #endif
                 com->tty->hw_stopped = false;
                 tx_disable(com);
@@ -796,7 +796,7 @@ static void check_modem_status(struct com *com)
         else {
             if (!com->msr.cts) {
 #if CHATTY_COM
-                COM_WARN("com%d: CTS tx stop\n");
+                COM_WARN("com%d: CTS tx stop\n", com->num);
 #endif
                 com->tty->hw_stopped = true;
                 tx_enable(com);
@@ -963,17 +963,17 @@ do {                        \
     }                       \
 } while (0);
 
-static void com1_irq(int irq_num)
+static void com1_irq(int irq, struct iregs *regs)
 {
-    assert(irq_num == IRQ_COM1);
+    assert(irq == IRQ_COM1);
 
     _do_com_irq(COM1);
     _do_com_irq(COM3);
 }
 
-static void com2_irq(int irq_num)
+static void com2_irq(int irq, struct iregs *regs)
 {
-    assert(irq_num == IRQ_COM2);
+    assert(irq == IRQ_COM2);
 
     _do_com_irq(COM2);
     _do_com_irq(COM4);

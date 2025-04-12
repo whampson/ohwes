@@ -108,7 +108,7 @@ int rtc_close(struct file *file);
 int rtc_read(struct file *file, char *buf, size_t count);
 int rtc_ioctl(struct file *file, int op, void *arg);
 
-static void rtc_interrupt(int irq_num);
+static void rtc_interrupt(int irq, struct iregs *regs);
 
 static void set_mode(int mask);
 static void clear_mode(int mask);
@@ -207,10 +207,10 @@ void init_rtc(void)
     restore_flags(flags);
 }
 
-static void rtc_interrupt(int irq_num)
+static void rtc_interrupt(int irq, struct iregs *regs)
 {
     uint8_t reg_c;
-    assert(irq_num == IRQ_RTC);
+    assert(irq == IRQ_RTC);
 
     reg_c = rd_c();
     if (reg_c & REG_C_AF) {
