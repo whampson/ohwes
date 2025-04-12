@@ -28,30 +28,38 @@
 // General Configuration
 // ----------------------------------------------------------------------------
 
+// memory
 #define MIN_KB              512 // let's see how long this lasts!
+#define HIGHER_GROUND       0   // map kernel in high virtual address space
+
+// printing
 #define PRINT_LOGO          0   // show a special logo at boot
 #define PRINT_MEMORY_MAP    1   // show BIOS memory map at boot
 #define PRINT_PAGE_MAP      0   // show initial page table mappings
 #define PRINT_IOCTL         1   // show ioctl calls
 #define E9_HACK             1   // tee console output to port 0xE9
-#define HIGHER_GROUND       0   // map kernel in high virtual address space
 
+// debugging
 #define SERIAL_DEBUGGING    1   // enable debugging over COM1 port
-#define DEBUG_PORT          COM1_PORT
-#define DEBUG_BAUD          BAUD_9600
+#define SERIAL_DEBUG_PORT   COM1_PORT
+#define SERIAL_DEBUG_BAUD   BAUD_9600
 
 //
 // Counts of Things
 // ----------------------------------------------------------------------------
 //
+
+// memory
 #define MAX_NR_POOLS        32  // max num concurrent pools
 #define MAX_NR_POOL_ITEMS   256 // max pool memory capacity across all pools
 
+// filesystem
 #define MAX_NR_INODES       64  // max num inodes
 #define MAX_NR_DENTRIES     64  // max num directory entries
 #define MAX_NR_TOTAL_OPEN   64  // max num open files on system
 #define MAX_NR_IO_RANGES    32  // max num I/O range reservations
 
+// i/o
 #define NR_CONSOLE          7   // number of virtual consoles
 #define NR_SERIAL           4   // number of serial ports
 
@@ -86,8 +94,9 @@ static_assert(INT_STACK_BASE <= KERNEL_PGDIR, "Interrupt stacks overlap static d
 static_assert(INT_STACK_LIMIT >= DOUBLE_FAULT_STACK, "Interrupt stacks overlap critical stacks!");
 #endif
 
-// Kernel space base virtual address. The lower 1MB of physical memory is mapped.
-#if HIGHER_GROUND // TOOD: move this toggle elsewhere
+// kernel virtual address space
+// the lower 1MB of physical memory is identity-mapped mapped
+#if HIGHER_GROUND
   #define KERNEL_VA_BASE    0xC0000000
 #else
   #define KERNEL_VA_BASE    0x0
@@ -98,11 +107,12 @@ static_assert(INT_STACK_LIMIT >= DOUBLE_FAULT_STACK, "Interrupt stacks overlap c
 // ----------------------------------------------------------------------------
 // See doc/vga.txt
 
+// constants
 #define _VGA_80x28 1
 #define _VGA_80x50 2
 #define _VGA_80x25 4
 
-
+// params
 #define VGA_MODE            3       // 3 = 80x25,B8000,16color
 #define VGA_FB_SELECT       0       // 0 = 0xA0000-0xBFFFF 128k
 #define VGA_DIMENSION      _VGA_80x28

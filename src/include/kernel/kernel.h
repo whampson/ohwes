@@ -68,6 +68,8 @@ do { \
     } \
 } while (0)
 
+#define zeromem(p,n)                    memset(p, 0, n)
+
 // #define kernel_task() get_task(0)
 
 #endif  // !defined(__ASSEMBLER__) && defined(__KERNEL__)

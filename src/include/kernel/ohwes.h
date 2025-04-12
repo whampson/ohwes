@@ -49,8 +49,6 @@
 
 #define spin(cond)                      while (cond) { }    // spin while cond == true, TODO: THIS NEEDS TO HAVE A TIMEOUT!!
 
-#define zeromem(p,n)                    memset(p, 0, n)
-
 #define has_flag(x,f)                   (((x)&(f))==(f))
 #define countof(x)                      (sizeof(x)/sizeof(x[0]))
 
