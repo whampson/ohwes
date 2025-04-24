@@ -25,22 +25,23 @@
 //
 // Selected POSIX error numbers:
 //
-#define EAGAIN      1   // Resource unavailable, try again
-#define EBADF       2   // Bad file descriptor
-#define EBADRQC     3   // Invalid request descriptor
-#define EBUSY       4   // Device or resource busy
-#define EFAULT      5   // Bad address
-#define EINVAL      6   // Invalid argument
-#define EIO         7   // Input/output error
-#define EMFILE      8   // Too many files open in process
-#define ENFILE      9   // Too many files open in system
-#define ENODEV      10  // No such device
-#define ENOENT      11  // No such file or directory
-#define ENOMEM      12  // Not enough memory
-#define ENOSYS      13  // Function not implemented
-#define ENOTTY      14  // Invalid I/O control operation
-#define ENXIO       15  // No such device or address
-#define EPERM       16  // Operation not permitted
+#define ENOMEM      1   // Not enough memory
+#define ENFILE      2   // Too many files open in system
+#define EBADF       3   // Bad file descriptor
+#define ENOSYS      4   // Function not implemented
+#define EMFILE      5   // Too many files open in process
+#define ERANGE      6   // Result too large
+#define ENODEV      7   // No such device
+#define EPERM       8   // Operation not permitted
+#define EFAULT      9   // Bad address
+#define EINVAL      10  // Invalid argument
+#define ENXIO       11  // No such device or address
+#define ENOTTY      12  // Invalid I/O control operation
+#define EAGAIN      13  // Resource unavailable, try again
+#define ENOENT      14  // No such file or directory
+#define EBUSY       15  // Device or resource busy
+#define EBADRQC     16  // Invalid request descriptor
+#define EIO         17  // Input/output error
 
 #ifndef __ASSEMBLER__
 extern int _errno;

@@ -13,58 +13,33 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/libc/stdio.c
- *      Created: January 4, 2024
+ *         File: include/stdlib.h
+ *      Created: April 11, 2025
  *       Author: Wes Hampson
+ *
+ * https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/stdlib.h.html
  * =============================================================================
  */
 
-#include <errno.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
+#ifndef __STDLIB_H
+#define __STDLIB_H
 
-int putchar(int c)
-{
-    unsigned char ch;
+#define EXIT_SUCCESS    0
+#define EXIT_FAILURE    1
 
-    ch = (unsigned char) c;
-    if (write(STDOUT_FILENO, &ch, 1) < 0) {
-        return EOF;
-    }
+#ifndef __NULL_DEFINED
+#define __NULL_DEFINED
+#define NULL ((void *)0)
+#endif
 
-    return ch;
-}
+#ifndef __SIZE_T_DEFINED
+#define __SIZE_T_DEFINED
+typedef __SIZE_TYPE__ size_t;
+#endif
 
-int puts(const char *str)
-{
-    // TODO: write string to a buffer then write buffer in chunks
+long strtol(const char *restrict str, char **restrict str_end, int base);
+long long strtoll(const char *restrict str, char **restrict str_end, int base);
+unsigned long strtoul(const char *restrict str, char **restrict str_end, int base);
+unsigned long long strtoull(const char *restrict str, char **restrict str_end, int base);
 
-    int nwritten, ret;
-
-    nwritten = 0;
-    ret = write(STDOUT_FILENO, str, strlen(str));
-    if (ret < 0) {
-        return EOF;
-    }
-    nwritten += ret;
-
-    char nl ='\n';
-    ret = write(STDOUT_FILENO, &nl, 1);
-    if (ret < 0) {
-        return EOF;
-    }
-    nwritten += ret;
-
-    return nwritten;
-}
-
-void perror(const char *s)
-{
-    // TODO: fprintf(stderr, ...);
-
-    if (s && *s != '\0') {
-        /*f*/printf(/*stderr, */"%s: ", s);
-    }
-    /*f*/printf(/*stderr, */"%s\n", strerror(errno));
-}
+#endif // __STDLIB_H
