@@ -58,6 +58,8 @@ size_t strnlen(const char *str, size_t maxlen);
 int strcmp(const char *lhs, const char *rhs);
 int strncmp(const char *lhs, const char *rhs, size_t count);
 
+// char * strchr(const char *str, const char *substr);
+
 char * strerror(int errnum);
 
 #endif // __STRING_H

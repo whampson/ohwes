@@ -95,7 +95,7 @@ void init_timer(void)
 
     irq_register(IRQ_TIMER, timer_interrupt);
 
-#ifdef DEBUG        // CTRL+ALT+FN to crash kernel
+#if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+FN to crash kernel
     irq_register(IRQ_TIMER, _crash_key_proc);
 #endif
 

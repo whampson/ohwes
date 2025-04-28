@@ -58,10 +58,9 @@ __fastcall void handle_irq(struct iregs *regs)
             ? (++g_irqstats->spur_pic0)
             : (++g_irqstats->spur_pic1);
 
-        beep(1675, 100);
         kprint_wrn("** spurious irq%d (%d) **", irq, count);
-        if ((count % SPURIOUS_THRESH) == 0) {
-            crash(regs);
+        if (count > SPURIOUS_THRESH) {
+            panic("more than %d spurious IRQs! what's going on??", SPURIOUS_THRESH);
         }
         return;     // no EOI for spurious IRQs
     }
@@ -77,9 +76,7 @@ __fastcall void handle_irq(struct iregs *regs)
     }
 
     if (!handled) {
-        kprint_wrn("** unhandled irq%d **", irq);
-        beep(1675, 100);
-        crash(regs);
+        panic("** unhandled irq%d **", irq);
     }
 }
 

@@ -40,9 +40,10 @@
 #define E9_HACK             1   // tee console output to port 0xE9
 
 // debugging
-#define SERIAL_DEBUGGING    1   // enable debugging over COM1 port
+#define SERIAL_DEBUGGING    1   // enable debugging over COM port
 #define SERIAL_DEBUG_PORT   COM1_PORT
 #define SERIAL_DEBUG_BAUD   BAUD_9600
+#define ENABLE_CRASH_KEY    0   // test various crash scenarios w/ keystroke
 
 //
 // Counts of Things

@@ -46,7 +46,6 @@ extern __fastcall void _crash(struct iregs *regs);   // crash.c
 
 #define kprint(...) _kprint(__VA_ARGS__)
 #define beep(hz,ms) pcspk_beep(hz, ms)   // beep at hz for millis (nonblocking)
-#define crash(regs) _crash(regs)
 
 #define kprint_wrn(...)     \
     kprint("\n\e[1;33mwarn: "); kprint(__VA_ARGS__); kprint("\e[0m");

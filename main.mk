@@ -2,7 +2,10 @@
 DEBUG           := 1
 DEBUGOPT        := 1
 TEST_BUILD      := 0
-CFLAGS          := -Wall -Werror
+
+ERROR_FLAGS     := -Wall -Werror -Wno-unused-function
+ASFLAGS         := ${ERROR_FLAGS}
+CFLAGS          := ${ERROR_FLAGS}
 
 ifeq "${DEBUG}" "1"
   ASFLAGS += -g
