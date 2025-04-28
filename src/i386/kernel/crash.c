@@ -28,7 +28,6 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <i386/boot.h>
-#include <i386/gdbstub.h>
 #include <i386/interrupt.h>
 #include <i386/pic.h>
 #include <i386/cpu.h>
@@ -91,8 +90,6 @@ __data_segment struct tss *g_double_fault_tss = &_double_fault_tss;
 int g_test_crash = 0;
 int g_test_soft_double_fault = 0;
 #endif
-
-static void _do_break(struct iregs *regs);
 
 extern void pcspk_on(void);
 extern void pcspk_off(void);
@@ -192,13 +189,6 @@ __fastcall void _crash(struct iregs *regs)
     _regs_copy.ss = ss->_value;
     _regs_copy.esp = esp;
     regs = &_regs_copy;
-
-
-    if (regs->vec_num == EXCEPTION_DB || regs->vec_num == EXCEPTION_BP) {
-        // route debugbreak and breakpoint exceptions to GDB
-        _do_break(regs);
-        return;
-    }
 
     // current console info
     struct console *cons = current_console();
@@ -371,51 +361,7 @@ done:
     g_crash->reentrant = false;
 }
 
-static void _do_break(struct iregs *regs)
-{
-    struct gdb_state state = { };
-
-    kprint("\n*** %s ***\nRegisters:\n",
-        (regs->vec_num == 3) ? "BREAKPOINT" : "DEBUG_BREAK");
-    kprint("   eax: %08x\n", regs->eax);
-    kprint("   ebx: %08x\n", regs->ebx);
-    kprint("   ecx: %08x\n", regs->ecx);
-    kprint("   edx: %08x\n", regs->edx);
-    kprint("   esi: %08x\n", regs->esi);
-    kprint("   edi: %08x\n", regs->edi);
-    kprint("   ebp: %08x\n", regs->ebp);
-    kprint("   esp: %08x\n", regs->esp);
-    kprint("   eip: %08x\n", regs->eip);
-    kprint("eflags: %08x\n", regs->eflags);
-    kprint("    cs: %04x\n", regs->cs);
-    kprint("    ds: %04x\n", regs->ds);
-    kprint("    es: %04x\n", regs->es);
-    kprint("    fs: %04x\n", regs->fs);
-    kprint("    gs: %04x\n", regs->gs);
-
-#if SERIAL_DEBUGGING
-    state.signum = GDB_SIGTRAP;
-    state.regs[GDB_REG_I386_EBX] = regs->ebx;
-    state.regs[GDB_REG_I386_ECX] = regs->ecx;
-    state.regs[GDB_REG_I386_EDX] = regs->edx;
-    state.regs[GDB_REG_I386_ESI] = regs->esi;
-    state.regs[GDB_REG_I386_EDI] = regs->edi;
-    state.regs[GDB_REG_I386_EBP] = regs->ebp;
-    state.regs[GDB_REG_I386_EAX] = regs->eax;
-    state.regs[GDB_REG_I386_DS ] = regs->ds;
-    state.regs[GDB_REG_I386_ES ] = regs->es;
-    state.regs[GDB_REG_I386_FS ] = regs->fs;
-    state.regs[GDB_REG_I386_GS ] = regs->gs;
-    state.regs[GDB_REG_I386_EIP] = regs->eip;
-    state.regs[GDB_REG_I386_CS ] = regs->cs;
-    state.regs[GDB_REG_I386_EFLAGS] = regs->eflags;
-    state.regs[GDB_REG_I386_ESP] = regs->esp;
-    state.regs[GDB_REG_I386_SS ] = regs->ss;
-    gdb_main(&state);
-#endif
-}
-
-__noreturn void _do_double_fault(void)
+__noreturn void _double_fault(void)
 {
     // true hardware double fault!
     // we got here via the special double fault task gate, construct an iregs

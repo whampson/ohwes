@@ -62,7 +62,7 @@ static void init_tss(void);
 static void verify_gdt(void);
 
 extern struct tss *g_double_fault_tss;          // crash.c
-extern __noreturn void _do_double_fault(void);  // crash.c
+extern __noreturn void _double_fault(void);  // crash.c
 
 // TODO: this is a bit of a janky way of managing kernel stacks
 // but it'll work for now
@@ -122,7 +122,8 @@ void init_idt(void)
     for (int i = 0; i < NR_EXCEPTIONS; i++) {
         // trap gate for exceptions; device interrupts are OK
         int vec = VEC_INTEL + i;
-        make_trap_gate(&idt[vec], KERNEL_CS, KERNEL_PL, exception_thunks[i]);
+        int pl = (vec == EXCEPTION_BP) ? USER_PL : KERNEL_PL;
+        make_intr_gate(&idt[vec], KERNEL_CS, pl, exception_thunks[i]);
     }
 
     // use task gate for double fault handler so we force a stack switch
@@ -154,7 +155,7 @@ static void init_tss(void)
     struct tss *crash_tss = get_tss_from_gdt(_TSS1_SEGMENT);
     assert(crash_tss == g_double_fault_tss);
     zeromem(crash_tss, TSS_SIZE);
-    crash_tss->eip = (uint32_t) _do_double_fault;
+    crash_tss->eip = (uint32_t) _double_fault;
     crash_tss->esp = __phys_to_virt(DOUBLE_FAULT_STACK);
     crash_tss->ebp = __phys_to_virt(DOUBLE_FAULT_STACK);
     crash_tss->cs = KERNEL_CS;

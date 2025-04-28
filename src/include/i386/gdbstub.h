@@ -68,6 +68,6 @@ struct gdb_state {
 int gdb_init_state(struct gdb_state *state, int signum, const struct iregs *regs);
 
 // main debugging loop
-int gdb_main(struct gdb_state *state);
+void gdb_main(struct gdb_state *state);
 
 #endif // __GDBSTUB_H

@@ -202,10 +202,14 @@ return_from_syscall:
 # tables
 
 exception_table:
-        .long   _crash, _crash, _crash, _crash, _crash, _crash, _crash, _crash
-        .long   _crash, _crash, _crash, _crash, _crash, _crash, _crash, _crash
-        .long   _crash, _crash, _crash, _crash, _crash, _crash, _crash, _crash
-        .long   _crash, _crash, _crash, _crash, _crash, _crash, _crash, _crash
+        .long   _crash, _dbgbrk, _crash, _dbgbrk
+        .long   _crash, _crash, _crash, _crash
+        .long   _crash, _crash, _crash, _crash
+        .long   _crash, _crash, _crash, _crash
+        .long   _crash, _crash, _crash, _crash
+        .long   _crash, _crash, _crash, _crash
+        .long   _crash, _crash, _crash, _crash
+        .long   _crash, _crash, _crash, _crash
 
 syscall_table:
         #include <i386/syscall_table.h>

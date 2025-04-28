@@ -24,10 +24,12 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <i386/gdbstub.h>
 #include <i386/io.h>
 #include <i386/interrupt.h>
+#include <i386/x86.h>
 #include <kernel/debug.h>
 #include <kernel/kernel.h>
 #include <kernel/io.h>
@@ -37,7 +39,7 @@
 #define GDB_MAXNACK             10
 
 #define GDB_ENABLE_INTERRUPT    0
-#define GDB_ENABLE_DEBUG        1
+#define GDB_ENABLE_DEBUG        0
 
 #if GDB_ENABLE_DEBUG
 #define GDB_PRINT(...)  kprint("gdb: " __VA_ARGS__)
@@ -63,15 +65,24 @@ static char gdb_putc(struct gdb_state *state, char c);
 static int gdb_recv_ack(struct gdb_state *state);  // 1 = nack, 0 = ack, EOF = error
 static int gdb_recv_packet(struct gdb_state *state, char *buf, size_t bufsiz, size_t *len);
 static int gdb_send_packet(struct gdb_state *state, const char *buf, size_t len);
+static int gdb_send_ok_packet(struct gdb_state *state);
+static int gdb_send_signal_packet(struct gdb_state *state, int signal);
+static int gdb_send_error_packet(struct gdb_state *state, int error);
 
 // data encoding/decoding
 static int encode_hex(char *buf, size_t bufsiz, const void *data, size_t len);
 static int decode_hex(const char *buf, size_t bufsiz, const void *data, size_t len);
 
 // command handling
+static int gdb_cmd_step(struct gdb_state *state);
+static int gdb_cmd_continue(struct gdb_state *state);
 static int gdb_cmd_query(struct gdb_state *state);
 static int gdb_cmd_read_regs(struct gdb_state *state);
-static int gdb_cmd_read_memory(struct gdb_state *state, char *pkt, size_t len);
+static int gdb_cmd_write_regs(struct gdb_state *state, char *pkt, size_t pktlen);
+static int gdb_cmd_read_mem(struct gdb_state *state, char *pkt, size_t pktlen);
+static int gdb_cmd_write_mem(struct gdb_state *state, char *pkt, size_t pktlen);
+
+static bool gdb_initialized = false;
 
 void init_gdb(void)
 {
@@ -96,6 +107,13 @@ void init_gdb(void)
     };
     uint16_t baud   = SERIAL_DEBUG_BAUD;
 
+    com_out(UART_SCR, 0);
+    com_out(UART_SCR, 0x55);
+    if (com_in(UART_SCR) != 0x55) {
+        kprint("gdb: cannot debug on com%d, port does not exist!\n", SERIAL_DEBUG_PORT);
+        return;
+    }
+
     com_out(UART_IER, ier._value);
     com_out(UART_MCR, mcr._value);
     com_out(UART_LCR, UART_LCR_DLAB);
@@ -111,6 +129,8 @@ void init_gdb(void)
 #if GDB_ENABLE_INTERRUPT
     irq_register(IRQ_COM1, gdb_serial_interrupt);
 #endif
+
+    gdb_initialized = true;
 }
 
 int gdb_init_state(struct gdb_state *state,
@@ -141,16 +161,25 @@ int gdb_init_state(struct gdb_state *state,
     return 0;
 }
 
-int gdb_main(struct gdb_state *state)
+void gdb_main(struct gdb_state *state)
 {
     char pkt[GDB_MAXLEN];
     size_t len;
     int status;
 
-    bool loop_forever = true;
-    do {
+    if (!gdb_initialized) {
+        return;
+    }
+
+    status = gdb_cmd_query(state);
+    if (status == EOF) {
+        goto error;
+    }
+
+    while (true) {
         status = gdb_recv_packet(state, pkt, sizeof(pkt), &len);
         if (status == EOF) {
+            GDB_PRINT("gdb_recv_packet() returned EOF, exiting...\n");
             break;
         }
         if (len == 0) {
@@ -158,35 +187,61 @@ int gdb_main(struct gdb_state *state)
         }
 
         switch (pkt[0]) {
-            case '?':
+            case '?':   // query halt state
                 status = gdb_cmd_query(state);
                 break;
 
-            case 'g':
+            case 'g':   // read regs
                 status = gdb_cmd_read_regs(state);
                 break;
 
-            case 'm':
-                status = gdb_cmd_read_memory(state, &pkt[1], len-1);
+            case 'G':   // write regs
+                status = gdb_cmd_write_regs(state, &pkt[1], len-1);
                 break;
+
+            case 'm':   // read memory
+                status = gdb_cmd_read_mem(state, &pkt[1], len-1);
+                break;
+
+            case 'M':    // write memory
+                status = gdb_cmd_write_mem(state, &pkt[1], len-1);
+                break;
+
+            case 'c':   // continue
+                gdb_cmd_continue(state);
+                return;
+
+            case 's':   // step
+                gdb_cmd_step(state);
+                return;
 
             default:
                 status = gdb_send_packet(state, NULL, 0);
                 break;
         }
-    } while (status != EOF || loop_forever);
 
-    return status;
+    error:
+        if (status == EOF) {
+            gdb_send_error_packet(state, 0);
+        }
+    }
+}
+
+static int gdb_cmd_step(struct gdb_state *state)
+{
+    state->regs[GDB_REG_I386_EFLAGS] |= EFLAGS_TF;
+    return 0;
+}
+
+static int gdb_cmd_continue(struct gdb_state *state)
+{
+    state->regs[GDB_REG_I386_EFLAGS] &= ~EFLAGS_TF;
+    return 0;
 }
 
 static int gdb_cmd_query(struct gdb_state *state)
 {
-    char buf[8];
-    size_t len;
-
-    buf[0] = 'S';
-    len = encode_hex(buf+1, sizeof(buf)-1, &state->signum, 1);
-    return gdb_send_packet(state, buf, len+1);
+    return gdb_send_signal_packet(state, state->signum);
 }
 
 static int gdb_cmd_read_regs(struct gdb_state *state)
@@ -198,29 +253,78 @@ static int gdb_cmd_read_regs(struct gdb_state *state)
         sizeof(buf), state->regs, sizeof(state->regs)));
 }
 
-static int gdb_cmd_read_memory(struct gdb_state *state, char *pkt, size_t len)
+static int gdb_cmd_write_regs(struct gdb_state *state, char *pkt, size_t pktlen)
 {
-    int sep;
-    GDB_PRINT("pkt = '%.*s'\n", len, pkt);
+    int status;
 
-    sep = -1;
-    for (int i = 0; i < len; i++) {
-        if (pkt[i] == ',') {
-            sep = i;
-            break;
-        }
+    status = decode_hex(pkt, pktlen, state->regs, sizeof(state->regs));
+    if (status == EOF) {
+        return gdb_send_error_packet(state, 0);
     }
 
-    if (sep <= 0) {
-        // no memory address! TODO: tx error packet?
+    return gdb_send_ok_packet(state);
+}
+
+static int gdb_cmd_read_mem(struct gdb_state *state, char *pkt, size_t pktlen)
+{
+    void *addr;
+    size_t count;
+    char  data[GDB_MAXLEN/2];
+    char tx_pkt[GDB_MAXLEN];
+    char *p;
+
+    pkt[pktlen] = '\0';    // no NUL protection built into strtol
+
+    addr = (void *) strtol(pkt, &p, 16);
+    if (*p == '\0') {
+        return EOF;     // invalid packet format
+    }
+
+    count = strtol(p+1, NULL, 16);
+    if (count > sizeof(data)) {
+        return EOF;     // too many bytes requested
+    }
+
+    for (int i = 0; i < count; i++) {
+        data[i] = *(((char *) addr) + i);
+    }
+
+    return gdb_send_packet(state, tx_pkt, encode_hex(tx_pkt,
+        sizeof(tx_pkt), data, count));
+}
+
+static int gdb_cmd_write_mem(struct gdb_state *state, char *pkt, size_t pktlen)
+{
+    int status;
+    void *addr;
+    size_t count;
+    char  data[GDB_MAXLEN/2];
+    char *p;
+
+    pkt[pktlen] = '\0';    // no NUL protection built into strtol
+
+    addr = (void *) strtol(pkt, &p, 16);
+    if (*p != ',') {
+        return EOF;     // invalid packet format
+    }
+
+    count = strtol(p+1, &p, 16);
+    if (*p != ':') {
+        return EOF;     // invalid packet format
+    }
+    if (count > sizeof(data)) {
+        return EOF;     // too many bytes requested
+    }
+
+    status = decode_hex(p+1, (size_t) pktlen - (p+1 - pkt), data, count);
+    if (status == EOF) {
         return EOF;
     }
 
-    // TODO: need strtol to get addr,count
-
-    GDB_PRINT("comma = %d\n", sep);
-
-    return 0;
+    for (int i = 0; i < count; i++) {
+        *(((char *) addr) + i) = data[i];
+    }
+    return gdb_send_ok_packet(state);
 }
 
 static int gdb_recv_ack(struct gdb_state *state)
@@ -241,7 +345,12 @@ static int gdb_recv_ack(struct gdb_state *state)
             // retransmit...
             return gdb_send_packet(state, state->tx_buf, state->tx_len);
         default:
-            GDB_PRINT("error: bad packet response '%c'\n", c);
+            if (isprint(c)) {
+                GDB_PRINT("error: bad packet response '%c'\n", c);
+            }
+            else {
+                GDB_PRINT("error: bad packet response \\x%02hhx\n", c);
+            }
             break;
     }
 
@@ -275,7 +384,12 @@ static int gdb_recv_packet(struct gdb_state *state,
         if (c == '$') {
             break;      // packet start
         }
-        GDB_PRINT("expecting '$', got '%c' (\\x%02x)\n", c, c);
+        if (isprint(c)) {
+            GDB_PRINT("expecting '$', got '%c'\n", c);
+        }
+        else {
+            GDB_PRINT("expecting '$', got \\x%02hhx\n", c);
+        }
     }
 
     // read-in packet data
@@ -317,9 +431,9 @@ static int gdb_recv_packet(struct gdb_state *state,
 
     // verify checksum
     if (cksum != tx_cksum) {
-        GDB_PRINT("cksum: expecting %02x, got %02x\n", tx_cksum, cksum);
+        GDB_PRINT("cksum: expecting %02hhx, got %02hhx\n", tx_cksum, cksum);
         gdb_putc(state, '-');  // NACK
-        return 1;
+        return EOF;
     }
 
     gdb_putc(state, '+');
@@ -330,6 +444,7 @@ static int gdb_send_packet(struct gdb_state *state, const char *buf, size_t len)
 {
     uint8_t cksum;
     char cksum_buf[2];
+    int status;
     int i;
 
     if (!buf && len > 0) {
@@ -352,7 +467,10 @@ static int gdb_send_packet(struct gdb_state *state, const char *buf, size_t len)
     state->tx_buf[i] = '\0';
     state->tx_len = i;
 
-    encode_hex(cksum_buf, sizeof(cksum_buf), &cksum, 1);
+    status = encode_hex(cksum_buf, sizeof(cksum_buf), &cksum, 1);
+    if (status == EOF) {
+        return EOF;
+    }
 
     gdb_putc(state, '#');
     gdb_putc(state, cksum_buf[0]);
@@ -362,6 +480,43 @@ static int gdb_send_packet(struct gdb_state *state, const char *buf, size_t len)
         state->tx_len, state->tx_buf, cksum_buf[0], cksum_buf[1]);
 
     return gdb_recv_ack(state);
+}
+
+static int gdb_send_ok_packet(struct gdb_state *state)
+{
+    return gdb_send_packet(state, "OK", 2);
+}
+
+static int gdb_send_signal_packet(struct gdb_state *state, int signal)
+{
+    char buf[8];
+    size_t len;
+    int status;
+
+    buf[0] = 'S';
+    status = encode_hex(buf+1, sizeof(buf)-1, &signal, 1);
+    if (status == EOF) {
+        return EOF;
+    }
+
+    len = status + 1;
+    return gdb_send_packet(state, buf, len);
+}
+
+static int gdb_send_error_packet(struct gdb_state *state, int error)
+{
+    char buf[8];
+    size_t len;
+    int status;
+
+    buf[0] = 'E';
+    status = encode_hex(buf+1, sizeof(buf)-1, &error, 1);
+    if (status == EOF) {
+        return EOF;
+    }
+
+    len = status + 1;
+    return gdb_send_packet(state, buf, len);
 }
 
 static int encode_hex(char *buf, size_t bufsiz, const void *data, size_t len)

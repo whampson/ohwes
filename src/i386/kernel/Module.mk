@@ -4,7 +4,9 @@ SOURCES := \
     entry.S \
     cpu.c \
     crash.c \
+    debug.c \
     gdbstub.c \
+    interrupt.c \
     pic.c \
     setup.S \
     timer.c \
