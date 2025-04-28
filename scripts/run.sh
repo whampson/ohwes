@@ -84,7 +84,7 @@ if [ "$1" = "qemu" ]; then
                 -ex 'add-symbol-file bin/kernel.elf' \
                 -ex 'set confirm off' \
                 -ex 'lay src' -ex 'lay reg' \
-                -ex 'b start_kernel' \
+                -ex 'b kmain' \
 
         else
             gdb \
@@ -101,7 +101,7 @@ if [ "$1" = "qemu" ]; then
         # GDB_FLAGS+=(-ex 'set confirm off')
         # GDB_FLAGS+=(-ex 'lay src' -ex 'lay reg')
         # if [ $NOBREAK -ne 1 ]; then
-        #     GDB_FLAGS+=(-ex 'b start_kernel')
+        #     GDB_FLAGS+=(-ex 'b kmain')
         # fi
     elif [ $DEBUG_MODE = 2 ]; then
         # boot debug params
@@ -118,7 +118,7 @@ if [ "$1" = "qemu" ]; then
             -ex 'add-symbol-file bin/kernel.elf' \
             -ex 'set confirm off' \
             -ex 'lay src' -ex 'lay reg' \
-            -ex 'b setup_kernel' \
+            -ex 'b ksetup' \
 
     else
         # no initial GDB

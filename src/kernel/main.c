@@ -13,7 +13,7 @@
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 * SOFTWARE.
 * -----------------------------------------------------------------------------
-*         File: src/kernel/init/main.c
+*         File: kernel/main.c
 *      Created: January 22, 2024
 *       Author: Wes Hampson
 * =============================================================================
@@ -42,11 +42,26 @@
 #include <kernel/irq.h>
 #include <kernel/kernel.h>
 #include <kernel/ohwes.h>
+#include <kernel/pool.h>
 #include <kernel/serial.h>
 #include <kernel/termios.h>
 #include <sys/ioctl.h>
 
-#include <kernel/pool.h>
+__data_segment static struct boot_info _boot;
+__data_segment struct boot_info *g_boot = &_boot;
+
+#define CHECK(sys)              \
+({                              \
+    int __ret = (sys);          \
+    if (__ret < 0) {            \
+        int __errno = errno;    \
+        perror(#sys);           \
+        _exit(__errno);         \
+    }                           \
+    __ret;                      \
+})
+
+extern void print_boot_info(void);
 
 extern void init_cpu(void);
 extern void init_fs(void);
@@ -66,24 +81,16 @@ extern void init_gdb(void);
 extern void run_tests(void);
 #endif
 
-static void print_boot_info(void);
+static void go_to_ring3(uint32_t stack);
 
-void init(void);
-int main(void);     // usermode program entry point
-static void usermode(uint32_t stack);
+void init(void);    // user mode portion of setup
+int main(void);     // user mode program entry point
 
-// static size_t
-//  /* it is now my duty to completely */
-//     drain_queue(struct ring *q, char *buf, size_t bufsiz);
-
-__data_segment static struct boot_info _boot;
-__data_segment struct boot_info *g_boot = &_boot;
-
-__fastcall void start_kernel(struct boot_info *info)
+__fastcall void kmain(struct boot_info *info)
 {
-    // copy boot info into kernel memory so we don't lose it
+    // copy boot info into kernel memory so we don't lose it during init
     memcpy(g_boot, info, sizeof(struct boot_info));
-    info = g_boot;  // reassign local ptr so we don't use overwritten buffer
+    info = g_boot;
 
     // init the early terminal by printing something to it
     kprint("\n\e[0;1m%s %s '%s'\n", OS_NAME, OS_VERSION, OS_MONIKER);
@@ -91,14 +98,15 @@ __fastcall void start_kernel(struct boot_info *info)
         __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
     print_boot_info();
 
-    // finish setting up CPU descriptors
-    init_cpu();
-
     // initialize static memory and setup memory manager,
     // do this as early as possible to ensure BSS is zeroed
     init_mm();
+
+    // finish setting up CPU descriptors (IDT, etc.) and setup I/O stuff
+    init_cpu();
     init_io();
 
+    // initialize the GDB stub
 #if SERIAL_DEBUGGING
     init_gdb();
 #endif
@@ -107,10 +115,6 @@ __fastcall void start_kernel(struct boot_info *info)
     init_pic();
     init_timer();
     init_rtc();
-
-#if TEST_BUILD
-    run_tests();
-#endif
 
     // initialize VGA
     init_vga();
@@ -124,7 +128,8 @@ __fastcall void start_kernel(struct boot_info *info)
     kprint(
         "Let's print something large to see whether console printing to "
         "both the VGA display and COM port works properly! Some lorem "
-        "ipsum for ya...\n\n"
+        "ipsum for ya...\n\n");
+    kprint(
         "Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque "
         "faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi "
         "pretium tellus duis convallis. Tempus leo eu aenean sed diam urna "
@@ -132,16 +137,21 @@ __fastcall void start_kernel(struct boot_info *info)
         "Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut "
         "hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent "
         "per conubia nostra inceptos himenaeos.\n\n");
-    kprint("\e[1mDid it work? :p\e[0m\n\n");
+    kprint(
+        "\e[1mDid it work? :p\e[0m\n\n");
+
+#if TEST_BUILD
+    run_tests();
+#endif
 
     kprint("entering user mode...\n");
-    usermode(__phys_to_virt(SETUP_STACK));
+    go_to_ring3(__phys_to_virt(SETUP_STACK));
 
     // for future reference...
     // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
 }
 
-static void usermode(uint32_t stack)
+static void go_to_ring3(uint32_t stack)
 {
     assert(getpl() == KERNEL_PL);
 
@@ -166,17 +176,6 @@ static void usermode(uint32_t stack)
     // drop to ring 3
     switch_context(&regs);
 }
-
-#define CHECK(sys)                                              \
-({                                                              \
-    int __ret = (sys);                                          \
-    if (__ret < 0) {                                            \
-        int __errno = errno;                                    \
-        perror(#sys);                                           \
-        _exit(__errno);                                         \
-    }                                                           \
-    __ret;                                                      \
-})
 
 void init(void)
 {
@@ -291,31 +290,4 @@ int main(void)
 
     close(fd);
     return 0;
-}
-
-static void print_boot_info(void)
-{
-    int nfloppies = g_boot->hwflags.has_diskette_drive;
-    if (nfloppies) {
-        nfloppies += g_boot->hwflags.num_other_diskette_drives;
-    }
-
-    int nserial = g_boot->hwflags.num_serial_ports;
-    int nparallel = g_boot->hwflags.num_parallel_ports;
-    bool gameport = g_boot->hwflags.has_gameport;
-    bool mouse = g_boot->hwflags.has_ps2mouse;
-    uint32_t ebda_size = 0xA0000 - g_boot->ebda_base;
-
-    kprint("bios: %d %s, %d serial %s, %d parallel %s\n",
-        nfloppies, PLURAL2(nfloppies, "floppy", "floppies"),
-        nserial, PLURAL(nserial, "port"),
-        nparallel, PLURAL(nparallel, "port"));
-    kprint("bios: A20 mode is %s\n",
-        (g_boot->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
-        (g_boot->a20_method == A20_PORT92) ? "A20_PORT92" :
-        (g_boot->a20_method == A20_BIOS) ? "A20_BIOS" :
-        "A20_NONE");
-    kprint("bios: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
-    kprint("bios: video mode is %02Xh\n", g_boot->vga_mode & 0x7F);
-    if (g_boot->ebda_base) kprint("bios: EBDA=%08X,%Xh\n", g_boot->ebda_base, ebda_size);
 }

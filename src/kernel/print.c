@@ -25,8 +25,9 @@
 #include <i386/io.h>
 #include <i386/paging.h>
 #include <kernel/console.h>
-#include <kernel/console.h>
+#include <kernel/kernel.h>
 #include <kernel/fs.h>
+#include <kernel/ohwes.h>
 #include <kernel/vga.h>
 #include <kernel/serial.h>
 
@@ -195,4 +196,31 @@ int _kprint(const char *fmt, ...)
 
     print_to_syscon(buf, nchars);
     return nchars;
+}
+
+void print_boot_info(void)
+{
+    int nfloppies = g_boot->hwflags.has_diskette_drive;
+    if (nfloppies) {
+        nfloppies += g_boot->hwflags.num_other_diskette_drives;
+    }
+
+    int nserial = g_boot->hwflags.num_serial_ports;
+    int nparallel = g_boot->hwflags.num_parallel_ports;
+    bool gameport = g_boot->hwflags.has_gameport;
+    bool mouse = g_boot->hwflags.has_ps2mouse;
+    uint32_t ebda_size = 0xA0000 - g_boot->ebda_base;
+
+    kprint("bios: %d %s, %d serial %s, %d parallel %s\n",
+        nfloppies, PLURAL2(nfloppies, "floppy", "floppies"),
+        nserial, PLURAL(nserial, "port"),
+        nparallel, PLURAL(nparallel, "port"));
+    kprint("bios: A20 mode is %s\n",
+        (g_boot->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
+        (g_boot->a20_method == A20_PORT92) ? "A20_PORT92" :
+        (g_boot->a20_method == A20_BIOS) ? "A20_BIOS" :
+        "A20_NONE");
+    kprint("bios: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
+    kprint("bios: video mode is %02Xh\n", g_boot->vga_mode & 0x7F);
+    if (g_boot->ebda_base) kprint("bios: EBDA=%08X,%Xh\n", g_boot->ebda_base, ebda_size);
 }

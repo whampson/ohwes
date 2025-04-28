@@ -5,6 +5,7 @@ SOURCES := \
     io.c \
     irq.c \
     list.c \
+    main.c \
     print.c \
     ring.c \
     task.c \
@@ -27,7 +28,6 @@ TARGET_LDSCRIPT:= kernel.ld
 
 MODULES := \
     chdev \
-    init \
     fs \
     mm \
 

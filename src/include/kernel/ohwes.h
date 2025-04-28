@@ -80,6 +80,7 @@ enum pl {
 #define STRINGIFY(x)                    # x
 #define STRINGIFY_LITERAL(x)            STRINGIFY(x)
 #define CONCAT(a,b)                     a ## b
+
 #define HASNO(cond)                     ((cond)?"has":"no")
 #define YN(cond)                        ((cond)?"yes":"no")
 #define ONOFF(cond)                     ((cond)?"on":"off")

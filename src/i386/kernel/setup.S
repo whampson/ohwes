@@ -33,8 +33,8 @@
 # Protected Mode CPU descriptors and setting up virtual memory mappings for
 # the kernel code.
 ##
-.globl setup_kernel
-setup_kernel:
+.globl ksetup
+ksetup:
         movl            %ecx, boot_params_ptr   # store boot params
         lgdt            gdt_desc                # load the real GDT
         lidt            idt_desc                #  and the real IDT
@@ -88,7 +88,7 @@ _kernel_trampoline:
         movl            boot_params_ptr, %ecx       # fastcall param goes in ecx
         movl            %cr3, %eax                  # flush TLB
         movl            %eax, %cr3
-        lcall           $KERNEL_CS, $start_kernel   # far call into the kernel
+        lcall           $KERNEL_CS, $kmain          # far call into the kernel
 
 _idle:  # we should never end up here... but in case we do, spin forever
         jmp             _idle

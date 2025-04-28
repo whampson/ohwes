@@ -73,7 +73,10 @@ void init_mm(void)
 {
     print_memory_map();
     print_kernel_sections();
+
+#if PRINT_PAGE_MAP
     print_page_mappings(g_mm);
+#endif
 
     init_bss();
     g_mm->pgdir = (void *) __phys_to_virt(KERNEL_PGDIR);
@@ -205,7 +208,6 @@ static void print_memory_map(void)
 
 static void print_page_mappings(struct mm_info *mm)
 {
-#if PRINT_PAGE_MAP
     struct pginfo *pgdir = mm->pgdir;
     struct pginfo *pgtbl;
     struct pginfo *page;
@@ -234,7 +236,6 @@ static void print_page_mappings(struct mm_info *mm)
             print_page_info(vaddr, page);
         }
     }
-#endif
 }
 
 static void print_page_info(uint32_t vaddr, const struct pginfo *page)
