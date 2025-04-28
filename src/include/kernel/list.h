@@ -68,12 +68,12 @@ void list_init(struct list_node *head);
 bool list_empty(struct list_node *head);
 
 /**
- * Add an item to the list after the specified list head.
+ * Add an item to the list before the specified list head.
  */
 void list_add(struct list_node *head, struct list_node *item);
 
 /**
- * Add an item to the list before the specified list head.
+ * Add an item to the list after the specified list head.
  */
 void list_add_tail(struct list_node *head, struct list_node *item);
 

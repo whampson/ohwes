@@ -156,7 +156,7 @@ pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capaci
             p->chunk_base = chunk;
             p->alloc = chunk;
         }
-        list_add_tail(&p->head, &chunk->chain);
+        list_add(&p->head, &chunk->chain);
     }
 
 #if CHATTY_POOL
@@ -271,7 +271,7 @@ int pool_free(pool_t pool, void *item)
 
     // free chunk by marking its data ptr invalid and adding it to free list
     chunk->data = NULL;
-    list_add(&p->head, &chunk->chain);
+    list_add_tail(&p->head, &chunk->chain);
 
     // set the alloc ptr to the free chunk and call it a day
     p->alloc = chunk;

@@ -54,12 +54,12 @@ bool list_empty(struct list_node *head)
 
 void list_add(struct list_node *head, struct list_node *item)
 {
-    insert_into_list(head, head->next, item);
+    insert_into_list(head->prev, head, item);
 }
 
 void list_add_tail(struct list_node *head, struct list_node *item)
 {
-    insert_into_list(head->prev, head, item);
+    insert_into_list(head, head->next, item);
 }
 
 void list_remove(struct list_node *item)
