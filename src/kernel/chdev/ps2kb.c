@@ -39,9 +39,10 @@
 #include <kernel/irq.h>
 #include <kernel/ohwes.h>
 
-#define CHATTY_KB       0       // print extra debug messages
+#include <kernel/debug.h>
 
-#define SCANCODE_SET    1       // using scancode set 1
+#define CHATTY_KB       1       // print extra debug messages
+
 #define TYPEMATIC_BYTE  0x22    // repeat rate = 24cps, delay = 500ms
 #define RETRY_COUNT     3       // command resends before giving up
 #define WARN_INTERVAL   10      // warn every N times a stray packet shows up
@@ -149,14 +150,14 @@ void init_kb(void)
     kb_ident();
     kb_typematic(TYPEMATIC_BYTE);
 
-    // detect supported scancode sets
+    // detect supported scancode sets (for fun...)
     g_kb.sc3_support = kb_scset(3);
     g_kb.sc2_support = kb_scset(2);
 
-    // select our desired scancode set
-    if (!kb_scset(SCANCODE_SET)) {
-        // if we couldn't pick a set (command may be unsupported),
-        // turn translation back on so we are guaranteed to be using set 1
+    // we are using scancode set 1 for now...
+    if (!kb_scset(1)) {
+        // if somehow that failed w/ scancode set 1 (it shouldn't)... turn
+        // translation back on so we are guaranteed to be using set 1
         ps2cfg |= PS2_CFG_TRANSLATE;
         ps2_cmd(PS2_CMD_WRCFG);
         ps2_write(ps2cfg);
@@ -649,26 +650,52 @@ static bool kb_setleds(uint8_t leds)
 static bool kb_scset(uint8_t set)
 {
     uint8_t data;
+    uint8_t oldset;
+    bool supported;
 
+    supported = false;
     assert(set > 0 && set <= 3);
-    RIF_FALSE(kb_sendcmd(PS2KB_CMD_SCANCODE));
+    RIF_FALSE(kb_sendcmd(PS2KB_CMD_SCANCODE));  // fail if command unsupported
 
-    kb_wrport(set);                 // write desired set
-    kb_rdport();                    // ack
+    // read current set
+    kb_wrport(0);
+    kb_rdport();    // ack
+    oldset = kb_rdport();
+    if (oldset == 0) {
+        // "read current set" not supported... this keyboard is probably so
+        // old that it doesn't support sets 2 and 3 either, so let's just
+        // use set 1 to be safe and return true only if we requested set 1.
+        // my old Lite-On Model M clone w XT/AT switch follows this path...
+        kb_sendcmd(PS2KB_CMD_SCANCODE);
+        kb_wrport(1);
+        kb_rdport();    // ack
+        g_kb.scancode_set = 1;
+        return (set == 1);
+    }
+
+    // write desired set
+    kb_sendcmd(PS2KB_CMD_SCANCODE);
+    kb_wrport(set);
+    kb_rdport();    // ack
 
     // readback
     kb_sendcmd(PS2KB_CMD_SCANCODE);
-    kb_wrport(0);                   // request current set
-    kb_rdport();                    // ack
+    kb_wrport(0);   // request current set
+    kb_rdport();    // ack
     data = kb_rdport();
-    kb_rdport();                    // may send additional ack
-
     if (data == set) {
-        g_kb.scancode_set = set;    // keep track of the current scancode set
-        return true;
+        supported = true;
+        g_kb.scancode_set = set;
+    }
+    else {
+        // unsupported, fallback to the old set...
+        kb_sendcmd(PS2KB_CMD_SCANCODE);
+        kb_wrport(oldset);
+        kb_rdport();    // ack
+        g_kb.scancode_set = oldset;
     }
 
-    return false;
+    return supported;
 }
 
 static bool kb_typematic(uint8_t typ)
