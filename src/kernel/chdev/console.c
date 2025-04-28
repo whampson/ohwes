@@ -304,7 +304,7 @@ void console_defaults(struct console *cons)
     save_console(cons);
 }
 
-extern int do_tty_open(struct tty *tty);
+extern int tty_open_internal(struct tty *tty);
 
 int switch_console(int num)
 {
@@ -322,7 +322,7 @@ int switch_console(int num)
     if (get_tty(__mkdev(TTY_MAJOR, num), &tty)) {
         panic("tty%d not found", num);
     }
-    if (do_tty_open(tty)) {
+    if (tty_open_internal(tty)) {
         panic("could not switch consoles -- unable to open tty%d", num);
     }
 

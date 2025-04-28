@@ -33,6 +33,7 @@
 static struct list_node tty_drivers;            // linked list of TTY drivers
 static struct tty_ldisc ldiscs[NR_LDISC] = { }; // TTY line disciplines
 static struct tty ttys[NR_TTY] = { };           // TTY structs
+__data_segment bool g_tty_initialized = false;
 
 static struct termios default_termios = {
     .c_line = N_TTY,
@@ -130,13 +131,22 @@ void init_tty(void)
     init_serial();
     init_console();
     init_kb();
+
+    // TODO: figure out which TTYs are valid
+    // (like, no ttyS3 if dev has 1 serial port)
+
+    g_tty_initialized = true;
 }
 
-int do_tty_open(struct tty *tty)
+int tty_open_internal(struct tty *tty)
 {
     int ret;
     struct tty_driver *driver;
     struct list_node *n;
+
+    if (!tty) {
+        return -EINVAL;
+    }
 
     if (tty->open) {
         return 0;       // TTY already open, no action needed
@@ -196,7 +206,30 @@ int do_tty_open(struct tty *tty)
     tty->throttled = false;
     tty->stopped = false;
     tty->hw_stopped = false;
-    return ret;
+    return 0;
+}
+
+int tty_putchar(struct tty *tty, char c)
+{
+    if (!tty || !tty->ldisc) {
+        return -ENXIO;
+    }
+    if (!tty->ldisc->write) {
+        assert(!"where's ldisc->write??");
+        return -ENOSYS;
+    }
+
+    return tty->ldisc->write(tty, &c, 1);
+}
+
+void tty_flush(struct tty *tty)
+{
+    if (tty->ldisc->flush) {
+        tty->ldisc->flush(tty);
+    }
+    if (tty->driver.flush) {
+        tty->driver.flush(tty);
+    }
 }
 
 static int tty_open(struct inode *inode, struct file *file)
@@ -215,7 +248,7 @@ static int tty_open(struct inode *inode, struct file *file)
     }
 
     // open the TTY device
-    ret = do_tty_open(tty);
+    ret = tty_open_internal(tty);
     if (ret < 0) {
         return ret;
     }

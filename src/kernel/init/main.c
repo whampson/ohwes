@@ -37,6 +37,7 @@
 #include <kernel/config.h>
 #include <kernel/console.h>
 #include <kernel/debug.h>
+#include <kernel/io.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
 #include <kernel/kernel.h>
@@ -120,7 +121,18 @@ __fastcall void start_kernel(struct boot_info *info)
     // get the console and tty subsystem working for real
     init_tty();
 
-    __dbgbrk();
+    kprint(
+        "Let's print something large to see whether console printing to "
+        "both the VGA display and COM port works properly! Some lorem "
+        "ipsum for ya...\n\n"
+        "Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque "
+        "faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi "
+        "pretium tellus duis convallis. Tempus leo eu aenean sed diam urna "
+        "tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. "
+        "Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut "
+        "hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent "
+        "per conubia nostra inceptos himenaeos.\n\n");
+    kprint("\e[1mDid it work? :p\e[0m\n\n");
 
     kprint("entering user mode...\n");
     usermode(__phys_to_virt(SETUP_STACK));
@@ -230,14 +242,14 @@ int main(void)
         // read serial TTY, nonblocking
         ret0 = read(fd, &c0, 1);
         if (ret0 < 0 && ret0 != -EAGAIN) {
-            perror("read(TTY): ");
+            perror("read(TTY)");
             break;
         }
 
         // read stdin, nonblocking
         ret1 = read(STDIN_FILENO, &c1, 1);
         if (ret1 <0 && ret1 != -EAGAIN) {
-            perror("read(stdin): ");
+            perror("read(stdin)");
             break;
         }
 

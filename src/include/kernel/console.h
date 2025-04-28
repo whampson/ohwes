@@ -62,8 +62,6 @@ struct console_save_state {
     uint64_t cursor;
 };
 
-extern bool g_early_console_initialized;
-
 struct console {
     int number;                         // console I/O line number
     int state;                          // current control state

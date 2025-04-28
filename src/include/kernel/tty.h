@@ -45,6 +45,9 @@
 #define SERIAL_MIN              (NR_CONSOLE+1)
 #define SERIAL_MAX              (SERIAL_MIN+NR_SERIAL)
 
+#define __mkserdev(num)         __mkdev(TTY_MAJOR, SERIAL_MIN+(num)-1)
+#define __mkcondev(num)         __mkdev(TTY_MAJOR, CONSOLE_MIN+(num)-1)
+
 // handy macros for working with termios flags
 #define _I_FLAG(tty,f)          ((tty)->termios.c_iflag & (f))
 #define _O_FLAG(tty,f)          ((tty)->termios.c_oflag & (f))
@@ -154,5 +157,9 @@ int tty_register_driver(struct tty_driver *driver);
 int tty_register_ldisc(int ldsic_num, struct tty_ldisc *ldisc);
 
 int get_tty(dev_t device, struct tty **tty);
+
+int tty_putchar(struct tty *tty, char c);
+
+void tty_flush(struct tty *tty);
 
 #endif // __TTY_H
