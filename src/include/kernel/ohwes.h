@@ -44,9 +44,6 @@
 // Useful Kernel Macros
 //
 
-// extern void timer_sleep(int millis);           // see timer.c
-// #define sleep(ms)                       timer_sleep(ms)     // spin for millis (blocking)
-
 #define spin(cond)                      while (cond) { }    // spin while cond == true, TODO: THIS NEEDS TO HAVE A TIMEOUT!!
 
 #define has_flag(x,f)                   (((x)&(f))==(f))

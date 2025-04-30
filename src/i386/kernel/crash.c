@@ -85,14 +85,12 @@ __data_segment struct crash_screen *g_crash = &_crash_screen;
 __data_segment static struct tss _double_fault_tss = { };
 __data_segment struct tss *g_double_fault_tss = &_double_fault_tss;
 
+__data_segment bool g_crashed = false;
 
 #if DEBUG
-int g_test_crash = 0;
+int g_test_crashkey = 0;
 int g_test_soft_double_fault = 0;
 #endif
-
-extern void pcspk_on(void);
-extern void pcspk_off(void);
 
 static void print_regs_and_stack(struct iregs *regs, bool print_stack);
 static void print_segsel(struct segsel *segsel);
@@ -321,8 +319,6 @@ __fastcall void _crash(struct iregs *regs)
 done:
     pic_mask = pic_getmask();
     pic_setmask(0xFFFF & ~(1 << IRQ_KEYBOARD));    // allow keyboard interrupts
-
-    pcspk_off();
 
     // disable character echo
     tcflag_t lflag = tty->termios.c_lflag;
@@ -620,12 +616,12 @@ static_assert(countof(exception_names) == NR_EXCEPTIONS, "Bad exception_names le
 void _crash_key_proc(int irq, struct iregs *regs)   // TODO: call this vis sysreq...
 {
     int crash_type;
-    if (!g_test_crash) {
+    if (!g_test_crashkey) {
         return;
     }
 
-    crash_type = g_test_crash;
-    g_test_crash = 0;
+    crash_type = g_test_crashkey;
+    g_test_crashkey = 0;
 
     // pick your poison
     switch (crash_type) {

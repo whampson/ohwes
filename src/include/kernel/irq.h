@@ -49,10 +49,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define IRQ_MASKALL         ((1<<NR_IRQS)-1)
+
 typedef void (*irq_handler)(int irq, struct iregs *regs);
 
-void irq_mask(int irq);
+void irq_enable(void);
+void irq_disable(void);
+
 void irq_unmask(int irq);
+void irq_mask(int irq);
 
 uint16_t irq_getmask(void);
 void irq_setmask(uint16_t mask);

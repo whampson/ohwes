@@ -45,7 +45,6 @@
 #define is_current(cons)        ((cons) == current_console())
 
 __data_segment struct console g_consoles[NR_CONSOLE] = { };
-__data_segment bool g_early_console_initialized = false;
 
 static int console_tty_open(struct tty *);
 static int console_tty_close(struct tty *);

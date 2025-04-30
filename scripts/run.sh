@@ -38,8 +38,8 @@ if [ "$1" = "qemu" ]; then
     QEMU_FLAGS+=" -monitor stdio"
     QEMU_FLAGS+=" -d cpu_reset"
     #QEMU_FLAGS+=" -display gtk,zoom-to-fit=true"
-    QEMU_FLAGS+=" -serial telnet:127.0.0.1:23456,server=on" # com1 (gdb)
-    QEMU_FLAGS+=" -serial telnet:127.0.0.1:50000,server=on" # com2 (output)
+    # QEMU_FLAGS+=" -serial telnet:127.0.0.1:23456,server=on" # com1 (gdb)
+    # QEMU_FLAGS+=" -serial telnet:127.0.0.1:50000,server=on" # com2 (output)
     # QEMU_FLAGS+=" -serial COM5"
 
     ##

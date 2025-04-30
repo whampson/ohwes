@@ -170,50 +170,50 @@ static void verify_gdt(void)
     struct x86_desc *gdt = get_gdt();
 
     struct x86_desc *kernel_cs = x86_get_desc(gdt, KERNEL_CS);
-    panic_assert(kernel_cs->seg.type == DESCTYPE_CODE_XR || kernel_cs->seg.type == DESCTYPE_CODE_XRA);
-    panic_assert(kernel_cs->seg.dpl == KERNEL_PL);
-    panic_assert(kernel_cs->seg.db == 1);
-    panic_assert(kernel_cs->seg.s == 1);
-    panic_assert(kernel_cs->seg.g == 1);
-    panic_assert(kernel_cs->seg.p == 1);
+    assert(kernel_cs->seg.type == DESCTYPE_CODE_XR || kernel_cs->seg.type == DESCTYPE_CODE_XRA);
+    assert(kernel_cs->seg.dpl == KERNEL_PL);
+    assert(kernel_cs->seg.db == 1);
+    assert(kernel_cs->seg.s == 1);
+    assert(kernel_cs->seg.g == 1);
+    assert(kernel_cs->seg.p == 1);
 
     struct x86_desc *kernel_ds = x86_get_desc(gdt, KERNEL_DS);
-    panic_assert(kernel_ds->seg.type == DESCTYPE_DATA_RW || kernel_ds->seg.type == DESCTYPE_DATA_RWA);
-    panic_assert(kernel_ds->seg.dpl == KERNEL_PL);
-    panic_assert(kernel_ds->seg.db == 1);
-    panic_assert(kernel_ds->seg.s == 1);
-    panic_assert(kernel_ds->seg.g == 1);
-    panic_assert(kernel_ds->seg.p == 1);
+    assert(kernel_ds->seg.type == DESCTYPE_DATA_RW || kernel_ds->seg.type == DESCTYPE_DATA_RWA);
+    assert(kernel_ds->seg.dpl == KERNEL_PL);
+    assert(kernel_ds->seg.db == 1);
+    assert(kernel_ds->seg.s == 1);
+    assert(kernel_ds->seg.g == 1);
+    assert(kernel_ds->seg.p == 1);
 
     struct x86_desc *user_cs = x86_get_desc(gdt, USER_CS);
-    panic_assert(user_cs->seg.type == DESCTYPE_CODE_XR);
-    panic_assert(user_cs->seg.dpl == USER_PL);
-    panic_assert(user_cs->seg.db == 1);
-    panic_assert(user_cs->seg.s == 1);
-    panic_assert(user_cs->seg.g == 1);
-    panic_assert(user_cs->seg.p == 1);
+    assert(user_cs->seg.type == DESCTYPE_CODE_XR);
+    assert(user_cs->seg.dpl == USER_PL);
+    assert(user_cs->seg.db == 1);
+    assert(user_cs->seg.s == 1);
+    assert(user_cs->seg.g == 1);
+    assert(user_cs->seg.p == 1);
 
     struct x86_desc *user_ds = x86_get_desc(gdt, USER_DS);
-    panic_assert(user_ds->seg.type == DESCTYPE_DATA_RW);
-    panic_assert(user_ds->seg.dpl == USER_PL);
-    panic_assert(user_ds->seg.db == 1);
-    panic_assert(user_ds->seg.s == 1);
-    panic_assert(user_ds->seg.g == 1);
-    panic_assert(user_ds->seg.p == 1);
+    assert(user_ds->seg.type == DESCTYPE_DATA_RW);
+    assert(user_ds->seg.dpl == USER_PL);
+    assert(user_ds->seg.db == 1);
+    assert(user_ds->seg.s == 1);
+    assert(user_ds->seg.g == 1);
+    assert(user_ds->seg.p == 1);
 
     struct x86_desc *ldt_desc = x86_get_desc(gdt, _LDT_SEGMENT);
-    panic_assert(ldt_desc->seg.type == DESCTYPE_LDT);
-    panic_assert(ldt_desc->seg.dpl == KERNEL_PL);
-    panic_assert(ldt_desc->seg.s == 0);
-    panic_assert(ldt_desc->seg.g == 0);
-    panic_assert(ldt_desc->seg.p == 1);
+    assert(ldt_desc->seg.type == DESCTYPE_LDT);
+    assert(ldt_desc->seg.dpl == KERNEL_PL);
+    assert(ldt_desc->seg.s == 0);
+    assert(ldt_desc->seg.g == 0);
+    assert(ldt_desc->seg.p == 1);
     // TODO: verify base/limit in kernel space
 
     struct x86_desc *tss_desc = x86_get_desc(gdt, _TSS0_SEGMENT);
-    panic_assert(tss_desc->tss.type == DESCTYPE_TSS32_BUSY);
-    panic_assert(tss_desc->tss.dpl == KERNEL_PL);
-    panic_assert(tss_desc->tss.g == 0);
-    panic_assert(tss_desc->tss.p == 1);
+    assert(tss_desc->tss.type == DESCTYPE_TSS32_BUSY);
+    assert(tss_desc->tss.dpl == KERNEL_PL);
+    assert(tss_desc->tss.g == 0);
+    assert(tss_desc->tss.p == 1);
     // TODO: verify base/limit in kernel space
 }
 

@@ -119,6 +119,11 @@ static int set_rate(unsigned char rate);
 static void get_time(struct rtc_time *time, bool alarm);
 static int set_time(struct rtc_time *time, bool alarm);
 
+#ifdef DEBUG
+extern void _crash_key_proc(int irq, struct iregs *regs);
+#endif
+
+
 struct rtc {
     uint64_t int_count;         // interrupt count
     uint64_t alarm_ticks;       // alarm ticks
@@ -198,6 +203,11 @@ void init_rtc(void)
     // register IRQ handler
     //
     irq_register(IRQ_RTC, rtc_interrupt);
+
+#if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+FN to crash kernel
+    irq_register(IRQ_RTC, _crash_key_proc);
+#endif
+
     irq_unmask(IRQ_RTC);
 
     //

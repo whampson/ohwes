@@ -24,8 +24,9 @@
 #include <i386/bitops.h>
 #include <i386/pic.h>
 #include <i386/interrupt.h>
+#include <i386/x86.h>
 #include <kernel/irq.h>
-#include <kernel/ohwes.h>
+#include <kernel/kernel.h>
 
 #define MAX_ISR             8   // max ISR handlers per IRQ line
 #define SPURIOUS_THRESH     3   // show warning screen every n spurious interrupts
@@ -43,41 +44,14 @@ struct irq_stats *g_irqstats = &_irqstats;
 
 static irq_handler _isr_map[NR_IRQS][MAX_ISR];
 
-__fastcall void handle_irq(struct iregs *regs)
+void irq_enable(void)
 {
-    int irq = ~regs->vec_num;
-    bool handled = false;
-    bool masked = IRQ_MASKED(irq);
+    __sti();
+}
 
-    // ack interrupt on hardware
-    pic_eoi(irq);
-
-    if ((irq == 7 && masked) || (irq == 15 && masked)) {
-        bool pic0 = irq == 7;
-        int count = (pic0)
-            ? (++g_irqstats->spur_pic0)
-            : (++g_irqstats->spur_pic1);
-
-        kprint_wrn("** spurious irq%d (%d) **", irq, count);
-        if (count > SPURIOUS_THRESH) {
-            panic("more than %d spurious IRQs! what's going on??", SPURIOUS_THRESH);
-        }
-        return;     // no EOI for spurious IRQs
-    }
-
-    if (!masked) {
-        for (int i = 0; i < MAX_ISR; i++) {
-            irq_handler isr = _isr_map[irq][i];
-            if (isr != NULL) {
-                isr(irq, regs);
-                handled = true;
-            }
-        }
-    }
-
-    if (!handled) {
-        panic("** unhandled irq%d **", irq);
-    }
+void irq_disable(void)
+{
+    __cli();
 }
 
 void irq_mask(int irq)
@@ -114,7 +88,7 @@ void irq_register(int irq, irq_handler func)
     }
 
     if (!registered) {
-        kprint("irq: maximum number of handlers already registered for IRQ %d\n", irq);    // kwarn?
+        panic("maximum number of handlers already registered for IRQ %d", irq);
     }
 }
 
@@ -132,6 +106,42 @@ void irq_unregister(int irq, irq_handler func)
     }
 
     if (!unregistered) {
-        kprint("irq: handler %08X not registered for IRQ %d\n", func, irq);
+        panic("handler at 0x%08tX not registered for IRQ %d", (intptr_t) func, irq);
+    }
+}
+__fastcall void handle_irq(struct iregs *regs)
+{
+    int irq = ~regs->vec_num;
+    bool handled = false;
+    bool masked = IRQ_MASKED(irq);
+
+    // ack interrupt on hardware
+    pic_eoi(irq);
+
+    if ((irq == 7 && masked) || (irq == 15 && masked)) {
+        bool pic0 = irq == 7;
+        int count = (pic0)
+            ? (++g_irqstats->spur_pic0)
+            : (++g_irqstats->spur_pic1);
+
+        alert("** spurious IRQ%d **\n", irq);
+        if (count > SPURIOUS_THRESH) {
+            alert("more than %d spurious IRQs! what's going on??\n", count - 1);
+        }
+        return;     // no EOI for spurious IRQs
+    }
+
+    if (!masked) {
+        for (int i = 0; i < MAX_ISR; i++) {
+            irq_handler isr = _isr_map[irq][i];
+            if (isr != NULL) {
+                isr(irq, regs);
+                handled = true;
+            }
+        }
+    }
+
+    if (!handled) {
+        alert("** unhandled irq%d! **\n", irq);
     }
 }

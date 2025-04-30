@@ -45,6 +45,9 @@
 #define SERIAL_DEBUG_BAUD   BAUD_9600
 #define ENABLE_CRASH_KEY    0   // test various crash scenarios w/ keystroke
 
+#define SERIAL_CONSOLE_NUM  2         // serial console TTY number
+#define SERIAL_OUTPUT_PORT  COM2_PORT // serial console I/O port number
+
 //
 // Counts of Things
 // ----------------------------------------------------------------------------

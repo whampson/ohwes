@@ -33,7 +33,7 @@
 static struct list_node tty_drivers;            // linked list of TTY drivers
 static struct tty_ldisc ldiscs[NR_LDISC] = { }; // TTY line disciplines
 static struct tty ttys[NR_TTY] = { };           // TTY structs
-__data_segment bool g_tty_initialized = false;
+extern bool g_tty_initialized;
 
 static struct termios default_termios = {
     .c_line = N_TTY,

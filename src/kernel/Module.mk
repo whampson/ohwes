@@ -4,9 +4,9 @@ TARGET_EXE := ohwes.sys
 SOURCES := \
     io.c \
     irq.c \
+    kprint.c \
     list.c \
     main.c \
-    print.c \
     ring.c \
     task.c \
 

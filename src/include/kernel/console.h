@@ -41,8 +41,6 @@
 // TODO: set via ioctl
 #define BELL_FREQ               750     // Hz
 #define BELL_TIME               50      // ms
-#define ALERT_FREQ              1675
-#define ALERT_TIME              50
 
 enum csi_color {
     CSI_BLACK,

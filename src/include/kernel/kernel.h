@@ -40,37 +40,33 @@
 #include <i386/interrupt.h>
 #include <kernel/task.h>
 
-extern void pcspk_beep(int hz, int ms);                     // see timer.c
-extern int _kprint(const char *fmt, ...);                   // print.c
-extern __fastcall void _crash(struct iregs *regs);   // crash.c
+#define ALERT_FREQ  1725
+#define ALERT_TIME   100
 
-#define kprint(...) _kprint(__VA_ARGS__)
-#define beep(hz,ms) pcspk_beep(hz, ms)   // beep at hz for millis (nonblocking)
+// TODO: use this on kprint and panic to sanitize format string
+//  __attribute__((format(printf, 1, 2)));
 
-#define kprint_wrn(...)     \
-    kprint("\n\e[1;33mwarn: "); kprint(__VA_ARGS__); kprint("\e[0m");
-#define kprint_err(...)     \
-    kprint("\n\e[31merror: ");  kprint(__VA_ARGS__); kprint("\e[0m");
-// #define kprint_dbg()
+// printf to console
+extern int kprint(const char *fmt, ...);
 
-#define panic(...) \
+// halt and catch fire
+extern __noreturn void panic(const char *fmt, ...);
+
+// beep at hz for millis (nonblocking);
+//  interrupts must be ON or it will beep forever!
+extern void beep(int hz, int ms);
+
+// print alert message and beep, then continue;
+//  interrupts must be ON or this will beep forever!
+#define alert(...) \
 do { \
-    kprint("\n\e[1;31mpanic: ");kprint(__VA_ARGS__); kprint("\e[0m"); \
-    for (;;); \
+    kprint("\e[1;33malert: " __VA_ARGS__); kprint("\e[0m"); \
+    beep(ALERT_FREQ, ALERT_TIME); \
 } while (0)
 
-#define panic_assert(x) \
-do { \
-    if (!(x)) { \
-        panic(_ASSERT_STRING_FORMAT(x)); \
-        for (;;); \
-    } \
-} while (0)
+// zero memory
+#define zeromem(p,n)    memset(p, 0, n)
 
-#define zeromem(p,n)                    memset(p, 0, n)
-
-// #define kernel_task() get_task(0)
 
 #endif  // !defined(__ASSEMBLER__) && defined(__KERNEL__)
-
 #endif  // __KERNEL_H

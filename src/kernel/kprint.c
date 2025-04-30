@@ -13,8 +13,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/print.c
- *      Created: July 31, 2024
+ *         File: kernel/kprint.c
+ *      Created: April 28, 2025
  *       Author: Wes Hampson
  * =============================================================================
  */
@@ -27,17 +27,47 @@
 #include <kernel/console.h>
 #include <kernel/kernel.h>
 #include <kernel/fs.h>
+#include <kernel/irq.h>
 #include <kernel/ohwes.h>
 #include <kernel/vga.h>
 #include <kernel/serial.h>
 
+// TODO: create 'console' struct (separate from the VGA "console") and include
+// the following members:
+//  char name;
+//  dev_t device;
+//  int flags;
+//  int setup();
+//  int read();
+//  int write();
+//  struct console *next;
+//
+// register console here and use list for kprint routing. console can be the
+// screen/keyboard (terminal) or a serial port.
+//
+// buffer early output to avoid haphazardly writing to partially-initialized
+// hardware
+
+// struct syscon {
+//     bool initialized;
+//     bool tty_open;
+//     bool tried_tty_open;
+//     struct tty *tty;
+
+//     int (*write)(char *buf);
+// }
+
+
 // TODO: this file is incredibly sloppy at the moment...
 
-#define KPRINT_BUFSIZ       4096
-#define SERIAL_OUTPUT_PORT  COM2_PORT
+#define MAX_PRINT_LEN       4096
+#define KPRINT_BUFSIZ       MAX_PRINT_LEN
+#define PANIC_BUFSIZ        128
 
-extern bool g_early_console_initialized;
-extern bool g_tty_initialized;
+__data_segment bool g_earlycons_initialized = false;
+__data_segment bool g_tty_initialized = false;
+__data_segment bool g_kb_initialized = false;
+__data_segment bool g_timer_initialized = false;
 
 __data_segment static bool cons_tty_open = false;
 __data_segment static bool seri_tty_open = false;
@@ -83,7 +113,7 @@ static void lazy_console_init(struct console *cons)
     cons->framebuf = (void *) fb_info.framebuf;
     cons->cursor.x = g_boot->cursor_col;
     cons->cursor.y = g_boot->cursor_row;
-    g_early_console_initialized = true;
+    g_earlycons_initialized = true;
 
     struct lcr lcr = {
         .word_length = WLS_8,       // 8 data bits
@@ -116,17 +146,18 @@ static void lazy_console_init(struct console *cons)
         (void) com_in(UART_LSR);
         (void) com_in(UART_MSR);
         (void) com_in(UART_IIR);
-        com_port_initialized  = true;
+
+        com_port_initialized = true;
     }
 }
 
-void print_to_syscon(const char *buf, size_t count)
+int console_print(const char *buf)
 {
     struct console *cons;
     const char *p;
 
     cons = get_console(SYSTEM_CONSOLE);
-    if (!cons->initialized && !g_early_console_initialized) {
+    if (!cons->initialized && !g_earlycons_initialized) {
         // we tried to print before the console was initialized! do the bare
         // minimum initialization here so we can print safely; full
         // initialization will occur when init_console() is called
@@ -140,14 +171,14 @@ void print_to_syscon(const char *buf, size_t count)
             tried_cons_tty_open = true;
         }
         if (!seri_tty_open && !tried_seri_tty_open) {
-            get_tty(__mkserdev(2), &seri_tty);
+            get_tty(__mkserdev(SERIAL_CONSOLE_NUM), &seri_tty);
             seri_tty_open = (tty_open_internal(seri_tty) == 0);
             tried_seri_tty_open = true;
         }
     }
 
     p = buf;
-    while (p < buf + count) {
+    while (*p != '\0' && (p - buf) < MAX_PRINT_LEN) {
         if (seri_tty_open) {
             tty_putchar(seri_tty, *p);
         }
@@ -178,24 +209,54 @@ void print_to_syscon(const char *buf, size_t count)
 
     g_boot->cursor_col = cons->cursor.x;
     g_boot->cursor_row = cons->cursor.y;
+
+    return (p - buf);
 }
 
-//
-// prints directly to the system console; bypasses TTY subsystem
-//
-int _kprint(const char *fmt, ...)
-{
-    size_t nchars;
-    char buf[KPRINT_BUFSIZ];
+// int tty_print(struct tty *tty, const char *buf)
+// {
 
+// }
+
+int kprint(const char *fmt, ...)
+{
+    char buf[KPRINT_BUFSIZ+1] = { };
     va_list args;
 
     va_start(args, fmt);
-    nchars = vsnprintf(buf, sizeof(buf), fmt, args);
+    vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    print_to_syscon(buf, nchars);
-    return nchars;
+    return console_print(buf);
+}
+
+void __noreturn panic(const char *fmt, ...)
+{
+    char buf[PANIC_BUFSIZ+1] = { };
+    va_list args;
+
+    irq_disable();
+
+    va_start(args, fmt);
+    vsnprintf(buf, PANIC_BUFSIZ, fmt, args);
+    va_end(args);
+
+    console_print("\n\e[1;31mpanic: ");
+    console_print(buf);
+    console_print("\e[0m");
+
+    if (g_kb_initialized || g_timer_initialized) {
+        irq_setmask(IRQ_MASKALL);
+        if (g_kb_initialized) {
+            irq_unmask(IRQ_KEYBOARD);   // TODO: disable echo
+        }
+        if (g_timer_initialized) {
+            irq_unmask(IRQ_TIMER);
+        }
+        irq_enable();
+    }
+
+    for (;;);
 }
 
 void print_boot_info(void)
@@ -211,16 +272,16 @@ void print_boot_info(void)
     bool mouse = g_boot->hwflags.has_ps2mouse;
     uint32_t ebda_size = 0xA0000 - g_boot->ebda_base;
 
-    kprint("bios: %d %s, %d serial %s, %d parallel %s\n",
+    kprint("bios-boot: %d %s, %d serial %s, %d parallel %s\n",
         nfloppies, PLURAL2(nfloppies, "floppy", "floppies"),
         nserial, PLURAL(nserial, "port"),
         nparallel, PLURAL(nparallel, "port"));
-    kprint("bios: A20 mode is %s\n",
+    kprint("bios-boot: A20 mode is %s\n",
         (g_boot->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
         (g_boot->a20_method == A20_PORT92) ? "A20_PORT92" :
         (g_boot->a20_method == A20_BIOS) ? "A20_BIOS" :
         "A20_NONE");
-    kprint("bios: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
-    kprint("bios: video mode is %02Xh\n", g_boot->vga_mode & 0x7F);
-    if (g_boot->ebda_base) kprint("bios: EBDA=%08X,%Xh\n", g_boot->ebda_base, ebda_size);
+    kprint("bios-boot: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
+    kprint("bios-boot: video mode is %02Xh\n", g_boot->vga_mode & 0x7F);
+    if (g_boot->ebda_base) kprint("bios-boot: EBDA=%08X,%Xh\n", g_boot->ebda_base, ebda_size);
 }

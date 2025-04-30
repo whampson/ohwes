@@ -55,7 +55,7 @@
 
 // warn print
 #define COM_WARN(...) \
-    beep(1000, 100); kprint_wrn(__VA_ARGS__)
+    alert(__VA_ARGS__)
 
 //
 // COM port identifiers

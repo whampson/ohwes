@@ -32,13 +32,12 @@
 #ifdef DEBUG
 
 #ifdef __KERNEL__
-extern int _kprint(const char *fmt, ...);
+extern void __noreturn panic(const char *fmt, ...);
 
 #define assert(x) \
 do { \
     if (!(x)) { \
-        _kprint(_ASSERT_STRING_FORMAT(x)); \
-        for (;;); \
+        panic(_ASSERT_STRING_FORMAT(x)); \
     } \
 } while (0)
 

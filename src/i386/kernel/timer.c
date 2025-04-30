@@ -53,22 +53,14 @@
 #define QUANTUM_MS                  20          // millis between timer interrupts
 
 struct pit_state {
-    uint64_t sys_timer;
     uint64_t ticks;
-    uint32_t pcspk_ticks;
-    uint32_t sleep_ticks;
-    int quantum_ms;
+    uint64_t pcspk_ticks;
+    uint64_t sleep_ticks;
 };
+extern bool g_timer_initialized;
 
-static struct pit_state _pit = {};
-struct pit_state * get_pit(void)
-{
-    return &_pit;
-}
-
-#ifdef DEBUG
-extern void _crash_key_proc(int irq, struct iregs *regs);
-#endif
+static struct pit_state _pit = { };
+struct pit_state *g_pit = &_pit;
 
 static uint16_t calculate_divisor(int freq);
 void timer_interrupt(int irq, struct iregs *regs);
@@ -78,13 +70,7 @@ void init_timer(void)
     uint8_t mode;
     uint16_t div;
     int freq;
-    struct pit_state *pit;
-
-    pit = get_pit();
-    zeromem(pit, sizeof(struct pit_state));
-    pit->quantum_ms = QUANTUM_MS;
-
-    freq = div_round(1000, pit->quantum_ms);
+    freq = div_round(1000, QUANTUM_MS);
     div = calculate_divisor(freq);
 
     mode = PIT_CFG_CHANNEL_0 | PIT_CFG_MODE_RATEGEN | PIT_CFG_ACCESS_LOHI;
@@ -95,12 +81,8 @@ void init_timer(void)
 
     irq_register(IRQ_TIMER, timer_interrupt);
 
-#if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+FN to crash kernel
-    irq_register(IRQ_TIMER, _crash_key_proc);
-#endif
-
     irq_unmask(IRQ_TIMER);
-    pic_unmask(IRQ_TIMER);
+    g_timer_initialized = true;
 }
 
 static uint16_t calculate_divisor(int freq)
@@ -116,54 +98,31 @@ static uint16_t calculate_divisor(int freq)
     return (uint16_t) div;
 }
 
-void timer_sleep(int millis)
-{
-    uint32_t flags;
-    volatile struct pit_state *pit;
-
-    cli_save(flags);
-
-    pit = get_pit();
-    if (pit->quantum_ms) {
-        pit->sleep_ticks = div_round(millis, pit->quantum_ms);
-        // kprint("timer: sleeping for %dms (%d ticks)\n", millis, pit.sleep_ticks);
-    }
-
-    __sti();
-    while (pit->sleep_ticks) { }
-    __cli();
-
-    restore_flags(flags);
-}
-
-void pcspk_on(void)
+static void pcspk_on(void)
 {
     uint8_t data;
-
     data = inb(0x61);
     data |= 0x03;
     outb(0x61, data);
 }
 
-void pcspk_off(void)
+static void pcspk_off(void)
 {
     uint8_t data;
-
     data = inb(0x61);
     data &= ~0x03;
     outb(0x61, data);
 }
 
-void pcspk_beep(int freq, int millis)
+void beep(int hz, int ms)
 {
     uint32_t flags;
     uint8_t mode;
     uint16_t div;
-    struct pit_state *pit;
 
     cli_save(flags);
 
-    div = calculate_divisor(freq);
+    div = calculate_divisor(hz);
     mode = PIT_CFG_CHANNEL_2 | PIT_CFG_MODE_SQUAREWAVE | PIT_CFG_ACCESS_LOHI;
     assert(mode == 0xB6);
 
@@ -171,31 +130,23 @@ void pcspk_beep(int freq, int millis)
     outb(PIT_PORT_CHAN2, div & 0xFF);
     outb(PIT_PORT_CHAN2, (div >> 8) & 0xFF);
 
-    pit = get_pit();
-    if (pit->quantum_ms) {
-        pit->pcspk_ticks = div_round(millis, pit->quantum_ms);
-        pcspk_on(); // turned off in interrupt handler
-    }
+    g_pit->pcspk_ticks = div_round(ms, QUANTUM_MS);
+    pcspk_on(); // turned off in interrupt handler
 
     restore_flags(flags);
 }
 
 void timer_interrupt(int irq, struct iregs *regs)
 {
-    volatile struct pit_state *pit;
     assert(irq == IRQ_TIMER);
 
-    pit = get_pit();
-    pit->ticks++;       // TODO: read tick count from PIT?
+    g_pit->ticks++;     // TODO: read tick count from PIT?
+                        // TODO: do timer ticks and speaker ticks trigger on the same pulse?
 
-    if (pit->pcspk_ticks) {
-        pit->pcspk_ticks--;
-        if (!pit->pcspk_ticks) {
+    if (g_pit->pcspk_ticks) {
+        g_pit->pcspk_ticks--;
+        if (!g_pit->pcspk_ticks) {
             pcspk_off();
         }
-    }
-
-    if (pit->sleep_ticks) {
-        pit->sleep_ticks--;
     }
 }

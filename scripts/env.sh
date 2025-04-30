@@ -28,15 +28,13 @@ CC_NATIVE=gcc
 CXX_NATIVE=g++
 
 # Platform-specific stuff
-if [[ "$OSTYPE" == "msys" ]]; then          # Windows/MINGW32
+if [[ "$(expr substr $(uname -s) 1 10)" == "MINGW32_NT" ]]; then # Windows/MINGW32
     QEMU_PATH="/c/Program Files/qemu"
     if [ -d "$QEMU_PATH" ]; then
         PATH=$PATH:$QEMU_PATH
     fi
 # else
 #     # TODO: darwin, linux
-#     echo "error: unsupported platform '$OSTYPE'!"
-#     return 1
 fi
 
 # Add i686-elf-tools to PATH

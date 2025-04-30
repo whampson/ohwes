@@ -42,12 +42,13 @@
 #include <kernel/debug.h>
 
 #define CHATTY_KB       1       // print extra debug messages
+#define PRINT_EVENTS    0       // print key events
+#define SELFTEST        0       // perform keyboard self-test
+#define PROBE_SCANSETS  0       // probe for supported scancode sets
 
 #define TYPEMATIC_BYTE  0x22    // repeat rate = 24cps, delay = 500ms
 #define RETRY_COUNT     3       // command resends before giving up
 #define WARN_INTERVAL   10      // warn every N times a stray packet shows up
-
-#define PRINT_EVENTS    0
 
 struct kb {
     // keyboard configuration
@@ -84,10 +85,12 @@ struct kb {
     int error_count;
 };
 
-struct kb g_kb = { };
+static struct kb _kb = { };
+struct kb *g_kb = &_kb;
+extern bool g_kb_initialized;
 
 #ifdef DEBUG
-extern int g_test_crash;  // crash.c
+extern int g_test_crashkey;  // crash.c
 #endif
 
 static const char keymap[256];
@@ -128,8 +131,7 @@ void init_kb(void)
 {
     init_ps2();
 
-    zeromem(&g_kb, sizeof(struct kb));
-    g_kb.numlk = 1;
+    g_kb->numlk = 1;
 
     // disable keyboard
     ps2_flush();
@@ -146,13 +148,17 @@ void init_kb(void)
     ps2_write(ps2cfg);
 
     // initialize keyboard
+#if SELFTEST
     kb_selftest();
+#endif
     kb_ident();
     kb_typematic(TYPEMATIC_BYTE);
 
+#if PROBE_SCANSETS
     // detect supported scancode sets (for fun...)
-    g_kb.sc3_support = kb_scset(3);
-    g_kb.sc2_support = kb_scset(2);
+    g_kb->sc3_support = kb_scset(3);
+    g_kb->sc2_support = kb_scset(2);
+#endif
 
     // we are using scancode set 1 for now...
     if (!kb_scset(1)) {
@@ -161,7 +167,7 @@ void init_kb(void)
         ps2cfg |= PS2_CFG_TRANSLATE;
         ps2_cmd(PS2_CMD_WRCFG);
         ps2_write(ps2cfg);
-        g_kb.scancode_set = 1;
+        g_kb->scancode_set = 1;
     }
 
     // re-enable keyboard
@@ -177,12 +183,14 @@ void init_kb(void)
 
 #if CHATTY_KB
     kprint("ps2kb: ident=%02Xh,%02Xh translation=%s\n",
-        g_kb.ident[0], g_kb.ident[1], ONOFF(ps2cfg & PS2_CFG_TRANSLATE));
+        g_kb->ident[0], g_kb->ident[1], ONOFF(ps2cfg & PS2_CFG_TRANSLATE));
     kprint("ps2kb: leds=%02Xh typematic=%02Xh\n",
-        g_kb.leds, g_kb.typematic_byte);
+        g_kb->leds, g_kb->typematic_byte);
     kprint("ps2kb: scancode_set=%d sc2_support=%s sc3_support=%s\n",
-        g_kb.scancode_set,  YN(g_kb.sc2_support), YN(g_kb.sc3_support));
+        g_kb->scancode_set,  YN(g_kb->sc2_support), YN(g_kb->sc3_support));
 #endif
+
+    g_kb_initialized = true;
 }
 
 static void kb_putq(char c)
@@ -203,17 +211,17 @@ static void update_leds(void)
 {
     // update toggle key LEDs
     int leds = 0;
-    if (g_kb.capslk) {
+    if (g_kb->capslk) {
         leds |= PS2KB_LED_CAPLK;
     }
-    if (g_kb.numlk) {
+    if (g_kb->numlk) {
         leds |= PS2KB_LED_NUMLK;
     }
-    if (g_kb.scrlk) {
+    if (g_kb->scrlk) {
         leds |= PS2KB_LED_SCRLK;
     }
 
-    if (g_kb.leds != leds) {
+    if (g_kb->leds != leds) {
         kb_setleds(leds);
     }
 }
@@ -262,17 +270,17 @@ static void kb_interrupt(int irq, struct iregs *regs)
     // check for some unexpected scancodes
     switch (sc) {
         case 0xFA:
-            g_kb.ack_count++;
-            if ((g_kb.ack_count % WARN_INTERVAL) == 0) {
-                kprint("ps2kb: seen %d stray acks\n", g_kb.ack_count);
+            g_kb->ack_count++;
+            if ((g_kb->ack_count % WARN_INTERVAL) == 0) {
+                alert("ps2kb: seen %d stray acks\n", g_kb->ack_count);
             }
             // TODO: panic after some amount...?
             goto done;
 
         case 0xFE:
-            g_kb.resend_count++;
-            if ((g_kb.resend_count % WARN_INTERVAL) == 0) {
-                kprint("ps2kb: seen %d stray resend requests\n", g_kb.resend_count);
+            g_kb->resend_count++;
+            if ((g_kb->resend_count % WARN_INTERVAL) == 0) {
+                alert("ps2kb: seen %d stray resend requests\n", g_kb->resend_count);
             }
             goto done;
 
@@ -280,26 +288,26 @@ static void kb_interrupt(int irq, struct iregs *regs)
         case 0xFD: __fallthrough;   // self-test failed
         case 0xFF: __fallthrough;   // error
         case 0x00:                  // error
-            g_kb.error_count++;
-            if (g_kb.error_count == 1) {
-                kprint("ps2kb: got error 0x%X\n", g_kb.error_count);
+            g_kb->error_count++;
+            if (g_kb->error_count == 1) {
+                alert("ps2kb: got error 0x%X\n", g_kb->error_count);
             }
-            if ((g_kb.error_count % WARN_INTERVAL) == 0) {
-                kprint("ps2kb: seen %d errors\n", g_kb.error_count);
+            if ((g_kb->error_count % WARN_INTERVAL) == 0) {
+                alert("ps2kb: seen %d errors\n", g_kb->error_count);
             }
             goto done;
     }
 
     // the following translation is for scancode set 1 only
-    assert(g_kb.scancode_set == 1);
+    assert(g_kb->scancode_set == 1);
 
     // did we get an escape code?
     if (sc == 0xE0) {
-        g_kb.e0 = true;
+        g_kb->e0 = true;
         goto done;
     }
     if (sc == 0xE1) {
-        g_kb.e1 = true;
+        g_kb->e1 = true;
         goto done;
     }
 
@@ -310,23 +318,23 @@ static void kb_interrupt(int irq, struct iregs *regs)
     }
 
     // translate the scancode to a virtual key
-    key = (g_kb.e0) ? scanmap_e0[sc] : scanmap[sc];
+    key = (g_kb->e0) ? scanmap_e0[sc] : scanmap[sc];
 
     // end E0 escape sequence (should only be one byte)
-    if (g_kb.e0) {
-        assert(!g_kb.e1);
+    if (g_kb->e0) {
+        assert(!g_kb->e1);
         sc |= 0xE000;
-        g_kb.e0 = false;
+        g_kb->e0 = false;
     }
 
     // special handling for the PAUSE key, because PAUSE and NUMLK share
     // a final scancode byte for some reason; also this is the only E1 key
-    if (g_kb.e1) {
-        assert(!g_kb.e0);
+    if (g_kb->e1) {
+        assert(!g_kb->e0);
         if (key == KEY_NUMLK) {
             key = KEY_PAUSE;
             sc |= 0xE100;
-            g_kb.e1 = false;
+            g_kb->e1 = false;
         }
     }
 
@@ -335,7 +343,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
     // ----------------------------------------------------------------
 
     // numlock handling
-    if (!g_kb.numlk) {
+    if (!g_kb->numlk) {
         switch (key) {
             case KEY_KP0: key = KEY_INSERT; break;
             case KEY_KP1: key = KEY_END; break;
@@ -352,13 +360,13 @@ static void kb_interrupt(int irq, struct iregs *regs)
 
     // update toggle keys and LEDs
     if (!release && key == KEY_CAPSLK) {
-        g_kb.capslk ^= true;
+        g_kb->capslk ^= true;
     }
     if (!release && key == KEY_NUMLK) {
-        g_kb.numlk ^= true;
+        g_kb->numlk ^= true;
     }
     if (!release && key == KEY_SCRLK) {
-        g_kb.scrlk ^= true;
+        g_kb->scrlk ^= true;
     }
     update_leds();
 
@@ -369,10 +377,10 @@ static void kb_interrupt(int irq, struct iregs *regs)
         if ((key) == (l)) { _mask |= 1 << 0; }  \
         if ((key) == (r)) { _mask |= 1 << 1; }  \
         if (_mask && !release) {                \
-            g_kb.mod |= _mask;                  \
+            g_kb->mod |= _mask;                  \
         }                                       \
         else if (_mask && release) {            \
-            g_kb.mod &= ~_mask;                 \
+            g_kb->mod &= ~_mask;                 \
         }                                       \
     })
     handle_modifier(key, ctrl, KEY_LCTRL, KEY_RCTRL);
@@ -382,9 +390,9 @@ static void kb_interrupt(int irq, struct iregs *regs)
     handle_modifier(key, sysrq, KEY_SYSRQ, 0);
 
     // submit alt code upon release of ALT key
-    if (is_alt(key) && release && g_kb.altchar) {
-        kb_putq(g_kb.altchar);
-        g_kb.altchar = 0;
+    if (is_alt(key) && release && g_kb->altchar) {
+        kb_putq(g_kb->altchar);
+        g_kb->altchar = 0;
         goto record_key_event;
     }
 
@@ -398,15 +406,15 @@ static void kb_interrupt(int irq, struct iregs *regs)
     //
 
     // CTRL+ALT+DEL: system reboot
-    if (g_kb.ctrl && g_kb.alt && (key == KEY_DELETE || key == KEY_KPDOT)) {
+    if (g_kb->ctrl && g_kb->alt && (key == KEY_DELETE || key == KEY_KPDOT)) {
         hard_reset();
         panic("unable to shut down -- please hard-reset your computer");
     }
 
 #ifdef DEBUG
-    if (g_kb.ctrl && g_kb.alt) {
+    if (g_kb->ctrl && g_kb->alt) {
         if (is_fnkey(key)) {
-            g_test_crash = key - KEY_F1 + 1;
+            g_test_crashkey = key - KEY_F1 + 1;
         }
     }
 #endif
@@ -415,7 +423,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
 
 
     // ALT+<FN>: switch terminal
-    if (g_kb.alt && !g_kb.ctrl && is_fnkey(key)) {
+    if (g_kb->alt && !g_kb->ctrl && is_fnkey(key)) {
         int cons = key - KEY_F1 + 1;
         assert(cons >= 1 && cons <= 12);
         switch_console(cons);
@@ -423,9 +431,9 @@ static void kb_interrupt(int irq, struct iregs *regs)
     }
 
     // ALT+<NUMPAD>: handle character code entry (if NumLk on)
-    if (g_kb.alt && is_kpnum(key)) {
-        g_kb.altchar *= 10;
-        g_kb.altchar += (key - KEY_KP0);
+    if (g_kb->alt && is_kpnum(key)) {
+        g_kb->altchar *= 10;
+        g_kb->altchar += (key - KEY_KP0);
         goto record_key_event;
     }
 
@@ -434,7 +442,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
     // ----------------------------------------------------------------
 
     // map key to character
-    c = (g_kb.shift && key >= 0x20 && key <= 0x60)
+    c = (g_kb->shift && key >= 0x20 && key <= 0x60)
         ? keymap_shift[key & 0x7F]
         : keymap[key & 0xFF];
     if (c == '\0') {
@@ -442,7 +450,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
     }
 
     // handle non-character keys
-    if (c == 0xE0 || (key == KEY_KP5 && !g_kb.numlk)) {
+    if (c == 0xE0 || (key == KEY_KP5 && !g_kb->numlk)) {
         c = '\0';
         switch (key) {
             // xterm sequences
@@ -480,7 +488,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
     }
 
     // handle control characters
-    if (g_kb.ctrl) {
+    if (g_kb->ctrl) {
         switch (key) {
             case KEY_2: c = '@'; break;
             case KEY_6: c = '^'; break;
@@ -500,13 +508,13 @@ static void kb_interrupt(int irq, struct iregs *regs)
     }
 
     // sysrq handling
-    if (g_kb.sysrq) {
+    if (g_kb->sysrq) {
         sysrq(c);
         goto done;
     }
 
     // handle caps lock
-    if (g_kb.capslk && !g_kb.alt) {
+    if (g_kb->capslk && !g_kb->alt) {
         if (isupper(c)) {
             c = tolower(c);
         }
@@ -516,7 +524,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
     }
 
     // put the character in the queue
-    if (g_kb.alt) {
+    if (g_kb->alt) {
         kb_putq('\e');
     }
     kb_putq(c);
@@ -630,7 +638,7 @@ static bool kb_ident(void)
     RIF_FALSE(kb_sendcmd(PS2KB_CMD_IDENT));
 
     for (int i = 0; i < 2; i++) {
-        g_kb.ident[i] = kb_rdport();
+        g_kb->ident[i] = kb_rdport();
     }
 
     return true;
@@ -640,8 +648,8 @@ static bool kb_setleds(uint8_t leds)
 {
     RIF_FALSE(kb_sendcmd(PS2KB_CMD_SETLED));
 
-    g_kb.leds = leds;
-    kb_wrport(g_kb.leds);
+    g_kb->leds = leds;
+    kb_wrport(g_kb->leds);
     kb_rdport();                    // ack
 
     return true;
@@ -669,7 +677,7 @@ static bool kb_scset(uint8_t set)
         kb_sendcmd(PS2KB_CMD_SCANCODE);
         kb_wrport(1);
         kb_rdport();    // ack
-        g_kb.scancode_set = 1;
+        g_kb->scancode_set = 1;
         return (set == 1);
     }
 
@@ -685,14 +693,14 @@ static bool kb_scset(uint8_t set)
     data = kb_rdport();
     if (data == set) {
         supported = true;
-        g_kb.scancode_set = set;
+        g_kb->scancode_set = set;
     }
     else {
         // unsupported, fallback to the old set...
         kb_sendcmd(PS2KB_CMD_SCANCODE);
         kb_wrport(oldset);
         kb_rdport();    // ack
-        g_kb.scancode_set = oldset;
+        g_kb->scancode_set = oldset;
     }
 
     return supported;
@@ -707,8 +715,8 @@ static bool kb_typematic(uint8_t typ)
     kb_wrport(typ);
     kb_rdport();                    // ack
 
-    g_kb.typematic = true;
-    g_kb.typematic_byte = typ;
+    g_kb->typematic = true;
+    g_kb->typematic_byte = typ;
 
     return true;
 }
@@ -800,7 +808,7 @@ uint8_t kb_rdport(void)
 #if CHATTY_KB
             kprint("ps2kb: kb_rdport: inb 0x%X\n", data);
 #endif
-            g_kb.error_count++;
+            g_kb->error_count++;
              __fallthrough;
         case 0x00:
             // going to consider 0 ok here...
