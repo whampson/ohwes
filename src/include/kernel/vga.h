@@ -269,6 +269,36 @@ bool vga_get_fb_info(struct vga_fb_info *fb_info);
 bool vga_set_fb(enum vga_fb_select fb_select);
 
 /**
+ * Enable character blink effect if the 'blink' bit is set in the character
+ * attribute.
+ *
+ * @param enable enable or disable blink effect
+ */
+void vga_blink_enable(bool enable);
+
+/**
+ * Enable cursor.
+ *
+ * @param enable enable or disable blinking cursor
+ */
+void vga_cursor_enable(bool enable);
+
+/**
+ * Set linear cursor position.
+ *
+ * @param pos linear cursor position
+ */
+void vga_set_cursor_pos(uint16_t pos);
+
+/**
+ * Set cursor shape.
+ *
+ * @param start start scan line
+ * @param end end scan line
+ */
+void vga_set_cursor_shape(uint8_t start, uint8_t end);
+
+/**
  * Reads a CRT Controller register.
  *
  * @param reg one of VGA_CRTC_REG_*

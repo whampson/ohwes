@@ -124,6 +124,65 @@ bool vga_set_fb(enum vga_fb_select fb_select)
     return ((grfx_misc & 0x0C) >> 2) == fb_select;
 }
 
+void vga_blink_enable(bool enable)
+{
+    uint32_t flags;
+    uint8_t modectl;
+
+    cli_save(flags);
+    modectl = vga_attr_read(VGA_ATTR_REG_MODE);
+    if (enable) {
+        modectl |= VGA_ATTR_FLD_MODE_BLINK;
+    }
+    else {
+        modectl &= ~VGA_ATTR_FLD_MODE_BLINK;
+    }
+    vga_attr_write(VGA_ATTR_REG_MODE, modectl);
+    restore_flags(flags);
+}
+
+void vga_cursor_enable(bool enable)
+{
+    uint32_t flags;
+    uint8_t css;
+
+    cli_save(flags);
+    css = vga_crtc_read(VGA_CRTC_REG_CSS);
+    if (!enable) {
+        css |= VGA_CRTC_FLD_CSS_CD_MASK;
+    }
+    else {
+        css &= ~VGA_CRTC_FLD_CSS_CD_MASK;
+    }
+    vga_crtc_write(VGA_CRTC_REG_CSS, css);
+    restore_flags(flags);
+}
+
+void vga_set_cursor_pos(uint16_t pos)
+{
+    uint32_t flags;
+
+    cli_save(flags);
+    vga_crtc_write(VGA_CRTC_REG_CL_HI, pos >> 8);
+    vga_crtc_write(VGA_CRTC_REG_CL_LO, pos & 0xFF);
+    restore_flags(flags);
+}
+
+void vga_set_cursor_shape(uint8_t start, uint8_t end)
+{
+    uint32_t flags;
+    uint8_t css, cse;
+
+    cli_save(flags);
+    css = vga_crtc_read(VGA_CRTC_REG_CSS) & ~VGA_CRTC_FLD_CSS_CSS_MASK;
+    cse = vga_crtc_read(VGA_CRTC_REG_CSE) & ~VGA_CRTC_FLD_CSE_CSE_MASK;
+    css |= (start & VGA_CRTC_FLD_CSS_CSS_MASK);
+    cse |= (end   & VGA_CRTC_FLD_CSE_CSE_MASK);
+    vga_crtc_write(VGA_CRTC_REG_CSS, css);
+    vga_crtc_write(VGA_CRTC_REG_CSE, cse);
+    restore_flags(flags);
+}
+
 uint8_t vga_crtc_read(uint8_t reg)
 {
     int flags;

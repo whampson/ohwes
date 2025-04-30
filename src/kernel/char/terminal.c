@@ -185,11 +185,12 @@ static void cursor_down(struct terminal *term, int n);   // ESC [<n>B
 static void cursor_right(struct terminal *term, int n);  // ESC [<n>C
 static void cursor_left(struct terminal *term, int n);   // ESC [<n>D
 
-// VGA programming
-static void vga_blink_enable(const struct terminal *term);  // ESC 3 / ESC 4
-static void vga_cursor_enable(const struct terminal *term); // ESC 5 / ESC 6
-static void vga_set_cursor_pos(const struct terminal *term);// ESC [ <n>;<m>H
-static void vga_set_cursor_shape(const struct terminal *term);
+// VGA features
+static void blink_enable(const struct terminal *term);  // ESC 3 / ESC 4
+static void cursor_enable(const struct terminal *term); // ESC 5 / ESC 6
+static void set_cursor_pos(const struct terminal *term);// ESC [ <n>;<m>H
+static void set_cursor_shape(const struct terminal *term);
+static void update_vga_state(const struct terminal *term);
 
 // frame buffer
 static void set_fb_char(struct terminal *term, uint16_t pos, char c);
@@ -365,15 +366,10 @@ int switch_terminal(int num)
 #endif
 
     flush_tlb();
-
-    // update VGA state
-    g_currterm = curr->number;
-    vga_blink_enable(curr);
-    vga_cursor_enable(curr);
-    vga_set_cursor_shape(curr);
-    vga_set_cursor_pos(curr);
+    update_vga_state(curr);
 
     // a terminal is fully initialized once we've switch to it at least once :-)
+    g_currterm = curr->number;
     curr->initialized = true;
 
     restore_flags(flags);
@@ -438,10 +434,7 @@ void terminal_restore(struct terminal *term, struct terminal_save_state *save)
     term->cursor._value = save->cursor;
 
     if (is_current(term)) {
-        vga_blink_enable(term);
-        vga_cursor_enable(term);
-        vga_set_cursor_shape(term);
-        vga_set_cursor_pos(term);
+        update_vga_state(term);
     }
 }
 
@@ -584,7 +577,7 @@ write_vga:
         set_fb_attr(term, char_pos, term->attr);
     }
     if (update_cursor_pos && is_current(term)) {
-        vga_set_cursor_pos(term);
+        set_cursor_pos(term);
     }
 
     // TODO: flush buffered chars?
@@ -634,25 +627,25 @@ static void esc(struct terminal *term, char c)
         case '3':       // ESC 3    disable blink
             term->blink_on = false;
             if (is_current(term)) {
-                vga_blink_enable(term);
+                blink_enable(term);
             }
             break;
         case '4':       // ESC 4    enable blink
             term->blink_on = true;
             if (is_current(term)) {
-                vga_blink_enable(term);
+                blink_enable(term);
             }
             break;
         case '5':       // ESC 5    hide cursor
             term->cursor.hidden = true;
             if (is_current(term)) {
-                vga_cursor_enable(term);
+                cursor_enable(term);
             }
             break;
         case '6':       // ESC 6    show cursor
             term->cursor.hidden = false;
             if (is_current(term)) {
-                vga_cursor_enable(term);
+                cursor_enable(term);
             }
             break;
         case '7':       // ESC 7    save terminal
@@ -891,10 +884,7 @@ static void reset(struct terminal *term)
     terminal_defaults(term);
     erase(term, 2);
     if (is_current(term)) {
-        vga_blink_enable(term);
-        vga_cursor_enable(term);
-        vga_set_cursor_shape(term);
-        vga_set_cursor_pos(term);
+        update_vga_state(term);
     }
 }
 
@@ -917,9 +907,7 @@ static void cursor_restore(struct terminal *term)
 {
     term->cursor._value = term->saved_state.cursor;
     if (is_current(term)) {
-        vga_cursor_enable(term);
-        vga_set_cursor_shape(term);
-        vga_set_cursor_pos(term);
+        update_vga_state(term);
     }
 }
 
@@ -1141,73 +1129,37 @@ static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr a
     }
 }
 
-// ----------------------------------------------------------------------------
-
-static void vga_blink_enable(const struct terminal *term)
+static void blink_enable(const struct terminal *term)
 {
-    uint32_t flags;
-    uint8_t modectl;
-
-    cli_save(flags);
-    modectl = vga_attr_read(VGA_ATTR_REG_MODE);
-
-    if (term->blink_on) {
-        modectl |= VGA_ATTR_FLD_MODE_BLINK;
-    }
-    else {
-        modectl &= ~VGA_ATTR_FLD_MODE_BLINK;
-    }
-
-    vga_attr_write(VGA_ATTR_REG_MODE, modectl);
-    restore_flags(flags);
+    vga_blink_enable(term->blink_on);
 }
 
-static void vga_cursor_enable(const struct terminal *term)
+static void cursor_enable(const struct terminal *term)
 {
-    uint32_t flags;
-    uint8_t css;
-    cli_save(flags);
-    css = vga_crtc_read(VGA_CRTC_REG_CSS);
-
-    if (term->cursor.hidden) {
-        css |= VGA_CRTC_FLD_CSS_CD_MASK;
-    }
-    else {
-        css &= ~VGA_CRTC_FLD_CSS_CD_MASK;
-    }
-
-    vga_crtc_write(VGA_CRTC_REG_CSS, css);
-    restore_flags(flags);
+    vga_cursor_enable(!term->cursor.hidden);
 }
 
-static void vga_set_cursor_pos(const struct terminal *term)
+static void set_cursor_pos(const struct terminal *term)
 {
-    uint32_t flags;
     uint16_t pos;
 
     pos = xy2pos(term->cols, term->cursor.x, term->cursor.y);
-
-    cli_save(flags);
-    vga_crtc_write(VGA_CRTC_REG_CL_HI, pos >> 8);
-    vga_crtc_write(VGA_CRTC_REG_CL_LO, pos & 0xFF);
-    restore_flags(flags);
+    vga_set_cursor_pos(pos);
 }
 
-static void vga_set_cursor_shape(const struct terminal *term)
+static void set_cursor_shape(const struct terminal *term)
 {
-    uint32_t flags;
     uint8_t start, end;
-    uint8_t css, cse;
 
-    start = ((uint16_t) term->cursor.shape) & 0xFF;
-    end = ((uint16_t) term->cursor.shape) >> 8;
+    start = ((uint8_t) term->cursor.shape) & 0xFF;
+    end = ((uint8_t) term->cursor.shape) >> 8;
+    vga_set_cursor_shape(start, end);
+}
 
-    cli_save(flags);
-    css = vga_crtc_read(VGA_CRTC_REG_CSS) & ~VGA_CRTC_FLD_CSS_CSS_MASK;
-    cse = vga_crtc_read(VGA_CRTC_REG_CSE) & ~VGA_CRTC_FLD_CSE_CSE_MASK;
-    css |= (start & VGA_CRTC_FLD_CSS_CSS_MASK);
-    cse |= (end   & VGA_CRTC_FLD_CSE_CSE_MASK);
-    vga_crtc_write(VGA_CRTC_REG_CSS, css);
-    vga_crtc_write(VGA_CRTC_REG_CSE, cse);
-    restore_flags(flags);
+static void update_vga_state(const struct terminal *term)
+{
+    blink_enable(term);
+    cursor_enable(term);
+    set_cursor_shape(term);
+    set_cursor_pos(term);
 }
