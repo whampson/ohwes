@@ -53,8 +53,9 @@
 //     bool tty_open;
 //     bool tried_tty_open;
 //     struct tty *tty;
-
+//     int (*init)(void);
 //     int (*write)(char *buf);
+//     int (*waitkey)(void);
 // }
 
 
@@ -98,16 +99,15 @@ static void com_putc(char c)
 
 extern int tty_open_internal(struct tty *tty);
 
-static void lazy_console_init(struct console *cons)
+static void lazy_terminal_init(struct terminal *cons)
 {
     struct vga_fb_info fb_info;
     vga_get_fb_info(&fb_info);
     g_vga->rows = g_boot->vga_rows;
     g_vga->cols = g_boot->vga_cols;
-    g_vga->active_console = SYSTEM_CONSOLE;
 
-    console_defaults(cons);
-    cons->number = SYSTEM_CONSOLE;
+    terminal_defaults(cons);
+    cons->number = SYSTEM_TERMINAL;
     cons->cols = g_boot->vga_cols;
     cons->rows = g_boot->vga_rows;
     cons->framebuf = (void *) fb_info.framebuf;
@@ -153,20 +153,20 @@ static void lazy_console_init(struct console *cons)
 
 int console_print(const char *buf)
 {
-    struct console *cons;
+    struct terminal *cons;
     const char *p;
 
-    cons = get_console(SYSTEM_CONSOLE);
+    cons = get_terminal(SYSTEM_TERMINAL);
     if (!cons->initialized && !g_earlycons_initialized) {
-        // we tried to print before the console was initialized! do the bare
+        // we tried to print before the terminal was initialized! do the bare
         // minimum initialization here so we can print safely; full
-        // initialization will occur when init_console() is called
-        lazy_console_init(cons);
+        // initialization will occur when init_terminal() is called
+        lazy_terminal_init(cons);
     }
 
     if (g_tty_initialized) {
         if (!cons_tty_open && !tried_cons_tty_open) {
-            get_tty(__mkcondev(SYSTEM_CONSOLE), &cons_tty);
+            get_tty(__mkcondev(SYSTEM_TERMINAL), &cons_tty);
             cons_tty_open = (tty_open_internal(cons_tty) == 0);
             tried_cons_tty_open = true;
         }
@@ -193,9 +193,9 @@ int console_print(const char *buf)
         }
         else {
             if (*p == '\n') {
-                console_putchar(cons, '\r');
+                terminal_putchar(cons, '\r');
             }
-            console_putchar(cons, *p);
+            terminal_putchar(cons, *p);
         }
         p++;
     }

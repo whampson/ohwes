@@ -28,7 +28,7 @@
 #include <kernel/terminal.h>
 #include <kernel/vga.h>
 
-__data_segment static struct vga _vga = { .active_console = SYSTEM_CONSOLE };
+__data_segment static struct vga _vga = { };
 __data_segment struct vga *g_vga = &_vga;
 
 void init_vga(void)
@@ -39,7 +39,6 @@ void init_vga(void)
     // grab text mode dimensions from boot info
     g_vga->rows = g_boot->vga_rows;
     g_vga->cols = g_boot->vga_cols;
-    g_vga->active_console = SYSTEM_CONSOLE;
 
     // read the current frame buffer parameters
     if (!vga_get_fb_info(&fb_info_old)) {
@@ -58,8 +57,8 @@ void init_vga(void)
     fb_new = (void *) __phys_to_virt(fb_info_new.framebuf);
     memmove(fb_new, fb_old, FB_SIZE_PAGES);
 
-    // // update system console frame buffer
-    get_console(SYSTEM_CONSOLE)->framebuf = fb_new;
+    // update system terminal frame buffer
+    get_terminal(SYSTEM_TERMINAL)->framebuf = fb_new;
 
     // read cursor attributes leftover from BIOS
     uint8_t cl_lo, cl_hi;
@@ -73,7 +72,7 @@ void init_vga(void)
     cl_hi = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
     g_vga->orig_cursor_shape = (cl_hi << 8) | cl_lo;
 
-    kprint("frame buffer is VGA, %d pages at %08X\n",
+    kprint("vga: frame buffer is %d pages at %08X\n",
         g_vga->fb_info.size_pages, g_vga->fb_info.framebuf);
 }
 

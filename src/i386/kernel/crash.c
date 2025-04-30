@@ -19,10 +19,6 @@
  * =============================================================================
  */
 
-//
-// NOTE: assumes console and keyboard are in working order!
-//
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -188,8 +184,8 @@ __fastcall void _crash(struct iregs *regs)
     _regs_copy.esp = esp;
     regs = &_regs_copy;
 
-    // current console info
-    struct console *cons = current_console();
+    // current terminal info
+    struct terminal *cons = get_terminal(0);
     struct tty *tty = cons->tty;
 
     // reentrancy check
@@ -212,8 +208,8 @@ __fastcall void _crash(struct iregs *regs)
 #endif
 
     // for drawing later
-    const int NumConsoleRows = (g_vga->rows) ? g_vga->rows : DEFAULT_VGA_ROWS;
-    const int OffsetFromBottom = (NumConsoleRows-CRASH_DUMP_OFFSET)-STACK_ROWS;
+    const int NumTerminalRows = (g_vga->rows) ? g_vga->rows : DEFAULT_VGA_ROWS;
+    const int OffsetFromBottom = (NumTerminalRows-CRASH_DUMP_OFFSET)-STACK_ROWS;
 
     //
     // -------------------------------------------------------------------------
@@ -230,7 +226,7 @@ __fastcall void _crash(struct iregs *regs)
 
     if (!(irq || nmi)) {
         set_background(CRASH_COLOR);
-        cprint("\e[%dH", NumConsoleRows / CRASH_HEADER_SCALE);
+        cprint("\e[%dH", NumTerminalRows / CRASH_HEADER_SCALE);
         print_banner(" " OS_NAME " ");
         cprint("\r\n\r\n");
         cprint("\r\n    A fatal exception " BOLD("%02X") " has occurred at " BOLD("%04X:%08X") ". Press Ctrl+Alt+Del",
@@ -274,18 +270,18 @@ __fastcall void _crash(struct iregs *regs)
     // -------------------------------------------------------------------------
     //
 
-    // backup frame buffer and console state
+    // backup frame buffer and terminal state
     char old_fb[FB_SIZE];
-    struct console_save_state saved_console;
-    memcpy(old_fb, get_console_fb(g_vga->active_console), FB_SIZE);
-    console_save(cons, &saved_console);
+    struct terminal_save_state saved_terminal;
+    memcpy(old_fb, get_terminal_fb(current_terminal()), FB_SIZE);
+    terminal_save(cons, &saved_terminal);
 
     assert(irq || nmi);
 
     if (irq) {
         die = false;
         set_background(IRQ_COLOR);
-        cprint("\e[%dH", NumConsoleRows / 3);
+        cprint("\e[%dH", NumTerminalRows / 3);
         print_banner(" Unhandled Interrupt ");
         cprint("\r\n\r\n\e[1m");
         cprint("\r\n    An unhandled interrupt was raised by device " UNDERLINE("IRQ %d") ". This could mean the", irq_num);
@@ -299,7 +295,7 @@ __fastcall void _crash(struct iregs *regs)
     else if (nmi) {
         die = false;
         set_background(NMI_COLOR);
-        cprint("\e[%dH", NumConsoleRows / 3);
+        cprint("\e[%dH", NumTerminalRows / 3);
         print_banner(" Non-Maskable Interrupt ");
         cprint("\r\n\r\n\e[1m");
         cprint("\r\n    A non-maskable interrupt was raised. If this persists, press Ctrl+Alt+Del");
@@ -348,10 +344,10 @@ done:
         tty->file->f_oflag = oflag;
     }
 
-    // restore console state
+    // restore terminal state
     tty->termios.c_lflag = lflag;
-    console_restore(cons, &saved_console);
-    memcpy(get_console_fb(g_vga->active_console), old_fb, FB_SIZE);
+    terminal_restore(cons, &saved_terminal);
+    memcpy(get_terminal_fb(current_terminal()), old_fb, FB_SIZE);
     pic_setmask(pic_mask);
 
     g_crash->reentrant = false;
@@ -391,8 +387,8 @@ __noreturn void _double_fault(void)
 
 static void print_regs_and_stack(struct iregs *regs, bool print_stack)
 {
-    const int NumConsoleCols = (g_vga->cols) ? g_vga->cols : DEFAULT_VGA_COLUMNS;
-    const int StackStartCol = NumConsoleCols-((8+1)*STACK_COLUMNS);
+    const int NumTerminalCols = (g_vga->cols) ? g_vga->cols : DEFAULT_VGA_COLUMNS;
+    const int StackStartCol = NumTerminalCols-((8+1)*STACK_COLUMNS);
 
     uint32_t *stack_ptr = (uint32_t *) regs->esp;
     struct eflags *flags = (struct eflags *) &regs->eflags;
@@ -501,7 +497,7 @@ static void cprint(const char *fmt, ...)
     nchars = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    console_write(current_console(), buf, nchars);
+    terminal_write(get_terminal(0), buf, nchars);
 }
 
 static void set_background(int bg)

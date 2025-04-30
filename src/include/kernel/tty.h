@@ -34,19 +34,19 @@
 #include <kernel/list.h>
 #include <kernel/termios.h>
 
-#define NR_TTY                  (1+NR_CONSOLE+NR_SERIAL)    // +1 for tty0
+#define NR_TTY                  (1+NR_TERMINAL+NR_SERIAL)    // +1 for tty0
 
 #define TTY_BUFFER_SIZE         1024
 #define TTY_THROTTLE_THRESH     128
 
 // TTY device minor numbers
-#define CONSOLE_MIN             1
-#define CONSOLE_MAX             NR_CONSOLE
-#define SERIAL_MIN              (NR_CONSOLE+1)
-#define SERIAL_MAX              (SERIAL_MIN+NR_SERIAL)
+#define TTY_MIN                 1
+#define TTY_MAX                 NR_TERMINAL
+#define TTYS_MIN                (TTY_MAX+1)
+#define TTYS_MAX                (TTYS_MIN+NR_SERIAL)
 
-#define __mkserdev(num)         __mkdev(TTY_MAJOR, SERIAL_MIN+(num)-1)
-#define __mkcondev(num)         __mkdev(TTY_MAJOR, CONSOLE_MIN+(num)-1)
+#define __mkserdev(num)         __mkdev(TTY_MAJOR, TTYS_MIN+(num)-1)
+#define __mkcondev(num)         __mkdev(TTY_MAJOR, TTY_MIN+(num)-1)
 
 // handy macros for working with termios flags
 #define _I_FLAG(tty,f)          ((tty)->termios.c_iflag & (f))

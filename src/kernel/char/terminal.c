@@ -34,41 +34,34 @@
 #include <kernel/terminal.h>
 #include <kernel/vga.h>
 
-// TODO: need to make a distinction between a 'console':
-//   a character device that can receive input, transmit output and is
-//   physically connected to the computer (e.g. keyboard+vga or a serial device)
-// and a 'vga terminal':
-//   a (PS/2) keyboard input and VGA output device that are connected to the
-//   system as a console
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// terminal TTY implementation
 
-#define is_syscon(cons)         ((cons)->number == SYSTEM_CONSOLE)
-#define is_current(cons)        ((cons) == current_console())
+static int terminal_tty_open(struct tty *);
+static int terminal_tty_close(struct tty *);
+static int terminal_tty_ioctl(struct tty *, int op, void *arg);
+static int terminal_tty_write(struct tty *, const char *buf, size_t count);
+static void terminal_tty_write_char(struct tty *, char c);
+static size_t terminal_tty_write_room(struct tty *);
 
-__data_segment struct console g_consoles[NR_CONSOLE] = { };
-
-static int console_tty_open(struct tty *);
-static int console_tty_close(struct tty *);
-static int console_tty_ioctl(struct tty *, int op, void *arg);
-static int console_tty_write(struct tty *, const char *buf, size_t count);
-static void console_tty_write_char(struct tty *, char c);
-static size_t console_tty_write_room(struct tty *);
-
-static struct tty_driver console_driver = {
+static struct tty_driver terminal_driver = {
     .name = "tty",
     .major = TTY_MAJOR,
-    .minor_start = CONSOLE_MIN,
-    .count = NR_CONSOLE,
-    .open = console_tty_open,
-    .close = console_tty_close,
-    .ioctl = console_tty_ioctl,
-    .write = console_tty_write,
-    ./* in the */write_room/* with black curtains*/ = console_tty_write_room,
+    .minor_start = TTY_MIN,
+    .count = NR_TERMINAL,
+    .open = terminal_tty_open,
+    .close = terminal_tty_close,
+    .ioctl = terminal_tty_ioctl,
+    .write = terminal_tty_write,
+    ./* in the */write_room/* with black curtains*/ = terminal_tty_write_room,
     .flush = NULL,
 };
 
-static int tty_get_console(struct tty *tty, struct console **console)
+static int tty_get_terminal(struct tty *tty, struct terminal **term)
 {
-    if (!tty || !console) {
+    if (!tty || !term) {
         return -EINVAL;
     }
 
@@ -77,61 +70,61 @@ static int tty_get_console(struct tty *tty, struct console **console)
     }
 
     int index = _DEV_MIN(tty->device);
-    if (index < CONSOLE_MIN || index > CONSOLE_MAX) {
-        return -ENXIO;  // TTY device is not a console
+    if (index < TTY_MIN || index > TTY_MAX) {
+        return -ENXIO;  // TTY device is not a virtual terminal
     }
 
-    *console = get_console(index);
+    *term = get_terminal(index);
     return 0;
 }
 
-static int console_tty_open(struct tty *tty)
+static int terminal_tty_open(struct tty *tty)
 {
-    struct console *cons;
+    struct terminal *term;
 
-    int ret = tty_get_console(tty, &cons);
+    int ret = tty_get_terminal(tty, &term);
     if (ret < 0) {
         return ret;
     }
 
-    if (cons->open) {
-        assert(cons->tty);
-        return -EBUSY;  // console already open
+    if (term->attached) {
+        assert(term->tty);
+        return -EBUSY;
     }
 
-    cons->tty = tty;
-    cons->open = true;
+    term->tty = tty;
+    term->attached = true;
     return 0;
 }
 
-static int console_tty_close(struct tty *tty)
+static int terminal_tty_close(struct tty *tty)
 {
-    struct console *cons;
+    struct terminal *term;
 
-    int ret = tty_get_console(tty, &cons);
+    int ret = tty_get_terminal(tty, &term);
     if (ret < 0) {
         return ret;
     }
 
-    cons->tty = NULL;
-    cons->open = false;
+    term->tty = NULL;
+    term->attached = false;
     return 0;
 }
 
-static int console_tty_write(struct tty *tty, const char *buf, size_t count)
+static int terminal_tty_write(struct tty *tty, const char *buf, size_t count)
 {
-    struct console *cons;
+    struct terminal *term;
 
     if (!buf) {
         return -EINVAL;
     }
 
-    int ret = tty_get_console(tty, &cons);
+    int ret = tty_get_terminal(tty, &term);
     if (ret < 0) {
         return ret;
     }
 
-    ret = console_write(cons, buf, count);
+    ret = terminal_write(term, buf, count);
     if (tty->driver.flush) {
         tty->driver.flush(tty);
     }
@@ -139,12 +132,12 @@ static int console_tty_write(struct tty *tty, const char *buf, size_t count)
     return ret;
 }
 
-static int console_tty_ioctl(struct tty *tty, int op, void *arg)
+static int terminal_tty_ioctl(struct tty *tty, int op, void *arg)
 {
     return -ENOTTY;
 }
 
-static size_t console_tty_write_room(struct tty *tty)
+static size_t terminal_tty_write_room(struct tty *tty)
 {
     // we can write the frame buffer forever...
     // return something sufficiently large to satisfy ldisc logic
@@ -152,49 +145,55 @@ static size_t console_tty_write_room(struct tty *tty)
 }
 
 // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// virtual terminal implementation
 
-// TODO: most of this should be in a file named terminal.c - because it emulates
-// a VGA terminal screen
+#define is_current(term)        ((term)->number == current_terminal())
+#define is_system(term)         ((term)->number == SYSTEM_TERMINAL)
 
-enum console_state {
+__data_segment struct terminal g_terminals[NR_TERMINAL] = { };
+__data_segment int g_currterm = SYSTEM_TERMINAL;
+
+enum terminal_state {
     S_NORM,
     S_ESC,
     S_CSI
 };
 
-// console state
-static void reset(struct console *cons);                // ESC c
-static void save_console(struct console *cons);         // ESC 7
-static void restore_console(struct console *cons);      // ESC 8
-static void cursor_save(struct console *cons);          // ESC [s
-static void cursor_restore(struct console *cons);       // ESC [u
+// terminal state
+static void reset(struct terminal *term);                // ESC c
+static void save_terminal(struct terminal *term);        // ESC 7
+static void restore_terminal(struct terminal *term);     // ESC 8
+static void cursor_save(struct terminal *term);          // ESC [s
+static void cursor_restore(struct terminal *term);       // ESC [u
 
 // character handling
-static void esc(struct console *cons, char c);          // ^[ (ESC)
-static void csi(struct console *cons, char c);          // ESC [
-static void csi_m(struct console *cons, char p);        // ESC [<params>m
-static void backspace(struct console *cons);            // ^H
-static void tab(struct console *cons);                  // ^I
-static void line_feed(struct console *cons);            // ^J
-static void reverse_linefeed(struct console *cons);     // ESC M
-static void carriage_return(struct console *cons);      // ^M
-static void scroll(struct console *cons, int n);        // ESC [<n>S / ESC [<n>T
-static void erase(struct console *cons, int mode);      // ESC [<n>J
-static void erase_line(struct console *cons, int mode); // ESC [<n>K
-static void cursor_up(struct console *cons, int n);     // ESC [<n>A
-static void cursor_down(struct console *cons, int n);   // ESC [<n>B
-static void cursor_right(struct console *cons, int n);  // ESC [<n>C
-static void cursor_left(struct console *cons, int n);   // ESC [<n>D
+static void esc(struct terminal *term, char c);          // ^[ (ESC)
+static void csi(struct terminal *term, char c);          // ESC [
+static void csi_m(struct terminal *term, char p);        // ESC [<params>m
+static void backspace(struct terminal *term);            // ^H
+static void tab(struct terminal *term);                  // ^I
+static void line_feed(struct terminal *term);            // ^J
+static void reverse_linefeed(struct terminal *term);     // ESC M
+static void carriage_return(struct terminal *term);      // ^M
+static void scroll(struct terminal *term, int n);        // ESC [<n>S / ESC [<n>T
+static void erase(struct terminal *term, int mode);      // ESC [<n>J
+static void erase_line(struct terminal *term, int mode); // ESC [<n>K
+static void cursor_up(struct terminal *term, int n);     // ESC [<n>A
+static void cursor_down(struct terminal *term, int n);   // ESC [<n>B
+static void cursor_right(struct terminal *term, int n);  // ESC [<n>C
+static void cursor_left(struct terminal *term, int n);   // ESC [<n>D
 
 // VGA programming
-static void vga_blink_enable(const struct console *cons); // ESC 3 / ESC 4
-static void vga_cursor_enable(const struct console *cons);// ESC 5 / ESC 6
-static void vga_set_cursor_pos(const struct console *cons);   // ESC [ <n>;<m>H
-static void vga_set_cursor_shape(const struct console *cons);
+static void vga_blink_enable(const struct terminal *term);  // ESC 3 / ESC 4
+static void vga_cursor_enable(const struct terminal *term); // ESC 5 / ESC 6
+static void vga_set_cursor_pos(const struct terminal *term);// ESC [ <n>;<m>H
+static void vga_set_cursor_shape(const struct terminal *term);
 
 // frame buffer
-static void set_fb_char(struct console *cons, uint16_t pos, char c);
-static void set_fb_attr(struct console *cons, uint16_t pos, struct _char_attr attr);
+static void set_fb_char(struct terminal *term, uint16_t pos, char c);
+static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr attr);
 
 // screen positioning
 static uint16_t xy2pos(uint16_t ncols, uint16_t x, uint16_t y);
@@ -202,49 +201,51 @@ static uint16_t xy2pos(uint16_t ncols, uint16_t x, uint16_t y);
 // ----------------------------------------------------------------------------
 // initialization
 
-void init_console(void)
+void init_terminal(void)
 {
-    // make sure we have enough memory for the configured number of consoles
-    if (g_vga->fb_info.size_pages - FB_SIZE_PAGES < NR_CONSOLE * FB_SIZE_PAGES) {
-        panic("not enough video memory available for %d consoles! See config.h.", NR_CONSOLE);
+    // make sure we have enough memory for the configured number of terminals
+    if (g_vga->fb_info.size_pages - FB_SIZE_PAGES < NR_TERMINAL * FB_SIZE_PAGES) {
+        panic("not enough video memory available for %d terminals! See config.h.", NR_TERMINAL);
     }
 
-    // register the console driver
-    if (tty_register_driver(&console_driver)) {
-        panic("unable to register console driver!");
+    // register the terminal TTY driver
+    if (tty_register_driver(&terminal_driver)) {
+        panic("unable to register terminal driver!");
     }
 
-    // initialize virtual consoles
-    for (int i = 1; i <= NR_CONSOLE; i++) {
-        struct console *cons = get_console(i);
-        cons->framebuf = get_console_fb(i);
-        cons->number = i;
-        console_defaults(cons);
-        erase(cons, 2);
+    // TODO: register system terminal as a console for printing system messages
+
+    // initialize virtual terminals
+    for (int i = 1; i <= NR_TERMINAL; i++) {
+        struct terminal *term = get_terminal(i);
+        term->framebuf = get_terminal_fb(i);
+        term->number = i;
+        terminal_defaults(term);
+        erase(term, 2);
     }
 
-    // restore console state from boot
-    struct console *cons = get_console(SYSTEM_CONSOLE);
-    cons->cursor.x = g_boot->cursor_col;
-    cons->cursor.y = g_boot->cursor_row;
-    cons->cursor.shape = g_vga->orig_cursor_shape;
-    cons->framebuf = (void *) g_vga->fb_info.framebuf;
+    // restore terminal state from boot
+    struct terminal *term = get_terminal(SYSTEM_TERMINAL);
+    term->cursor.x = g_boot->cursor_col;
+    term->cursor.y = g_boot->cursor_row;
+    term->cursor.shape = g_vga->orig_cursor_shape;
+    term->framebuf = (void *) g_vga->fb_info.framebuf;
 
-    // do a proper 'switch' to the initial virtual console
-    int ret = switch_console(SYSTEM_CONSOLE);
+    // do a proper 'switch' to the initial virtual terminal
+    int ret = switch_terminal(SYSTEM_TERMINAL);
     if (ret != 0) {
-        panic("failed to initialize system console!");
+        panic("failed to initialize system terminal!");
     }
-    assert(cons == get_console(SYSTEM_CONSOLE));
+    assert(term == get_terminal(SYSTEM_TERMINAL));
 
     // create a restore point
-    save_console(cons);
+    save_terminal(term);
 
     // enable blink, show cursor
-    kprint("\e4\e6");
+    terminal_print(term, "\e4\e6");
 
 #if PRINT_LOGO
-    kprint( // safe to print now, so let's print a bird with a blinking eye lol
+    kprint( // let's print a bird with a blinking eye lol
     "\e[1;37m                                                                           \n\
                                                      ,::::.._                           \n\
                                                   ,':::::::::.                          \n\
@@ -274,59 +275,59 @@ void init_console(void)
 // ----------------------------------------------------------------------------
 // public functions
 
-void console_defaults(struct console *cons)
+void terminal_defaults(struct terminal *term)
 {
-    cons->state = S_NORM;
-    cons->cols = g_vga->cols;
-    cons->rows = g_vga->rows;
+    term->state = S_NORM;
+    term->cols = g_vga->cols;
+    term->rows = g_vga->rows;
     for (int i = 0; i < MAX_TABSTOP; i++) {
-        cons->tabstops[i] = (((i + 1) % TABSTOP_WIDTH) == 0);
+        term->tabstops[i] = (((i + 1) % TABSTOP_WIDTH) == 0);
     }
-    memset(cons->csiparam, -1, sizeof(cons->csiparam));
-    cons->paramidx = 0;
-    cons->blink_on = false;
-    cons->need_wrap = false;
-    cons->attr.bg = VGA_BLACK;
-    cons->attr.fg = VGA_WHITE;
-    cons->attr.bright = false;
-    cons->attr.faint = false;
-    cons->attr.italic = false;
-    cons->attr.underline = false;
-    cons->attr.blink = false;
-    cons->attr.invert = false;
-    cons->cursor.x = 0;
-    cons->cursor.y = 0;
-    cons->cursor.shape = g_vga->orig_cursor_shape;
-    cons->cursor.hidden = false;
-    cons->csi_defaults.attr = cons->attr;
-    cons->csi_defaults.cursor = cons->cursor;
-    save_console(cons);
+    memset(term->csiparam, -1, sizeof(term->csiparam));
+    term->paramidx = 0;
+    term->blink_on = false;
+    term->need_wrap = false;
+    term->attr.bg = VGA_BLACK;
+    term->attr.fg = VGA_WHITE;
+    term->attr.bright = false;
+    term->attr.faint = false;
+    term->attr.italic = false;
+    term->attr.underline = false;
+    term->attr.blink = false;
+    term->attr.invert = false;
+    term->cursor.x = 0;
+    term->cursor.y = 0;
+    term->cursor.shape = g_vga->orig_cursor_shape;
+    term->cursor.hidden = false;
+    term->csi_defaults.attr = term->attr;
+    term->csi_defaults.cursor = term->cursor;
+    save_terminal(term);
 }
 
 extern int tty_open_internal(struct tty *tty);
 
-int switch_console(int num)
+int switch_terminal(int num)
 {
-    if (num <= 0 || num > NR_CONSOLE) {
+    if (num <= 0 || num > NR_TERMINAL) {
         return -EINVAL;
     }
 
     uint32_t flags;
     cli_save(flags);
 
-    struct console *curr = current_console();
-    struct console *next = get_console(num);
+    struct terminal *curr = get_terminal(0);
+    struct terminal *next = get_terminal(num);
     struct tty *tty = NULL;
 
     if (get_tty(__mkdev(TTY_MAJOR, num), &tty)) {
         panic("tty%d not found", num);
     }
     if (tty_open_internal(tty)) {
-        panic("could not switch consoles -- unable to open tty%d", num);
+        panic("could not switch terminals -- unable to open tty%d", num);
     }
 
-    curr->framebuf = get_console_fb(curr->number);
-    next->framebuf = get_console_fb(next->number);
+    curr->framebuf = get_terminal_fb(curr->number);
+    next->framebuf = get_terminal_fb(next->number);
 
     uint32_t pgdir_addr = 0;
     store_cr3(pgdir_addr);
@@ -366,93 +367,117 @@ int switch_console(int num)
     flush_tlb();
 
     // update VGA state
-    g_vga->active_console = curr->number;
+    g_currterm = curr->number;
     vga_blink_enable(curr);
     vga_cursor_enable(curr);
     vga_set_cursor_shape(curr);
     vga_set_cursor_pos(curr);
 
-    // a console is fully initialized once we've switch to it at least once :-)
+    // a terminal is fully initialized once we've switch to it at least once :-)
     curr->initialized = true;
 
     restore_flags(flags);
     return 0;
 }
 
-struct console * current_console(void)
+int current_terminal(void)
 {
-    return get_console(0);
+    if (g_currterm <= 0 || g_currterm > NR_TERMINAL) {
+        panic("g_currterm is %d!\n", g_currterm);
+    }
+    return g_currterm;
 }
 
-struct console * get_console(int num)
+struct terminal * get_terminal(int num)
 {
-    // 0 = current active console
-
-    if (num < 0 || num > NR_CONSOLE) {
-        panic("attempt to get invalid console!");
+    if (num < 0 || num > NR_TERMINAL) {
+        panic("attempt to get nonexistant terminal %d!\n", num);
     }
-
     if (num == 0) {
-        num = g_vga->active_console;
-        assert(num > 0 && (num - 1) < NR_CONSOLE);
+        num = current_terminal();
+    }
+    assert(num > 0);
+
+    struct terminal *term = &g_terminals[num - 1];
+    if (term->initialized) {
+        assert(term->number == num);
     }
 
-    struct console *cons = &g_consoles[num - 1];
-    if (cons->initialized) {
-        assert(cons->number == num);
-    }
-
-    return cons;
+    return term;
 }
 
-void * get_console_fb(int num)
+void * get_terminal_fb(int num)
 {
+    if (num < 0 || num > NR_TERMINAL) {
+        panic("attempt to get nonexistant terminal %d frame buffer!\n", num);
+    }
+    if (num == 0) {
+        num = current_terminal();
+    }
+    assert(num > 0);
+
     char *fb = (char *) g_vga->fb_info.framebuf;
     fb += (num * FB_SIZE_PAGES) << PAGE_SHIFT;
 
     return fb;
 }
 
-void console_save(struct console *cons, struct console_save_state *save)
+void terminal_save(struct terminal *term, struct terminal_save_state *save)
 {
-    memcpy(save->tabstops, cons->tabstops, MAX_TABSTOP);
-    save->blink_on = cons->blink_on;
-    save->attr = cons->attr._value;
-    save->cursor = cons->cursor._value;
+    memcpy(save->tabstops, term->tabstops, MAX_TABSTOP);
+    save->blink_on = term->blink_on;
+    save->attr = term->attr._value;
+    save->cursor = term->cursor._value;
 }
 
-void console_restore(struct console *cons, struct console_save_state *save)
+void terminal_restore(struct terminal *term, struct terminal_save_state *save)
 {
-    memcpy(cons->tabstops, save->tabstops, MAX_TABSTOP);
-    cons->blink_on = save->blink_on;
-    cons->attr._value = save->attr;
-    cons->cursor._value = save->cursor;
+    memcpy(term->tabstops, save->tabstops, MAX_TABSTOP);
+    term->blink_on = save->blink_on;
+    term->attr._value = save->attr;
+    term->cursor._value = save->cursor;
 
-    if (is_current(cons)) {
-        vga_blink_enable(cons);
-        vga_cursor_enable(cons);
-        vga_set_cursor_shape(cons);
-        vga_set_cursor_pos(cons);
+    if (is_current(term)) {
+        vga_blink_enable(term);
+        vga_cursor_enable(term);
+        vga_set_cursor_shape(term);
+        vga_set_cursor_pos(term);
     }
 }
 
-int console_write(struct console *cons, const char *buf, size_t count)
+int terminal_print(struct terminal *term, const char *buf)
 {
     const char *p;
 
-    if (!cons || !buf) {
+    if (!term || !buf) {
+        return -EINVAL;
+    }
+
+    p = buf;
+    while (*p != '\0' && (p - buf) < MAX_PRINTBUF) {
+        p += terminal_putchar(term, *p);
+    }
+
+    return (p - buf);
+}
+
+int terminal_write(struct terminal *term, const char *buf, size_t count)
+{
+    const char *p;
+
+    if (!term || !buf) {
         return -EINVAL;
     }
 
     p = buf;
     while (p < buf + count) {
-        p += console_putchar(cons, *p);
+        p += terminal_putchar(term, *p);
     }
 
     return count;
 }
 
-int console_putchar(struct console *cons, char c)
+int terminal_putchar(struct terminal *term, char c)
 {
     bool update_char = false;
     bool update_attr = false;
@@ -460,29 +485,30 @@ int console_putchar(struct console *cons, char c)
     uint16_t char_pos;
 
     // prevent reentrancy
-    if (test_and_set_bit(&cons->printing, 0)) {
-        return 0;
+    if (test_and_set_bit(&term->printing, 0)) {
+        return 0;   // TODO: do we just drop the char?
+                    // we should buffer the char then flush it at the end
     }
 
 #if E9_HACK
-    if (is_syscon(cons)) {
+    if (is_system(term)) {
         outb(0xE9, c);
     }
 #endif
 
     // handle escape sequences if not a control character
     if (!iscntrl(c)) {
-        switch (cons->state) {
+        switch (term->state) {
             case S_ESC:
-                esc(cons, c);
+                esc(term, c);
                 goto write_vga;
             case S_CSI:
-                csi(cons, c);
+                csi(term, c);
                 goto write_vga;
             case S_NORM:
                 break;
             default:
-                cons->state = S_NORM;
+                term->state = S_NORM;
                 break;
         }
     }
@@ -493,26 +519,26 @@ int console_putchar(struct console *cons, char c)
             beep(BELL_FREQ, BELL_TIME);         // TODO: ioctl to control beep tone/time
             break;
         case '\b':      // ^H - BS - backspace
-            backspace(cons);
+            backspace(term);
             break;
         case '\t':      // ^I - HT - horizontal tab
-            tab(cons);
+            tab(term);
             break;
         case '\n':      // ^J - LF - line feed
             __fallthrough;
         case '\v':      // ^K - VT - vertical tab
         case '\f':      // ^L - FF - form feed
-            line_feed(cons);
+            line_feed(term);
             break;
         case '\r':      // ^M - CR -  carriage return
-            carriage_return(cons);
+            carriage_return(term);
             break;
 
         case ASCII_CAN: // ^X - CAN - cancel escape sequence
-            cons->state = S_NORM;
+            term->state = S_NORM;
             goto done;
         case '\e':      // ^[ - ESC - start escape sequence
-            cons->state = S_ESC;
+            term->state = S_ESC;
             goto done;
 
         default:        // everything else
@@ -525,23 +551,23 @@ int console_putchar(struct console *cons, char c)
             update_attr = true;
 
             // handle deferred wrap
-            if (cons->need_wrap) {
-                carriage_return(cons);
-                line_feed(cons);
+            if (term->need_wrap) {
+                carriage_return(term);
+                line_feed(term);
             }
 
             // determine character position
-            char_pos = xy2pos(cons->cols, cons->cursor.x, cons->cursor.y);
+            char_pos = xy2pos(term->cols, term->cursor.x, term->cursor.y);
 
             // advance cursor
-            cons->cursor.x++;
-            if (cons->cursor.x >= cons->cols) {
+            term->cursor.x++;
+            if (term->cursor.x >= term->cols) {
                 // if the cursor is at the end of the line, prevent
                 // the display from scrolling one line (wrapping) until
                 // the next character is received so we aren't left with
                 // an unnecessary blank line
-                cons->cursor.x--;
-                cons->need_wrap = true;
+                term->cursor.x--;
+                term->need_wrap = true;
                 update_cursor_pos = false;
             }
             break;
@@ -549,27 +575,29 @@ int console_putchar(struct console *cons, char c)
 
 write_vga:
     if (update_char) {
-        set_fb_char(cons, char_pos, c);
+        set_fb_char(term, char_pos, c);
     }
     if (update_attr) {
-        if (cons->attr.bright && cons->attr.faint) {
-            cons->attr.bright = false;      // faint overrides bright
+        if (term->attr.bright && term->attr.faint) {
+            term->attr.bright = false;      // faint overrides bright
         }
-        set_fb_attr(cons, char_pos, cons->attr);
+        set_fb_attr(term, char_pos, term->attr);
     }
-    if (update_cursor_pos && is_current(cons)) {
-        vga_set_cursor_pos(cons);
+    if (update_cursor_pos && is_current(term)) {
+        vga_set_cursor_pos(term);
     }
 
+    // TODO: flush buffered chars?
+
 done:
-    clear_bit(&cons->printing, 0);
+    clear_bit(&term->printing, 0);
     return 1;
 }
 
 // ----------------------------------------------------------------------------
 // private functions
 
-static void esc(struct console *cons, char c)
+static void esc(struct terminal *term, char c)
 {
     //
     // Escape Sequences
@@ -582,72 +610,72 @@ static void esc(struct console *cons, char c)
         // C1 sequences
         //
         case 'D':       // ESC D - IND - linefeed (LF)
-            line_feed(cons);
+            line_feed(term);
             break;
         case 'E':       // ESC E - NEL - newline (CRLF)
-            carriage_return(cons);
-            line_feed(cons);
+            carriage_return(term);
+            line_feed(term);
             break;
         case 'H':       // ESC H - HTS - set tab stop
-            cons->tabstops[cons->cursor.x] = 1;
+            term->tabstops[term->cursor.x] = 1;
             break;
         case 'M':       // ESC M - RI - reverse line feed
-            reverse_linefeed(cons);
+            reverse_linefeed(term);
             break;
         case '[':       // ESC [ - CSI - control sequence introducer
-            memset(cons->csiparam, 0xFF, sizeof(cons->csiparam));
-            cons->paramidx = 0;
-            cons->state = S_CSI;
+            memset(term->csiparam, 0xFF, sizeof(term->csiparam));
+            term->paramidx = 0;
+            term->state = S_CSI;
             return;
 
         //
-        // "Custom" console-related sequences
+        // "Custom" terminal-related sequences
         //
         case '3':       // ESC 3    disable blink
-            cons->blink_on = false;
-            if (is_current(cons)) {
-                vga_blink_enable(cons);
+            term->blink_on = false;
+            if (is_current(term)) {
+                vga_blink_enable(term);
             }
             break;
         case '4':       // ESC 4    enable blink
-            cons->blink_on = true;
-            if (is_current(cons)) {
-                vga_blink_enable(cons);
+            term->blink_on = true;
+            if (is_current(term)) {
+                vga_blink_enable(term);
             }
             break;
         case '5':       // ESC 5    hide cursor
-            cons->cursor.hidden = true;
-            if (is_current(cons)) {
-                vga_cursor_enable(cons);
+            term->cursor.hidden = true;
+            if (is_current(term)) {
+                vga_cursor_enable(term);
             }
             break;
         case '6':       // ESC 6    show cursor
-            cons->cursor.hidden = false;
-            if (is_current(cons)) {
-                vga_cursor_enable(cons);
+            term->cursor.hidden = false;
+            if (is_current(term)) {
+                vga_cursor_enable(term);
             }
             break;
-        case '7':       // ESC 7    save console
-            save_console(cons);
+        case '7':       // ESC 7    save terminal
+            save_terminal(term);
             break;
-        case '8':       // ESC 8    restore console
-            restore_console(cons);
+        case '8':       // ESC 8    restore terminal
+            restore_terminal(term);
             break;
-        case 'c':       // ESC c    reset console
-            reset(cons);
+        case 'c':       // ESC c    reset terminal
+            reset(term);
             break;
         case 'h':       // ESC h    clear tab stop
-            cons->tabstops[cons->cursor.x] = 0;     // TODO: replace with ESC [0g (clear current) and ESC [3g (clear all)
+            term->tabstops[term->cursor.x] = 0;     // TODO: replace with ESC [0g (clear current) and ESC [3g (clear all)
             break;
         default:
             break;
     }
 
-    cons->need_wrap = false;
-    cons->state = S_NORM;
+    term->need_wrap = false;
+    term->state = S_NORM;
 }
 
-static void csi(struct console *cons, char c)
+static void csi(struct terminal *term, char c)
 {
     //
     // ANSI Control Sequences
@@ -658,15 +686,15 @@ static void csi(struct console *cons, char c)
 
     #define param_minimum(index,value)          \
     do {                                        \
-        if (cons->csiparam[index] < (value)) {  \
-            cons->csiparam[index] = (value);    \
+        if (term->csiparam[index] < (value)) {  \
+            term->csiparam[index] = (value);    \
         }                                       \
     } while (0)
 
     #define param_maximum(index,value)          \
     do {                                        \
-        if (cons->csiparam[index] > (value)) {  \
-            cons->csiparam[index] = (value);    \
+        if (term->csiparam[index] > (value)) {  \
+            term->csiparam[index] = (value);    \
         }                                       \
     } while (0)
 
@@ -677,63 +705,63 @@ static void csi(struct console *cons, char c)
         //
         case 'A':       // CSI n A  - CUU - move cursor up n rows
             param_minimum(0, 1);
-            cursor_up(cons, cons->csiparam[0]);
+            cursor_up(term, term->csiparam[0]);
             goto csi_done;
         case 'B':       // CSI n B  - CUD - move cursor down n rows
             param_minimum(0, 1);
-            cursor_down(cons, cons->csiparam[0]);
+            cursor_down(term, term->csiparam[0]);
             goto csi_done;
         case 'C':       // CSI n C  - CUF - move cursor right (forward) n columns
             param_minimum(0, 1);
-            cursor_right(cons, cons->csiparam[0]);
+            cursor_right(term, term->csiparam[0]);
             goto csi_done;
         case 'D':       // CSI n D  - CUB - move cursor left (back) n columns
             param_minimum(0, 1);
-            cursor_left(cons, cons->csiparam[0]);
+            cursor_left(term, term->csiparam[0]);
             goto csi_done;
         case 'E':       // CSI n E  - CNL - move cursor to beginning of line, n rows down
             param_minimum(0, 1);
-            cons->cursor.x = 0;
-            cursor_down(cons, cons->csiparam[0]);
+            term->cursor.x = 0;
+            cursor_down(term, term->csiparam[0]);
             goto csi_done;
         case 'F':       // CSI n F  - CPL - move cursor to beginning of line, n rows up
             param_minimum(0, 1);
-            cons->cursor.x = 0;
-            cursor_up(cons, cons->csiparam[0]);
+            term->cursor.x = 0;
+            cursor_up(term, term->csiparam[0]);
             goto csi_done;
         case 'G':       // CSI n G  - CHA - move cursor to column n
             param_minimum(0, 1);
-            param_maximum(0, cons->cols);
-            cons->cursor.x = cons->csiparam[0] - 1;
+            param_maximum(0, term->cols);
+            term->cursor.x = term->csiparam[0] - 1;
             goto csi_done;
         case 'H':       // CSI n ; m H - CUP - move cursor to row n, column m
             param_minimum(0, 1);
             param_minimum(1, 1);
-            param_maximum(0, cons->rows);
-            param_maximum(1, cons->cols);
-            cons->cursor.y = cons->csiparam[0] - 1;
-            cons->cursor.x = cons->csiparam[1] - 1;
+            param_maximum(0, term->rows);
+            param_maximum(1, term->cols);
+            term->cursor.y = term->csiparam[0] - 1;
+            term->cursor.x = term->csiparam[1] - 1;
             goto csi_done;
         case 'J':       // CSI n J  - ED - erase in display (n = mode)
             param_minimum(0, 0);
-            erase(cons, cons->csiparam[0]);
+            erase(term, term->csiparam[0]);
             goto csi_done;
         case 'K':       // CSI n K  - EL- erase in line (n = mode)
             param_minimum(0, 0);
-            erase_line(cons, cons->csiparam[0]);
+            erase_line(term, term->csiparam[0]);
             goto csi_done;
         case 'S':       // CSI n S  - SU - scroll n lines
             param_minimum(0, 1);
-            scroll(cons, cons->csiparam[0]);
+            scroll(term, term->csiparam[0]);
             goto csi_done;
         case 'T':       // CSI n T  - ST - reverse scroll n lines
             param_minimum(0, 1);
-            scroll(cons, -cons->csiparam[0]);     // note the negative for reverse!
+            scroll(term, -term->csiparam[0]);     // note the negative for reverse!
             goto csi_done;
         case 'm':       // CSI n m  - SGR - set graphics attribute
-            for (int i = 0; i <= cons->paramidx; i++){
+            for (int i = 0; i <= term->paramidx; i++){
                 param_minimum(i, 0);
-                csi_m(cons, cons->csiparam[i]);
+                csi_m(term, term->csiparam[i]);
             }
             goto csi_done;
 
@@ -741,45 +769,45 @@ static void csi(struct console *cons, char c)
         // Custom (or "private") sequences
         //
         case 's':       // CSI s        save cursor position
-            cursor_save(cons);
+            cursor_save(term);
             goto csi_done;
         case 'u':       // CSI u        restore cursor position
-            cursor_restore(cons);
+            cursor_restore(term);
             goto csi_done;
 
         //
         // CSI params
         //
         case ';':   // parameter separator
-            cons->paramidx++;
-            if (cons->paramidx >= MAX_CSIPARAM) {
+            term->paramidx++;
+            if (term->paramidx >= MAX_CSIPARAM) {
                 goto csi_done;  // too many params! cancel
             }
             goto csi_next;
         default:    // parameter
             if (isdigit(c)) {
-                if (cons->csiparam[cons->paramidx] == -1) {
-                    cons->csiparam[cons->paramidx] = 0;
+                if (term->csiparam[term->paramidx] == -1) {
+                    term->csiparam[term->paramidx] = 0;
                 }
-                cons->csiparam[cons->paramidx] *= 10;
-                cons->csiparam[cons->paramidx] += (c - '0');
+                term->csiparam[term->paramidx] *= 10;
+                term->csiparam[term->paramidx] += (c - '0');
                 goto csi_next;
             }
             goto csi_done;  // invalid param char
     }
 
 csi_done:   // CSI processing done
-    cons->need_wrap = false;
-    cons->state = S_NORM;
+    term->need_wrap = false;
+    term->state = S_NORM;
 
-csi_next:   // we need more CSI characters; do not alter console state
+csi_next:   // we need more CSI characters; do not alter terminal state
     return;
 
     #undef param_minimum
     #undef param_maximum
 }
 
-static void csi_m(struct console *cons, char p)
+static void csi_m(struct terminal *term, char p)
 {
     static const char CSI_COLORS[8] =
     {
@@ -804,141 +832,141 @@ static void csi_m(struct console *cons, char p)
 
     switch (p) {
         case 0:     // reset to defaults
-            cons->attr = cons->csi_defaults.attr;
+            term->attr = term->csi_defaults.attr;
             break;
         case 1:     // set bright (bold)
-            cons->attr.bright = true;
+            term->attr.bright = true;
             break;
         case 2:     // set faint (simulated with color)
-            cons->attr.faint = true;
+            term->attr.faint = true;
             break;
         case 3:     // set italic (simulated with color)
-            cons->attr.italic = true;
+            term->attr.italic = true;
             break;
         case 4:     // set underline (simulated with color)
-            cons->attr.underline = true;
+            term->attr.underline = true;
             break;
         case 5:     // set blink
-            cons->attr.blink = true;
+            term->attr.blink = true;
             break;
         case 7:     // set fg/bg color inversion
-            cons->attr.invert = true;
+            term->attr.invert = true;
             break;
         case 22:    // normal intensity (neither bright nor faint)
-            cons->attr.bright = false;
-            cons->attr.faint = false;
+            term->attr.bright = false;
+            term->attr.faint = false;
             break;
         case 23:    // disable italic
-            cons->attr.italic = false;
+            term->attr.italic = false;
             break;
         case 24:    // disable underline
-            cons->attr.underline = false;
+            term->attr.underline = false;
             break;
         case 25:    // disable blink
-            cons->attr.blink = false;
+            term->attr.blink = false;
             break;
         case 27:    // disable fg/bg inversion
-            cons->attr.invert = false;
+            term->attr.invert = false;
             break;
         default:
             // colors
-            if (p >= 30 && p <= 37) cons->attr.fg = CSI_COLORS[p - 30];
-            if (p >= 40 && p <= 47) cons->attr.bg = CSI_COLORS[p - 40];
-            if (p == 39) cons->attr.fg = cons->csi_defaults.attr.fg;
-            if (p == 49) cons->attr.bg = cons->csi_defaults.attr.bg;
+            if (p >= 30 && p <= 37) term->attr.fg = CSI_COLORS[p - 30];
+            if (p >= 40 && p <= 47) term->attr.bg = CSI_COLORS[p - 40];
+            if (p == 39) term->attr.fg = term->csi_defaults.attr.fg;
+            if (p == 49) term->attr.bg = term->csi_defaults.attr.bg;
             if (p >= 90 && p <= 97) {
-                cons->attr.fg = CSI_COLORS[p - 90];
-                cons->attr.bright = 1;
+                term->attr.fg = CSI_COLORS[p - 90];
+                term->attr.bright = 1;
             }
             if (p >= 100 && p <= 107) {
-                cons->attr.bg = CSI_COLORS[p - 100];
-                cons->attr.bright = !cons->attr.blink;  // blink overrides bright
+                term->attr.bg = CSI_COLORS[p - 100];
+                term->attr.bright = !term->attr.blink;  // blink overrides bright
             }
             break;
     }
 }
 
-static void reset(struct console *cons)
+static void reset(struct terminal *term)
 {
-    console_defaults(cons);
-    erase(cons, 2);
-    if (is_current(cons)) {
-        vga_blink_enable(cons);
-        vga_cursor_enable(cons);
-        vga_set_cursor_shape(cons);
-        vga_set_cursor_pos(cons);
+    terminal_defaults(term);
+    erase(term, 2);
+    if (is_current(term)) {
+        vga_blink_enable(term);
+        vga_cursor_enable(term);
+        vga_set_cursor_shape(term);
+        vga_set_cursor_pos(term);
     }
 }
 
-static void save_console(struct console *cons)
+static void save_terminal(struct terminal *term)
 {
-    console_save(cons, &cons->saved_state);
+    terminal_save(term, &term->saved_state);
 }
 
-static void restore_console(struct console *cons)
+static void restore_terminal(struct terminal *term)
 {
-    console_restore(cons, &cons->saved_state);
+    terminal_restore(term, &term->saved_state);
 }
 
-static void cursor_save(struct console *cons)
+static void cursor_save(struct terminal *term)
 {
-    cons->saved_state.cursor = cons->cursor._value;
+    term->saved_state.cursor = term->cursor._value;
 }
 
-static void cursor_restore(struct console *cons)
+static void cursor_restore(struct terminal *term)
 {
-    cons->cursor._value = cons->saved_state.cursor;
-    if (is_current(cons)) {
-        vga_cursor_enable(cons);
-        vga_set_cursor_shape(cons);
-        vga_set_cursor_pos(cons);
+    term->cursor._value = term->saved_state.cursor;
+    if (is_current(term)) {
+        vga_cursor_enable(term);
+        vga_set_cursor_shape(term);
+        vga_set_cursor_pos(term);
     }
 }
 
-static void backspace(struct console *cons)
+static void backspace(struct terminal *term)
 {
-    cursor_left(cons, 1);
-    cons->need_wrap = false;
+    cursor_left(term, 1);
+    term->need_wrap = false;
 }
 
-static void carriage_return(struct console *cons)
+static void carriage_return(struct terminal *term)
 {
-    cons->cursor.x = 0;
-    cons->need_wrap = false;
+    term->cursor.x = 0;
+    term->need_wrap = false;
 }
 
-static void line_feed(struct console *cons)
+static void line_feed(struct terminal *term)
 {
-    if (++cons->cursor.y >= cons->rows) {
-        scroll(cons, 1);
-        cons->cursor.y--;
+    if (++term->cursor.y >= term->rows) {
+        scroll(term, 1);
+        term->cursor.y--;
     }
-    cons->need_wrap = false;
+    term->need_wrap = false;
 }
 
-static void reverse_linefeed(struct console *cons)
+static void reverse_linefeed(struct terminal *term)
 {
-    if (--cons->cursor.y < 0) {     // TODO: fix so it doesn't wrap
-        scroll(cons, -1);
-        cons->cursor.y++;
+    if (--term->cursor.y < 0) {     // TODO: fix so it doesn't wrap
+        scroll(term, -1);
+        term->cursor.y++;
     }
-    cons->need_wrap = false;
+    term->need_wrap = false;
 }
 
-static void tab(struct console *cons)
+static void tab(struct terminal *term)
 {
-    while (cons->cursor.x < cons->cols) {
-        if (cons->tabstops[++cons->cursor.x]) {
+    while (term->cursor.x < term->cols) {
+        if (term->tabstops[++term->cursor.x]) {
             break;
         }
     }
 
-    if (cons->cursor.x >= cons->cols) {
-        cons->cursor.x = cons->cols - 1;
+    if (term->cursor.x >= term->cols) {
+        term->cursor.x = term->cols - 1;
     }
 }
 
-static void scroll(struct console *cons, int n)   // n < 0 is reverse scroll
+static void scroll(struct terminal *term, int n)   // n < 0 is reverse scroll
 {
     int n_cells;
     int n_blank;
@@ -953,35 +981,35 @@ static void scroll(struct console *cons, int n)   // n < 0 is reverse scroll
     if (reverse) {
         n = -n;
     }
-    if (n > cons->rows) {
-        n = cons->rows;
+    if (n > term->rows) {
+        n = term->rows;
     }
     if (n == 0) {
         return;
     }
 
-    n_blank = n * cons->cols;
-    n_cells = (cons->rows * cons->cols) - n_blank;
+    n_blank = n * term->cols;
+    n_cells = (term->rows * term->cols) - n_blank;
     n_bytes = n_cells * sizeof(struct vga_cell);
 
-    src_end = &((struct vga_cell *) cons->framebuf)[n_blank];
-    src = (reverse) ? cons->framebuf : src_end;
-    dst = (reverse) ? src_end : cons->framebuf;
+    src_end = &((struct vga_cell *) term->framebuf)[n_blank];
+    src = (reverse) ? term->framebuf : src_end;
+    dst = (reverse) ? src_end : term->framebuf;
     memmove(dst, src, n_bytes);
 
     for (i = 0; i < n_blank; i++) {
         int pos = (reverse) ? i : n_cells + i;
-        set_fb_char(cons, pos, ' ');
-        set_fb_attr(cons, pos, cons->attr);
+        set_fb_char(term, pos, ' ');
+        set_fb_attr(term, pos, term->attr);
     }
 }
 
-static void erase(struct console *cons, int mode)
+static void erase(struct terminal *term, int mode)
 {
     int start;
     int count;
-    int pos = xy2pos(cons->cols, cons->cursor.x, cons->cursor.y);
-    int area = cons->rows * cons->cols;
+    int pos = xy2pos(term->cols, term->cursor.x, term->cursor.y);
+    int area = term->rows * term->cols;
 
     switch (mode) {
         case 0:     // erase screen from cursor down
@@ -1000,75 +1028,75 @@ static void erase(struct console *cons, int mode)
     }
 
     for (int i = 0; i < count; i++) {
-        set_fb_char(cons, start + i, ' ');
-        set_fb_attr(cons, start + i, cons->attr);
+        set_fb_char(term, start + i, ' ');
+        set_fb_attr(term, start + i, term->attr);
     }
 }
 
-static void erase_line(struct console *cons, int mode)
+static void erase_line(struct terminal *term, int mode)
 {
     int start;
     int count;
-    int pos = xy2pos(cons->cols, cons->cursor.x, cons->cursor.y);
+    int pos = xy2pos(term->cols, term->cursor.x, term->cursor.y);
 
     switch (mode) {
         case 0:    // erase line from cursor down
             start = pos;
-            count = cons->cols - (pos % cons->cols);
+            count = term->cols - (pos % term->cols);
             break;
         case 1:      // erase line from cursor up
-            start = xy2pos(cons->cols, 0, cons->cursor.y);
-            count = (pos % cons->cols) + 1;
+            start = xy2pos(term->cols, 0, term->cursor.y);
+            count = (pos % term->cols) + 1;
             break;
         case 2:     // erase entire line
         default:
-            start = xy2pos(cons->cols, 0, cons->cursor.y);
-            count = cons->cols;
+            start = xy2pos(term->cols, 0, term->cursor.y);
+            count = term->cols;
     }
 
     for (int i = 0; i < count; i++) {
-        set_fb_char(cons, start + i, ' ');
-        set_fb_attr(cons, start + i, cons->attr);
+        set_fb_char(term, start + i, ' ');
+        set_fb_attr(term, start + i, term->attr);
     }
 }
 
-static void cursor_up(struct console *cons, int n)
+static void cursor_up(struct terminal *term, int n)
 {
-    if (cons->cursor.y - n > 0) {
-        cons->cursor.y -= n;
+    if (term->cursor.y - n > 0) {
+        term->cursor.y -= n;
     }
     else {
-        cons->cursor.y = 0;
+        term->cursor.y = 0;
     }
 }
 
-static void cursor_down(struct console *cons, int n)
+static void cursor_down(struct terminal *term, int n)
 {
-    if (cons->cursor.y + n < cons->rows - 1) {
-        cons->cursor.y += n;
+    if (term->cursor.y + n < term->rows - 1) {
+        term->cursor.y += n;
     }
     else {
-        cons->cursor.y = cons->rows - 1;
+        term->cursor.y = term->rows - 1;
     }
 }
 
-static void cursor_left(struct console *cons, int n)
+static void cursor_left(struct terminal *term, int n)
 {
-    if (cons->cursor.x - n > 0) {
-        cons->cursor.x -= n;
+    if (term->cursor.x - n > 0) {
+        term->cursor.x -= n;
     }
     else {
-        cons->cursor.x = 0;
+        term->cursor.x = 0;
     }
 }
 
-static void cursor_right(struct console *cons, int n)
+static void cursor_right(struct terminal *term, int n)
 {
-    if (cons->cursor.x + n < cons->cols - 1) {
-        cons->cursor.x += n;
+    if (term->cursor.x + n < term->cols - 1) {
+        term->cursor.x += n;
     }
     else {
-        cons->cursor.x = cons->cols - 1;
+        term->cursor.x = term->cols - 1;
     }
 }
 
@@ -1077,15 +1105,15 @@ static uint16_t xy2pos(uint16_t ncols, uint16_t x, uint16_t y)
     return y * ncols + x;
 }
 
-static void set_fb_char(struct console *cons, uint16_t pos, char c)
+static void set_fb_char(struct terminal *term, uint16_t pos, char c)
 {
-    ((struct vga_cell *) cons->framebuf)[pos].ch = c;
+    ((struct vga_cell *) term->framebuf)[pos].ch = c;
 }
 
-static void set_fb_attr(struct console *cons, uint16_t pos, struct _char_attr attr)
+static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr attr)
 {
     struct vga_attr *vga_attr;
-    vga_attr = &((struct vga_cell *) cons->framebuf)[pos].attr;
+    vga_attr = &((struct vga_cell *) term->framebuf)[pos].attr;
 
     vga_attr->bg = attr.bg;
     vga_attr->fg = attr.fg;
@@ -1115,7 +1143,7 @@ static void set_fb_attr(struct console *cons, uint16_t pos, struct _char_attr at
 
 // ----------------------------------------------------------------------------
 
-static void vga_blink_enable(const struct console *cons)
+static void vga_blink_enable(const struct terminal *term)
 {
     uint32_t flags;
     uint8_t modectl;
@@ -1123,7 +1151,7 @@ static void vga_blink_enable(const struct console *cons)
     cli_save(flags);
     modectl = vga_attr_read(VGA_ATTR_REG_MODE);
 
-    if (cons->blink_on) {
+    if (term->blink_on) {
         modectl |= VGA_ATTR_FLD_MODE_BLINK;
     }
     else {
@@ -1134,14 +1162,14 @@ static void vga_blink_enable(const struct console *cons)
     restore_flags(flags);
 }
 
-static void vga_cursor_enable(const struct console *cons)
+static void vga_cursor_enable(const struct terminal *term)
 {
     uint32_t flags;
     uint8_t css;
     cli_save(flags);
     css = vga_crtc_read(VGA_CRTC_REG_CSS);
 
-    if (cons->cursor.hidden) {
+    if (term->cursor.hidden) {
         css |= VGA_CRTC_FLD_CSS_CD_MASK;
     }
     else {
@@ -1152,12 +1180,12 @@ static void vga_cursor_enable(const struct console *cons)
     restore_flags(flags);
 }
 
-static void vga_set_cursor_pos(const struct console *cons)
+static void vga_set_cursor_pos(const struct terminal *term)
 {
     uint32_t flags;
     uint16_t pos;
 
-    pos = xy2pos(cons->cols, cons->cursor.x, cons->cursor.y);
+    pos = xy2pos(term->cols, term->cursor.x, term->cursor.y);
 
     cli_save(flags);
     vga_crtc_write(VGA_CRTC_REG_CL_HI, pos >> 8);
@@ -1165,14 +1193,14 @@ static void vga_set_cursor_pos(const struct console *cons)
     restore_flags(flags);
 }
 
-static void vga_set_cursor_shape(const struct console *cons)
+static void vga_set_cursor_shape(const struct terminal *term)
 {
     uint32_t flags;
     uint8_t start, end;
     uint8_t css, cse;
 
-    start = ((uint16_t) cons->cursor.shape) & 0xFF;
-    end = ((uint16_t) cons->cursor.shape) >> 8;
+    start = ((uint16_t) term->cursor.shape) & 0xFF;
+    end = ((uint16_t) term->cursor.shape) >> 8;
 
     cli_save(flags);
     css = vga_crtc_read(VGA_CRTC_REG_CSS) & ~VGA_CRTC_FLD_CSS_CSS_MASK;
@@ -1183,5 +1211,3 @@ static void vga_set_cursor_shape(const struct console *cons)
     vga_crtc_write(VGA_CRTC_REG_CSE, cse);
     restore_flags(flags);
 }
-
-

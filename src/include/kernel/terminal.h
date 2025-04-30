@@ -30,9 +30,9 @@
 #include <kernel/tty.h>
 #include <kernel/vga.h>
 
-#define SYSTEM_CONSOLE          1       // console for boot, kprint, etc...
+#define SYSTEM_TERMINAL         1       // terminal for boot messages, kprint, etc...
 #define MAX_CSIPARAM            16      // ESC[p;q;r;s;...,n param count
-#define MAX_TABSTOP             80
+#define MAX_TABSTOP             80      // maximum number of tabstops allowed
 #define TABSTOP_WIDTH           8       // TODO: make configurable
 
 #define FB_SIZE_PAGES           2       // 8192 chars (enough for 80x50)
@@ -42,6 +42,7 @@
 #define BELL_FREQ               750     // Hz
 #define BELL_TIME               50      // ms
 
+// ESC[<x>m color code
 enum csi_color {
     CSI_BLACK,
     CSI_RED,
@@ -53,19 +54,19 @@ enum csi_color {
     CSI_WHITE
 };
 
-struct console_save_state {
+struct terminal_save_state {
     bool blink_on;
     char tabstops[MAX_TABSTOP];
     uint32_t attr;
     uint64_t cursor;
 };
 
-struct console {
-    int number;                         // console I/O line number
+struct terminal {
+    int number;                         // virtual terminal number
     int state;                          // current control state
-    bool initialized;                   // console can be used
-    bool open;                          // console is currently attached
-    bool printing;                      // console is currently printing
+    bool initialized;                   // terminal has been switched to once
+    bool attached;                      // terminal attached to a TTY
+    bool printing;                      // terminal is currently printing
 
     struct tty *tty;
 
@@ -115,23 +116,32 @@ struct console {
         struct _cursor cursor;
     } csi_defaults;
 
-    struct console_save_state saved_state; // saved parameters
+    struct terminal_save_state saved_state; // saved parameters
 };
 
-struct console * current_console(void);     // return current console (console0)
-struct console * get_console(int num);      // indexed at 1; 0 gets current
-int switch_console(int num);
-void * get_console_fb(int num);
+// get virtual terminal; 0 returns current terminal
+struct terminal * get_terminal(int num);
 
-void console_save(struct console *cons, struct console_save_state *save);
-void console_restore(struct console *cons, struct console_save_state *save);
+// get active virtual terminal number
+int current_terminal(void);
 
-void console_defaults(struct console *cons);
+// switch to a virtual terminal
+int switch_terminal(int num);
 
-int console_putchar(struct console *cons, char c);
+// get a terminal's frame buffer
+void * get_terminal_fb(int num);
 
-int console_read(struct console *cons, char *buf, size_t count);
-int console_write(struct console *cons, const char *buf, size_t count);
+// save/restore terminal state
+void terminal_save(struct terminal *term, struct terminal_save_state *save);
+void terminal_restore(struct terminal *term, struct terminal_save_state *save);
+
+// set terminal defaults
+void terminal_defaults(struct terminal *term);
+
+// write directly to terminal, bypassing TTY
+int terminal_putchar(struct terminal *term, char c);
+int terminal_print(struct terminal *term, const char *buf);
+int terminal_write(struct terminal *term, const char *buf, size_t count);
 
 
 /**

@@ -146,7 +146,7 @@ struct boot_info {
     struct hwflags hwflags;         // system hardware flags (INT 11h)
     uint32_t a20_method;            // method used to enable A20 line, one of A20_*
 
-    // console info
+    // terminal info
     uint32_t vga_mode;              // VGA video mode (INT 10h,AH=0Fh)
     uint32_t vga_rows;              // VGA row count
     uint32_t vga_cols;              // VGA column count (INT 10h,AH=0Fh)

@@ -123,7 +123,7 @@ __fastcall void kmain(struct boot_info *info)
     // setup the file system
     init_fs();
 
-    // get the console and tty subsystem working for real
+    // get the TTY subsystem working for real
     init_tty();
 
     kprint(
@@ -202,7 +202,7 @@ int main(void)
     //
     assert(getpl() == USER_PL);
 
-    printf("\e4\e[5;33mHello from user mode!\e[m\n");
+    printf("\e[5;33mHello from user mode!\e[m\n");
 
     // open TTY serial port
     printf("Opening /dev/ttyS0...\n");

@@ -54,18 +54,19 @@
 //
 
 // memory
-#define MAX_NR_POOLS        32  // max num concurrent pools
-#define MAX_NR_POOL_ITEMS   256 // max pool memory capacity across all pools
+#define MAX_NR_POOLS        32    // max num concurrent pools
+#define MAX_NR_POOL_ITEMS   256   // max pool memory capacity across all pools
 
 // filesystem
-#define MAX_NR_INODES       64  // max num inodes
-#define MAX_NR_DENTRIES     64  // max num directory entries
-#define MAX_NR_TOTAL_OPEN   64  // max num open files on system
-#define MAX_NR_IO_RANGES    32  // max num I/O range reservations
+#define MAX_NR_INODES       64    // max num inodes
+#define MAX_NR_DENTRIES     64    // max num directory entries
+#define MAX_NR_TOTAL_OPEN   64    // max num open files on system
+#define MAX_NR_IO_RANGES    32    // max num I/O range reservations
 
 // i/o
-#define NR_CONSOLE          7   // number of virtual consoles
-#define NR_SERIAL           4   // number of serial ports
+#define NR_TERMINAL         7     // number of virtual terminals
+#define NR_SERIAL           4     // number of serial ports
+#define MAX_PRINTBUF        4096  // max num chars in print buffer
 
 //
 // Important Memory Addresses

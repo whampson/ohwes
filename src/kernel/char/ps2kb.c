@@ -194,16 +194,14 @@ void init_kb(void)
 
 static void kb_putq(char c)
 {
-    struct tty *tty = current_console()->tty;
+    struct tty *tty = get_terminal(0)->tty;
     if (!tty || !tty->ldisc) {
         panic("no TTY attached to keyboard!");
     }
-
-    if (!tty->ldisc->read) {
+    if (!tty->ldisc->recv) {
         panic("keyboard has no input receiver!");
     }
-
-    tty->ldisc->recv(tty, &c, 1);   // just drop chars if its full...
+    tty->ldisc->recv(tty, &c, 1);   // just drop chars if it's full...
 }
 
 static void update_leds(void)
@@ -425,7 +423,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
     if (g_kb->alt && !g_kb->ctrl && is_fnkey(key)) {
         int cons = key - KEY_F1 + 1;
         assert(cons >= 1 && cons <= 12);
-        switch_console(cons);
+        switch_terminal(cons);
         goto done;
     }
 
@@ -457,7 +455,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
             case KEY_DOWN:  s = "\e[B"; break;
             case KEY_RIGHT: s = "\e[C"; break;
             case KEY_LEFT:  s = "\e[D"; break;
-            case KEY_KP5:   s = "\e[G"; break;  // maybe, conflicts with console
+            case KEY_KP5:   s = "\e[G"; break;  // maybe, conflicts with terminal (move cursor to column n)
             case KEY_PRTSC: s = "\e[P"; break;  // maybe
             // VT sequences
             case KEY_HOME:  s = "\e[1~"; break;

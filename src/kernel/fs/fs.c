@@ -63,11 +63,11 @@ void init_fs(void)
     // create TTY dentries
     for (int i = 0; i < NR_TTY; i++) {
         char name[DENTRY_NAME_LENGTH];
-        if (i <= NR_CONSOLE) {
+        if (i <= TTY_MAX) {
             snprintf(name, DENTRY_NAME_LENGTH, "/dev/tty%d", i);
         }
         else {
-            snprintf(name, DENTRY_NAME_LENGTH, "/dev/ttyS%d", i-NR_CONSOLE-1);
+            snprintf(name, DENTRY_NAME_LENGTH, "/dev/ttyS%d", i-TTYS_MIN+1);
         }
 
         struct dentry *dentry = NULL;
@@ -79,7 +79,7 @@ void init_fs(void)
         list_add_tail(&dentries, &dentry->dentry_list);
 
         if (i == 0) {
-            // no inode for tty0
+            // no inode for tty0, yet...
             continue;
         }
 

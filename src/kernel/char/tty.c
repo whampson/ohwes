@@ -116,7 +116,7 @@ int get_tty(dev_t device, struct tty **tty)
 
 extern void init_n_tty(void);
 extern void init_serial(void);
-extern void init_console(void);
+extern void init_terminal(void);
 extern void init_kb(void);
 
 void init_tty(void)
@@ -129,7 +129,7 @@ void init_tty(void)
 
     init_n_tty();
     init_serial();
-    init_console();
+    init_terminal();
     init_kb();
 
     // TODO: figure out which TTYs are valid

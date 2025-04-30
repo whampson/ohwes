@@ -160,6 +160,6 @@ write() pipeline:
         tty->ldisc->write(file, buf, count) -> tty_ldisc_write(file, buf, count)
     tty_ldisc_write(file, buf, count):
       * applies OPOST character processing (if enabled) then sends chars to
-        driver write routine (serial_write or console_tty_write)
-    console_tty_write(tty, buf, count):
-      * writes characters from the TTY to the console
+        driver write routine (serial_write or terminal_tty_write)
+    terminal_tty_write(tty, buf, count):
+      * writes characters from the TTY to the terminal

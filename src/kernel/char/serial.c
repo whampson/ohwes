@@ -117,7 +117,7 @@ static void serial_stop(struct tty *);
 struct tty_driver serial_driver = {
     .name = "ttyS",
     .major = TTY_MAJOR,
-    .minor_start = SERIAL_MIN,
+    .minor_start = TTYS_MIN,
     .count = NR_SERIAL,
     .open = serial_open,
     .close = serial_close,
@@ -180,11 +180,11 @@ static int tty_get_com(struct tty *tty, struct com **com)
     }
 
     int index = _DEV_MIN(tty->device);
-    if (index < SERIAL_MIN || index > SERIAL_MAX) {
+    if (index < TTYS_MIN || index > TTYS_MAX) {
         return -ENXIO;  // TTY device is not a COM
     }
 
-    int com_index = index - SERIAL_MIN + 1;
+    int com_index = index - TTYS_MIN + 1;
     *com = get_com(com_index);
     return 0;
 }

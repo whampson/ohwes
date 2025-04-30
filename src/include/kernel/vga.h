@@ -1,3 +1,4 @@
+
 /* =============================================================================
  * Copyright (C) 2020-2025 Wes Hampson. All Rights Reserved.
  *
@@ -37,7 +38,6 @@ struct vga_fb_info {
 };
 
 struct vga {
-    uint32_t active_console;
     uint32_t rows, cols;
     uint16_t orig_cursor_shape;
     struct vga_fb_info fb_info;
