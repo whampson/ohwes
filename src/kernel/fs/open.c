@@ -25,7 +25,7 @@
 #include <i386/syscall.h>
 #include <i386/x86.h>
 #include <kernel/config.h>
-#include <kernel/chdev.h>
+#include <kernel/char.h>
 #include <kernel/ohwes.h>
 #include <kernel/pool.h>
 #include <kernel/task.h>

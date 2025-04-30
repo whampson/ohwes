@@ -28,7 +28,7 @@
 #include <i386/paging.h>
 #include <i386/x86.h>
 #include <kernel/ohwes.h>
-#include <kernel/chdev.h>
+#include <kernel/char.h>
 #include <kernel/kernel.h>
 #include <kernel/tty.h>
 #include <kernel/terminal.h>

@@ -13,14 +13,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/char/chdev.c
+ *         File: kernel/char/char.c
  *      Created: August 17, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
 #include <errno.h>
-#include <kernel/chdev.h>
+#include <kernel/char.h>
 #include <kernel/kernel.h>
 #include <kernel/list.h>
 #include <kernel/ohwes.h>

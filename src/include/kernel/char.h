@@ -13,14 +13,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/include/kernel/chdev.h
+ *         File: include/kernel/char.h
  *      Created: August 17, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __CHDEV_H
-#define __CHDEV_H
+#ifndef __CHAR_H
+#define __CHAR_H
 
 #include <stdint.h>
 #include <kernel/device.h>
@@ -31,4 +31,4 @@
 
 int register_chdev(uint16_t major, const char *name, struct file_ops *fops);
 
-#endif // __CHDEV_H
+#endif // __CHAR_H

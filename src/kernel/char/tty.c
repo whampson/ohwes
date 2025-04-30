@@ -21,7 +21,7 @@
 
 #include <errno.h>
 #include <i386/boot.h>
-#include <kernel/chdev.h>
+#include <kernel/char.h>
 #include <kernel/config.h>
 #include <kernel/fs.h>
 #include <kernel/ioctls.h>

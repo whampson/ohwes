@@ -3,7 +3,7 @@ TARGET_DEFINES := __KERNEL__
 TARGET_CFLAGS  := -Wno-unused-function
 
 SOURCES := \
-    chdev.c \
+    char.c \
     ps2.c \
     ps2kb.c \
     rtc.c \
