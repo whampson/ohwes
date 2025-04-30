@@ -34,12 +34,11 @@
 #include <i386/io.h>
 #include <i386/ps2.h>
 #include <i386/x86.h>
-#include <kernel/console.h>
+#include <kernel/debug.h>
 #include <kernel/input.h>
 #include <kernel/irq.h>
 #include <kernel/ohwes.h>
-
-#include <kernel/debug.h>
+#include <kernel/terminal.h>
 
 #define CHATTY_KB       1       // print extra debug messages
 #define PRINT_EVENTS    0       // print key events

@@ -24,13 +24,13 @@
 #include <i386/boot.h>
 #include <i386/io.h>
 #include <i386/paging.h>
-#include <kernel/console.h>
 #include <kernel/kernel.h>
 #include <kernel/fs.h>
 #include <kernel/irq.h>
 #include <kernel/ohwes.h>
 #include <kernel/vga.h>
 #include <kernel/serial.h>
+#include <kernel/terminal.h>
 
 // TODO: create 'console' struct (separate from the VGA "console") and include
 // the following members:

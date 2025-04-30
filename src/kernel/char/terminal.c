@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/char/console.c
+ *         File: kernel/char/terminal.c
  *      Created: March 26, 2023
  *       Author: Wes Hampson
  * =============================================================================
@@ -28,10 +28,10 @@
 #include <i386/paging.h>
 #include <i386/x86.h>
 #include <kernel/ohwes.h>
-#include <kernel/console.h>
 #include <kernel/chdev.h>
 #include <kernel/kernel.h>
 #include <kernel/tty.h>
+#include <kernel/terminal.h>
 #include <kernel/vga.h>
 
 // TODO: need to make a distinction between a 'console':

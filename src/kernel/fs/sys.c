@@ -24,12 +24,12 @@
 #include <i386/syscall.h>
 #include <i386/paging.h>
 #include <i386/x86.h>
-#include <kernel/console.h>
 #include <kernel/fs.h>
 #include <kernel/ioctl.h>
 #include <kernel/kernel.h>
 #include <kernel/ohwes.h>
 #include <kernel/task.h>
+#include <kernel/terminal.h>
 
 // !!!!!!!
 // TODO: All of these need to safely access the current task struct, to prevent

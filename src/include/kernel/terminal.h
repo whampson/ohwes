@@ -13,14 +13,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/include/kernel/console.h
+ *         File: include/kernel/terminal.h
  *      Created: October 10, 2023
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __CONSOLE_H
-#define __CONSOLE_H
+#ifndef __TERMINAL_H
+#define __TERMINAL_H
 
 #include <assert.h>
 #include <stdbool.h>
@@ -173,4 +173,4 @@ enum ascii_cntl {
     ASCII_DEL = 0x7F    /* Delete */
 };
 
-#endif // __CONSOLE_H
+#endif // __TERMINAL_H

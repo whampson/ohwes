@@ -36,9 +36,9 @@
 #include <i386/x86.h>
 #include <kernel/ohwes.h>
 #include <kernel/kernel.h>
-#include <kernel/console.h>
 #include <kernel/irq.h>
 #include <kernel/fs.h>
+#include <kernel/terminal.h>
 #include <kernel/vga.h>
 
 // colors

@@ -35,7 +35,6 @@
 #include <i386/syscall.h>
 #include <i386/x86.h>
 #include <kernel/config.h>
-#include <kernel/console.h>
 #include <kernel/debug.h>
 #include <kernel/io.h>
 #include <kernel/ioctls.h>
@@ -44,6 +43,7 @@
 #include <kernel/ohwes.h>
 #include <kernel/pool.h>
 #include <kernel/serial.h>
+#include <kernel/terminal.h>
 #include <kernel/termios.h>
 #include <sys/ioctl.h>
 

@@ -24,8 +24,8 @@
 #include <i386/io.h>
 #include <i386/paging.h>
 #include <i386/x86.h>
-#include <kernel/console.h>
 #include <kernel/ohwes.h>
+#include <kernel/terminal.h>
 #include <kernel/vga.h>
 
 __data_segment static struct vga _vga = { .active_console = SYSTEM_CONSOLE };
