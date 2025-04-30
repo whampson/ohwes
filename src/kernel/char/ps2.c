@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/drivers/char/ps2.c
+ *         File: kernel/char/ps2.c
  *      Created: February 21, 2024
  *       Author: Wes Hampson
  *

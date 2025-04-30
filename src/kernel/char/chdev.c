@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/drivers/char/chdev.c
+ *         File: kernel/char/chdev.c
  *      Created: August 17, 2024
  *       Author: Wes Hampson
  * =============================================================================

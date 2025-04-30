@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/chdev/serial.c
+ *         File: kernel/char/serial.c
  *      Created: December 24, 2024
  *       Author: Wes Hampson
  *

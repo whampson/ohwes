@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/drivers/char/console.c
+ *         File: kernel/char/console.c
  *      Created: March 26, 2023
  *       Author: Wes Hampson
  * =============================================================================

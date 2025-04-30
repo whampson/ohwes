@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/drivers/char/vga.c
+ *         File: kernel/char/vga.c
  *      Created: December 14, 2020
  *       Author: Wes Hampson
  * =============================================================================

@@ -27,7 +27,7 @@ TARGET_CFLAGS  := -Wno-unused-function -Wno-multichar
 TARGET_LDSCRIPT:= kernel.ld
 
 MODULES := \
-    chdev \
+    char \
     fs \
     mm \
 

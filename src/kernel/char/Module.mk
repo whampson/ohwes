@@ -1,4 +1,4 @@
-TARGET         := lib/kernel/chdev.a
+TARGET         := lib/kernel/char.a
 TARGET_DEFINES := __KERNEL__
 TARGET_CFLAGS  := -Wno-unused-function
 

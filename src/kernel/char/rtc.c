@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/drivers/char/rtc.c
+ *         File: kernel/char/rtc.c
  *      Created: March 31, 2024
  *       Author: Wes Hampson
  *

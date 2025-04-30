@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/drivers/chdev/tty_ldisc.c
+ *         File: kernel/char/tty_ldisc.c
  *      Created: December 10, 2024
  *       Author: Wes Hampson
  * =============================================================================
