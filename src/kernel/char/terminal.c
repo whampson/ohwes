@@ -27,9 +27,10 @@
 #include <i386/io.h>
 #include <i386/paging.h>
 #include <i386/x86.h>
-#include <kernel/ohwes.h>
 #include <kernel/char.h>
+#include <kernel/console.h>
 #include <kernel/kernel.h>
+#include <kernel/ohwes.h>
 #include <kernel/tty.h>
 #include <kernel/terminal.h>
 #include <kernel/vga.h>
@@ -87,13 +88,11 @@ static int terminal_tty_open(struct tty *tty)
         return ret;
     }
 
-    if (term->attached) {
-        assert(term->tty);
-        return -EBUSY;
+    if (term->tty) {
+        return -EBUSY;  // TODO: return 0?
     }
 
     term->tty = tty;
-    term->attached = true;
     return 0;
 }
 
@@ -107,7 +106,6 @@ static int terminal_tty_close(struct tty *tty)
     }
 
     term->tty = NULL;
-    term->attached = false;
     return 0;
 }
 
@@ -143,6 +141,69 @@ static size_t terminal_tty_write_room(struct tty *tty)
     // return something sufficiently large to satisfy ldisc logic
     return 4096;
 }
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// console implementation
+
+static dev_t vt_console_device(struct console *cons)
+{
+    return __mkdev(TTY_MAJOR, cons->index);
+}
+
+static void vt_console_setup(struct console *cons)
+{
+    struct vga_fb_info fb_info;
+    vga_get_fb_info(&fb_info);
+    g_vga->rows = g_boot->vga_rows;
+    g_vga->cols = g_boot->vga_cols;
+
+    struct terminal *term = get_terminal(cons->index);
+    terminal_defaults(term);
+    term->number = cons->index;
+    term->cols = g_boot->vga_cols;
+    term->rows = g_boot->vga_rows;
+    term->framebuf = (void *) fb_info.framebuf;
+    term->cursor.x = g_boot->cursor_col;
+    term->cursor.y = g_boot->cursor_row;
+}
+
+static int vt_console_write(struct console *cons, const char *buf, size_t count)
+{
+    struct terminal *term;
+    const char *p;
+
+    term = get_terminal(cons->index);
+
+    p = buf;
+    while (*p != '\0' && (p - buf) < count) {
+        if (*p == '\n') {
+            terminal_putchar(term, '\r');
+        }
+        terminal_putchar(term, *p);
+        p++;
+    }
+
+    return (p - buf);
+}
+
+static int vt_console_waitkey(struct console *cons)
+{
+    // TODO
+    return -EBUSY;
+}
+
+struct console vt_console =
+{
+    .name = "tty",
+    .index = TTY_MIN,     // SYSTEM_CONSOLE ?
+    .flags = 0,
+    .device = vt_console_device,
+    // .setup = vt_console_setup,
+    .write = vt_console_write,
+    .waitkey = vt_console_waitkey
+};
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -243,7 +304,10 @@ void init_terminal(void)
     save_terminal(term);
 
     // enable blink, show cursor
-    terminal_print(term, "\e4\e6");
+    const char *config = "\e4\e6";
+    terminal_write(term, config, strlen(config));
+
+    register_console(&vt_console);
 
 #if PRINT_LOGO
     kprint( // let's print a bird with a blinking eye lol
@@ -438,21 +502,21 @@ void terminal_restore(struct terminal *term, struct terminal_save_state *save)
     }
 }
 
-int terminal_print(struct terminal *term, const char *buf)
-{
-    const char *p;
+// int terminal_print(struct terminal *term, const char *buf)
+// {
+//     const char *p;
 
-    if (!term || !buf) {
-        return -EINVAL;
-    }
+//     if (!term || !buf) {
+//         return -EINVAL;
+//     }
 
-    p = buf;
-    while (*p != '\0' && (p - buf) < MAX_PRINTBUF) {
-        p += terminal_putchar(term, *p);
-    }
+//     p = buf;
+//     while (*p != '\0' && (p - buf) < MAX_PRINTBUF) {
+//         p += terminal_putchar(term, *p);
+//     }
 
-    return (p - buf);
-}
+//     return (p - buf);
+// }
 
 int terminal_write(struct terminal *term, const char *buf, size_t count)
 {

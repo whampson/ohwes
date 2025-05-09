@@ -36,6 +36,9 @@ struct ring {
     uint32_t tail;      // tail pointer
 };
 
+#define RING_INITIALIZER(buf)   { .ring = buf, .length = sizeof(buf) }
+// TODO: get ring of ring_init()
+
 /**
  * Initialize the character queue using the specified buffer.
  * TODO: allocate buffer internally so we don't need to supply our own.

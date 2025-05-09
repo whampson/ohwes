@@ -65,7 +65,6 @@ struct terminal {
     int number;                         // virtual terminal number
     int state;                          // current control state
     bool initialized;                   // terminal has been switched to once
-    bool attached;                      // terminal attached to a TTY
     bool printing;                      // terminal is currently printing
 
     struct tty *tty;
@@ -140,7 +139,7 @@ void terminal_defaults(struct terminal *term);
 
 // write directly to terminal, bypassing TTY
 int terminal_putchar(struct terminal *term, char c);
-int terminal_print(struct terminal *term, const char *buf);
+// int terminal_print(struct terminal *term, const char *buf);
 int terminal_write(struct terminal *term, const char *buf, size_t count);
 
 

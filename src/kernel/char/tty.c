@@ -33,7 +33,6 @@
 static struct list_node tty_drivers;            // linked list of TTY drivers
 static struct tty_ldisc ldiscs[NR_LDISC] = { }; // TTY line disciplines
 static struct tty ttys[NR_TTY] = { };           // TTY structs
-extern bool g_tty_initialized;
 
 static struct termios default_termios = {
     .c_line = N_TTY,
@@ -134,8 +133,6 @@ void init_tty(void)
 
     // TODO: figure out which TTYs are valid
     // (like, no ttyS3 if dev has 1 serial port)
-
-    g_tty_initialized = true;
 }
 
 int tty_open_internal(struct tty *tty)

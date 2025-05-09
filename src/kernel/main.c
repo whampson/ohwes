@@ -104,7 +104,7 @@ __fastcall void kmain(struct boot_info *info)
     init_mm();
 
     // finish setting up CPU descriptors (IDT, etc.) and setup I/O stuff
-    init_cpu();
+    init_cpu(); // TODO: move this to setup.S
     init_io();
 
     // initialize the GDB stub
@@ -205,8 +205,8 @@ int main(void)
     printf("\e[5;33mHello from user mode!\e[m\n");
 
     // open TTY serial port
-    printf("Opening /dev/ttyS0...\n");
-    int fd = CHECK(open("/dev/ttyS0", O_RDWR | O_NONBLOCK));
+    printf("Opening /dev/ttyS1...\n");
+    int fd = CHECK(open("/dev/ttyS1", O_RDWR | O_NONBLOCK));
 
     // set serial TTY termios flags
     //  disable local echo, enable flow control
