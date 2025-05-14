@@ -26,7 +26,7 @@
  * Important interrupt vector table numbers.
  */
 #define VEC_INTEL                   0x00    // Base vector for Intel exceptions.
-#define VEC_DEVICEIRQ               0x20    // Base vector for device IRQs.
+#define VEC_IRQ                     0x20    // Base vector for device IRQs.
 #define VEC_SYSCALL                 0x80    // Interrupt vector for syscalls.
 
 /**

@@ -35,8 +35,8 @@
 
 // Initialization Command Words (ICW)
 #define ICW1            0x11                // edge-triggered, 8 byte vectors, cascade mode, ICW4 needed
-#define ICW2_M          (VEC_DEVICEIRQ)     // master PIC base interrupt vector
-#define ICW2_S          (VEC_DEVICEIRQ+8)   // slave PIC base interrupt vector
+#define ICW2_M          (VEC_IRQ)     // master PIC base interrupt vector
+#define ICW2_S          (VEC_IRQ+8)   // slave PIC base interrupt vector
 #define ICW3_M          (SLAVE_MASK)        // mask of slave IRQ line on master PIC
 #define ICW3_S          (IRQ_SLAVE)         // slave IRQ number, to be sent to master
 #define ICW4            0x01                // not special fully nested, not auto EOI, 8086 mode

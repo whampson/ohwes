@@ -10,3 +10,4 @@ SOURCES := \
     pic.c \
     setup.S \
     timer.c \
+    x86.c \
