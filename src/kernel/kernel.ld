@@ -22,14 +22,17 @@
 #include <i386/paging.h>
 #include <kernel/config.h>
 
-OUTPUT_FORMAT("elf32-i386")
+#define ENTRY_POINT ksetup
+
 OUTPUT_ARCH("i386")
-ENTRY(ksetup)
+OUTPUT_FORMAT("elf32-i386")
+ENTRY(ENTRY_POINT)
+ENTRY_POINT = KERNEL_BASE;
 
 SECTIONS
 {
     _kernel_lma = KERNEL_BASE;
-    _kernel_vma = PAGE_OFFSET + _kernel_lma;
+    _kernel_vma = KERNEL_VA + _kernel_lma;
     _kernel_start = _kernel_vma;
 
     _setup_lma = _kernel_lma;
@@ -43,7 +46,7 @@ SECTIONS
     . = ALIGN(PAGE_SIZE);
 
     _text_lma = .;
-    _text_vma = PAGE_OFFSET + _text_lma;
+    _text_vma = KERNEL_VA + _text_lma;
     .text _text_vma : AT (_text_lma)
     {
         _text_start = .;
@@ -79,3 +82,6 @@ SECTIONS
     _kernel_end = .;
     _kernel_size = _kernel_end - _kernel_start;
 }
+
+ASSERT(ENTRY_POINT == KERNEL_BASE,
+    "error: the kernel entry point must be placed at KERNEL_BASE");

@@ -30,17 +30,28 @@
 .code32
 .section .setup, "ax", @progbits
 
+# global exports
 .globl g_boot, g_gdt, g_idt, g_ldt, g_tss
 
 ##
-# Kernel setup.
-# Bridge the gap between the boot loader and kernel by initializing the
-# Protected Mode CPU descriptors and setting up virtual memory mappings for
-# the kernel code.
+# -----------------------------------------------------------------------------
+# ksetup
+# -----------------------------------------------------------------------------
+# void __fastcall __noreturn ksetup(struct boot_info *);
+#
+# The kernel entry point. Bridges the gap between the boot loader and kernel by
+# initializing the CPU descriptors and setting up virtual memory. This function
+# should perform other necessary architecture-specific setup to ensure the
+# kernel can do basic things like print and not explode if an interrupt occurs.
+# Essentially "stage 3" of the boot loader.
 ##
+.globl ksetup
 ksetup:
+        # make damn sure interrupts are off!
+        cli
+
         # copy boot params from stage2
-        movl            %ecx, %esi              # ptr passed in ecx from stage2
+        movl            %ecx, %esi
         movl            g_boot, %edi
         movl            $BI_SIZE, %ecx
         cld
@@ -53,21 +64,21 @@ ksetup:
         # setup paging; first 1M of physical memory will be identity mapped
         call            setup_paging
 
-        # now that paging is enabled and kernel space is mapped at PAGE_OFFSET,
+        # now that paging is enabled and kernel space is mapped at KERNEL_VA,
         # adjust the descriptor table pointers and boot info pointers to point
         # to kernel space
-        addl            $PAGE_OFFSET, %ebp
+        addl            $KERNEL_VA, %ebp
         movl            %ebp, %esp
-        addl            $PAGE_OFFSET, g_gdt
-        addl            $PAGE_OFFSET, g_idt
-        addl            $PAGE_OFFSET, g_boot
+        addl            $KERNEL_VA, g_gdt
+        addl            $KERNEL_VA, g_idt
+        addl            $KERNEL_VA, g_boot
 
         # load the GDT and IDT descriptor registers, perform the jump that
         # reloads CS to begin execution in kernel space, then reload the segment
         # registers with new values from the GDT
         lgdt            gdt_desc
         lidt            idt_desc
-        ljmp            $KERNEL_CS, $PAGE_OFFSET+_seg_reload
+        ljmp            $KERNEL_CS, $KERNEL_VA+_seg_reload
 _seg_reload:
         movw            $KERNEL_DS, %ax
         movw            %ax, %ds                # ds = KERNEL_DS
@@ -78,8 +89,7 @@ _seg_reload:
         movw            %ax, %gs                # gs = 0
 
 #if HIGHER_GROUND
-        # clear the identity mapping
-        movl            $0, KERNEL_PGDIR
+        movl            $0, KERNEL_PGDIR        # clear identity mapping
 #endif
 
         # now we can build the CPU descriptor tables;
@@ -106,20 +116,20 @@ _idle:  # we should never end up here... but in case we do, spin forever
 # paging on the CPU. Right now, we only care about the low 1M of physical
 # memory. We know our kernel is under 1M in size because we loaded it in Real
 # Mode from the boot loader, which can only address 1M. Thus, we need just one
-# page table in addition to the page directory (we are using 4K pages only at
-# this point). If the kernel ever grows larger than about 512k, we will need to
-# adjust this scheme :-) The kernel is linked with a base virtual address of
-# C0000000 (PAGE_OFFSET), while this setup code is linked with a base address of
-# 00000000 so it can bridge the gap between the boot loader and the kernel.
-# Therefore, we must create two mappings for the low 1M of physical memory: one
-# for the kernel at C0000000-C00FFFFF and another temporary identity mapping so
-# this setup code can continue execution.
+# page table in addition to the page directory. If the kernel ever grows larger
+# than about 512k, we will need to adjust this scheme :-) The kernel is linked
+# with a base virtual address of KERNEL_VA, while this setup code is linked with
+# a base address of 0, so it can bridge the gap between the boot loader and the
+# kernel. Therefore, we must create two mappings for the low 1M of physical
+# memory: one for the kernel at C0000000-C00FFFFF and another temporary identity
+# mapping so this setup code can continue execution.
 ##
 setup_paging:
 
+PAGE_FLAGS = _PAGE_PRESENT | _PAGE_RW
+PAGE_FLAGS = PAGE_FLAGS |  _PAGE_USER   # TODO: don't map kernel memory with user privileges lol
+KERNEL_PDN = KERNEL_VA >> (PGDIR_SHIFT - 2)
 TABLE_COUNT = PAGE_SIZE >> 2
-PAGE_FLAGS = _PAGE_PRESENT | _PAGE_RW | _PAGE_USER
-KERNEL_PDN = PAGE_OFFSET >> (PGDIR_SHIFT - 2)
 
         # zero the page directory
         xorl            %eax, %eax

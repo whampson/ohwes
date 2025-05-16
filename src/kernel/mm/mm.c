@@ -46,14 +46,14 @@ extern uint32_t _bss_start, _bss_end, _bss_size;
 static void print_kernel_sections(void);
 static void print_memory_map(void);
 static void print_page_info(uint32_t vaddr, const struct pginfo *page);
-static void print_page_mappings(struct mm_info *mm);
+static void print_page_mappings(void);
 
 static void init_bss(void);
 
 extern void init_pools(void);
 
-struct mm_info _mm = { };
-struct mm_info *g_mm = &_mm;
+__data_segment struct mm_info _mm = { };
+__data_segment struct mm_info *g_mm = &_mm;
 
 struct free_area {
     struct list_node free_list;
@@ -71,16 +71,16 @@ struct zone {
 
 void init_mm(void)
 {
+    g_mm->pgdir = (void *) KERNEL_ADDR(KERNEL_PGDIR);
+
     print_memory_map();
     print_kernel_sections();
 
 #if PRINT_PAGE_MAP
-    print_page_mappings(g_mm);
+    print_page_mappings();
 #endif
 
     init_bss();
-    g_mm->pgdir = (void *) KERNEL_ADDR(KERNEL_PGDIR);
-
     init_pools();
 }
 
@@ -206,9 +206,9 @@ static void print_memory_map(void)
     }
 }
 
-static void print_page_mappings(struct mm_info *mm)
+static void print_page_mappings(void)
 {
-    struct pginfo *pgdir = mm->pgdir;
+    struct pginfo *pgdir = g_mm->pgdir;
     struct pginfo *pgtbl;
     struct pginfo *page;
     uint32_t vaddr;

@@ -31,6 +31,7 @@
 #include <i386/paging.h>
 #include <i386/x86.h>
 #include <kernel/ohwes.h>
+#include <kernel/console.h>
 #include <kernel/kernel.h>
 #include <kernel/irq.h>
 #include <kernel/fs.h>
@@ -213,6 +214,17 @@ __fastcall void _crash(struct iregs *regs)
     // handle fatal crash (blue screen)
     // -------------------------------------------------------------------------
     //
+
+    {
+        extern struct console *g_consoles;
+        extern struct console vt_console;
+
+        if (g_consoles == NULL) {
+            // register an emergency console so we can print!
+            struct console *panic_console = &vt_console;
+            register_console(panic_console);    // TODO: something more minimal...
+        }
+    }
 
     // NOTE: PCem doesn't push an error code of 0 onto the stack when a true
     // double fault occurs, which violates the Intel spec. My inspection of the
