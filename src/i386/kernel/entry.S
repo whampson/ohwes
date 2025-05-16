@@ -318,7 +318,7 @@ IRQ_THUNK               (_irq_0Fh, IRQ_ATA2)
 # 48-79                 reserved
 
 # 80                    system call
-EXCEPTION_THUNK         (_syscall, VEC_SYSCALL)
+EXCEPTION_THUNK         (syscall_thunk, VEC_SYSCALL)
 
 # 81-255                reserved
 

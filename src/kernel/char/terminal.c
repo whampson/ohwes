@@ -200,7 +200,7 @@ struct console vt_console =
     .index = TTY_MIN,     // SYSTEM_CONSOLE ?
     .flags = 0,
     .device = vt_console_device,
-    // .setup = vt_console_setup,
+    .setup = vt_console_setup,
     .write = vt_console_write,
     .waitkey = vt_console_waitkey
 };

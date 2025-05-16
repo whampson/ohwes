@@ -78,9 +78,6 @@ struct crash_screen {
 __data_segment static struct crash_screen _crash_screen;
 __data_segment struct crash_screen *g_crash = &_crash_screen;
 
-__data_segment static struct tss _double_fault_tss = { };
-__data_segment struct tss *g_double_fault_tss = &_double_fault_tss;
-
 __data_segment bool g_crashed = false;
 
 #if DEBUG
@@ -359,8 +356,8 @@ __noreturn void _double_fault(void)
     // we got here via the special double fault task gate, construct an iregs
     // from the faulting TSS and pass it to _crash()
 
-    struct tss *tss = get_tss();
-    struct tss *fault_tss = get_tss_from_gdt(tss->prev_task);
+    struct tss *tss = get_curr_tss();
+    struct tss *fault_tss = get_tss(tss->prev_task);
 
     struct iregs regs = { };
     regs.ebx = fault_tss->ebx;

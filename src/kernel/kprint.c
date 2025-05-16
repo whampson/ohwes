@@ -38,7 +38,11 @@
 #define KPRINT_BUFSIZ       KLOG_BUFSIZ
 #define PANIC_BUFSIZ        128
 
-#define __initmem __data_segment
+#define __initmem __data_segment    // TODO: better name for this... __diskmem?
+                                    // to reflect that it's zeroed in the kernel
+                                    // image and will thus always be initialized
+                                    // to zero upon reboot but will also take up
+                                    // disk space
 
 __initmem static int _log_start = 0;
 __initmem static int _log_size = 0;
@@ -48,7 +52,7 @@ __initmem static int _log_size = 0;
 // don't want 4K of empty space occupying our kernel image!
 __initmem static char _kernel_log[KLOG_BUFSIZ];
 
-__initmem static struct console *consoles = NULL;
+__initmem struct console *g_consoles = NULL;
 
 // TODO: remove
 __data_segment bool g_kb_initialized = false;
@@ -89,7 +93,7 @@ int kprint(const char *fmt, ...)
         }
 
         // write line to console
-        cons = consoles;
+        cons = g_consoles;
         while (cons) {
             if (cons->write) {
                 cons->write(cons, line, (p - line) + linefeed);
@@ -108,18 +112,17 @@ int kprint(const char *fmt, ...)
 
 void register_console(struct console *cons)
 {
-    int ret;
     const char *log_ptr;
     struct console *currcons;
 
     assert(cons);
 
-    if (consoles == NULL) {
-        consoles = cons;
+    if (g_consoles == NULL) {
+        g_consoles = cons;
         cons->next = NULL;
     }
     else {
-        currcons = consoles;
+        currcons = g_consoles;
         while (currcons->next) {
             currcons = currcons->next;
         }
@@ -128,10 +131,7 @@ void register_console(struct console *cons)
     }
 
     if (cons->setup) {
-        ret = cons->setup(cons);
-        if (ret != 0) {
-            panic("%s setup failed (error %d)", cons->name, ret);
-        }
+        cons->setup(cons);
     }
     if (cons->write) {
         log_ptr = &_kernel_log[_log_start];
@@ -151,13 +151,13 @@ void unregister_console(struct console *cons)
 
     assert(cons);
 
-    if (consoles == cons) {
-        consoles = consoles->next;
+    if (g_consoles == cons) {
+        g_consoles = g_consoles->next;
         cons->next = NULL;
         return;
     }
 
-    currcons = consoles;
+    currcons = g_consoles;
     while (currcons->next) {
         prevcons = currcons;
         currcons = currcons->next;
@@ -180,7 +180,7 @@ static void print_consoles(void)   // TODO: procfs for this
 {
     struct console *cons;
 
-    cons = consoles;
+    cons = g_consoles;
     while (cons) {
         // printf("%s ", cons->name);
         cons = cons->next;
@@ -326,6 +326,7 @@ static void print_consoles(void)   // TODO: procfs for this
 
 // }
 
+extern struct console vt_console;
 
 void __noreturn panic(const char *fmt, ...)
 {
@@ -337,6 +338,12 @@ void __noreturn panic(const char *fmt, ...)
     va_start(args, fmt);
     vsnprintf(buf, PANIC_BUFSIZ, fmt, args);
     va_end(args);
+
+    if (g_consoles == NULL) {
+        // register an emergency console so we can print!
+        struct console *panic_console = &vt_console;
+        register_console(panic_console);
+    }
 
     kprint("\n\e[1;31mpanic: ");
     kprint(buf);

@@ -35,7 +35,7 @@ struct io_range {
 
 list_t io_ranges_list = LIST_INITIALIZER(io_ranges_list);
 struct io_range _io_ranges_pool[MAX_NR_IO_RANGES];
-pool_t io_ranges_pool;
+pool_t io_ranges_pool = NULL;
 
 void init_io(void)
 {
@@ -59,6 +59,10 @@ int reserve_io_range(uint16_t base, uint8_t count, const char *name)
     struct io_range *new_range;
     struct io_range *curr;
     struct list_node *e;
+
+    if (!io_ranges_pool) {
+        panic("I/O ranges not initialized!");
+    }
 
     new_range = pool_alloc(io_ranges_pool);
     if (!new_range) {

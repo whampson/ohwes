@@ -47,9 +47,6 @@
 #include <kernel/termios.h>
 #include <sys/ioctl.h>
 
-__data_segment static struct boot_info _boot;
-__data_segment struct boot_info *g_boot = &_boot;
-
 #define CHECK(sys)              \
 ({                              \
     int __ret = (sys);          \
@@ -88,9 +85,7 @@ int main(void);     // user mode program entry point
 
 __fastcall void kmain(struct boot_info *info)
 {
-    // copy boot info into kernel memory so we don't lose it during init
-    memcpy(g_boot, info, sizeof(struct boot_info));
-    info = g_boot;
+    // __dbgbrk(); // TODO: make this work
 
     // init the early terminal by printing something to it; this is so
     // even very early crash prints have a basic working terminal
@@ -103,8 +98,7 @@ __fastcall void kmain(struct boot_info *info)
     // do this as early as possible to ensure BSS is zeroed
     init_mm();
 
-    // finish setting up CPU descriptors (IDT, etc.) and setup I/O stuff
-    init_cpu(); // TODO: move this to setup.S
+    // setup I/O stuff
     init_io();
 
     // initialize the GDB stub

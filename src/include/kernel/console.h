@@ -31,7 +31,7 @@ struct console {
     int flags;
 
     dev_t (*device)(struct console *);
-    int (*setup)(struct console *);
+    void (*setup)(struct console *);
     int (*write)(struct console *, const char *, size_t);
     int (*waitkey)(struct console *);
 
