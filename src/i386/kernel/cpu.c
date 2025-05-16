@@ -203,7 +203,7 @@ static void setup_tss(void)
         KERNEL_PL, (uintptr_t) &_tss_table[0]);
     struct tss *tss = get_tss(_TSS0_SEGMENT);
     assert(tss == &_tss_table[0]);
-    tss->esp0 = __phys_to_virt(INT_STACK_BASE);
+    tss->esp0 = KERNEL_ADDR(INT_STACK_BASE);
     tss->ss0 = KERNEL_DS;
 
     // double fault TSS, used to force a stack switch so we don't lose
@@ -215,8 +215,8 @@ static void setup_tss(void)
     struct tss *crash_tss = get_tss(_TSS1_SEGMENT);
     assert(crash_tss == &_tss_table[1]);
     crash_tss->eip = (uint32_t) _double_fault;
-    crash_tss->esp = __phys_to_virt(DOUBLE_FAULT_STACK);
-    crash_tss->ebp = __phys_to_virt(DOUBLE_FAULT_STACK);
+    crash_tss->esp = KERNEL_ADDR(DOUBLE_FAULT_STACK);
+    crash_tss->ebp = KERNEL_ADDR(DOUBLE_FAULT_STACK);
     crash_tss->cs = KERNEL_CS;
     crash_tss->ds = KERNEL_DS;
     crash_tss->es = KERNEL_DS;

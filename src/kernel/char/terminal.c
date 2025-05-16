@@ -396,7 +396,7 @@ int switch_terminal(int num)
 
     uint32_t pgdir_addr = 0;
     store_cr3(pgdir_addr);
-    pgdir_addr = __phys_to_virt(pgdir_addr);
+    pgdir_addr = KERNEL_ADDR(pgdir_addr);
 
 #if HIGHER_GROUND
     // enable kernel identity mapping so we can operate on page tables
@@ -408,7 +408,7 @@ int switch_terminal(int num)
     for (int i = 0; i < FB_SIZE_PAGES; i++) {
         uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
         pte_t *pte = pte_offset((pde_t *) pgdir_addr, fb_page);
-        *pte = __mkpte(__virt_to_phys(fb_page), _PAGE_RW);
+        *pte = __mkpte(PHYSICAL_ADDR(fb_page), _PAGE_RW);
     }
     flush_tlb();
 
@@ -422,7 +422,7 @@ int switch_terminal(int num)
         uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
         uint32_t vga_page = g_vga->fb_info.framebuf + (i << PAGE_SHIFT);
         pte_t *pte = pte_offset((pde_t *) pgdir_addr, fb_page);
-        *pte = __mkpte(__virt_to_phys(vga_page), _PAGE_RW);
+        *pte = __mkpte(PHYSICAL_ADDR(vga_page), _PAGE_RW);
     }
 
 #if HIGHER_GROUND

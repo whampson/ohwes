@@ -68,6 +68,9 @@ do { \
 // zero memory
 #define zeromem(p,n)    memset(p, 0, n)
 
+// TODO: verify/test these!!
+#define PHYSICAL_ADDR(v)    (((uintptr_t) (v) >= KERNEL_VA) ? ((uintptr_t) (v) - KERNEL_VA) : (uintptr_t) (v))
+#define KERNEL_ADDR(p)      (((uintptr_t) (p) >= -KERNEL_VA)  ? (uintptr_t) (p) : ((uintptr_t) (p) + KERNEL_VA))
 
 #endif  // !defined(__ASSEMBLER__) && defined(__KERNEL__)
 #endif  // __KERNEL_H

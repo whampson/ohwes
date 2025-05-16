@@ -87,8 +87,6 @@ __fastcall void kmain(struct boot_info *info)
 {
     // __dbgbrk(); // TODO: make this work
 
-    // init the early terminal by printing something to it; this is so
-    // even very early crash prints have a basic working terminal
     kprint("\n\e[0;1m%s %s '%s'\n", OS_NAME, OS_VERSION, OS_MONIKER);
     kprint("built %s %s using GCC %s by %s\e[0m\n",
         __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
@@ -142,7 +140,7 @@ __fastcall void kmain(struct boot_info *info)
     __cli();
 
     kprint("entering user mode...\n");
-    go_to_ring3(__phys_to_virt(SETUP_STACK));
+    go_to_ring3(KERNEL_ADDR(SETUP_STACK));  // reuse the setup stack
 
     // for future reference...
     // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779

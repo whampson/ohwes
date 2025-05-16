@@ -45,6 +45,7 @@
 #define SERIAL_DEBUG_BAUD   BAUD_9600
 #define ENABLE_CRASH_KEY    0   // test various crash scenarios w/ keystroke
 
+// console assignments
 #define SERIAL_CONSOLE_NUM  2         // serial console TTY number
 #define SERIAL_OUTPUT_PORT  COM2_PORT // serial console I/O port number
 
@@ -102,9 +103,9 @@ static_assert(INT_STACK_LIMIT >= DOUBLE_FAULT_STACK, "Interrupt stacks overlap c
 // kernel virtual address space
 // the lower 1MB of physical memory is identity-mapped mapped
 #if HIGHER_GROUND
-  #define KERNEL_VA_BASE    0xC0000000
+  #define KERNEL_VA     0xC0000000
 #else
-  #define KERNEL_VA_BASE    0x0
+  #define KERNEL_VA     0x0
 #endif
 
 //

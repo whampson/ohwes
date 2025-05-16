@@ -53,8 +53,8 @@ void init_vga(void)
     g_vga->fb_info = fb_info_new;
 
     // move the old frame buffer to the new one
-    fb_old = (void *) __phys_to_virt(fb_info_old.framebuf);
-    fb_new = (void *) __phys_to_virt(fb_info_new.framebuf);
+    fb_old = (void *) KERNEL_ADDR(fb_info_old.framebuf);
+    fb_new = (void *) KERNEL_ADDR(fb_info_new.framebuf);
     memmove(fb_new, fb_old, FB_SIZE_PAGES);
 
     // update system terminal frame buffer

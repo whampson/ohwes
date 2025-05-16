@@ -79,7 +79,7 @@ void init_mm(void)
 #endif
 
     init_bss();
-    g_mm->pgdir = (void *) __phys_to_virt(KERNEL_PGDIR);
+    g_mm->pgdir = (void *) KERNEL_ADDR(KERNEL_PGDIR);
 
     init_pools();
 }
@@ -113,7 +113,7 @@ static void print_kernel_sections(void)
     for (int i = 0; i < countof(sections); i++) {
         struct section *sec = &sections[i];
         kprint("PA:%08X-%08X VA:%08X-%08X %s\n",
-            __virt_to_phys(sec->start), __virt_to_phys(sec->end)-1,
+            PHYSICAL_ADDR(sec->start), PHYSICAL_ADDR(sec->end)-1,
             sec->start, sec->end-1, sec->name);
     }
 
