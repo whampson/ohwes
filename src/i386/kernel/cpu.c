@@ -56,19 +56,26 @@
 #define CPUID_PGE               (1 << 13)
 #define CPUID_PAT               (1 << 16)
 
-static void init_idt(void);
-static void init_tss(void);
-
+static void setup_ldt(void);
+static void setup_tss(void);
+static void setup_idt(void);
 static void verify_gdt(void);
 
-extern struct tss *g_double_fault_tss;          // crash.c
+extern struct x86_desc *g_gdt;
+extern struct x86_desc *g_idt;
+static struct x86_desc * get_gdt(void);
+static struct x86_desc * get_idt(void);
+
+__data_segment static struct x86_desc _ldt[1];
+__data_segment static struct tss _tss_table[2];
+
 extern __noreturn void _double_fault(void);  // crash.c
 
 // TODO: this is a bit of a janky way of managing kernel stacks
 // but it'll work for now
 void push_kernel_stack(void)
 {
-    struct tss *tss = get_tss();
+    struct tss *tss = get_curr_tss();
     tss->esp0 -= FRAME_SIZE;
     if (tss->esp0 <= INT_STACK_LIMIT) {
         panic("too many nested interrupts!");
@@ -77,84 +84,136 @@ void push_kernel_stack(void)
 
 void pop_kernel_stack(void)
 {
-    struct tss *tss = get_tss();
+    struct tss *tss = get_curr_tss();
     tss->esp0 += FRAME_SIZE;
     if (tss->esp0 > INT_STACK_BASE) {
         panic("kernel stack underflow");
     }
 }
 
-void init_cpu(void)
+struct tss * get_curr_tss(void)
 {
-    init_idt();
-    init_tss();
-    verify_gdt();
-
-    struct cpuid cpuid;
-    bool has_cpuid = get_cpu_info(&cpuid);
-    if (has_cpuid) {
-        kprint("cpu: vendor=%s level=%02xh", cpuid.vendor_id, cpuid.level);
-        if (cpuid.level >= 1) {
-            kprint(" family=%02xh model=%02xh step=%02xh",
-                cpuid.family, cpuid.model, cpuid.stepping);
-            kprint("\ncpu: type=%02xh index=%02xh ext=%02xh",
-                cpuid.type, cpuid.brand_index, cpuid.level_extended);
-        }
-        if (cpuid.level_extended >= 0x80000004) {
-            kprint("\ncpu: name='%s'", cpuid.brand_name);
-        }
-        kprint("\n");
-    }
+    uint16_t segsel; __str(segsel);
+    return get_tss(segsel);
 }
 
-void init_idt(void)
+struct tss * get_tss(uint16_t segsel)
+{
+    struct x86_desc *gdt = get_gdt();
+    struct x86_desc *tss_desc = x86_get_desc(gdt, segsel);
+
+    return (struct tss *) ((tss_desc->tss.basehi << 24) | tss_desc->tss.baselo);
+}
+
+static struct x86_desc * get_gdt(void)
+{
+    struct table_desc gdt_desc = { };
+    __sgdt(gdt_desc);
+
+    struct x86_desc *desc = (struct x86_desc *) gdt_desc.base;
+    assert(desc == g_gdt);
+
+    return desc;
+}
+
+static struct x86_desc * get_idt(void)
+{
+    // must be marked 'volatile' or compiler will optimize away result
+    struct table_desc idt_desc = { };
+    __sidt(idt_desc);
+
+    struct x86_desc *desc = (struct x86_desc *) idt_desc.base;
+    assert(desc == g_idt);
+
+    return desc;
+}
+
+void setup_cpu(void)
+{
+    setup_idt();
+    setup_ldt();
+    setup_tss();
+    verify_gdt();
+
+    // struct cpuid cpuid;
+    // bool has_cpuid = get_cpu_info(&cpuid);
+    // if (has_cpuid) {
+    //     kprint("cpu: vendor=%s level=%02xh", cpuid.vendor_id, cpuid.level);
+    //     if (cpuid.level >= 1) {
+    //         kprint(" family=%02xh model=%02xh step=%02xh",
+    //             cpuid.family, cpuid.model, cpuid.stepping);
+    //         kprint("\ncpu: type=%02xh index=%02xh ext=%02xh",
+    //             cpuid.type, cpuid.brand_index, cpuid.level_extended);
+    //     }
+    //     if (cpuid.level_extended >= 0x80000004) {
+    //         kprint("\ncpu: name='%s'", cpuid.brand_name);
+    //     }
+    //     kprint("\n");
+    // }
+}
+
+void setup_idt(void)
 {
     extern idt_thunk exception_thunks[NR_EXCEPTIONS];
     extern idt_thunk irq_thunks[NR_IRQS];
-    extern idt_thunk _syscall;
+    extern idt_thunk syscall_thunk;
 
-    struct x86_desc *idt;
-    volatile struct table_desc idt_desc = { };
-
-    __sidt(idt_desc);
-    idt = (struct x86_desc *) idt_desc.base;
+    struct x86_desc *idt = get_idt();
 
     for (int i = 0; i < NR_EXCEPTIONS; i++) {
-        // trap gate for exceptions; device interrupts are OK
-        int vec = VEC_INTEL + i;
-        int pl = (vec == EXCEPTION_BP) ? USER_PL : KERNEL_PL;
-        make_intr_gate(&idt[vec], KERNEL_CS, pl, exception_thunks[i]);
+        // interrupt gate for system exceptions;
+        // each handler must explicitly enable interrupts if it wants them
+        make_intr_gate(&idt[VEC_INTEL + i], KERNEL_CS, KERNEL_PL, exception_thunks[i]);
     }
-
-    // use task gate for double fault handler so we force a stack switch
-    make_task_gate(&idt[EXCEPTION_DF], _TSS1_SEGMENT, KERNEL_PL);
 
     for (int i = 0; i < NR_IRQS; i++) {
-        // interrupt gate for device IRQs; no nested device interrupts
-        int vec = VEC_DEVICEIRQ + i;
-        make_intr_gate(&idt[vec], KERNEL_CS, KERNEL_PL, irq_thunks[i]);
+        // interrupt gate for device IRQs; prevent nested IRQs
+        make_intr_gate(&idt[VEC_IRQ + i], KERNEL_CS, KERNEL_PL, irq_thunks[i]);
     }
 
+    // user-mode interrupt gate for breakpoint handler
+    // so user-mode programs can trigger it
+    make_intr_gate(&idt[EXCEPTION_BP], KERNEL_CS, USER_PL, exception_thunks[EXCEPTION_BP]);
+
+    // task gate for double fault handler to force a stack switch
+    // so we don't lose original exception's stack
+    make_task_gate(&idt[EXCEPTION_DF], _TSS1_SEGMENT, KERNEL_PL);
+
     // trap gate for system calls; device interrupts are OK
-    make_trap_gate(&idt[VEC_SYSCALL], KERNEL_CS, USER_PL, &_syscall);
+    make_trap_gate(&idt[VEC_SYSCALL], KERNEL_CS, USER_PL, &syscall_thunk);
 }
 
-static void init_tss(void)
+void setup_ldt(void)
 {
-    // system call TSS
-    struct tss *tss = get_tss_from_gdt(_TSS0_SEGMENT);
-    zeromem(tss, TSS_SIZE);
+    // no LDT in use (only contains null entry);
+    // make a dummy descriptor so CPU doesn't freak out
+    make_ldt_desc(
+        x86_get_desc(get_gdt(), _LDT_SEGMENT),
+        KERNEL_PL, (uintptr_t) _ldt, sizeof(_ldt) - 1);
+
+    // load LDT descriptor register
+    __lldt(_LDT_SEGMENT);
+}
+
+static void setup_tss(void)
+{
+    // normal interrupt TSS
+    make_tss_desc(
+        x86_get_desc(get_gdt(), _TSS0_SEGMENT),
+        KERNEL_PL, (uintptr_t) &_tss_table[0]);
+    struct tss *tss = get_tss(_TSS0_SEGMENT);
+    assert(tss == &_tss_table[0]);
     tss->esp0 = __phys_to_virt(INT_STACK_BASE);
     tss->ss0 = KERNEL_DS;
 
-    // double fault TSS, used to force a stack switch
+    // double fault TSS, used to force a stack switch so we don't lose
+    // initial fault's stack
     make_tss_desc(
         x86_get_desc(get_gdt(), _TSS1_SEGMENT),
-        KERNEL_PL, (uintptr_t) g_double_fault_tss);
+        KERNEL_PL, (uintptr_t) &_tss_table[1]);
 
-    struct tss *crash_tss = get_tss_from_gdt(_TSS1_SEGMENT);
-    assert(crash_tss == g_double_fault_tss);
-    zeromem(crash_tss, TSS_SIZE);
+    struct tss *crash_tss = get_tss(_TSS1_SEGMENT);
+    assert(crash_tss == &_tss_table[1]);
     crash_tss->eip = (uint32_t) _double_fault;
     crash_tss->esp = __phys_to_virt(DOUBLE_FAULT_STACK);
     crash_tss->ebp = __phys_to_virt(DOUBLE_FAULT_STACK);
@@ -163,6 +222,9 @@ static void init_tss(void)
     crash_tss->es = KERNEL_DS;
     crash_tss->ss = KERNEL_DS;
     crash_tss->cr3 = KERNEL_PGDIR;
+
+    // load task register
+    __ltr(_TSS0_SEGMENT);
 }
 
 static void verify_gdt(void)
@@ -215,28 +277,6 @@ static void verify_gdt(void)
     assert(tss_desc->tss.g == 0);
     assert(tss_desc->tss.p == 1);
     // TODO: verify base/limit in kernel space
-}
-
-struct x86_desc * get_gdt(void)
-{
-    volatile struct table_desc desc = { };
-    __sgdt(desc);
-
-    return (struct x86_desc *) desc.base;
-}
-
-struct tss * get_tss(void)
-{
-    int segsel; __str(segsel);
-    return get_tss_from_gdt(segsel);
-}
-
-struct tss * get_tss_from_gdt(int segsel)
-{
-    struct x86_desc *gdt = get_gdt();
-    struct x86_desc *tss_desc = x86_get_desc(gdt, segsel);
-
-    return (struct tss *) ((tss_desc->tss.basehi << 24) | tss_desc->tss.baselo);
 }
 
 bool cpu_has_cpuid(void)

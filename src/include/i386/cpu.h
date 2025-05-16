@@ -50,8 +50,7 @@ bool cpu_has_cr4(void);
 bool cpu_has_cpuid(void);
 bool get_cpu_info(struct cpuid *cpuid_info);    // cpuid
 
-struct x86_desc * get_gdt(void);
-struct tss * get_tss(void);
-struct tss * get_tss_from_gdt(int segsel);
+struct tss * get_curr_tss(void);
+struct tss * get_tss(uint16_t segsel);
 
 #endif // __CPU_H

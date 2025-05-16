@@ -28,6 +28,7 @@
 #define VEC_INTEL                   0x00    // Base vector for Intel exceptions.
 #define VEC_IRQ                     0x20    // Base vector for device IRQs.
 #define VEC_SYSCALL                 0x80    // Interrupt vector for syscalls.
+#define NR_VECS                     256
 
 /**
  * Intel exception vector numbers.

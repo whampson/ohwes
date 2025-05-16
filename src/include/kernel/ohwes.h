@@ -54,21 +54,6 @@
 
 #define ispow2(x)                       ((x) == 1 || ((x) & ((x) - 1)) == 0)
 
-//
-// CPU Privilege
-//
-
-enum pl {
-    KERNEL_PL = 0,
-    USER_PL = 3,
-};
-
-#define getpl()                         \
-({                                      \
-    struct segsel cs;                   \
-    store_cs(cs);                       \
-    cs.rpl;                             \
-})
 
 //
 // Strings

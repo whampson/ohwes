@@ -32,6 +32,8 @@
 
 // ----------------------------------------------------------------------------
 
+#define BI_SIZE             0x34    // boot info size
+
 #ifndef __ASSEMBLER__
 // C-only defines from here on out!
 
@@ -129,7 +131,7 @@ typedef struct acpi_mmap_entry acpi_mmap_t;
  */
 struct boot_info {
     //
-    // !!! KEEP OFFSETS IN-LINE WITH src/boot/stage2.h !!!
+    // !!! KEEP OFFSETS IN-LINE WITH boot/i386/stage2.S !!!
     //
 
     // important memory addresses
@@ -153,6 +155,7 @@ struct boot_info {
     uint32_t cursor_row;            // current cursor row (INT 10h,AH=03h)
     uint32_t cursor_col;            // current cursor column (INT 10h,AH=03h)
 };
+static_assert(sizeof(struct boot_info) == BI_SIZE, "sizeof(struct boot_info)");
 
 #endif  // __ASSEMBLER__
 

@@ -22,6 +22,7 @@
 #ifndef __KERNEL_H
 #define __KERNEL_H
 
+// x86 segment selectors (TODO: move to some x86 header)
 #define KERNEL_CS                       0x10
 #define KERNEL_DS                       0x18
 #define USER_CS                         0x23

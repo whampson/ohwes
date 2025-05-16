@@ -19,13 +19,18 @@
 #  Environment: 32-bit Protected Mode
 # =============================================================================
 
+#include <i386/boot.h>
+#include <i386/interrupt.h>
 #include <i386/paging.h>
 #include <i386/x86.h>
 #include <kernel/config.h>
 #include <kernel/kernel.h>
+#include <kernel/irq.h>         // TODO: should be i386/irq.h
 
 .code32
 .section .setup, "ax", @progbits
+
+.globl g_boot, g_gdt, g_idt, g_ldt, g_tss
 
 ##
 # Kernel setup.
@@ -33,21 +38,13 @@
 # Protected Mode CPU descriptors and setting up virtual memory mappings for
 # the kernel code.
 ##
-.globl ksetup
 ksetup:
-        movl            %ecx, boot_params_ptr   # store boot params
-        lgdt            gdt_desc                # load the real GDT
-        lidt            idt_desc                #  and the real IDT
-        ljmp            $KERNEL_CS, $_setup     # cs = KERNEL_CS
-_setup:
-        # reload the segment registers
-        movw            $KERNEL_DS, %ax
-        movw            %ax, %ds                # ds = KERNEL_DS
-        movw            %ax, %es                # es = KERNEL_DS
-        movw            %ax, %ss                # ss = KERNEL_DS
-        xorw            %ax, %ax
-        movw            %ax, %fs                # fs = 0
-        movw            %ax, %gs                # gs = 0
+        # copy boot params from stage2
+        movl            %ecx, %esi              # ptr passed in ecx from stage2
+        movl            g_boot, %edi
+        movl            $BI_SIZE, %ecx
+        cld
+    rep movsb
 
         # setup the inititial stack
         movl            $SETUP_STACK, %ebp
@@ -56,87 +53,49 @@ _setup:
         # setup paging; first 1M of physical memory will be identity mapped
         call            setup_paging
 
-#if HIGHER_GROUND
-        # now that paging is enabled and kernel-space is also mapped in high
-        # memory at PAGE_OFFSET, reload the stack registers, the CPU descriptor
-        # registers and pointers, the boot params pointer, and EIP with their
-        # kernel-space equivalents
+        # now that paging is enabled and kernel space is mapped at PAGE_OFFSET,
+        # adjust the descriptor table pointers and boot info pointers to point
+        # to kernel space
         addl            $PAGE_OFFSET, %ebp
         movl            %ebp, %esp
-        addl            $PAGE_OFFSET, boot_params_ptr
-        addl            $PAGE_OFFSET, gdt_ptr
-        addl            $PAGE_OFFSET, idt_ptr
-        addl            $PAGE_OFFSET, ldt_ptr
-        addl            $PAGE_OFFSET, tss_ptr
-        call            make_ldt_desc
-        call            make_tss_desc
+        addl            $PAGE_OFFSET, g_gdt
+        addl            $PAGE_OFFSET, g_idt
+        addl            $PAGE_OFFSET, g_boot
+
+        # load the GDT and IDT descriptor registers, perform the jump that
+        # reloads CS to begin execution in kernel space, then reload the segment
+        # registers with new values from the GDT
         lgdt            gdt_desc
         lidt            idt_desc
-        ljmp            $KERNEL_CS, $PAGE_OFFSET+_kernel_trampoline
-_kernel_trampoline:
-        # now we are executing in high address space :-) this screws with
-        # debugger symbols, luckily we aren't in this code for much longer...
+        ljmp            $KERNEL_CS, $PAGE_OFFSET+_seg_reload
+_seg_reload:
+        movw            $KERNEL_DS, %ax
+        movw            %ax, %ds                # ds = KERNEL_DS
+        movw            %ax, %es                # es = KERNEL_DS
+        movw            %ax, %ss                # ss = KERNEL_DS
+        xorw            %ax, %ax
+        movw            %ax, %fs                # fs = 0
+        movw            %ax, %gs                # gs = 0
+
+#if HIGHER_GROUND
         # clear the identity mapping
         movl            $0, KERNEL_PGDIR
-#else
-        # build the LDT and TSS
-        call            make_ldt_desc
-        call            make_tss_desc
 #endif
 
-        # load boot params ptr and pass control off to the kernel
-        movl            boot_params_ptr, %ecx       # fastcall param goes in ecx
-        movl            %cr3, %eax                  # flush TLB
-        movl            %eax, %cr3
-        lcall           $KERNEL_CS, $kmain          # far call into the kernel
+        # now we can build the CPU descriptor tables;
+        # the GDT is partially initiailzed statically below (see _gdt)
+        call            setup_cpu
+
+        # pass control off to the kernel
+        movl            %cr3, %eax
+        movl            %eax, %cr3              # flush TLB
+        lcall           $KERNEL_CS, $kmain      # far call into the kernel
 
 _idle:  # we should never end up here... but in case we do, spin forever
         jmp             _idle
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
-# -----------------------------------------------------------------------------
-
-make_ldt_desc:
-        movl            gdt_ptr, %ebx               # gdt_base in ebx
-        movl            ldt_ptr, %eax               # base in eax
-        movl            ldt_limit, %ecx             # limit in ecx
-        roll            $16, %eax                   # base[15:0] in upper eax
-        movl            %eax, %edx                  # base[31:16] in dx
-        movw            %cx, %ax                    # limit[15:0] in ax
-        movl            %eax, _LDT_SEGMENT(%ebx)    # write desc[31:0]
-        movw            %dx, %ax                    # base[31:24] in ah, base[23:16] in dl
-        rorl            $16, %ecx
-        movb            %cl, %al                    # limit[19:16] in al
-        andb            $0x0F, %al                  # g=0
-        movb            $0x82, %dh                  # p=1,dpl=0,s=0,type=2 (LDT)
-        rorl            $16, %eax                   # base[31:24] and limit[19:16] in upper eax
-        movw            %dx, %ax                    # everything else in ax
-        movl            %eax, _LDT_SEGMENT+4(%ebx)  # write desc[63:32]
-        movw            $_LDT_SEGMENT, %ax
-        lldt            %ax
-        ret
-
-make_tss_desc:
-        movl            gdt_ptr, %ebx               # gdt_base in ebx
-        movl            tss_ptr, %eax               # base in eax
-        movl            tss_limit, %ecx             # limit in ecx
-        roll            $16, %eax                   # base[15:0] in upper eax
-        movl            %eax, %edx                  # base[31:16] in dx
-        movw            %cx, %ax                    # limit[15:0] in ax
-        movl            %eax, _TSS0_SEGMENT(%ebx)   # write desc[31:0]
-        movw            %dx, %ax                    # base[31:24] in ah, base[23:16] in dl
-        rorl            $16, %ecx
-        movb            %cl, %al                    # limit[19:16] in al
-        andb            $0x0F, %al                  # g=0
-        movb            $0x89, %dh                  # p=1,dpl=0,s=0,type=9 (TSS)
-        rorl            $16, %eax                   # base[31:24] and limit[19:16] in upper eax
-        movw            %dx, %ax                    # everything else in ax
-        movl            %eax, _TSS0_SEGMENT+4(%ebx) # write desc[63:32]
-        movw            $_TSS0_SEGMENT, %ax
-        ltr             %ax
-        ret
-
 # -----------------------------------------------------------------------------
 
 ##
@@ -213,22 +172,19 @@ _map_low_1M_loop:
 _setup_paging_done:
         ret
 
+# buncha empty space here...
+
 # -----------------------------------------------------------------------------
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
-
-boot_params_ptr:
-        .long           0                       # filled in with ptr from stage2
+.align PAGE_SIZE, 0
 
 # -----------------------------------------------------------------------------
 # IDT
 
-IDT_COUNT = 256
-
 # Interrupt Descriptor Table
-.align PAGE_SIZE, 0
 _idt:
-        .fill           IDT_COUNT, 8, 0
+        .fill           NR_VECS, 8, 0
 _idt_end:
 
 # -----------------------------------------------------------------------------
@@ -252,29 +208,13 @@ _gdt:
 _gdt_end:
 
 # -----------------------------------------------------------------------------
-# LDT
-
-.align 8
-_ldt:
-        .quad           0
-_ldt_end:
-
-# -----------------------------------------------------------------------------
-# TSS
-
-.align 8
-_tss:
-        .fill           TSS_SIZE
-_tss_end:
-
-# -----------------------------------------------------------------------------
 # IDT Descriptor
 
         .word           0                       # align
 idt_desc:
 idt_limit:
         .word           _idt_end - _idt - 1
-idt_ptr:
+g_idt:
         .long           _idt
 
 # -----------------------------------------------------------------------------
@@ -284,21 +224,13 @@ idt_ptr:
 gdt_desc:
 gdt_limit:
         .word           _gdt_end - _gdt - 1
-gdt_ptr:
+g_gdt:
         .long           _gdt
 
 # -----------------------------------------------------------------------------
-# LDT Descriptor
+# Boot Info
 
-ldt_limit:
-        .long           _ldt_end - _ldt - 1
-ldt_ptr:
-        .long           _ldt
-
-# -----------------------------------------------------------------------------
-# TSS Descriptor
-
-tss_limit:
-        .long           _tss_end - _tss - 1
-tss_ptr:
-        .long           _tss
+_boot_info:
+        .fill           BI_SIZE
+g_boot:
+        .long           _boot_info

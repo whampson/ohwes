@@ -175,6 +175,21 @@
 #include <string.h>
 
 /**
+ * CPU Privilege Level
+ */
+enum pl {
+    KERNEL_PL = 0,
+    USER_PL = 3,
+};
+
+#define getpl()                         \
+({                                      \
+    struct segsel cs;                   \
+    store_cs(cs);                       \
+    cs.rpl;                             \
+})
+
+/**
  * EFLAGS Register
  */
 struct eflags {
@@ -354,7 +369,7 @@ static_assert(sizeof(struct table_desc) == 6, "sizeof(struct table_desc) == 6");
  * @return a pointer to the segment descriptor specified by the segment selector
  */
 #define x86_get_desc(table,segsel) \
-    (&(((struct x86_desc *)(table))[(segsel)>>3]))
+    (&(((struct x86_desc *)(table))[(segsel&0xFFFF)>>3]))
 
 /**
  * Gets the base address from a Segment Descriptor.
@@ -538,15 +553,15 @@ __asm__ volatile (                              \
 #define __cli() __asm__ volatile ("cli")
 #define __sti() __asm__ volatile ("sti")
 
-#define __lgdt(table_desc) __asm__ volatile ("lgdt %0" :: "m"(table_desc))
-#define __sgdt(table_desc) __asm__ volatile ("sgdt %0" :: "m"(table_desc))
-#define __lidt(table_desc) __asm__ volatile ("lidt %0" :: "m"(table_desc))
-#define __sidt(table_desc) __asm__ volatile ("sidt %0" :: "m"(table_desc))
+#define __lgdt(table_desc) __asm__ volatile ("lgdt %0" :: "m"(table_desc) : "memory")
+#define __sgdt(table_desc) __asm__ volatile ("sgdt %0" :: "m"(table_desc) : "memory")
+#define __lidt(table_desc) __asm__ volatile ("lidt %0" :: "m"(table_desc) : "memory")
+#define __sidt(table_desc) __asm__ volatile ("sidt %0" :: "m"(table_desc) : "memory")
 
-#define __lldt(segsel) __asm__ volatile ("lldt %0"  :: "r"(segsel))
-#define __sldt(segsel) __asm__ volatile ("sldt %0"  : "=r"(segsel))
-#define __ltr(segsel)  __asm__ volatile ("ltr %0"   :: "r"(segsel))
-#define __str(segsel)  __asm__ volatile ("str %0"   : "=r"(segsel))
+#define __lldt(segsel) __asm__ volatile ("lldt %w0"  :: "r"(segsel))
+#define __sldt(segsel) __asm__ volatile ("sldt %w0"  : "=r"(segsel))
+#define __ltr(segsel)  __asm__ volatile ("ltr %w0"   :: "r"(segsel))
+#define __str(segsel)  __asm__ volatile ("str %w0"   : "=r"(segsel))
 
 #define  load_cs(cs) __asm__ volatile ("ljmpl %0, $x%=; x%=:" :: "I"(cs))
 #define  load_ds(ds) __asm__ volatile ("movw %%ax, %%ds"      :: "a"(ds))
