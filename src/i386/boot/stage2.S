@@ -79,7 +79,11 @@ stage2:
 
         # long jump to the kernel setup
         leal            boot_info, %ecx         # pass bootparams ptr to kernel
-        ljmpl           $BOOT_CS, $KERNEL_BASE  # reload CS, jump to 32-bit code
+        movl            $KERNEL_BASE, %ebx
+        movl            0(%ebx), %ebx           # load kernel entry point addr
+        pushl           $BOOT_CS
+        pushl           %ebx
+        ljmpl           *(%esp)                 # long jump to 32-bit kernel
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------

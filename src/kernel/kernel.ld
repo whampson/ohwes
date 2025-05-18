@@ -27,7 +27,6 @@
 OUTPUT_ARCH("i386")
 OUTPUT_FORMAT("elf32-i386")
 ENTRY(ENTRY_POINT)
-ENTRY_POINT = KERNEL_BASE;
 
 SECTIONS
 {
@@ -39,6 +38,7 @@ SECTIONS
     .setup _setup_lma :
     {
         _setup_start = .;
+        LONG(ENTRY_POINT);
         *(.setup)
         _setup_end = .;
     }
@@ -82,6 +82,3 @@ SECTIONS
     _kernel_end = .;
     _kernel_size = _kernel_end - _kernel_start;
 }
-
-ASSERT(ENTRY_POINT == KERNEL_BASE,
-    "error: the kernel entry point must be placed at KERNEL_BASE");

@@ -24,7 +24,7 @@ endif
 
 TARGET_DEFINES := __KERNEL__
 TARGET_CFLAGS  := -Wno-unused-function -Wno-multichar
-TARGET_LDSCRIPT:= kernel.ld
+TARGET_LDSCRIPT:= kernel.ld	# TODO: move to arch directory?
 
 MODULES := \
     char \
