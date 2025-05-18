@@ -160,13 +160,15 @@ static void vt_console_setup(struct console *cons)
     g_vga->cols = g_boot->vga_cols;
 
     struct terminal *term = get_terminal(cons->index);
-    terminal_defaults(term);
-    term->number = cons->index;
-    term->cols = g_boot->vga_cols;
-    term->rows = g_boot->vga_rows;
-    term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
-    term->cursor.x = g_boot->cursor_col;
-    term->cursor.y = g_boot->cursor_row;
+    if (!term->initialized) {
+        terminal_defaults(term);
+        term->number = cons->index;
+        term->cols = g_boot->vga_cols;
+        term->rows = g_boot->vga_rows;
+        term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
+        term->cursor.x = g_boot->cursor_col;
+        term->cursor.y = g_boot->cursor_row;
+    }
 }
 
 static int vt_console_write(struct console *cons, const char *buf, size_t count)
@@ -197,7 +199,7 @@ static int vt_console_waitkey(struct console *cons)
 struct console vt_console =
 {
     .name = "tty",
-    .index = TTY_MIN,     // SYSTEM_CONSOLE ?
+    .index = 0,     // write to active terminal
     .flags = 0,
     .device = vt_console_device,
     .setup = vt_console_setup,

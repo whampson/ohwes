@@ -551,21 +551,20 @@ done:
 
 static void sysrq(char c)
 {
-    kb_enable();
-
     switch (c) {
-        case 'b':   // reboot
-            hard_reset();
+        default:
+            kprint("sysrq: crash(c) debug-break(g) reboot(r)\n");
             break;
-        case 'c':   // crash
-            __sti();
+        case 'c':
+            kb_enable();
+            irq_enable();
             load_ss(0x00);
             break;
-        case 'h':   // help
-            kprint("\nSYSRQ:\n");
-            kprint("  b: reboot\n");
-            kprint("  c: crash\n");
-            kprint("  h: help\n");
+        case 'g':
+            __dbgbrk();
+            break;
+        case 'r':
+            hard_reset();
             break;
     }
 }
