@@ -59,6 +59,7 @@
 
 #define MEMMAP_BASE         0x1000
 #define ROOTDIR_BASE        0x2000
+#define STACK_BASE          0x7C00
 #define STAGE2_BASE         0x7E00
 
 /*----------------------------------------------------------------------------*
