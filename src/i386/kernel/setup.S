@@ -31,9 +31,6 @@
 .code32
 .section .setup, "ax", @progbits
 
-# global exports
-.globl g_boot, g_gdt, g_idt, g_ldt, g_tss
-
 ##
 # -----------------------------------------------------------------------------
 # ksetup
@@ -53,7 +50,7 @@ ksetup:
 
         # copy boot params from stage2
         movl            %ecx, %esi
-        movl            g_boot, %edi
+        movl            boot_info_ptr, %edi
         movl            $BI_SIZE, %ecx
         cld
     rep movsb
@@ -70,17 +67,19 @@ ksetup:
         # to kernel space
         addl            $KERNEL_VA, %ebp
         movl            %ebp, %esp
-        addl            $KERNEL_VA, g_gdt
-        addl            $KERNEL_VA, g_idt
-        addl            $KERNEL_VA, g_boot
+        addl            $KERNEL_VA, gdt_ptr
+        addl            $KERNEL_VA, idt_ptr
+        addl            $KERNEL_VA, boot_info_ptr
 
         # load the GDT and IDT descriptor registers, perform the jump that
-        # reloads CS to begin execution in kernel space, then reload the segment
-        # registers with new values from the GDT
+        # reloads CS to begin execution in kernel space, then reload the
+        # segment registers with new values from the GDT
         lgdt            gdt_desc
         lidt            idt_desc
-        ljmp            $KERNEL_CS, $KERNEL_VA+_seg_reload
-_seg_reload:
+        ljmp            $KERNEL_CS, $_ksetup_continue
+
+.text   # we're executing in kernel-space now...
+_ksetup_continue:
         movw            $KERNEL_DS, %ax
         movw            %ax, %ds                # ds = KERNEL_DS
         movw            %ax, %es                # es = KERNEL_DS
@@ -96,6 +95,7 @@ _seg_reload:
 #if SERIAL_DEBUGGING
         call            setup_debug_port
 #endif
+
 #if HIGHER_GROUND
         movl            $0, KERNEL_PGDIR        # clear identity mapping
 #endif
@@ -103,6 +103,8 @@ _seg_reload:
         # pass control off to the kernel
         movl            %cr3, %eax
         movl            %eax, %cr3              # flush TLB
+        leal            boot_info_ptr, %ecx     # get ptr to boot params ptr
+        addl            $KERNEL_VA, %ecx        # adjust addr for kernel space
         lcall           $KERNEL_CS, $kmain      # far call into the kernel
 
 _idle:  # we should never end up here... but in case we do, spin forever
@@ -111,6 +113,7 @@ _idle:  # we should never end up here... but in case we do, spin forever
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
 # -----------------------------------------------------------------------------
+.section .setup, "ax", @progbits
 
 ##
 # -----------------------------------------------------------------------------
@@ -225,7 +228,8 @@ setup_debug_port:
         movw            $SERIAL_DEBUG_PORT+UART_IER, %dx
         outb            %al, %dx        # no serial interrupts
         movw            $SERIAL_DEBUG_PORT+UART_FCR, %dx
-        outb            %al, %dx        # no fifo
+        movb            $0xC7, %al
+        outb            %al, %dx        # enable FIFO
 
         # clear any pending reads
         movw            $SERIAL_DEBUG_PORT+UART_LSR, %dx
@@ -283,7 +287,7 @@ _gdt_end:
 idt_desc:
 idt_limit:
         .word           _idt_end - _idt - 1
-g_idt:
+idt_ptr:
         .long           _idt
 
 # -----------------------------------------------------------------------------
@@ -293,13 +297,13 @@ g_idt:
 gdt_desc:
 gdt_limit:
         .word           _gdt_end - _gdt - 1
-g_gdt:
+gdt_ptr:
         .long           _gdt
 
 # -----------------------------------------------------------------------------
 # Boot Info
 
-_boot_info:
+boot_info:
         .fill           BI_SIZE
-g_boot:
-        .long           _boot_info
+boot_info_ptr:
+        .long           boot_info

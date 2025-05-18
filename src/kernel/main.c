@@ -83,8 +83,12 @@ static void go_to_ring3(uint32_t stack);
 void init(void);    // user mode portion of setup
 int main(void);     // user mode program entry point
 
-__fastcall void kmain(struct boot_info *info)
+__data_segment struct boot_info *g_boot;
+
+__fastcall void kmain(struct boot_info **info)
 {
+    g_boot = *info;
+
     kprint("\n\e[0;1m%s %s '%s'\n", OS_NAME, OS_VERSION, OS_MONIKER);
     kprint("built %s %s using GCC %s by %s\e[0m\n",
         __DATE__, __TIME__, __VERSION__, OS_AUTHOR);

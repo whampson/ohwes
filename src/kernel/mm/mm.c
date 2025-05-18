@@ -149,7 +149,7 @@ static void print_memory_map(void)
         kb_free = kb_free_low + kb_free_1M + kb_free_16M;
     }
     else {
-        const acpi_mmap_t *e = g_boot->mem_map;
+        const acpi_mmap_t *e = (const acpi_mmap_t *) KERNEL_ADDR(g_boot->mem_map);
         while (e->type != 0)
         {
 #if PRINT_MEMORY_MAP

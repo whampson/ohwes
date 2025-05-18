@@ -30,7 +30,7 @@
 
 // memory
 #define MIN_KB              512 // let's see how long this lasts!
-#define HIGHER_GROUND       0   // map kernel in high virtual address space
+#define HIGHER_GROUND       1   // map kernel in high virtual address space
 
 // printing
 #define PRINT_LOGO          0   // show a special logo at boot
@@ -42,7 +42,7 @@
 // debugging
 #define SERIAL_DEBUGGING    1   // enable debugging over COM port
 #define SERIAL_DEBUG_PORT   COM1_PORT
-#define SERIAL_DEBUG_BAUD   BAUD_9600
+#define SERIAL_DEBUG_BAUD   BAUD_115200
 #define ENABLE_CRASH_KEY    0   // test various crash scenarios w/ keystroke
 
 // console assignments

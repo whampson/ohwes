@@ -61,8 +61,6 @@ static void setup_tss(void);
 static void setup_idt(void);
 static void verify_gdt(void);
 
-extern struct x86_desc *g_gdt;
-extern struct x86_desc *g_idt;
 static struct x86_desc * get_gdt(void);
 static struct x86_desc * get_idt(void);
 
@@ -77,7 +75,7 @@ void push_kernel_stack(void)
 {
     struct tss *tss = get_curr_tss();
     tss->esp0 -= FRAME_SIZE;
-    if (tss->esp0 <= INT_STACK_LIMIT) {
+    if (tss->esp0 <= KERNEL_ADDR(INT_STACK_LIMIT)) {
         panic("too many nested interrupts!");
     }
 }
@@ -86,18 +84,18 @@ void pop_kernel_stack(void)
 {
     struct tss *tss = get_curr_tss();
     tss->esp0 += FRAME_SIZE;
-    if (tss->esp0 > INT_STACK_BASE) {
+    if (tss->esp0 > KERNEL_ADDR(INT_STACK_BASE)) {
         panic("kernel stack underflow");
     }
 }
 
-struct tss * get_curr_tss(void)
+inline struct tss * get_curr_tss(void)
 {
     uint16_t segsel; __str(segsel);
     return get_tss(segsel);
 }
 
-struct tss * get_tss(uint16_t segsel)
+inline struct tss * get_tss(uint16_t segsel)
 {
     struct x86_desc *gdt = get_gdt();
     struct x86_desc *tss_desc = x86_get_desc(gdt, segsel);
@@ -105,27 +103,21 @@ struct tss * get_tss(uint16_t segsel)
     return (struct tss *) ((tss_desc->tss.basehi << 24) | tss_desc->tss.baselo);
 }
 
-static struct x86_desc * get_gdt(void)
+inline static struct x86_desc * get_gdt(void)
 {
     struct table_desc gdt_desc = { };
     __sgdt(gdt_desc);
 
-    struct x86_desc *desc = (struct x86_desc *) gdt_desc.base;
-    assert(desc == g_gdt);
-
-    return desc;
+    return (struct x86_desc *) KERNEL_ADDR(gdt_desc.base);
 }
 
-static struct x86_desc * get_idt(void)
+inline static struct x86_desc * get_idt(void)
 {
     // must be marked 'volatile' or compiler will optimize away result
     struct table_desc idt_desc = { };
     __sidt(idt_desc);
 
-    struct x86_desc *desc = (struct x86_desc *) idt_desc.base;
-    assert(desc == g_idt);
-
-    return desc;
+    return (struct x86_desc *) KERNEL_ADDR(idt_desc.base);
 }
 
 void setup_cpu(void)

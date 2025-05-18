@@ -164,7 +164,7 @@ static void vt_console_setup(struct console *cons)
     term->number = cons->index;
     term->cols = g_boot->vga_cols;
     term->rows = g_boot->vga_rows;
-    term->framebuf = (void *) fb_info.framebuf;
+    term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
     term->cursor.x = g_boot->cursor_col;
     term->cursor.y = g_boot->cursor_row;
 }
@@ -291,7 +291,7 @@ void init_terminal(void)
     term->cursor.x = g_boot->cursor_col;
     term->cursor.y = g_boot->cursor_row;
     term->cursor.shape = g_vga->orig_cursor_shape;
-    term->framebuf = (void *) g_vga->fb_info.framebuf;
+    term->framebuf = (void *) KERNEL_ADDR(g_vga->fb_info.framebuf);
 
     // do a proper 'switch' to the initial virtual terminal
     int ret = switch_terminal(SYSTEM_TERMINAL);
@@ -476,7 +476,7 @@ void * get_terminal_fb(int num)
     }
     assert(num > 0);
 
-    char *fb = (char *) g_vga->fb_info.framebuf;
+    char *fb = (char *) KERNEL_ADDR(g_vga->fb_info.framebuf);
     fb += (num * FB_SIZE_PAGES) << PAGE_SHIFT;
 
     return fb;
