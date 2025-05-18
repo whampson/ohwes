@@ -139,7 +139,7 @@ static uint8_t com_in(struct com *com, uint8_t reg);
 static void com_out(struct com *com, uint8_t reg, uint8_t data);
 
 static void shadow_regs(struct com *com);
-static bool set_baud(struct com *com, enum baud_rate baud);
+static bool set_baud(struct com *com, int baud_divisor);
 static bool set_mode(struct com *com,
     enum word_length wls, enum parity parity, enum stop_bits stb);
 static void set_fifo(struct com *com, bool enabled, enum recv_trig depth);
@@ -597,14 +597,14 @@ static void shadow_regs(struct com *com)
     com->msr._value = com_in(com, UART_MSR);
 }
 
-static bool set_baud(struct com *com, enum baud_rate baud)
+static bool set_baud(struct com *com, int baud_divisor)
 {
     uint8_t div_lo, div_hi;
     uint8_t lcr;
 
     // calculate divisor
-    div_lo = baud & 0xFF;
-    div_hi = (baud >> 8) & 0xFF;
+    div_lo = baud_divisor & 0xFF;
+    div_hi = (baud_divisor >> 8) & 0xFF;
 
     // set DLAB=1 so we can access the divisor regs
     lcr = com_in(com, UART_LCR);
@@ -618,7 +618,8 @@ static bool set_baud(struct com *com, enum baud_rate baud)
 
     // if readback failed, we might have a bad COM port
     if (ERR_CHK(com->baud_divisor) ) {
-        kprint("com%d: error: unable to set baud rate (div=%Xh)\n", com->num, baud);
+        kprint("com%d: error: unable to set baud rate (div=%Xh)\n",
+                com->num, baud_divisor);
         return false;
     }
 

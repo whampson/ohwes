@@ -22,10 +22,6 @@
 #ifndef __SERIAL_H
 #define __SERIAL_H
 
-#include <assert.h>
-#include <stdint.h>
-#include <kernel/config.h>
-
 //
 // UART Base IO Port Numbers
 //
@@ -38,18 +34,56 @@
 //
 // UART IO Port Registers
 //
-#define UART_RX             0       // Receive Buffer Register (Read-Only) (DLAB=0)
-#define UART_TX             0       // Transmit Holding Register (Write-Only) (DLAB=0)
-#define UART_DLL            0       // Baud Rate Divisor LSB (DLAB=1)
-#define UART_DLM            1       // Baud Rate Divisor MSB (DLAB=1)
-#define UART_IER            1       // Interrupt Enable Register
-#define UART_IIR            2       // Interrupt Identification Register (Read-Only)
-#define UART_FCR            2       // FIFO Control Register (Write-Only)
-#define UART_LCR            3       // Line Control Register
-#define UART_MCR            4       // Modem Control Register
-#define UART_LSR            5       // Line Status Register
-#define UART_MSR            6       // Modem Status Register
-#define UART_SCR            7       // Scratch Register
+#define UART_RX             0   // Receive Buffer Register (Read-Only) (DLAB=0)
+#define UART_TX             0   // Transmit Holding Register (Write-Only) (DLAB=0)
+#define UART_DLL            0   // Baud Rate Divisor LSB (DLAB=1)
+#define UART_DLM            1   // Baud Rate Divisor MSB (DLAB=1)
+#define UART_IER            1   // Interrupt Enable Register
+#define UART_IIR            2   // Interrupt Identification Register (Read-Only)
+#define UART_FCR            2   // FIFO Control Register (Write-Only)
+#define UART_LCR            3   // Line Control Register
+#define UART_MCR            4   // Modem Control Register
+#define UART_LSR            5   // Line Status Register
+#define UART_MSR            6   // Modem Status Register
+#define UART_SCR            7   // Scratch Register
+
+//
+// COM Port Baud Rates
+//
+// The integer value of each enum value may be used to program the
+// Baud Rate Divisor register.
+//
+#define BAUD_115200         1
+#define BAUD_57600          2
+#define BAUD_38400          3
+#define BAUD_28800          4    // nonstandard
+#define BAUD_23040          5    // nonstandard
+#define BAUD_19200          6
+#define BAUD_14400          8
+#define BAUD_12800          9    // nonstandard
+#define BAUD_11520          10   // nonstandard
+#define BAUD_9600           12
+#define BAUD_7680           15   // nonstandard
+#define BAUD_7200           16
+#define BAUD_6400           18   // nonstandard
+#define BAUD_5760           20   // nonstandard
+#define BAUD_4800           24
+#define BAUD_2400           48
+#define BAUD_1800           64
+#define BAUD_1200           96
+#define BAUD_600            192
+#define BAUD_300            384
+#define BAUD_200            576
+#define BAUD_150            768
+#define BAUD_134_5          857
+#define BAUD_110            1047
+#define BAUD_75             1536
+#define BAUD_50             2304
+
+#ifndef __ASSEMBLER__
+#include <assert.h>
+#include <stdint.h>
+#include <kernel/config.h>
 
 //
 // Interrupt Enable Register
@@ -192,41 +226,6 @@ enum parity {
 #define UART_MSR_DCD        0x80    // Data Carrier Detect
 
 #define UART_MSR_ANY_DELTA  0x0F    // mask for delta bits
-
-//
-// COM Port Baud Rates
-//
-// The integer value of each enum value may be used to program the
-// Baud Rate Divisor register.
-//
-enum baud_rate {
-    BAUD_115200 = 1,
-    BAUD_57600  = 2,
-    BAUD_38400  = 3,
-    BAUD_28800  = 4,    // nonstandard
-    BAUD_23040  = 5,    // nonstandard
-    BAUD_19200  = 6,
-    BAUD_14400  = 8,
-    BAUD_12800  = 9,    // nonstandard
-    BAUD_11520  = 10,   // nonstandard
-    BAUD_9600   = 12,
-    BAUD_7680   = 15,   // nonstandard
-    BAUD_7200   = 16,
-    BAUD_6400   = 18,   // nonstandard
-    BAUD_5760   = 20,   // nonstandard
-    BAUD_4800   = 24,
-    BAUD_2400   = 48,
-    BAUD_1800   = 64,
-    BAUD_1200   = 96,
-    BAUD_600    = 192,
-    BAUD_300    = 384,
-    BAUD_200    = 576,
-    BAUD_150    = 768,
-    BAUD_134_5  = 857,
-    BAUD_110    = 1047,
-    BAUD_75     = 1536,
-    BAUD_50     = 2304,
-};
 
 //
 // Line and Modem Statistics
@@ -374,5 +373,7 @@ struct msr {
     };
 };
 static_assert(sizeof(struct msr) == 1, "sizeof(struct msr)");
+
+#endif // __ASSEMBLER__
 
 #endif // __SERIAL_H

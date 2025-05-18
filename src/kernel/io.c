@@ -25,6 +25,7 @@
 #include <kernel/list.h>
 #include <kernel/kernel.h>
 #include <kernel/pool.h>
+#include <kernel/serial.h>
 
 struct io_range {
     struct list_node chain;
@@ -47,11 +48,17 @@ void init_io(void)
     if (!io_ranges_pool) {
         panic("failed to create io_ranges_pool!");
     }
+
+#if SERIAL_DEBUGGING
+    if (reserve_io_range(SERIAL_DEBUG_PORT, 8, "serial_debug") < 0) {
+        panic("unable to reserve I/O ports for serial debugging!");
+    }
+#endif
 }
 
 int check_io_range(uint16_t base, uint8_t count)
 {
-    return -EBUSY;
+    return -EBUSY;  // TODO
 }
 
 int reserve_io_range(uint16_t base, uint8_t count, const char *name)

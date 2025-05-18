@@ -71,7 +71,7 @@ extern void init_tty(void);
 extern void init_vga(void);
 
 #if SERIAL_DEBUGGING
-extern void init_gdb(void);
+extern bool g_debug_port_available;
 #endif
 
 #if TEST_BUILD
@@ -85,11 +85,17 @@ int main(void);     // user mode program entry point
 
 __fastcall void kmain(struct boot_info *info)
 {
-    // __dbgbrk(); // TODO: make this work
-
     kprint("\n\e[0;1m%s %s '%s'\n", OS_NAME, OS_VERSION, OS_MONIKER);
     kprint("built %s %s using GCC %s by %s\e[0m\n",
         __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
+
+#if SERIAL_DEBUGGING
+    if (!g_debug_port_available) {
+        kprint("warning: remote debugging not available, "
+            "no serial port found on I/O port %Xh!\n", SERIAL_DEBUG_PORT);
+    }
+#endif
+
     print_boot_info();
 
     // initialize static memory and setup memory manager,
@@ -98,11 +104,6 @@ __fastcall void kmain(struct boot_info *info)
 
     // setup I/O stuff
     init_io();
-
-    // initialize the GDB stub
-#if SERIAL_DEBUGGING
-    init_gdb();
-#endif
 
     // initialize interrupts and timers
     init_pic();
@@ -136,8 +137,6 @@ __fastcall void kmain(struct boot_info *info)
 #if TEST_BUILD
     run_tests();
 #endif
-
-    __cli();
 
     kprint("entering user mode...\n");
     go_to_ring3(KERNEL_ADDR(SETUP_STACK));  // reuse the setup stack

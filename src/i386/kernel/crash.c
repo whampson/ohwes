@@ -217,12 +217,10 @@ __fastcall void _crash(struct iregs *regs)
 
     {
         extern struct console *g_consoles;
-        extern struct console vt_console;
 
         if (g_consoles == NULL) {
             // register an emergency console so we can print!
-            struct console *panic_console = &vt_console;
-            register_console(panic_console);    // TODO: something more minimal...
+            register_default_console();
         }
     }
 

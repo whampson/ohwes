@@ -26,6 +26,7 @@
 #include <kernel/config.h>
 #include <kernel/kernel.h>
 #include <kernel/irq.h>         // TODO: should be i386/irq.h
+#include <kernel/serial.h>
 
 .code32
 .section .setup, "ax", @progbits
@@ -88,13 +89,16 @@ _seg_reload:
         movw            %ax, %fs                # fs = 0
         movw            %ax, %gs                # gs = 0
 
-#if HIGHER_GROUND
-        movl            $0, KERNEL_PGDIR        # clear identity mapping
-#endif
-
         # now we can build the CPU descriptor tables;
         # the GDT is partially initiailzed statically below (see _gdt)
         call            setup_cpu
+
+#if SERIAL_DEBUGGING
+        call            setup_debug_port
+#endif
+#if HIGHER_GROUND
+        movl            $0, KERNEL_PGDIR        # clear identity mapping
+#endif
 
         # pass control off to the kernel
         movl            %cr3, %eax
@@ -181,6 +185,61 @@ _map_low_1M_loop:
 
 _setup_paging_done:
         ret
+
+
+##
+# -----------------------------------------------------------------------------
+# setup_debug_port
+# -----------------------------------------------------------------------------
+# Initializes the serial port for remote debugging.
+##
+setup_debug_port:
+        # determine whether the port exists
+        xorb            %al, %al
+        movw            $SERIAL_DEBUG_PORT+UART_SCR, %dx
+        outb            %al, %dx
+        movb            $0x55, %al
+        outb            %al, %dx
+        movb            %al, %ah
+        inb             %dx, %al
+        cmpb            %al, %ah
+        jne             setup_debug_port_done
+
+        # configure the UART port
+        movw            $SERIAL_DEBUG_PORT+UART_LCR, %dx
+        movb            $0x80, %al
+        outb            %al, %dx        # enable DLAB so we can set baud
+        movb            $SERIAL_DEBUG_BAUD >>8 , %al
+        movw            $SERIAL_DEBUG_PORT+UART_DLM, %dx
+        outb            %al, %dx        # set baud divisor high byte
+        movw            $SERIAL_DEBUG_PORT+UART_DLL, %dx
+        movb            $SERIAL_DEBUG_BAUD & 0xFF, %al
+        outb            %al, %dx        # set baud divisor low byte
+        movw            $SERIAL_DEBUG_PORT+UART_LCR, %dx
+        movb            $0x03, %al
+        outb            %al, %dx        # LCR = 8N1
+        movw            $SERIAL_DEBUG_PORT+UART_MCR, %dx
+        movb            $0x0B, %al
+        outb            %al, %dx        # MCR = dtr rts out2
+        xorb            %al, %al
+        movw            $SERIAL_DEBUG_PORT+UART_IER, %dx
+        outb            %al, %dx        # no serial interrupts
+        movw            $SERIAL_DEBUG_PORT+UART_FCR, %dx
+        outb            %al, %dx        # no fifo
+
+        # clear any pending reads
+        movw            $SERIAL_DEBUG_PORT+UART_LSR, %dx
+        inb             %dx, %al
+        movw            $SERIAL_DEBUG_PORT+UART_MSR, %dx
+        inb             %dx, %al
+        movw            $SERIAL_DEBUG_PORT+UART_IIR, %dx
+        inb             %dx, %al
+
+        movl            $1, g_debug_port_available
+
+setup_debug_port_done:
+        ret
+
 
 # buncha empty space here...
 

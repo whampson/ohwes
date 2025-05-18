@@ -39,7 +39,11 @@
 
 #include <assert.h>
 #include <i386/interrupt.h>
+#include <kernel/config.h>
+#include <kernel/console.h>
 #include <kernel/task.h>
+
+#define __setup __attribute__((section(".setup")))
 
 #define ALERT_FREQ  1725
 #define ALERT_TIME   100

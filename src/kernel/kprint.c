@@ -123,9 +123,17 @@ void register_console(struct console *cons)
     }
     else {
         currcons = g_consoles;
+        if (cons == currcons) {
+            return; // already registered
+        }
+
         while (currcons->next) {
             currcons = currcons->next;
+            if (currcons == cons) {
+                return; // already registered
+            }
         }
+
         currcons->next = cons;
         cons->next = NULL;
     }
@@ -169,6 +177,12 @@ void unregister_console(struct console *cons)
     }
 }
 
+void register_default_console(void)
+{
+    extern struct console vt_console;
+    register_console(&vt_console);
+}
+
 static void print_log(void)    // TODO: procfs for this
 {
     for (int i = 0; i < _log_size; i++) {
@@ -188,144 +202,6 @@ static void print_consoles(void)   // TODO: procfs for this
     // printf("\n");
 }
 
-
-// inline static char com_in(int port)
-// {
-//     return inb(SERIAL_OUTPUT_PORT + port);
-// }
-
-// inline static void com_out(int port, char data)
-// {
-//     outb(SERIAL_OUTPUT_PORT + port, data);
-// }
-
-// static void com_putc(char c)
-// {
-//     while ((com_in(UART_LSR) & UART_LSR_THRE) == 0);
-//     com_out(UART_TX, c);
-// }
-
-// extern int tty_open_internal(struct tty *tty);
-
-// static void lazy_terminal_init(struct terminal *term)
-// {
-//     // struct vga_fb_info fb_info;
-//     // vga_get_fb_info(&fb_info);
-//     // g_vga->rows = g_boot->vga_rows;
-//     // g_vga->cols = g_boot->vga_cols;
-
-//     // terminal_defaults(term);
-//     // term->number = SYSTEM_TERMINAL;
-//     // term->cols = g_boot->vga_cols;
-//     // term->rows = g_boot->vga_rows;
-//     // term->framebuf = (void *) fb_info.framebuf;
-//     // term->cursor.x = g_boot->cursor_col;
-//     // term->cursor.y = g_boot->cursor_row;
-//     // g_earlycons_initialized = true;
-
-//     struct lcr lcr = {
-//         .word_length = WLS_8,       // 8 data bits
-//         .stop_bits   = STB_1,       // 1 stop bit
-//         .parity      = PARITY_NONE, // no parity
-//     };
-//     struct mcr mcr = {
-//         .dtr        = 1,            // data terminal ready
-//         .rts        = 1,            // request to send
-//         .out2       = 1,            // carrier detect
-//     };
-//     struct ier ier = {
-//         .rda        = 1,            // data ready
-//         .rls        = 1,            // line status interrupt
-//         .ms         = 1,            // modem status interrupt
-//     };
-//     uint16_t baud   = BAUD_9600;
-
-//     com_out(UART_SCR, 0);
-//     com_out(UART_SCR, 0x55);
-//     if (com_in(UART_SCR) == 0x55) {
-//         com_out(UART_IER, ier._value);
-//         com_out(UART_MCR, mcr._value);
-//         com_out(UART_LCR, UART_LCR_DLAB);
-//         com_out(UART_DLM, baud >> 8);
-//         com_out(UART_DLL, baud & 0xFF);
-//         com_out(UART_LCR, lcr._value);
-//         com_out(UART_FCR, 0);
-
-//         (void) com_in(UART_LSR);
-//         (void) com_in(UART_MSR);
-//         (void) com_in(UART_IIR);
-
-//         com_port_initialized = true;
-//     }
-// }
-
-// int console_print(const char *buf)
-// {
-//     // struct terminal *term;
-//     // const char *p;
-
-//     // term = get_terminal(SYSTEM_TERMINAL);
-//     // if (!term->initialized && !g_earlycons_initialized) {
-//     //     // we tried to print before the terminal was initialized! do the bare
-//     //     // minimum initialization here so we can print safely; full
-//     //     // initialization will occur when init_terminal() is called
-//     //     lazy_terminal_init(term);
-//     // }
-
-//     // if (g_tty_initialized) {
-//     //     if (!cons_tty_open && !tried_cons_tty_open) {
-//     //         get_tty(__mkcondev(SYSTEM_TERMINAL), &cons_tty);
-//     //         cons_tty_open = (tty_open_internal(cons_tty) == 0);
-//     //         tried_cons_tty_open = true;
-//     //     }
-//     //     if (!seri_tty_open && !tried_seri_tty_open) {
-//     //         get_tty(__mkserdev(SERIAL_CONSOLE_NUM), &seri_tty);
-//     //         seri_tty_open = (tty_open_internal(seri_tty) == 0);
-//     //         tried_seri_tty_open = true;
-//     //     }
-//     // }
-
-//     // p = buf;
-//     // while (*p != '\0' && (p - buf) < MAX_PRINT_LEN) {
-//     //     if (seri_tty_open) {
-//     //         tty_putchar(seri_tty, *p);
-//     //     }
-//     //     else if (com_port_initialized) {
-//     //         if (*p == '\n') {
-//     //             com_putc('\r');
-//     //         }
-//     //         com_putc(*p);
-//     //     }
-//     //     if (cons_tty_open) {
-//     //        tty_putchar(cons_tty, *p);
-//     //     }
-//     //     else {
-//     //         if (*p == '\n') {
-//     //             terminal_putchar(term, '\r');
-//     //         }
-//     //         terminal_putchar(term, *p);
-//     //     }
-//     //     p++;
-//     // }
-
-//     // if (seri_tty_open) {
-//     //     tty_flush(seri_tty);
-//     // }
-//     // if (cons_tty_open) {
-//     //     tty_flush(cons_tty);
-//     // }
-
-//     // g_boot->cursor_col = term->cursor.x;
-//     // g_boot->cursor_row = term->cursor.y;
-
-//     // return (p - buf);
-// }
-
-// int tty_print(struct tty *tty, const char *buf)
-// {
-
-// }
-
 extern struct console vt_console;
 
 void __noreturn panic(const char *fmt, ...)
@@ -341,8 +217,7 @@ void __noreturn panic(const char *fmt, ...)
 
     if (g_consoles == NULL) {
         // register an emergency console so we can print!
-        struct console *panic_console = &vt_console;
-        register_console(panic_console);
+        register_default_console();
     }
 
     kprint("\n\e[1;31mpanic: ");

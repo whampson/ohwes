@@ -37,8 +37,6 @@
 #include <kernel/serial.h>
 
 #define GDB_MAXNACK             10
-
-#define GDB_ENABLE_INTERRUPT    0
 #define GDB_ENABLE_DEBUG        0
 
 #if GDB_ENABLE_DEBUG
@@ -46,9 +44,6 @@
 #else
 #define GDB_PRINT(...)
 #endif
-
-// initialization (called once at OS startup)
-void init_gdb(void);
 
 // serial port interrupt handler
 void gdb_serial_interrupt(int irq, struct iregs *regs);
@@ -82,56 +77,7 @@ static int gdb_cmd_write_regs(struct gdb_state *state, char *pkt, size_t pktlen)
 static int gdb_cmd_read_mem(struct gdb_state *state, char *pkt, size_t pktlen);
 static int gdb_cmd_write_mem(struct gdb_state *state, char *pkt, size_t pktlen);
 
-static bool gdb_initialized = false;
-
-void init_gdb(void)
-{
-    if (reserve_io_range(SERIAL_DEBUG_PORT, 8, "serial_debug") < 0) {
-        kprint("unable to reserve I/O ports for serial debugging!\n");
-    }
-
-    struct lcr lcr = {
-        .word_length = WLS_8,       // 8 data bits
-        .stop_bits   = STB_1,       // 1 stop bit
-        .parity      = PARITY_NONE, // no parity
-    };
-    struct mcr mcr = {
-        .dtr        = 1,            // data terminal ready
-        .rts        = 1,            // request to send
-        .out2       = 1,            // carrier detect
-    };
-    struct ier ier = {
-        .rda        = 1,            // data ready
-        .rls        = 1,            // line status interrupt
-        .ms         = 1,            // modem status interrupt
-    };
-    uint16_t baud   = SERIAL_DEBUG_BAUD;
-
-    com_out(UART_SCR, 0);
-    com_out(UART_SCR, 0x55);
-    if (com_in(UART_SCR) != 0x55) {
-        kprint("gdb: cannot debug on com%d, port does not exist!\n", SERIAL_DEBUG_PORT);
-        return;
-    }
-
-    com_out(UART_IER, ier._value);
-    com_out(UART_MCR, mcr._value);
-    com_out(UART_LCR, UART_LCR_DLAB);
-    com_out(UART_DLM, baud >> 8);
-    com_out(UART_DLL, baud & 0xFF);
-    com_out(UART_LCR, lcr._value);
-    com_out(UART_FCR, 0);           // disable the FIFO
-
-    (void) com_in(UART_LSR);
-    (void) com_in(UART_MSR);
-    (void) com_in(UART_IIR);
-
-#if GDB_ENABLE_INTERRUPT
-    irq_register(IRQ_COM1, gdb_serial_interrupt);
-#endif
-
-    gdb_initialized = true;
-}
+__data_segment bool g_debug_port_available = false;
 
 int gdb_init_state(struct gdb_state *state,
     int signum, const struct iregs *regs)
@@ -167,9 +113,17 @@ void gdb_main(struct gdb_state *state)
     size_t len;
     int status;
 
-    if (!gdb_initialized) {
+    if (!g_debug_port_available) {
+        panic("serial debugging unavailable!");
         return;
     }
+
+#if GDB_ENABLE_DEBUG
+    extern struct console *g_consoles;
+    if (g_consoles == NULL) {
+        register_default_console();
+    }
+#endif
 
     status = gdb_cmd_query(state);
     if (status == EOF) {
@@ -565,12 +519,6 @@ static int decode_hex(const char *buf, size_t bufsiz, const void *data, size_t l
 
 static char gdb_getc(struct gdb_state *state)
 {
-    // if (state->rx_char != 0) { // get char received by interrupt first
-    //     char c = state->rx_char;
-    //     state->rx_char = 0;
-    //     return c;
-    // }
-
     while ((com_in(UART_LSR) & UART_LSR_DR) == 0);
     return com_in(UART_RX);
 }
@@ -594,58 +542,3 @@ inline static char com_out(int port, char data)
     outb(SERIAL_DEBUG_PORT + port, data);
     return data;
 }
-
-#if GDB_ENABLE_INTERRUPT
-void gdb_serial_interrupt(int irq, struct iregs *regs)
-{
-    int pass;
-
-    struct iir iir;
-    iir._value = com_in(UART_IIR);
-    if (iir.no_int) {
-        return;
-    }
-
-    pass = 0;
-    do {
-        struct lsr lsr;
-        lsr._value = com_in(UART_LSR);
-        if (lsr._value & 0x1E) {
-            GDB_PRINT("com: lsr: %s%s%s%s%s\n",
-                (lsr.dr)  ? "ready "   : "",
-                (lsr.oe)  ? "overrun " : "",
-                (lsr.pe)  ? "parity "  : "",
-                (lsr.fe)  ? "frame "   : "",
-                (lsr.brk) ? "break "   : "");
-        }
-
-        uint8_t msr = com_in(UART_MSR);
-        if (msr & UART_MSR_ANY_DELTA) {
-            GDB_PRINT("msr: %s%s%s%s%s%s%s%s\n",
-                (msr & UART_MSR_DCTS) ? "dcts " : "",
-                (msr & UART_MSR_DDSR) ? "ddsr " : "",
-                (msr & UART_MSR_TERI) ? "teri " : "",
-                (msr & UART_MSR_DDCD) ? "ddcd " : "",
-                (msr & UART_MSR_CTS)  ? "cts "  : "",
-                (msr & UART_MSR_DSR)  ? "dsr "  : "",
-                (msr & UART_MSR_RI)   ? "ri "   : "",
-                (msr & UART_MSR_DCD)  ? "dcd "  : "");
-        }
-
-        if (iir.id == ID_RDA || iir.timeout || lsr.dr) {
-            char c = com_in(UART_RX);
-            if (c == 3) {
-                struct gdb_state state;
-                gdb_init_state(&state, GDB_SIGINT, regs);
-                gdb_main(&state);
-            }
-        }
-
-        if (pass >= 16) {
-            break;
-        }
-
-        iir._value = com_in(UART_IIR);
-    } while (iir.no_int == 0);
-}
-#endif
