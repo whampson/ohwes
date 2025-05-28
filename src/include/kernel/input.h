@@ -30,9 +30,12 @@
 #define is_shift(k)             (((k) == KEY_LSHIFT || (k) == KEY_RSHIFT))
 #define is_alt(k)               (((k) == KEY_LALT || (k) == KEY_RALT))
 #define is_meta(k)              (((k) == KEY_LWIN || (k) == KEY_RWIN))
-#define is_kpnum(k)             ((k) >= KEY_KP0 && (k) <= KEY_KP9)
+#define is_numpad(k)            ((k) >= KEY_KP0 && (k) <= KEY_KP9)
 #define is_fnkey(k)             ((k) >= KEY_F1 && (k) <= KEY_F12)
 #define is_sysrq(k)             ((k) == KEY_SYSRQ)
+
+#define numpad_index(k)         ((is_numpad(k)) ? (k) - KEY_KP0 : -1)
+#define fnkey_index(k)          ((is_fnkey(k)) ? (k) - KEY_F1 + 1 : -1)
 
 struct key_event
 {

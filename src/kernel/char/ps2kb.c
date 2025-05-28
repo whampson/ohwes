@@ -410,27 +410,28 @@ static void kb_interrupt(int irq, struct iregs *regs)
 
 #ifdef DEBUG
     if (g_kb->ctrl && g_kb->alt) {
-        if (is_fnkey(key)) {
-            g_test_crashkey = key - KEY_F1 + 1;
-        }
+        g_test_crashkey = fnkey_index(key);
     }
 #endif
 
     // TODO: CTRL+SCRLK = print kernel output buffer?
 
-
     // ALT+<FN>: switch terminal
-    if (g_kb->alt && !g_kb->ctrl && is_fnkey(key)) {
-        int cons = key - KEY_F1 + 1;
-        assert(cons >= 1 && cons <= 12);
-        switch_terminal(cons);
-        goto done;
+    if (g_kb->alt && !g_kb->ctrl) {
+        int term = fnkey_index(key);
+        if (term >= 1 && term <= NR_TERMINAL) {
+            int ret = switch_terminal(term);
+            if (ret != 0) {
+                panic("unable to switch to terminal %d!", term);
+            }
+            goto done;
+        }
     }
 
     // ALT+<NUMPAD>: handle character code entry (if NumLk on)
-    if (g_kb->alt && is_kpnum(key)) {
+    if (g_kb->alt && is_numpad(key)) {
         g_kb->altchar *= 10;
-        g_kb->altchar += (key - KEY_KP0);
+        g_kb->altchar += numpad_index(key);
         goto record_key_event;
     }
 
