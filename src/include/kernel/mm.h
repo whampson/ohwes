@@ -22,9 +22,14 @@
 #ifndef __MM_H
 #define __MM_H
 
-struct mm_info
-{
-    void *pgdir;     // page directory
-};
+#include <stdint.h>
+
+// linker script symbols -- use operator& to get assigned value
+extern uint32_t _kernel_start, _kernel_end, _kernel_size;
+extern uint32_t _setup_start, _setup_end, _setup_size;
+extern uint32_t _text_start, _text_end, _text_size;
+extern uint32_t _data_start, _data_end, _data_size;
+extern uint32_t _rodata_start, _rodata_end, _rodata_size;
+extern uint32_t _bss_start, _bss_end, _bss_size;
 
 #endif  // __MM_H

@@ -76,6 +76,28 @@
 #define KEEPMEM             0x4321  // preserve memory
 #define SUSPEND             0x5678  // suspend instead of reboot
 
+/*----------------------------------------------------------------------------*
+ * Real Mode VGA Stuff
+ * http://www.ctyme.com/intr/rb-0069.htm
+ * https://www.stanislavs.org/helppc/int_10-0.html
+ *----------------------------------------------------------------------------*/
+// Text Mode Constants:
+//
+// VGA_MODE
+//     2: 80x25,B8000h,16gray
+//     3: 80x25,B8000h,16
+//     7: 80x25,B0000h,mono
+// VGA_FONT
+//     1: 8x14,80x28,text
+//     2:  8x8,80x50,text
+//     4: 8x16,80x25,text
+
+#define _VGA_FONT_8x14      1
+#define _VGA_FONT_8x8       2
+#define _VGA_FONT_8x16      4
+
+#define VGA_MODE            3
+#define VGA_FONT            _VGA_FONT_8x14
 
 /*----------------------------------------------------------------------------*
  * Floppy Stuff
@@ -105,7 +127,7 @@
 
 
 /*----------------------------------------------------------------------------*
- * Assembler-only Stuff
+ * Assembler Macros
  *----------------------------------------------------------------------------*/
 
 #ifdef __ASSEMBLER__

@@ -48,6 +48,9 @@ stage2:
         shll            $4, %ebx
         movl            %ebx, ebda_base
 
+        # setup text mode VGA
+        call            init_vga
+
         # detect memory
         call            enable_a20
         call            detect_memory
@@ -60,9 +63,6 @@ stage2:
         LOAD_SEGMENT    $KERNEL_SEGMENT, %es
         xorl            %ebx, %ebx
         call            load_file               # load it!
-
-        # setup console
-        call            init_early_console
 
         # load GDT and switch to Protected Mode
         cli                                     # no more interrupts!
@@ -91,19 +91,15 @@ stage2:
 
 ##
 # -----------------------------------------------------------------------------
-# init_early_console
+# init_vga
 # -----------------------------------------------------------------------------
 # Sets the VGA mode using a BIOS routine and collects information about the
 # console.
 ##
-init_early_console:
-
-VGA_FONT_80x28  = 1
-VGA_FONT_80x50  = 2
-VGA_FONT_80x25  = 4
+init_vga:
 
         # store cursor position
-        xorb            %bh, %bh                # bh = page
+        xorb            %bh, %bh                # page 0
         movb            $0x03, %ah
         int             $0x10
         jc              _vga_error
@@ -117,13 +113,20 @@ VGA_FONT_80x25  = 4
         int             $0x10
         jc              _vga_error_bad_mode
 
-        # restore cursor position
-        xorw            %ax, %ax
-        movb            tmp_cursor_row, %dh
-        movb            tmp_cursor_col, %dl
-        movb            $0x02, %ah
+        # set font size
+        movw            $VGA_FONT, %ax
+_font0: cmpw            $_VGA_FONT_8x14, %ax
+        jne             _font1
+        jmp             _dofont
+_font1: cmpw            $_VGA_FONT_8x8, %ax
+        jne             _font2
+        jmp             _dofont
+_font2: cmpw            $_VGA_FONT_8x16, %ax
+        jne             _vga_error_bad_font
+_dofont:addw            $0x1110, %ax
+        xorb            %bl, %bl
         int             $0x10
-        jc              _vga_error
+        jc              _vga_error_bad_font
 
         # set video page
         xorb            %al, %al                # page 0
@@ -131,28 +134,22 @@ VGA_FONT_80x25  = 4
         int             $0x10
         jc              _vga_error
 
-        # set font size
-        movw            $VGA_DIMENSION, %ax
-_font0: cmpw            $VGA_FONT_80x25, %ax
-        jne             _font1
-        jmp             _dofont
-_font1: cmpw            $VGA_FONT_80x28, %ax
-        jne             _font2
-        jmp             _dofont
-_font2: cmpw            $VGA_FONT_80x50, %ax
-        jne             _vga_error_bad_font
-_dofont:addw            $0x1110, %ax
-        xorb            %bl, %bl
-        int             $0x10
-        jc              _vga_error_bad_font
-
-        # gather and store video params for kernel
+        # gather and store video info for kernel
         movb            $0x0F, %ah
         int             $0x10
         jc              _vga_error
+        andb            $0x7F, %al
         movb            %al, vga_mode
         xorb            %bh, %bh
         movb            $0x03, %ah
+        int             $0x10
+        jc              _vga_error
+
+        # restore cursor position
+        xorw            %ax, %ax
+        movb            tmp_cursor_row, %dh
+        movb            tmp_cursor_col, %dl
+        movb            $0x02, %ah
         int             $0x10
         jc              _vga_error
 

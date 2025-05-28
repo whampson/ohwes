@@ -31,18 +31,21 @@
 #include <kernel/terminal.h>
 #include <kernel/vga.h>
 
+// Text mode only for now!
+
 void init_vga(void)
 {
     struct vga_fb_info fb_info_old, fb_info_new;
     void *fb_old, *fb_new;
 
-    // grab text mode dimensions from boot info
+    // 32 pages, up to 16 VT frame buffers at 80x50 chars each
+    const int FrameBufferSelect = VGA_MEMORY_128K;
 
-    // read the current frame buffer parameters
+    // set frame buffer address
     if (!vga_get_fb_info(&fb_info_old)) {
         panic("failed to get VGA frame buffer info!");
     }
-    if (!vga_set_fb(VGA_FB_SELECT)) {
+    if (!vga_set_fb(FrameBufferSelect)) {
         panic("failed to change VGA frame buffer!");
     }
     if (!vga_get_fb_info(&fb_info_new)) {
@@ -55,7 +58,7 @@ void init_vga(void)
     memmove(fb_new, fb_old, FB_SIZE_PAGES);
 
     // update system terminal frame buffer
-    get_terminal(SYSTEM_TERMINAL)->framebuf = fb_new;
+    get_terminal(0)->framebuf = fb_new;
 
     kprint("vga: frame buffer is %d pages at %08X\n",
         fb_info_new.size_pages, fb_new);

@@ -32,11 +32,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-struct vga_fb_info {
-    uintptr_t framebuf;     // frame buffer physical address
-    size_t size_pages;      // frame buffer size in pages
-};
-
 /**
  * CRT Controller Registers
  * http://www.osdever.net/FreeVGA/vga/crtcreg.htm
@@ -196,8 +191,10 @@ struct vga_fb_info {
 #define VGA_EXTL_FLD_MO_HSYNCP      0x40    /* Horizontal Sync Polarity Field */
 #define VGA_EXTL_FLD_MO_VSYNCP      0x80    /* Vertical Sync Polarity Field */
 
+// ----------------------------------------------------------------------------
+
 /**
- * Default Text Mode colors.
+ * Default Text Mode Color Palette
  */
 enum vga_color {
     VGA_BLACK,
@@ -210,15 +207,26 @@ enum vga_color {
     VGA_WHITE,
 };
 
+/**
+ * VGA Frame Buffer Select
+ */
 enum vga_fb_select {
-    VGA_FB_128K,        // A0000-BFFFF
-    VGA_FB_64K,         // A0000-AFFFF
-    VGA_FB_32K_LO,      // B0000-B7FFF
-    VGA_FB_32K_HI,      // B8000-BFFFF
+    VGA_MEMORY_128K,    // 0: 0xA0000-0xBFFFF 128k
+    VGA_MEMORY_64K,     // 1: 0xA0000-0xAFFFF 64k
+    VGA_MEMORY_32K_HI,  // 2: 0xB0000-0xB7FFF 32k
+    VGA_MEMORY_32K_LO,  // 3: 0xB8000-0xBFFFF 32k
 };
 
 /**
- * Text Mode character attribute.
+ * Frame Buffer Geometry
+ */
+struct vga_fb_info {
+    uintptr_t framebuf;     // frame buffer physical address
+    size_t size_pages;      // frame buffer size in pages
+};
+
+/**
+ * Text Mode Character Attribute
  */
 struct vga_attr {
     union {
@@ -238,7 +246,7 @@ struct vga_attr {
 static_assert(sizeof(struct vga_attr) == 1, "sizeof(struct vga_attr)");
 
 /**
- * Text Mode character cell.
+ * Text Mode Character Cell
  */
 struct vga_cell {
     union {
@@ -250,6 +258,8 @@ struct vga_cell {
     };
 };
 static_assert(sizeof(struct vga_cell) == 2, "sizeof(struct vga_cell)");
+
+// ----------------------------------------------------------------------------
 
 /**
  * Get the number of text mode rows.
@@ -328,7 +338,7 @@ void vga_set_cursor_shape(uint16_t shape);
 // ----------------------------------------------------------------------------
 
 /**
- * Reads a CRT Controller register.
+ * Read a CRT controller register.
  *
  * @param reg one of VGA_CRTC_REG_*
  * @return the register value
@@ -336,7 +346,7 @@ void vga_set_cursor_shape(uint16_t shape);
 uint8_t vga_crtc_read(uint8_t reg);
 
 /**
- * Writes a CRT Controller register.
+ * Write a CRT controller register.
  *
  * @param reg one of VGA_CRTC_REG_*
  * @param data the value to write
@@ -344,7 +354,7 @@ uint8_t vga_crtc_read(uint8_t reg);
 void vga_crtc_write(uint8_t reg, uint8_t data);
 
 /**
- * Reads a Graphics register.
+ * Read a VGA graphics register.
  *
  * @param reg one of VGA_GRFX_REG_*
  * @return the register value
@@ -352,7 +362,7 @@ void vga_crtc_write(uint8_t reg, uint8_t data);
 uint8_t vga_grfx_read(uint8_t reg);
 
 /**
- * Writes a Graphics register.
+ * Write a VGA graphics register.
  *
  * @param reg one of VGA_GRFX_REG_*
  * @param data the value to write
@@ -360,7 +370,7 @@ uint8_t vga_grfx_read(uint8_t reg);
 void vga_grfx_write(uint8_t reg, uint8_t data);
 
 /**
- * Reads a Sequencer register.
+ * Read a VGA sequencer register.
  *
  * @param reg one of VGA_SEQR_REG_*
  * @return the register value
@@ -368,7 +378,7 @@ void vga_grfx_write(uint8_t reg, uint8_t data);
 uint8_t vga_seqr_read(uint8_t reg);
 
 /**
- * Writes a Sequencer register.
+ * Write a VGA sequencer register.
  *
  * @param reg one of VGA_SEQR_REG_*
  * @param data the value to write
@@ -376,7 +386,7 @@ uint8_t vga_seqr_read(uint8_t reg);
 void vga_seqr_write(uint8_t reg, uint8_t data);
 
 /**
- * Reads an Attribute register.
+ * Read a VGA attribute register.
  *
  * @param reg one of VGA_ATTR_REG_*
  * @return the register value
@@ -384,7 +394,7 @@ void vga_seqr_write(uint8_t reg, uint8_t data);
 uint8_t vga_attr_read(uint8_t reg);
 
 /**
- * Writes an Attribute register.
+ * Write a VGA attribute register.
  *
  * @param reg one of VGA_ATTR_REG_*
  * @param data the value to write

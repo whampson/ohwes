@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <i386/bitops.h>
 #include <i386/boot.h>
+#include <i386/cpu.h>
 #include <i386/interrupt.h>
 #include <i386/io.h>
 #include <i386/paging.h>
@@ -198,7 +199,7 @@ static int vt_console_waitkey(struct console *cons)
 struct console vt_console =
 {
     .name = "tty",
-    .index = 0,     // write to active terminal
+    .index = VT_CONSOLE_NUMBER,
     .flags = 0,
     .device = vt_console_device,
     .setup = vt_console_setup,
@@ -212,10 +213,9 @@ struct console vt_console =
 // virtual terminal implementation
 
 #define is_current(term)        ((term)->number == current_terminal())
-#define is_system(term)         ((term)->number == SYSTEM_TERMINAL)
 
 __data_segment struct terminal g_terminals[NR_TERMINAL] = { };
-__data_segment int g_currterm = SYSTEM_TERMINAL;
+__data_segment int g_currterm = 1;
 
 enum terminal_state {
     S_NORM,
@@ -286,17 +286,17 @@ void init_terminal(void)
         erase(term, 2);
     }
 
-    // restore terminal state from boot
-    struct terminal *term = get_terminal(SYSTEM_TERMINAL);
+    // restore terminal state
+    struct terminal *term = get_terminal(DEFAULT_VT);
     pos2xy(term, vga_get_cursor_pos());
     term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
 
     // do a proper 'switch' to the initial virtual terminal
-    int ret = switch_terminal(SYSTEM_TERMINAL);
+    int ret = switch_terminal(DEFAULT_VT);
     if (ret != 0) {
-        panic("failed to initialize system terminal!");
+        panic("unable to switch to terminal %d!", DEFAULT_VT);
     }
-    assert(term == get_terminal(SYSTEM_TERMINAL));
+    assert(term == get_terminal(DEFAULT_VT));
 
     // create a restore point
     save_terminal(term);
@@ -375,6 +375,8 @@ int switch_terminal(int num)
         return -EINVAL;
     }
 
+    pde_t *pgdir;
+
     uint32_t flags;
     cli_save(flags);
 
@@ -394,34 +396,32 @@ int switch_terminal(int num)
     curr->framebuf = get_terminal_fb(curr->number);
     next->framebuf = get_terminal_fb(next->number);
 
-    uint32_t pgdir_addr = 0;
-    store_cr3(pgdir_addr);
-    pgdir_addr = KERNEL_ADDR(pgdir_addr);
+    pgdir = (pde_t *) get_pgdir();
 
 #if HIGHER_GROUND
     // enable kernel identity mapping so we can operate on page tables
-    pde_t *ident_pde = (pde_t *) pgdir_addr;
+    pde_t *ident_pde = &pgdir[0];
     *ident_pde = __mkpde(KERNEL_PGTBL, _PAGE_RW);
 #endif
 
     // identity map old frame buffer, so it will write to back buffer
     for (int i = 0; i < FB_SIZE_PAGES; i++) {
         uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
-        pte_t *pte = pte_offset((pde_t *) pgdir_addr, fb_page);
+        pte_t *pte = pte_offset(pgdir, fb_page);
         *pte = __mkpte(PHYSICAL_ADDR(fb_page), _PAGE_RW);
     }
     flush_tlb();
 
     // swap buffers
-    memcpy(curr->framebuf, (void *) fb_info.framebuf, PAGE_SIZE * FB_SIZE_PAGES);
-    memcpy((void *) fb_info.framebuf, next->framebuf, PAGE_SIZE * FB_SIZE_PAGES);
+    memcpy(curr->framebuf, (void *) fb_info.framebuf, FB_SIZE);
+    memcpy((void *) fb_info.framebuf, next->framebuf, FB_SIZE);
     curr = next;
 
     // map new frame buffer to VGA
     for (int i = 0; i < FB_SIZE_PAGES; i++) {
         uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
         uint32_t vga_page = fb_info.framebuf + (i << PAGE_SHIFT);
-        pte_t *pte = pte_offset((pde_t *) pgdir_addr, fb_page);
+        pte_t *pte = pte_offset(pgdir, fb_page);
         *pte = __mkpte(PHYSICAL_ADDR(vga_page), _PAGE_RW);
     }
 
@@ -443,7 +443,7 @@ int switch_terminal(int num)
 int current_terminal(void)
 {
     if (g_currterm <= 0 || g_currterm > NR_TERMINAL) {
-        panic("g_currterm is %d!\n", g_currterm);
+        panic("g_currterm is somehow %d!", g_currterm);
     }
     return g_currterm;
 }
@@ -451,7 +451,7 @@ int current_terminal(void)
 struct terminal * get_terminal(int num)
 {
     if (num < 0 || num > NR_TERMINAL) {
-        panic("attempt to get nonexistant terminal %d!\n", num);
+        panic("attempt to get nonexistant terminal %d!", num);
     }
     if (num == 0) {
         num = current_terminal();
@@ -472,7 +472,7 @@ void * get_terminal_fb(int num)
     struct vga_fb_info fb_info;
 
     if (num < 0 || num > NR_TERMINAL) {
-        panic("attempt to get nonexistant terminal %d frame buffer!\n", num);
+        panic("attempt to get nonexistant terminal %d frame buffer!", num);
     }
     if (num == 0) {
         num = current_terminal();
@@ -550,12 +550,6 @@ int terminal_putchar(struct terminal *term, char c)
         return 0;   // TODO: do we just drop the char?
                     // we should buffer the char then flush it at the end
     }
-
-#if E9_HACK
-    if (is_system(term)) {
-        outb(0xE9, c);
-    }
-#endif
 
     // handle escape sequences if not a control character
     if (!iscntrl(c)) {

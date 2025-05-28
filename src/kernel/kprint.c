@@ -22,12 +22,14 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <i386/boot.h>
+#include <i386/cpu.h>
 #include <i386/io.h>
 #include <i386/paging.h>
 #include <kernel/console.h>
 #include <kernel/kernel.h>
 #include <kernel/fs.h>
 #include <kernel/irq.h>
+#include <kernel/mm.h>
 #include <kernel/ohwes.h>
 #include <kernel/vga.h>
 #include <kernel/serial.h>
@@ -73,11 +75,18 @@ int kprint(const char *fmt, ...)
     count = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
+    if (g_consoles == NULL) {
+        register_default_console();
+    }
+
     p = buf;
     linefeed = 0;
     while ((p - buf) < count) {
         // add to the log 'til we see a linefeed or hit the end
         for (line = p; (p - buf) < count; p++) {
+#if E9_HACK
+            outb(0xE9, *p);
+#endif
             _kernel_log[(_log_start + _log_size) % KLOG_BUFSIZ] = *p;
             if (_log_size < KLOG_BUFSIZ) {
                 _log_size++;
@@ -263,4 +272,175 @@ void print_boot_info(void)
     kprint("bios-boot: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
     kprint("bios-boot: video mode is %02Xh\n", g_boot->vga_mode & 0x7F);
     if (g_boot->ebda_base) kprint("bios-boot: EBDA=%08X,%Xh\n", g_boot->ebda_base, ebda_size);
+}
+
+void print_kernel_sections(void)
+{
+    struct section {
+        const char *name;
+        void *start, *end;
+    };
+
+    // TODO: pack kernel.elf header into image and extract info from there
+
+    struct section sections[] = {
+        { "setup stack",        (void *) SETUP_STACK-FRAME_SIZE,        (void *) SETUP_STACK },
+        { "interrupt stacks",   (void *) INT_STACK_LIMIT,               (void *) INT_STACK_BASE },
+        { "page directory",     (void *) KERNEL_PGDIR,                  (void *) KERNEL_PGDIR+PAGE_SIZE },
+        { "kernel page table",  (void *) KERNEL_PGTBL,                  (void *) KERNEL_PGTBL+PAGE_SIZE },
+        { "kernel image:",      &_kernel_start,                         &_kernel_end },
+        { ".setup",             &_setup_start,                          &_setup_end },
+        { ".text",              &_text_start,                           &_text_end },
+        { ".data",              &_data_start,                           &_data_end },
+        { ".rodata",            &_rodata_start,                         &_rodata_end },
+        { ".bss",               &_bss_start,                            &_bss_end },
+    };
+
+    for (int i = 0; i < countof(sections); i++) {
+        struct section *sec = &sections[i];
+        kprint("PA:%08X-%08X VA:%08X-%08X %s\n",
+            PHYSICAL_ADDR(sec->start), PHYSICAL_ADDR(sec->end)-1,
+            sec->start, sec->end-1, sec->name);
+    }
+
+    kprint("kernel stack space allows for %d nested interrupts\n", NR_INT_STACKS);
+    kprint("kernel image takes up %dk bytes (%d pages)\n",
+        align((size_t) &_kernel_size, 1024) >> 10,
+        PAGE_ALIGN((size_t) &_kernel_size) >> PAGE_SHIFT);
+}
+
+void print_memory_info(void)
+{
+    int kb_total = 0;
+    int kb_free = 0;
+    int kb_reserved = 0;
+    int kb_acpi = 0;
+    int kb_bad = 0;
+
+    int kb_free_low = 0;    // between 0 and 640k
+    int kb_free_1M = 0;     // between 1M and 16M
+    int kb_free_16M = 0;    // between 1M and 4G
+
+    if (!g_boot->mem_map) {
+        kprint("bios-e820: memory map not available\n");
+        if (g_boot->kb_high_e801h != 0) {
+            kb_free_1M = g_boot->kb_high_e801h;
+            kb_free_16M = (g_boot->kb_extended << 6);
+        }
+        else {
+            kprint("bios-e801: memory map not available\n");
+            kb_free_1M = g_boot->kb_high;
+        }
+        kb_free_low = g_boot->kb_low;
+        kb_free = kb_free_low + kb_free_1M + kb_free_16M;
+    }
+    else {
+        const acpi_mmap_t *e = (const acpi_mmap_t *) KERNEL_ADDR(g_boot->mem_map);
+        for (; e->type != 0; e++) {
+            uint32_t base = (uint32_t) e->base;
+            uint32_t limit = (uint32_t) e->length - 1;
+
+            kprint("bios-e820: %08lX-%08lX ", base, base+limit, e->attributes, e->type);
+            switch (e->type) {
+                case ACPI_MMAP_TYPE_USABLE: kprint("free"); break;
+                case ACPI_MMAP_TYPE_RESERVED: kprint("reserved"); break;
+                case ACPI_MMAP_TYPE_ACPI: kprint("reserved ACPI"); break;
+                case ACPI_MMAP_TYPE_ACPI_NVS: kprint("reserved ACPI non-volatile"); break;
+                case ACPI_MMAP_TYPE_BAD: kprint("bad"); break;
+                default: kprint("unknown (%d)", e->type); break;
+            }
+            if (e->attributes) {
+                kprint(" (attributes = %X)", e->attributes);
+            }
+            kprint("\n");
+
+            // TODO: kb count does not account for overlapping regions
+
+            int kb = (e->length >> 10);
+            kb_total += kb;
+
+            switch (e->type) {
+                case ACPI_MMAP_TYPE_USABLE:
+                    kb_free += kb;
+                    break;
+                case ACPI_MMAP_TYPE_ACPI:
+                case ACPI_MMAP_TYPE_ACPI_NVS:
+                    kb_acpi += kb;
+                    break;
+                case ACPI_MMAP_TYPE_BAD:
+                    kb_bad += kb;
+                    break;
+                default:
+                    kb_reserved += kb;
+                    break;
+            }
+        }
+    }
+
+    kprint("bios-boot: ");
+    if (kb_total) kprint("%dk total, ", kb_total);
+    kprint("%dk free", kb_free);
+    if (kb_bad) kprint(", %dk bad", kb_bad);
+    kprint("\n");
+
+    if (kb_free < RAM_KBYTES) {
+        panic("not enough memory! " OS_NAME " needs least %dk to operate!",
+                RAM_KBYTES);
+    }
+}
+
+static void print_page_info(uint32_t va, const struct pginfo *page)
+{
+    uint32_t pa = page->pfn << PAGE_SHIFT;
+    uint32_t plimit = pa + PAGE_SIZE - 1;
+    uint32_t vlimit = va + PAGE_SIZE - 1;
+    if (page->pde) {
+        if (page->ps) {
+            plimit = pa + PGDIR_SIZE - 1;
+        }
+        vlimit = va + PGDIR_SIZE - 1;
+    }
+
+    //           va-vlimit -> pa-plimit k/M/T rw u/s a/d g wt nc
+    kprint("  v(%08X-%08X) -> p(%08X-%08X) %c %-2s %c %c %c %s%s\n",
+        va, vlimit, pa, plimit,
+        page->pde ? (page->ps ? 'M' : 'T') : 'k',   // (k) small page, (M) large page, (T) page table
+        page->rw ? "rw" : "r",                      // read/write
+        page->us ? 'u' : 's',                       // user/supervisor
+        page->a ? (page->d ? 'd' : 'a') : ' ',      // accessed/dirty
+        page->g ? 'g' : ' ',                        // global
+        page->pwt ? "wt " : "  ",                   // write-through
+        page->pcd ? "nc " : "  ");                  // no-cache
+}
+
+void print_page_mappings(void)
+{
+    struct pginfo *pgdir = (struct pginfo *) get_pgdir();
+    struct pginfo *pgtbl;
+    struct pginfo *page;
+    uint32_t va;
+
+    for (int i = 0; i < PDE_COUNT; i++) {
+        page = &pgdir[i];
+        if (!page->p) {
+            continue;
+        }
+
+        va = i << PGDIR_SHIFT;
+        print_page_info(va, page);
+
+        if (page->pde && page->ps) {
+            continue;   // large
+        }
+
+        pgtbl = (struct pginfo *) KERNEL_ADDR(page->pfn << PAGE_SHIFT);
+        for (int j = 0; j < PTE_COUNT; j++) {
+            page = &pgtbl[j];
+            if (!page->p) {
+                continue;
+            }
+            va = (i << PGDIR_SHIFT) | (j << PAGE_SHIFT);
+            print_page_info(va, page);
+        }
+    }
 }

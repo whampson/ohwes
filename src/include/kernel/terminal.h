@@ -30,17 +30,16 @@
 #include <kernel/tty.h>
 #include <kernel/vga.h>
 
-#define SYSTEM_TERMINAL         1       // terminal for boot messages, kprint, etc...
-#define MAX_CSIPARAM            16      // ESC[p;q;r;s;...,n param count
-#define MAX_TABSTOP             80      // maximum number of tabstops allowed
-#define TABSTOP_WIDTH           8       // TODO: make configurable
-
-#define FB_SIZE_PAGES           2       // 8192 chars (enough for 80x50)
+#define FB_SIZE_PAGES           2       // 8192 bytes (enough for 80x50)
 #define FB_SIZE                 ((FB_SIZE_PAGES)<<PAGE_SHIFT)
 
 // TODO: set via ioctl
 #define BELL_FREQ               750     // Hz
 #define BELL_TIME               50      // ms
+
+#define MAX_CSIPARAM            16      // ESC[p;q;r;s;...,n param count
+#define MAX_TABSTOP             80      // maximum number of tabstops allowed
+#define TABSTOP_WIDTH           8       // TODO: make configurable
 
 // ESC[<x>m color code
 enum csi_color {
