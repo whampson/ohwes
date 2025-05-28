@@ -61,9 +61,6 @@ static void setup_tss(void);
 static void setup_idt(void);
 static void verify_gdt(void);
 
-static struct x86_desc * get_gdt(void);
-static struct x86_desc * get_idt(void);
-
 __data_segment static struct x86_desc _ldt[1];
 __data_segment static struct tss _tss_table[2];
 
@@ -87,37 +84,6 @@ void pop_kernel_stack(void)
     if (tss->esp0 > KERNEL_ADDR(INT_STACK_BASE)) {
         panic("kernel stack underflow");
     }
-}
-
-inline struct tss * get_curr_tss(void)
-{
-    uint16_t segsel; __str(segsel);
-    return get_tss(segsel);
-}
-
-inline struct tss * get_tss(uint16_t segsel)
-{
-    struct x86_desc *gdt = get_gdt();
-    struct x86_desc *tss_desc = x86_get_desc(gdt, segsel);
-
-    return (struct tss *) ((tss_desc->tss.basehi << 24) | tss_desc->tss.baselo);
-}
-
-inline static struct x86_desc * get_gdt(void)
-{
-    struct table_desc gdt_desc = { };
-    __sgdt(gdt_desc);
-
-    return (struct x86_desc *) KERNEL_ADDR(gdt_desc.base);
-}
-
-inline static struct x86_desc * get_idt(void)
-{
-    // must be marked 'volatile' or compiler will optimize away result
-    struct table_desc idt_desc = { };
-    __sidt(idt_desc);
-
-    return (struct x86_desc *) KERNEL_ADDR(idt_desc.base);
 }
 
 void setup_cpu(void)

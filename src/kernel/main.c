@@ -58,8 +58,7 @@
     __ret;                      \
 })
 
-extern void print_boot_info(void);
-
+void init_boot(struct boot_info **info);
 extern void init_cpu(void);
 extern void init_fs(void);
 extern void init_io(void);
@@ -78,6 +77,11 @@ extern bool g_debug_port_available;
 extern void run_tests(void);
 #endif
 
+extern void print_boot_info(void);
+extern void print_memory_info(void);
+extern void print_kernel_sections(void);
+extern void print_page_mappings(void);
+
 static void go_to_ring3(uint32_t stack);
 
 void init(void);    // user mode portion of setup
@@ -87,20 +91,7 @@ __data_segment struct boot_info *g_boot;
 
 __fastcall void kmain(struct boot_info **info)
 {
-    g_boot = *info;
-
-    kprint("\n\e[0;1m%s %s '%s'\n", OS_NAME, OS_VERSION, OS_MONIKER);
-    kprint("built %s %s using GCC %s by %s\e[0m\n",
-        __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
-
-#if SERIAL_DEBUGGING
-    if (!g_debug_port_available) {
-        kprint("warning: remote debugging not available, "
-            "no serial port found on I/O port %Xh!\n", SERIAL_DEBUG_PORT);
-    }
-#endif
-
-    print_boot_info();
+    init_boot(info);
 
     // initialize static memory and setup memory manager,
     // do this as early as possible to ensure BSS is zeroed
@@ -147,6 +138,29 @@ __fastcall void kmain(struct boot_info **info)
 
     // for future reference...
     // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
+}
+
+void init_boot(struct boot_info **info)
+{
+    g_boot = *info;
+
+    kprint("\n\e[0;1m%s %s '%s'\n", OS_NAME, OS_VERSION, OS_MONIKER);
+    kprint("built %s %s using GCC %s by %s\e[0m\n",
+        __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
+
+#if SERIAL_DEBUGGING
+    if (!g_debug_port_available) {
+        kprint("warning: remote debugging not available, "
+            "no serial port found on I/O port %Xh!\n", SERIAL_DEBUG_PORT);
+    }
+#endif
+
+    print_boot_info();
+    print_memory_info();
+    print_kernel_sections();
+#if PRINT_PAGE_MAP
+    print_page_mappings();
+#endif
 }
 
 static void go_to_ring3(uint32_t stack)

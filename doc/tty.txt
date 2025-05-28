@@ -2,10 +2,6 @@
 The TTY Subsystem
 ================================================================================
 
-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-I. Design Ideas
-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
 --------------------------------------------------------------------------------
 1) Terminology
 --------------------------------------------------------------------------------
@@ -33,7 +29,7 @@ echoing, and flow control.
 
 Imagine for a second that the only device you have to interface with your
 computer is a typewriter/printer (i.e. a TeleType). We'll call this device a
-Terminal. The terminal is connected to a modem which is connected to a phone
+Terminal. The terminal is connected to a modem, which is connected to a phone
 line. At the other end of the phone line is another modem, which is finally
 connected directly to computer via a UART. In this scenario, the line discipline
 would be a small program or device that sits in between the terminal and the

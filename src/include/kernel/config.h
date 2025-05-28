@@ -22,32 +22,39 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
-#include <i386/paging.h>
+#include <i386/paging.h>    // for PAGE_SIZE
 
 //
 // General Configuration
 // ----------------------------------------------------------------------------
 
+// OS version info strings
+#define OS_NAME             "OH-WES"
+#define OS_VERSION          "0.1"
+#define OS_MONIKER          "Ronnie Raven"
+#define OS_AUTHOR           "whampson"
+
 // memory
-#define MIN_KB              512 // let's see how long this lasts!
+#define RAM_KBYTES          512 // let's see how long this lasts!
 #define HIGHER_GROUND       1   // map kernel in high virtual address space
 
 // printing
 #define PRINT_LOGO          0   // show a special logo at boot
-#define PRINT_MEMORY_MAP    1   // show BIOS memory map at boot
 #define PRINT_PAGE_MAP      0   // show initial page table mappings
 #define PRINT_IOCTL         1   // show ioctl calls
-#define E9_HACK             1   // tee console output to port 0xE9
+#define E9_HACK             1   // tee console output to I/O port 0xE9
+
+// console
+#define DEFAULT_VT          1   // initial virtual terminal activated
+#define VT_CONSOLE_NUMBER   0   // print console messages to active terminal
+#define SERIAL_CONSOLE_PORT COM2_PORT
+#define SERIAL_CONSOLE_BAUD BAUD_9600
 
 // debugging
 #define SERIAL_DEBUGGING    1   // enable debugging over COM port
 #define SERIAL_DEBUG_PORT   COM1_PORT
 #define SERIAL_DEBUG_BAUD   BAUD_115200
 #define ENABLE_CRASH_KEY    0   // test various crash scenarios w/ keystroke
-
-// console assignments
-#define SERIAL_CONSOLE_NUM  2         // serial console TTY number
-#define SERIAL_OUTPUT_PORT  COM2_PORT // serial console I/O port number
 
 //
 // Counts of Things
@@ -108,19 +115,5 @@ static_assert(INT_STACK_LIMIT >= DOUBLE_FAULT_STACK, "Interrupt stacks overlap c
   #define KERNEL_VA     0x0
 #endif
 
-//
-// VGA Stuff
-// ----------------------------------------------------------------------------
-// See doc/vga.txt
-
-// constants
-#define _VGA_80x28 1
-#define _VGA_80x50 2
-#define _VGA_80x25 4
-
-// params
-#define VGA_MODE            3       // 3 = 80x25,B8000,16color
-#define VGA_FB_SELECT       0       // 0 = 0xA0000-0xBFFFF 128k
-#define VGA_DIMENSION      _VGA_80x28
 
 #endif // __CONFIG_H

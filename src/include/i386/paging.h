@@ -78,7 +78,6 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <kernel/mm.h>
 
 typedef uint32_t pte_t;
 typedef uint32_t pde_t;
@@ -139,9 +138,9 @@ static inline bool pde_bad(pde_t pde)
         || (pde_large(pde) && __ptn(pde) != 0);
 }
 
-static inline pde_t * pde_offset(struct mm_info *mm, uint32_t addr)
+static inline pde_t * pde_offset(pde_t *pde, uint32_t va)
 {
-    return ((pde_t *) (mm)->pgdir) + __pdn(addr);
+    return pde + __pdn(va);
 }
 
 // ---------------------------------------------
@@ -152,9 +151,9 @@ static inline void * pte_page(pte_t pte)        { return (void *) (pte & PAGE_MA
 static inline bool pte_none(pte_t pte)          { return !pte; }
 static inline void pte_clear(pte_t *pte)        { *pte = 0; }
 
-static inline pde_t * pte_offset(pde_t *pde, uint32_t addr)
+static inline pde_t * pte_offset(pde_t *pde, uint32_t va)
 {
-    return ((pte_t *) pde_page(*pde)) + __ptn(addr);
+    return ((pte_t *) pde_page(*pde)) + __ptn(va);
 }
 
 static inline bool pte_read(pte_t pte)          { return (pte & _PAGE_USER) == _PAGE_USER; }

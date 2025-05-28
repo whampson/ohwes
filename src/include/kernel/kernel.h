@@ -22,6 +22,8 @@
 #ifndef __KERNEL_H
 #define __KERNEL_H
 
+#include <kernel/config.h>
+
 // x86 segment selectors (TODO: move to some x86 header)
 #define KERNEL_CS                       0x10
 #define KERNEL_DS                       0x18
@@ -39,7 +41,6 @@
 
 #include <assert.h>
 #include <i386/interrupt.h>
-#include <kernel/config.h>
 #include <kernel/console.h>
 #include <kernel/task.h>
 
