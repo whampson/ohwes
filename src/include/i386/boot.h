@@ -32,7 +32,7 @@
 
 // ----------------------------------------------------------------------------
 
-#define BI_SIZE             0x34    // boot info size
+#define BI_SIZE             0x24    // boot info size
 
 #ifndef __ASSEMBLER__
 // C-only defines from here on out!
@@ -150,10 +150,6 @@ struct boot_info {
 
     // terminal info
     uint32_t vga_mode;              // VGA video mode (INT 10h,AH=0Fh)
-    uint32_t vga_rows;              // VGA row count
-    uint32_t vga_cols;              // VGA column count (INT 10h,AH=0Fh)
-    uint32_t cursor_row;            // current cursor row (INT 10h,AH=03h)
-    uint32_t cursor_col;            // current cursor column (INT 10h,AH=03h)
 };
 static_assert(sizeof(struct boot_info) == BI_SIZE, "sizeof(struct boot_info)");
 

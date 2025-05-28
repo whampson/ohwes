@@ -127,7 +127,7 @@ int current_terminal(void);
 // switch to a virtual terminal
 int switch_terminal(int num);
 
-// get a terminal's frame buffer
+// get a terminal's virtual frame buffer
 void * get_terminal_fb(int num);
 
 // save/restore terminal state

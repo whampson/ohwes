@@ -37,14 +37,6 @@ struct vga_fb_info {
     size_t size_pages;      // frame buffer size in pages
 };
 
-struct vga {
-    uint32_t rows, cols;
-    uint16_t orig_cursor_shape;
-    struct vga_fb_info fb_info;
-};
-
-extern struct vga *g_vga;
-
 /**
  * CRT Controller Registers
  * http://www.osdever.net/FreeVGA/vga/crtcreg.htm
@@ -63,8 +55,8 @@ extern struct vga *g_vga;
 #define VGA_CRTC_REG_HRE            0x05    /* End Horizontal Retrace Register */
 #define VGA_CRTC_REG_VT             0x06    /* Vertical Total Register */
 #define VGA_CRTC_REG_OF             0x07    /* Overflow Register */
-#define VGA_CRTC_REG_PRESCAN        0x08    /* Preset Row Scan Register */
-#define VGA_CRTC_REG_MAXSCAN        0x09    /* Maximum Scan Line Register */
+#define VGA_CRTC_REG_PRS            0x08    /* Preset Row Scan Register */
+#define VGA_CRTC_REG_MSL            0x09    /* Maximum Scan Line Register */
 #define VGA_CRTC_REG_CSS            0x0A    /* Cursor Scan Line Start Register */
 #define VGA_CRTC_REG_CSE            0x0B    /* Cursor Scan Line End Register */
 #define VGA_CRTC_REG_ADDR_HI        0x0C    /* Start Address High Register */
@@ -74,8 +66,8 @@ extern struct vga *g_vga;
 #define VGA_CRTC_REG_VRS            0x10    /* Vertical Retrace Start Register */
 #define VGA_CRTC_REG_VRE            0x11    /* Vertical Retrace End Register */
 #define VGA_CRTC_REG_VDE            0x12    /* Vertical Display End Register */
-#define VGA_CRTC_REG_OFFSET         0x13    /* Offset Register */
-#define VGA_CRTC_REG_UNDERLINE      0x14    /* Underline Location Register */
+#define VGA_CRTC_REG_OFF            0x13    /* Offset Register */
+#define VGA_CRTC_REG_UL             0x14    /* Underline Location Register */
 #define VGA_CRTC_REG_VBS            0x15    /* Start Vertical Blanking Register */
 #define VGA_CRTC_REG_VBE            0x16    /* End Vertical Blanking */
 #define VGA_CRTC_REG_MODE           0x17    /* CRTC Mode Control Register */
@@ -88,6 +80,14 @@ extern struct vga *g_vga;
 /* Cursor Scan Line End Register Fields */
 #define VGA_CRTC_FLD_CSE_CSE_MASK   0x1F    /* Cursor Scan Line End Field */
 #define VGA_CRTC_FLD_CSE_CSK_MASK   0x60    /* Cursor Skew Field */
+
+#define VGA_CRTC_FLD_MSL_MSL_MASK   0x1F    /* Maximum Scan Line */
+
+#define VGA_CRTC_FLD_OF_VDE8_MASK   0x02    /* Vertical Display End (bit 8) */
+#define VGA_CRTC_FLD_OF_VDE8_SHIFT  1
+
+#define VGA_CRTC_FLD_OF_VDE9_MASK   0x40    /* Vertical Display End (bit 9) */
+#define VGA_CRTC_FLD_OF_VDE9_SHIFT  6
 
 /**
  * Graphics Registers
@@ -252,6 +252,16 @@ struct vga_cell {
 static_assert(sizeof(struct vga_cell) == 2, "sizeof(struct vga_cell)");
 
 /**
+ * Get the number of text mode rows.
+ */
+uint8_t vga_get_rows(void);
+
+/**
+ * Get the number of text mode columns.
+ */
+uint8_t vga_get_cols(void);
+
+/**
  * Fill a vga_fb_info struct with the current frame buffer parameters.
  *
  * @param fb_info the vga_fb_info structure to fill
@@ -284,6 +294,13 @@ void vga_blink_enable(bool enable);
 void vga_cursor_enable(bool enable);
 
 /**
+ * Get linear cursor position.
+ *
+ * @return linear cursor position
+ */
+uint16_t vga_get_cursor_pos(void);
+
+/**
  * Set linear cursor position.
  *
  * @param pos linear cursor position
@@ -291,12 +308,24 @@ void vga_cursor_enable(bool enable);
 void vga_set_cursor_pos(uint16_t pos);
 
 /**
+ * Get cursor shape.
+ *
+ * @return cursor shape:
+ *  upper byte contains end scan line,
+ *  lower byte contains start scan line
+ */
+uint16_t vga_get_cursor_shape(void);
+
+/**
  * Set cursor shape.
  *
- * @param start start scan line
- * @param end end scan line
+ * @param shape cursor shape:
+ *  upper byte contains end scan line,
+ *  lower byte contains start scan line
  */
-void vga_set_cursor_shape(uint8_t start, uint8_t end);
+void vga_set_cursor_shape(uint16_t shape);
+
+// ----------------------------------------------------------------------------
 
 /**
  * Reads a CRT Controller register.

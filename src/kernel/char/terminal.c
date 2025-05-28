@@ -35,6 +35,10 @@
 #include <kernel/terminal.h>
 #include <kernel/vga.h>
 
+// screen positioning
+static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y);
+static void pos2xy(struct terminal *term, uint16_t pos);
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -149,25 +153,20 @@ static size_t terminal_tty_write_room(struct tty *tty)
 
 static dev_t vt_console_device(struct console *cons)
 {
-    return __mkdev(TTY_MAJOR, cons->index);
+    return __mkdev(TTY_MAJOR, (cons->index) ? cons->index : current_terminal());
 }
 
 static void vt_console_setup(struct console *cons)
 {
     struct vga_fb_info fb_info;
     vga_get_fb_info(&fb_info);
-    g_vga->rows = g_boot->vga_rows;
-    g_vga->cols = g_boot->vga_cols;
 
     struct terminal *term = get_terminal(cons->index);
     if (!term->initialized) {
         terminal_defaults(term);
-        term->number = cons->index;
-        term->cols = g_boot->vga_cols;
-        term->rows = g_boot->vga_rows;
+        term->number = (cons->index) ? cons->index : current_terminal();
         term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
-        term->cursor.x = g_boot->cursor_col;
-        term->cursor.y = g_boot->cursor_row;
+        pos2xy(term, vga_get_cursor_pos());
     }
 }
 
@@ -259,17 +258,18 @@ static void update_vga_state(const struct terminal *term);
 static void set_fb_char(struct terminal *term, uint16_t pos, char c);
 static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr attr);
 
-// screen positioning
-static uint16_t xy2pos(uint16_t ncols, uint16_t x, uint16_t y);
-
 // ----------------------------------------------------------------------------
 // initialization
 
 void init_terminal(void)
 {
+    struct vga_fb_info fb_info;
+    vga_get_fb_info(&fb_info);
+
     // make sure we have enough memory for the configured number of terminals
-    if (g_vga->fb_info.size_pages - FB_SIZE_PAGES < NR_TERMINAL * FB_SIZE_PAGES) {
-        panic("not enough video memory available for %d terminals! See config.h.", NR_TERMINAL);
+    if (fb_info.size_pages - FB_SIZE_PAGES < NR_TERMINAL * FB_SIZE_PAGES) {
+        panic("not enough video memory available for %d terminals! See config.h.",
+                NR_TERMINAL);
     }
 
     // register the terminal TTY driver
@@ -277,23 +277,19 @@ void init_terminal(void)
         panic("unable to register terminal driver!");
     }
 
-    // TODO: register system terminal as a console for printing system messages
-
     // initialize virtual terminals
     for (int i = 1; i <= NR_TERMINAL; i++) {
         struct terminal *term = get_terminal(i);
-        term->framebuf = get_terminal_fb(i);
-        term->number = i;
         terminal_defaults(term);
+        term->number = i;
+        term->framebuf = get_terminal_fb(i);
         erase(term, 2);
     }
 
     // restore terminal state from boot
     struct terminal *term = get_terminal(SYSTEM_TERMINAL);
-    term->cursor.x = g_boot->cursor_col;
-    term->cursor.y = g_boot->cursor_row;
-    term->cursor.shape = g_vga->orig_cursor_shape;
-    term->framebuf = (void *) KERNEL_ADDR(g_vga->fb_info.framebuf);
+    pos2xy(term, vga_get_cursor_pos());
+    term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
 
     // do a proper 'switch' to the initial virtual terminal
     int ret = switch_terminal(SYSTEM_TERMINAL);
@@ -345,8 +341,8 @@ void init_terminal(void)
 void terminal_defaults(struct terminal *term)
 {
     term->state = S_NORM;
-    term->cols = g_vga->cols;
-    term->rows = g_vga->rows;
+    term->cols = vga_get_cols();
+    term->rows = vga_get_rows();
     for (int i = 0; i < MAX_TABSTOP; i++) {
         term->tabstops[i] = (((i + 1) % TABSTOP_WIDTH) == 0);
     }
@@ -364,7 +360,7 @@ void terminal_defaults(struct terminal *term)
     term->attr.invert = false;
     term->cursor.x = 0;
     term->cursor.y = 0;
-    term->cursor.shape = g_vga->orig_cursor_shape;
+    term->cursor.shape = vga_get_cursor_shape();    // TODO: default shape
     term->cursor.hidden = false;
     term->csi_defaults.attr = term->attr;
     term->csi_defaults.cursor = term->cursor;
@@ -382,6 +378,7 @@ int switch_terminal(int num)
     uint32_t flags;
     cli_save(flags);
 
+    struct vga_fb_info fb_info;
     struct terminal *curr = get_terminal(0);
     struct terminal *next = get_terminal(num);
     struct tty *tty = NULL;
@@ -393,6 +390,7 @@ int switch_terminal(int num)
         panic("could not switch terminals -- unable to open tty%d", num);
     }
 
+    vga_get_fb_info(&fb_info);
     curr->framebuf = get_terminal_fb(curr->number);
     next->framebuf = get_terminal_fb(next->number);
 
@@ -415,14 +413,14 @@ int switch_terminal(int num)
     flush_tlb();
 
     // swap buffers
-    memcpy(curr->framebuf, (void *) g_vga->fb_info.framebuf, PAGE_SIZE * FB_SIZE_PAGES);
-    memcpy((void *) g_vga->fb_info.framebuf, next->framebuf, PAGE_SIZE * FB_SIZE_PAGES);
+    memcpy(curr->framebuf, (void *) fb_info.framebuf, PAGE_SIZE * FB_SIZE_PAGES);
+    memcpy((void *) fb_info.framebuf, next->framebuf, PAGE_SIZE * FB_SIZE_PAGES);
     curr = next;
 
     // map new frame buffer to VGA
     for (int i = 0; i < FB_SIZE_PAGES; i++) {
         uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
-        uint32_t vga_page = g_vga->fb_info.framebuf + (i << PAGE_SHIFT);
+        uint32_t vga_page = fb_info.framebuf + (i << PAGE_SHIFT);
         pte_t *pte = pte_offset((pde_t *) pgdir_addr, fb_page);
         *pte = __mkpte(PHYSICAL_ADDR(vga_page), _PAGE_RW);
     }
@@ -470,6 +468,9 @@ struct terminal * get_terminal(int num)
 
 void * get_terminal_fb(int num)
 {
+    char *fb;
+    struct vga_fb_info fb_info;
+
     if (num < 0 || num > NR_TERMINAL) {
         panic("attempt to get nonexistant terminal %d frame buffer!\n", num);
     }
@@ -478,7 +479,8 @@ void * get_terminal_fb(int num)
     }
     assert(num > 0);
 
-    char *fb = (char *) KERNEL_ADDR(g_vga->fb_info.framebuf);
+    vga_get_fb_info(&fb_info);
+    fb = (char *) KERNEL_ADDR(fb_info.framebuf);
     fb += (num * FB_SIZE_PAGES) << PAGE_SHIFT;
 
     return fb;
@@ -616,7 +618,7 @@ int terminal_putchar(struct terminal *term, char c)
             }
 
             // determine character position
-            char_pos = xy2pos(term->cols, term->cursor.x, term->cursor.y);
+            char_pos = xy2pos(term, term->cursor.x, term->cursor.y);
 
             // advance cursor
             term->cursor.x++;
@@ -1062,7 +1064,7 @@ static void erase(struct terminal *term, int mode)
 {
     int start;
     int count;
-    int pos = xy2pos(term->cols, term->cursor.x, term->cursor.y);
+    int pos = xy2pos(term, term->cursor.x, term->cursor.y);
     int area = term->rows * term->cols;
 
     switch (mode) {
@@ -1091,7 +1093,7 @@ static void erase_line(struct terminal *term, int mode)
 {
     int start;
     int count;
-    int pos = xy2pos(term->cols, term->cursor.x, term->cursor.y);
+    int pos = xy2pos(term, term->cursor.x, term->cursor.y);
 
     switch (mode) {
         case 0:    // erase line from cursor down
@@ -1099,12 +1101,12 @@ static void erase_line(struct terminal *term, int mode)
             count = term->cols - (pos % term->cols);
             break;
         case 1:      // erase line from cursor up
-            start = xy2pos(term->cols, 0, term->cursor.y);
+            start = xy2pos(term, 0, term->cursor.y);
             count = (pos % term->cols) + 1;
             break;
         case 2:     // erase entire line
         default:
-            start = xy2pos(term->cols, 0, term->cursor.y);
+            start = xy2pos(term, 0, term->cursor.y);
             count = term->cols;
     }
 
@@ -1154,9 +1156,15 @@ static void cursor_right(struct terminal *term, int n)
     }
 }
 
-static uint16_t xy2pos(uint16_t ncols, uint16_t x, uint16_t y)
+static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y)
 {
-    return y * ncols + x;
+    return y * term->cols + x;
+}
+
+static void pos2xy(struct terminal *term, uint16_t pos)
+{
+    term->cursor.x = pos % term->cols;
+    term->cursor.y = pos / term->cols;
 }
 
 static void set_fb_char(struct terminal *term, uint16_t pos, char c)
@@ -1209,17 +1217,13 @@ static void set_cursor_pos(const struct terminal *term)
 {
     uint16_t pos;
 
-    pos = xy2pos(term->cols, term->cursor.x, term->cursor.y);
+    pos = xy2pos(term, term->cursor.x, term->cursor.y);
     vga_set_cursor_pos(pos);
 }
 
 static void set_cursor_shape(const struct terminal *term)
 {
-    uint8_t start, end;
-
-    start = ((uint8_t) term->cursor.shape) & 0xFF;
-    end = ((uint8_t) term->cursor.shape) >> 8;
-    vga_set_cursor_shape(start, end);
+    vga_set_cursor_shape(term->cursor.shape);
 }
 
 static void update_vga_state(const struct terminal *term)

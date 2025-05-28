@@ -107,8 +107,8 @@ VGA_FONT_80x25  = 4
         movb            $0x03, %ah
         int             $0x10
         jc              _vga_error
-        movb            %dh, cursor_row
-        movb            %dl, cursor_col
+        movb            %dh, tmp_cursor_row
+        movb            %dl, tmp_cursor_col
 
         # set video mode
         movb            $VGA_MODE, %al
@@ -119,8 +119,8 @@ VGA_FONT_80x25  = 4
 
         # restore cursor position
         xorw            %ax, %ax
-        movb            cursor_row, %dh
-        movb            cursor_col, %dl
+        movb            tmp_cursor_row, %dh
+        movb            tmp_cursor_col, %dl
         movb            $0x02, %ah
         int             $0x10
         jc              _vga_error
@@ -135,15 +135,12 @@ VGA_FONT_80x25  = 4
         movw            $VGA_DIMENSION, %ax
 _font0: cmpw            $VGA_FONT_80x25, %ax
         jne             _font1
-        movl            $25, vga_rows
         jmp             _dofont
 _font1: cmpw            $VGA_FONT_80x28, %ax
         jne             _font2
-        movl            $28, vga_rows
         jmp             _dofont
 _font2: cmpw            $VGA_FONT_80x50, %ax
         jne             _vga_error_bad_font
-        movl            $50, vga_rows
 _dofont:addw            $0x1110, %ax
         xorb            %bl, %bl
         int             $0x10
@@ -154,13 +151,10 @@ _dofont:addw            $0x1110, %ax
         int             $0x10
         jc              _vga_error
         movb            %al, vga_mode
-        movb            %ah, vga_cols
         xorb            %bh, %bh
         movb            $0x03, %ah
         int             $0x10
         jc              _vga_error
-        movb            %dh, cursor_row
-        movb            %dl, cursor_col
 
 _vga_done:
         ret
@@ -460,6 +454,9 @@ _kernel_too_big:
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
 
+tmp_cursor_row:         .long   0
+tmp_cursor_col:         .long   0
+
 # keep this in-line with struct boot_info in include/boot.h!
 .globl boot_info
 boot_info:
@@ -472,10 +469,6 @@ boot_info:
   hwflags:              .long   0
   a20_method:           .long   A20_NONE
   vga_mode:             .long   0
-  vga_rows:             .long   0
-  vga_cols:             .long   0
-  cursor_row:           .long   0
-  cursor_col:           .long   0
 
 # -----------------------------------------------------------------------------
 

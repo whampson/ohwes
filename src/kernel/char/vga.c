@@ -19,6 +19,9 @@
  * =============================================================================
  */
 
+// Good resource for later:
+// https://www.singlix.com/trdos/archive/vga/
+
 #include <i386/boot.h>
 #include <i386/interrupt.h>
 #include <i386/io.h>
@@ -28,17 +31,12 @@
 #include <kernel/terminal.h>
 #include <kernel/vga.h>
 
-__data_segment static struct vga _vga = { };
-__data_segment struct vga *g_vga = &_vga;
-
 void init_vga(void)
 {
     struct vga_fb_info fb_info_old, fb_info_new;
     void *fb_old, *fb_new;
 
     // grab text mode dimensions from boot info
-    g_vga->rows = g_boot->vga_rows;
-    g_vga->cols = g_boot->vga_cols;
 
     // read the current frame buffer parameters
     if (!vga_get_fb_info(&fb_info_old)) {
@@ -50,7 +48,6 @@ void init_vga(void)
     if (!vga_get_fb_info(&fb_info_new)) {
         panic("failed to get VGA frame buffer info!");
     }
-    g_vga->fb_info = fb_info_new;
 
     // move the old frame buffer to the new one
     fb_old = (void *) KERNEL_ADDR(fb_info_old.framebuf);
@@ -60,20 +57,24 @@ void init_vga(void)
     // update system terminal frame buffer
     get_terminal(SYSTEM_TERMINAL)->framebuf = fb_new;
 
-    // read cursor attributes leftover from BIOS
-    uint8_t cl_lo, cl_hi;
-    uint16_t pos;
-    cl_lo = vga_crtc_read(VGA_CRTC_REG_CL_LO);
-    cl_hi = vga_crtc_read(VGA_CRTC_REG_CL_HI);
-    pos = (cl_hi << 8) | cl_lo;
-    g_boot->cursor_col = pos % g_vga->cols;
-    g_boot->cursor_row = pos / g_vga->cols;
-    cl_lo = vga_crtc_read(VGA_CRTC_REG_CSS) & VGA_CRTC_FLD_CSS_CSS_MASK;
-    cl_hi = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
-    g_vga->orig_cursor_shape = (cl_hi << 8) | cl_lo;
-
     kprint("vga: frame buffer is %d pages at %08X\n",
-        g_vga->fb_info.size_pages, g_vga->fb_info.framebuf);
+        fb_info_new.size_pages, fb_new);
+}
+
+uint8_t vga_get_rows(void)
+{
+    uint8_t of = vga_crtc_read(VGA_CRTC_REG_OF);
+    uint16_t vde = vga_crtc_read(VGA_CRTC_REG_VDE);
+    vde |= ((of & VGA_CRTC_FLD_OF_VDE8_MASK) >> VGA_CRTC_FLD_OF_VDE8_SHIFT) << 8;
+    vde |= ((of & VGA_CRTC_FLD_OF_VDE9_MASK) >> VGA_CRTC_FLD_OF_VDE9_SHIFT) << 9;
+    uint8_t msl = vga_crtc_read(VGA_CRTC_REG_MSL) & VGA_CRTC_FLD_MSL_MSL_MASK;
+    return (uint8_t) ((vde + 1) / (msl + 1));
+}
+
+uint8_t vga_get_cols(void)
+{
+    uint8_t hde = vga_crtc_read(VGA_CRTC_REG_HDE);
+    return hde + 1;
 }
 
 bool vga_get_fb_info(struct vga_fb_info *fb_info)
@@ -158,6 +159,18 @@ void vga_cursor_enable(bool enable)
     restore_flags(flags);
 }
 
+uint16_t vga_get_cursor_pos(void)
+{
+    uint32_t flags;
+
+    cli_save(flags);
+    uint8_t cl_hi = vga_crtc_read(VGA_CRTC_REG_CL_HI);
+    uint8_t cl_lo = vga_crtc_read(VGA_CRTC_REG_CL_LO);
+    restore_flags(flags);
+
+    return (cl_hi << 8) | cl_lo;
+}
+
 void vga_set_cursor_pos(uint16_t pos)
 {
     uint32_t flags;
@@ -168,10 +181,27 @@ void vga_set_cursor_pos(uint16_t pos)
     restore_flags(flags);
 }
 
-void vga_set_cursor_shape(uint8_t start, uint8_t end)
+uint16_t vga_get_cursor_shape(void)
+{
+    uint32_t flags;
+    uint8_t start, end;
+
+    cli_save(flags);
+    start = vga_crtc_read(VGA_CRTC_REG_CSS) & VGA_CRTC_FLD_CSS_CSS_MASK;
+    end   = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
+    restore_flags(flags);
+
+    return (end << 8) | start;
+}
+
+void vga_set_cursor_shape(uint16_t shape)
 {
     uint32_t flags;
     uint8_t css, cse;
+    uint8_t start, end;
+
+    start = shape & 0xFF;
+    end = shape >> 8;
 
     cli_save(flags);
     css = vga_crtc_read(VGA_CRTC_REG_CSS) & ~VGA_CRTC_FLD_CSS_CSS_MASK;
