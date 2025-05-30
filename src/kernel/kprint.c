@@ -60,65 +60,6 @@ __initmem struct console *g_consoles = NULL;
 __data_segment bool g_kb_initialized = false;
 __data_segment bool g_timer_initialized = false;
 
-int kprint(const char *fmt, ...)
-{
-    char buf[KPRINT_BUFSIZ+1] = { };
-    va_list args;
-    int count;
-    int linefeed;
-
-    const char *p;
-    const char *line;
-    struct console *cons;
-
-    va_start(args, fmt);
-    count = vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
-
-    if (g_consoles == NULL) {
-        register_default_console();
-    }
-
-    p = buf;
-    linefeed = 0;
-    while ((p - buf) < count) {
-        // add to the log 'til we see a linefeed or hit the end
-        for (line = p; (p - buf) < count; p++) {
-#if E9_HACK
-            outb(0xE9, *p);
-#endif
-            _kernel_log[(_log_start + _log_size) % KLOG_BUFSIZ] = *p;
-            if (_log_size < KLOG_BUFSIZ) {
-                _log_size++;
-            }
-            else {
-                _log_start += 1;
-                _log_start %= KLOG_BUFSIZ;
-            }
-            linefeed = (*p == '\n');
-            if (linefeed) {
-                break;
-            }
-        }
-
-        // write line to console
-        cons = g_consoles;
-        while (cons) {
-            if (cons->write) {
-                cons->write(cons, line, (p - line) + linefeed);
-            }
-            cons = cons->next;
-        }
-
-        if (linefeed) {
-            linefeed = 0;
-            p++;
-        }
-    }
-
-    return (p - buf);
-}
-
 void register_console(struct console *cons)
 {
     const char *log_ptr;
@@ -192,6 +133,66 @@ void register_default_console(void)
     register_console(&vt_console);
 }
 
+int kprint(const char *fmt, ...)
+{
+    char buf[KPRINT_BUFSIZ+1] = { };
+    va_list args;
+    int count;
+    int linefeed;
+
+    const char *p;
+    const char *line;
+    struct console *cons;
+
+    va_start(args, fmt);
+    count = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    if (g_consoles == NULL) {
+        register_default_console();
+    }
+
+    p = buf;
+    linefeed = 0;
+    while ((p - buf) < count) {
+        // add to the log 'til we see a linefeed or hit the end
+        for (line = p; (p - buf) < count; p++) {
+#if E9_HACK
+            outb(0xE9, *p);
+#endif
+            _kernel_log[(_log_start + _log_size) % KLOG_BUFSIZ] = *p;
+            if (_log_size < KLOG_BUFSIZ) {
+                _log_size++;
+            }
+            else {
+                _log_start += 1;
+                _log_start %= KLOG_BUFSIZ;
+            }
+            linefeed = (*p == '\n');
+            if (linefeed) {
+                break;
+            }
+        }
+
+        // write line to console
+        cons = g_consoles;
+        while (cons) {
+            if (cons->write) {
+                cons->write(cons, line, (p - line) + linefeed);
+            }
+            cons = cons->next;
+        }
+
+        if (linefeed) {
+            linefeed = 0;
+            p++;
+        }
+    }
+
+    return (p - buf);
+}
+
+#if 0
 static void print_log(void)    // TODO: procfs for this
 {
     for (int i = 0; i < _log_size; i++) {
@@ -210,8 +211,7 @@ static void print_consoles(void)   // TODO: procfs for this
     }
     // printf("\n");
 }
-
-extern struct console vt_console;
+#endif
 
 void __noreturn panic(const char *fmt, ...)
 {
@@ -225,7 +225,6 @@ void __noreturn panic(const char *fmt, ...)
     va_end(args);
 
     if (g_consoles == NULL) {
-        // register an emergency console so we can print!
         register_default_console();
     }
 

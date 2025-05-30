@@ -41,6 +41,4 @@ struct console {
 void register_console(struct console *cons);
 void unregister_console(struct console *cons);
 
-void register_default_console(void);
-
 #endif // __CONSOLE_H

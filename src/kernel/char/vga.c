@@ -35,33 +35,21 @@
 
 void init_vga(void)
 {
-    struct vga_fb_info fb_info_old, fb_info_new;
-    void *fb_old, *fb_new;
+    struct vga_fb_info fb_old, fb_new;
 
-    // 32 pages, up to 16 VT frame buffers at 80x50 chars each
-    const int FrameBufferSelect = VGA_MEMORY_128K;
+    // may get called twice: once during vt_console setup and another
+    // during init_terminal to ensure frame buffer is set correctly
+    static __data_segment bool vga_initialized = false;
+    if (vga_initialized) {
+        return;
+    }
 
     // set frame buffer address
-    if (!vga_get_fb_info(&fb_info_old)) {
-        panic("failed to get VGA frame buffer info!");
-    }
-    if (!vga_set_fb(FrameBufferSelect)) {
-        panic("failed to change VGA frame buffer!");
-    }
-    if (!vga_get_fb_info(&fb_info_new)) {
-        panic("failed to get VGA frame buffer info!");
-    }
+    vga_get_fb_info(&fb_old);
+    vga_set_fb(VGA_MEMORY_128K);    // 32 pages, up to 16 80x50 VTs
+    vga_get_fb_info(&fb_new);
 
-    // move the old frame buffer to the new one
-    fb_old = (void *) KERNEL_ADDR(fb_info_old.framebuf);
-    fb_new = (void *) KERNEL_ADDR(fb_info_new.framebuf);
-    memmove(fb_new, fb_old, FB_SIZE_PAGES);
-
-    // update system terminal frame buffer
-    get_terminal(0)->framebuf = fb_new;
-
-    kprint("vga: frame buffer is %d pages at %08X\n",
-        fb_info_new.size_pages, fb_new);
+    vga_initialized = true;
 }
 
 uint8_t vga_get_rows(void)
@@ -80,14 +68,12 @@ uint8_t vga_get_cols(void)
     return hde + 1;
 }
 
-bool vga_get_fb_info(struct vga_fb_info *fb_info)
+void vga_get_fb_info(struct vga_fb_info *fb_info)
 {
     uint8_t grfx_misc;
     uint8_t fb_select;
 
-    if (!fb_info) {
-        return false;
-    }
+    assert(fb_info);
 
     grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
     fb_select = (grfx_misc & 0x0C) >> 2;
@@ -109,26 +95,22 @@ bool vga_get_fb_info(struct vga_fb_info *fb_info)
             fb_info->framebuf = 0xB8000;
             fb_info->size_pages = 8;
             break;
-        default:    // cannot happen...
-            return false;
     }
-
-    return true;
 }
 
-bool vga_set_fb(enum vga_fb_select fb_select)
+void vga_set_fb(enum vga_fb_select fb_select)
 {
-    volatile uint8_t grfx_misc;
+    uint8_t grfx_misc;
 
     grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
     grfx_misc = (grfx_misc & 0xF3) | ((fb_select & 3) << 2);
     vga_grfx_write(VGA_GRFX_REG_MISC, grfx_misc);
 
     grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
-    return ((grfx_misc & 0x0C) >> 2) == fb_select;
+    assert((grfx_misc & 0x0C) >> 2 == fb_select);
 }
 
-void vga_blink_enable(bool enable)
+void vga_enable_blink(bool enable)
 {
     uint32_t flags;
     uint8_t modectl;
@@ -145,7 +127,7 @@ void vga_blink_enable(bool enable)
     restore_flags(flags);
 }
 
-void vga_cursor_enable(bool enable)
+void vga_enable_cursor(bool enable)
 {
     uint32_t flags;
     uint8_t css;

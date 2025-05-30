@@ -118,13 +118,6 @@ void gdb_main(struct gdb_state *state)
         return;
     }
 
-#if GDB_ENABLE_DEBUG
-    extern struct console *g_consoles;
-    if (g_consoles == NULL) {
-        register_default_console();
-    }
-#endif
-
     status = gdb_cmd_query(state);
     if (status == EOF) {
         goto error;

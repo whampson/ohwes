@@ -213,8 +213,8 @@ enum vga_color {
 enum vga_fb_select {
     VGA_MEMORY_128K,    // 0: 0xA0000-0xBFFFF 128k
     VGA_MEMORY_64K,     // 1: 0xA0000-0xAFFFF 64k
-    VGA_MEMORY_32K_HI,  // 2: 0xB0000-0xB7FFF 32k
-    VGA_MEMORY_32K_LO,  // 3: 0xB8000-0xBFFFF 32k
+    VGA_MEMORY_32K_LO,  // 2: 0xB0000-0xB7FFF 32k
+    VGA_MEMORY_32K_HI,  // 3: 0xB8000-0xBFFFF 32k
 };
 
 /**
@@ -275,18 +275,15 @@ uint8_t vga_get_cols(void);
  * Fill a vga_fb_info struct with the current frame buffer parameters.
  *
  * @param fb_info the vga_fb_info structure to fill
- * @return 'true' if the fb_info structure was successfully filled
-*/
-bool vga_get_fb_info(struct vga_fb_info *fb_info);
+ */
+void vga_get_fb_info(struct vga_fb_info *fb_info);
 
 /**
  * Program the VGA frame buffer address.
  *
  * @param fb_select one of the vga_fb_select enum values
- * @return true if the fb_select parameter was valid and the frame buffer
- *         address was successfully programmed
-*/
-bool vga_set_fb(enum vga_fb_select fb_select);
+ */
+void vga_set_fb(enum vga_fb_select fb_select);
 
 /**
  * Enable character blink effect if the 'blink' bit is set in the character
@@ -294,14 +291,14 @@ bool vga_set_fb(enum vga_fb_select fb_select);
  *
  * @param enable enable or disable blink effect
  */
-void vga_blink_enable(bool enable);
+void vga_enable_blink(bool enable);
 
 /**
  * Enable cursor.
  *
  * @param enable enable or disable blinking cursor
  */
-void vga_cursor_enable(bool enable);
+void vga_enable_cursor(bool enable);
 
 /**
  * Get linear cursor position.

@@ -36,6 +36,10 @@
 #include <kernel/terminal.h>
 #include <kernel/vga.h>
 
+// initialization
+extern void init_vga(void);
+static void initialize_terminal(int num, struct terminal *term);
+
 // screen positioning
 static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y);
 static void pos2xy(struct terminal *term, uint16_t pos);
@@ -43,7 +47,7 @@ static void pos2xy(struct terminal *term, uint16_t pos);
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
-// terminal TTY implementation
+// TTY device implementation
 
 static int terminal_tty_open(struct tty *);
 static int terminal_tty_close(struct tty *);
@@ -160,14 +164,18 @@ static dev_t vt_console_device(struct console *cons)
 static void vt_console_setup(struct console *cons)
 {
     struct vga_fb_info fb_info;
+
+    init_vga(); // ok to call more than once
     vga_get_fb_info(&fb_info);
 
     struct terminal *term = get_terminal(cons->index);
     if (!term->initialized) {
-        terminal_defaults(term);
-        term->number = (cons->index) ? cons->index : current_terminal();
-        term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
-        pos2xy(term, vga_get_cursor_pos());
+        int num = (cons->index) ? cons->index : current_terminal();
+        initialize_terminal(num, term);
+        if (num == 1) {
+            term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
+            pos2xy(term, vga_get_cursor_pos());
+        }
     }
 }
 
@@ -223,12 +231,18 @@ enum terminal_state {
     S_CSI
 };
 
+enum erase_mode {
+    ERASE_DOWN,
+    ERASE_UP,
+    ERASE_ALL
+};
+
 // terminal state
-static void reset(struct terminal *term);                // ESC c
+static void reset_terminal(struct terminal *term);       // ESC c
 static void save_terminal(struct terminal *term);        // ESC 7
 static void restore_terminal(struct terminal *term);     // ESC 8
-static void cursor_save(struct terminal *term);          // ESC [s
-static void cursor_restore(struct terminal *term);       // ESC [u
+static void save_cursor(struct terminal *term);          // ESC [s
+static void restore_cursor(struct terminal *term);       // ESC [u
 
 // character handling
 static void esc(struct terminal *term, char c);          // ^[ (ESC)
@@ -248,8 +262,8 @@ static void cursor_right(struct terminal *term, int n);  // ESC [<n>C
 static void cursor_left(struct terminal *term, int n);   // ESC [<n>D
 
 // VGA features
-static void blink_enable(const struct terminal *term);  // ESC 3 / ESC 4
-static void cursor_enable(const struct terminal *term); // ESC 5 / ESC 6
+static void enable_blink(const struct terminal *term);  // ESC 3 / ESC 4
+static void enable_cursor(const struct terminal *term); // ESC 5 / ESC 6
 static void set_cursor_pos(const struct terminal *term);// ESC [ <n>;<m>H
 static void set_cursor_shape(const struct terminal *term);
 static void update_vga_state(const struct terminal *term);
@@ -264,12 +278,17 @@ static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr a
 void init_terminal(void)
 {
     struct vga_fb_info fb_info;
+
+    init_vga(); // ok to call more than once
     vga_get_fb_info(&fb_info);
+    kprint("vga: frame buffer is %d pages at %08X\n",
+        fb_info.size_pages, fb_info.framebuf);
 
     // make sure we have enough memory for the configured number of terminals
     if (fb_info.size_pages - FB_SIZE_PAGES < NR_TERMINAL * FB_SIZE_PAGES) {
-        panic("not enough video memory available for %d terminals! See config.h.",
-                NR_TERMINAL);
+        panic("not enough video memory available for %d terminals at "
+            "%d frame buffer\npages each! See config.h.",
+            NR_TERMINAL, FB_SIZE_PAGES);
     }
 
     // register the terminal TTY driver
@@ -280,31 +299,31 @@ void init_terminal(void)
     // initialize virtual terminals
     for (int i = 1; i <= NR_TERMINAL; i++) {
         struct terminal *term = get_terminal(i);
-        terminal_defaults(term);
-        term->number = i;
-        term->framebuf = get_terminal_fb(i);
-        erase(term, 2);
+        if (term->initialized) {
+            // terminal already initialized if console was registered early
+            continue;
+        }
+        initialize_terminal(i, term);
+        erase(term, ERASE_ALL);
     }
 
-    // restore terminal state
-    struct terminal *term = get_terminal(DEFAULT_VT);
-    pos2xy(term, vga_get_cursor_pos());
-    term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
+    // restore boot terminal state
+    get_terminal(1)->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
+    pos2xy(get_terminal(1), vga_get_cursor_pos());
 
     // do a proper 'switch' to the initial virtual terminal
     int ret = switch_terminal(DEFAULT_VT);
     if (ret != 0) {
         panic("unable to switch to terminal %d!", DEFAULT_VT);
     }
-    assert(term == get_terminal(DEFAULT_VT));
 
     // create a restore point
-    save_terminal(term);
+    save_terminal(get_terminal(DEFAULT_VT));
 
     // enable blink, show cursor
-    const char *config = "\e4\e6";
-    terminal_write(term, config, strlen(config));
+    terminal_print(get_terminal(DEFAULT_VT), "\e4\e6");
 
+    // register the virtual terminal console
     register_console(&vt_console);
 
 #if PRINT_LOGO
@@ -333,6 +352,18 @@ void init_terminal(void)
                                             `                                           \n\
     \e[0m\n"); //https://ascii.co.uk/art/raven
 #endif
+}
+
+static void initialize_terminal(int num, struct terminal *term)
+{
+    if (term->initialized) {
+        return;
+    }
+
+    terminal_defaults(term);
+    term->number = num;
+    term->framebuf = get_terminal_fb(num);
+    term->initialized = true;
 }
 
 // ----------------------------------------------------------------------------
@@ -430,11 +461,9 @@ int switch_terminal(int num)
 #endif
 
     flush_tlb();
-    update_vga_state(curr);
 
-    // a terminal is fully initialized once we've switch to it at least once :-)
+    update_vga_state(curr);
     g_currterm = curr->number;
-    curr->initialized = true;
 
     restore_flags(flags);
     return 0;
@@ -506,21 +535,21 @@ void terminal_restore(struct terminal *term, struct terminal_save_state *save)
     }
 }
 
-// int terminal_print(struct terminal *term, const char *buf)
-// {
-//     const char *p;
+int terminal_print(struct terminal *term, const char *buf)
+{
+    const char *p;
 
-//     if (!term || !buf) {
-//         return -EINVAL;
-//     }
+    if (!term || !buf) {
+        return -EINVAL;
+    }
 
-//     p = buf;
-//     while (*p != '\0' && (p - buf) < MAX_PRINTBUF) {
-//         p += terminal_putchar(term, *p);
-//     }
+    p = buf;
+    while (*p != '\0' && (p - buf) < MAX_PRINTBUF) {
+        p += terminal_putchar(term, *p);
+    }
 
-//     return (p - buf);
-// }
+    return (p - buf);
+}
 
 int terminal_write(struct terminal *term, const char *buf, size_t count)
 {
@@ -689,25 +718,25 @@ static void esc(struct terminal *term, char c)
         case '3':       // ESC 3    disable blink
             term->blink_on = false;
             if (is_current(term)) {
-                blink_enable(term);
+                enable_blink(term);
             }
             break;
         case '4':       // ESC 4    enable blink
             term->blink_on = true;
             if (is_current(term)) {
-                blink_enable(term);
+                enable_blink(term);
             }
             break;
         case '5':       // ESC 5    hide cursor
             term->cursor.hidden = true;
             if (is_current(term)) {
-                cursor_enable(term);
+                enable_cursor(term);
             }
             break;
         case '6':       // ESC 6    show cursor
             term->cursor.hidden = false;
             if (is_current(term)) {
-                cursor_enable(term);
+                enable_cursor(term);
             }
             break;
         case '7':       // ESC 7    save terminal
@@ -717,7 +746,7 @@ static void esc(struct terminal *term, char c)
             restore_terminal(term);
             break;
         case 'c':       // ESC c    reset terminal
-            reset(term);
+            reset_terminal(term);
             break;
         case 'h':       // ESC h    clear tab stop
             term->tabstops[term->cursor.x] = 0;     // TODO: replace with ESC [0g (clear current) and ESC [3g (clear all)
@@ -824,10 +853,10 @@ static void csi(struct terminal *term, char c)
         // Custom (or "private") sequences
         //
         case 's':       // CSI s        save cursor position
-            cursor_save(term);
+            save_cursor(term);
             goto csi_done;
         case 'u':       // CSI u        restore cursor position
-            cursor_restore(term);
+            restore_cursor(term);
             goto csi_done;
 
         //
@@ -941,10 +970,10 @@ static void csi_m(struct terminal *term, char p)
     }
 }
 
-static void reset(struct terminal *term)
+static void reset_terminal(struct terminal *term)
 {
     terminal_defaults(term);
-    erase(term, 2);
+    erase(term, ERASE_ALL);
     if (is_current(term)) {
         update_vga_state(term);
     }
@@ -960,12 +989,12 @@ static void restore_terminal(struct terminal *term)
     terminal_restore(term, &term->saved_state);
 }
 
-static void cursor_save(struct terminal *term)
+static void save_cursor(struct terminal *term)
 {
     term->saved_state.cursor = term->cursor._value;
 }
 
-static void cursor_restore(struct terminal *term)
+static void restore_cursor(struct terminal *term)
 {
     term->cursor._value = term->saved_state.cursor;
     if (is_current(term)) {
@@ -1062,15 +1091,15 @@ static void erase(struct terminal *term, int mode)
     int area = term->rows * term->cols;
 
     switch (mode) {
-        case 0:     // erase screen from cursor down
+        case ERASE_DOWN:    // erase screen from cursor down
             start = pos;
             count = area - pos;
             break;
-        case 1:     // erase screen from cursor up
+        case ERASE_UP:      // erase screen from cursor up
             start = 0;
             count = pos + 1;
             break;
-        case 2:     // erase entire screen
+        case ERASE_ALL:     // erase entire screen
         default:
             start = 0;
             count = area;
@@ -1090,15 +1119,15 @@ static void erase_line(struct terminal *term, int mode)
     int pos = xy2pos(term, term->cursor.x, term->cursor.y);
 
     switch (mode) {
-        case 0:    // erase line from cursor down
+        case ERASE_DOWN:    // erase line from cursor forward
             start = pos;
             count = term->cols - (pos % term->cols);
             break;
-        case 1:      // erase line from cursor up
+        case ERASE_UP:      // erase line from cursor back
             start = xy2pos(term, 0, term->cursor.y);
             count = (pos % term->cols) + 1;
             break;
-        case 2:     // erase entire line
+        case ERASE_ALL:     // erase entire line
         default:
             start = xy2pos(term, 0, term->cursor.y);
             count = term->cols;
@@ -1197,14 +1226,14 @@ static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr a
     }
 }
 
-static void blink_enable(const struct terminal *term)
+static void enable_blink(const struct terminal *term)
 {
-    vga_blink_enable(term->blink_on);
+    vga_enable_blink(term->blink_on);
 }
 
-static void cursor_enable(const struct terminal *term)
+static void enable_cursor(const struct terminal *term)
 {
-    vga_cursor_enable(!term->cursor.hidden);
+    vga_enable_cursor(!term->cursor.hidden);
 }
 
 static void set_cursor_pos(const struct terminal *term)
@@ -1222,8 +1251,8 @@ static void set_cursor_shape(const struct terminal *term)
 
 static void update_vga_state(const struct terminal *term)
 {
-    blink_enable(term);
-    cursor_enable(term);
+    enable_blink(term);
+    enable_cursor(term);
     set_cursor_shape(term);
     set_cursor_pos(term);
 }

@@ -67,7 +67,6 @@ extern void init_pic(void);
 extern void init_rtc(void);
 extern void init_timer(void);
 extern void init_tty(void);
-extern void init_vga(void);
 
 #if SERIAL_DEBUGGING
 extern bool g_debug_port_available;
@@ -105,9 +104,6 @@ __fastcall void kmain(struct boot_info **info)
     init_timer();
     init_rtc();
 
-    // initialize VGA
-    init_vga();
-
     // setup the file system
     init_fs();
 
@@ -144,9 +140,10 @@ void init_boot(struct boot_info **info)
 {
     g_boot = *info;
 
-    kprint("\n\e[0;1m%s %s '%s'\n", OS_NAME, OS_VERSION, OS_MONIKER);
-    kprint("built %s %s using GCC %s by %s\e[0m\n",
-        __DATE__, __TIME__, __VERSION__, OS_AUTHOR);
+    kprint("\n\e[0;1m%s %s\n", OS_NAME, OS_VERSION);
+    kprint("%s\n", OS_COPYRIGHT);
+    kprint("Compiled on %s at %s using GCC %s\e[0m\n\n",
+            __DATE__, __TIME__, __VERSION__);
 
 #if SERIAL_DEBUGGING
     if (!g_debug_port_available) {
