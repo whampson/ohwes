@@ -41,4 +41,9 @@ struct console {
 void register_console(struct console *cons);
 void unregister_console(struct console *cons);
 
+bool has_console(void);
+
+// print to all consoles
+int console_print(const char *str);
+
 #endif // __CONSOLE_H

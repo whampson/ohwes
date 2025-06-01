@@ -58,7 +58,7 @@ void register_console(struct console *cons)
 
     assert(cons);
 
-    if (g_consoles == NULL) {
+    if (!has_console()) {
         g_consoles = cons;
         cons->next = NULL;
     }
@@ -118,7 +118,12 @@ void unregister_console(struct console *cons)
     }
 }
 
-void register_default_console(void)
+bool has_console()
+{
+    return g_consoles != NULL;
+}
+
+static void register_default_console(void)
 {
     extern struct console vt_console;
     register_console(&vt_console);
@@ -135,7 +140,7 @@ int console_print(const char *str)
     const int MaxCount = KERNEL_LOG_SIZE;
 
     // ensure a console is registered
-    if (g_consoles == NULL) {
+    if (!has_console()) {
         register_default_console();
     }
 
