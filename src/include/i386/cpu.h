@@ -87,4 +87,9 @@ static inline struct tss * get_curr_tss(void)
     return get_tss(segsel);
 }
 
+static inline int get_cpl()
+{
+    return getpl();
+}
+
 #endif // __CPU_H

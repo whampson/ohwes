@@ -19,6 +19,7 @@
  * =============================================================================
  */
 
+#include <i386/cpu.h>
 #include <i386/gdbstub.h>
 #include <i386/io.h>
 #include <i386/x86.h>
@@ -27,7 +28,7 @@
 
 uint32_t get_esp(const struct iregs *regs)
 {
-    uint32_t esp = did_privilege_level_change(regs)
+    uint32_t esp = (get_rpl(regs) != get_cpl())
         // if we changed privilege levels, ESP in iregs is valid
         ? (uint32_t) regs->esp
         // if we did not change privilege levels, no ESP (or SS) was pushed to
@@ -45,24 +46,12 @@ uint16_t get_ss(const struct iregs *regs)
     uint16_t curr_ss;
     store_ss(curr_ss);
 
-    return did_privilege_level_change(regs)
+    return (get_rpl(regs) != get_cpl())
         ? regs->ss
         : curr_ss;
 }
 
-bool did_privilege_level_change(const struct iregs *regs)
+int get_rpl(const struct iregs *regs)
 {
-    struct segsel *regs_cs;
-    uint32_t _cs_storage;
-    int cpl;
-
-    regs_cs = (struct segsel *) &regs->cs;
-    store_cs(_cs_storage);
-    cpl = ((struct segsel *) &_cs_storage)->rpl;
-
-    if (regs_cs->rpl > cpl) {
-        return true;
-    }
-
-    return false;
+    return ((struct segsel *) &regs->cs)->rpl;
 }

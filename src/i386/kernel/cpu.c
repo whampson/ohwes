@@ -64,7 +64,7 @@ static void verify_gdt(void);
 __data_segment static struct x86_desc _ldt[1];
 __data_segment static struct tss _tss_table[2];
 
-extern __noreturn void _double_fault(void);  // crash.c
+extern __noreturn void handle_double_fault(void);  // crash.c
 
 // TODO: this is a bit of a janky way of managing kernel stacks
 // but it'll work for now
@@ -172,7 +172,7 @@ static void setup_tss(void)
 
     struct tss *crash_tss = get_tss(_TSS1_SEGMENT);
     assert(crash_tss == &_tss_table[1]);
-    crash_tss->eip = (uint32_t) _double_fault;
+    crash_tss->eip = (uint32_t) handle_double_fault;
     crash_tss->esp = KERNEL_ADDR(DOUBLE_FAULT_STACK);
     crash_tss->ebp = KERNEL_ADDR(DOUBLE_FAULT_STACK);
     crash_tss->cs = KERNEL_CS;

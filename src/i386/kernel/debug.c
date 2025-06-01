@@ -19,8 +19,10 @@
  * =============================================================================
  */
 
+#include <i386/cpu.h>
 #include <i386/gdbstub.h>
 #include <i386/io.h>
+#include <i386/interrupt.h>
 #include <i386/x86.h>
 #include <kernel/config.h>
 #include <kernel/ohwes.h>
@@ -63,7 +65,7 @@ void dump_regs(const struct iregs *regs, uint32_t esp, uint16_t ss)
 
 __fastcall void _dbgbrk(struct iregs *regs)
 {
-    bool pl_change = did_privilege_level_change(regs);
+    bool pl_change = (get_rpl(regs) != get_cpl());
     uint32_t esp = get_esp(regs);
     uint32_t ss = get_ss(regs);
 

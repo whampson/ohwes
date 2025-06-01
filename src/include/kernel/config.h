@@ -58,7 +58,7 @@
 #define SERIAL_DEBUGGING    1   // enable debugging over COM port
 #define SERIAL_DEBUG_PORT   COM1_PORT
 #define SERIAL_DEBUG_BAUD   BAUD_115200
-#define ENABLE_CRASH_KEY    0   // test various crash scenarios w/ keystroke
+#define ENABLE_CRASH_KEY    1   // test various crash scenarios w/ keystroke
 
 //
 // ----------------------------------------------------------------------------

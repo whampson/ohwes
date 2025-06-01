@@ -44,6 +44,11 @@
 
 #define __early __attribute__((section(".data")))
 
+#if DEBUG
+int g_test_crashkey = 0;
+int g_test_soft_double_fault = 0;
+#endif
+
 extern bool g_kb_initialized;
 extern bool g_timer_initialized;
 
@@ -60,7 +65,6 @@ struct x86_regs {
 };
 
 static void cprint(const char *fmt, ...);
-extern int console_print(const char *str);
 
 static void dump_exception(struct x86_regs *regs);
 static void dump_regs(struct x86_regs *regs);
@@ -70,84 +74,93 @@ static void print_eflags(struct eflags *flags);
 static __noreturn __fastcall
 void handle_soft_double_fault(struct x86_regs *regs, struct x86_regs *orig_regs);
 
-void convert_regs(struct x86_regs *regs, struct iregs *iregs)
-{
-    regs->iregs.ebx = iregs->ebx;
-    regs->iregs.ecx = iregs->ecx;
-    regs->iregs.edx = iregs->edx;
-    regs->iregs.esi = iregs->esi;
-    regs->iregs.edi = iregs->edi;
-    regs->iregs.ebp = iregs->ebp;
-    regs->iregs.eax = iregs->eax;
-    regs->iregs.ds  = iregs->ds;
-    regs->iregs.es  = iregs->es;
-    regs->iregs.fs  = iregs->fs;
-    regs->iregs.gs  = iregs->gs;
-    regs->iregs.vec_num = iregs->vec_num;
-    regs->iregs.err_code = iregs->err_code;
-    regs->iregs.eip = iregs->eip;
-    regs->iregs.cs = iregs->cs;
-    regs->iregs.eflags = iregs->eflags;
-    // TODO: if hardware double fault, ESP and SS in iregs are valid
-    // because we know iregs came from the double fault TSS
-    regs->iregs.esp = get_esp(iregs);
-    regs->iregs.ss = get_ss(iregs);
-    store_cr0(regs->cr0);
-    store_cr2(regs->cr2);
-    store_cr3(regs->cr3);
-    regs->cr4 = 0; if (cpu_has_cr4()) store_cr4(regs->cr4);
-}
-
+//
+// Generic x86 exception handler.
+//
 __fastcall void handle_exception(struct iregs *iregs)
 {
-    // TODO: handle recoverable faults like page faults
-
+    // static vars for soft double-fault detection
     __early static bool crashing = false;
     __early static struct x86_regs orig_regs;
 
+    // capture ALL the regs
     struct x86_regs regs;
-    convert_regs(&regs, iregs);
+    store_cr0(regs.cr0);
+    store_cr2(regs.cr2);
+    store_cr3(regs.cr3);
+    regs.cr4 = 0;
+    if (cpu_has_cr4()) {
+        store_cr4(regs.cr4);
+    }
+    regs.iregs.ebx = iregs->ebx;
+    regs.iregs.ecx = iregs->ecx;
+    regs.iregs.edx = iregs->edx;
+    regs.iregs.esi = iregs->esi;
+    regs.iregs.edi = iregs->edi;
+    regs.iregs.ebp = iregs->ebp;
+    regs.iregs.eax = iregs->eax;
+    regs.iregs.ds  = iregs->ds;
+    regs.iregs.es  = iregs->es;
+    regs.iregs.fs  = iregs->fs;
+    regs.iregs.gs  = iregs->gs;
+    regs.iregs.vec_num = iregs->vec_num;
+    regs.iregs.err_code = iregs->err_code;
+    regs.iregs.eip = iregs->eip;
+    regs.iregs.cs  = iregs->cs;
+    regs.iregs.eflags = iregs->eflags;
+    if (iregs->vec_num == EXCEPTION_DF) {
+        // Double Fault exceptions are the only type of exception handled with
+        // a task gate, where the full context if the interrupted program is
+        // known regardless of privilege level. Therefore, we know ESP and SS
+        // are valid and don't need to do fancy x86 wizardry to determine where
+        // to find them.
+        regs.iregs.esp = iregs->esp;
+        regs.iregs.ss = iregs->ss;
+    }
+    else {
+        regs.iregs.esp = get_esp(iregs);
+        regs.iregs.ss = get_ss(iregs);
+    }
 
-    // handle a crash that occurred here (hopefully this never happens...)
+    // if we're already crashing... well... that's not good...
+    // handle it here!
     if (crashing) {
         handle_soft_double_fault(&regs, &orig_regs);
     }
     crashing = true;
     orig_regs = regs;
 
-    volatile unsigned int *bad = (volatile unsigned int *) 0xdeadead;
-    unsigned int code = *bad;
-    (void) code;
+#if DEBUG
+    // test a software double fault
+    if (g_test_soft_double_fault) {
+        __asm__ volatile (".short 0x0A0F");
+    }
+#endif
+
+    // TODO: handle recoverable exceptions like Page Faults
 
     // dump info to the console
     cprint("\n\e[1;31mfatal: ");
     dump_exception(&regs);
 
+    // TODO: show a crash screen
+
     for (;;);
     // crashing = false;   // if we ever return...
 }
 
-__noreturn __fastcall void handle_soft_double_fault(
-    struct x86_regs *regs, struct x86_regs *orig_regs)
+//
+// x86 Double Fault exception handler. An exception occurred within the CPU
+// while handling a different exception. Not to be called directly.
+//
+// The IDT is set up to perform a task switch if a Double Fault exception
+// occurs (task gate). This is to ensure we end up with a known good stack
+// so we can print diagnostic information to the user. Grab the program
+// context from the faulting program's TSS and feed it to
+// handle_exception().
+//
+__noreturn void handle_double_fault(void)
 {
-    // software double fault
-    // exception occurred while handling another exception
-
-    cprint("\n\e[1;31mfatal: ");
-    dump_exception(regs);
-    cprint("\n\n\e[1;31m(while handling) ");
-    dump_exception(orig_regs);
-    cprint("\n\n");
-    cprint("\e[1;31mfatal: >>DOUBLE FAULT<< your system is toast!\e[0m");
-
-    for (;;);
-}
-
-__noreturn void handle_hard_double_fault(void)
-{
-    // true hardware double fault!
-    // exception occurred within the CPU while handling a previous exception
-
     struct tss *tss = get_curr_tss();
     struct tss *fault_tss = get_tss(tss->prev_task);
 
@@ -159,19 +172,39 @@ __noreturn void handle_hard_double_fault(void)
     regs.edi = fault_tss->edi;
     regs.ebp = fault_tss->ebp;
     regs.eax = fault_tss->eax;
-    regs.ds = fault_tss->ds;
-    regs.es = fault_tss->es;
-    regs.fs = fault_tss->fs;
-    regs.gs = fault_tss->gs;
+    regs.ds  = fault_tss->ds;
+    regs.es  = fault_tss->es;
+    regs.fs  = fault_tss->fs;
+    regs.gs  = fault_tss->gs;
     regs.vec_num = EXCEPTION_DF;
     regs.err_code = 0;
     regs.eip = fault_tss->eip;
-    regs.cs = fault_tss->cs;
+    regs.cs  = fault_tss->cs;
     regs.eflags = fault_tss->eflags;
     regs.esp = fault_tss->esp;
-    regs.ss = fault_tss->ss;
+    regs.ss  = fault_tss->ss;
 
     handle_exception(&regs);
+    for (;;);
+}
+
+//
+// Software double fault. An exception occurred in the exception handler.
+// Do the bare minimum here to show diagnostic information to the user.
+//
+// This is to be called ONLY by handle_exception() if we were previously
+// handling an exception!
+//
+__noreturn __fastcall void handle_soft_double_fault(
+    struct x86_regs *regs, struct x86_regs *orig_regs)
+{
+    cprint("\n\e[1;31mfatal: ");
+    dump_exception(regs);
+    cprint("\n\e[1;31m(occurred while handling) ");
+    dump_exception(orig_regs);
+    cprint("\n\n");
+    cprint("\e[1;31mfatal: software double fault, your system is toast!\e[0m");
+
     for (;;);
 }
 
@@ -278,10 +311,91 @@ void cprint(const char *fmt, ...)
     vsnprintf(buf, CRASH_PRINT_BUFSIZ, fmt, args);
     va_end(args);
 
-    if (g_consoles != NULL) {
+    if (has_console()) {
         console_print(buf);
     }
+    else {
+        // TODO: print directly to frame buffer
+    }
 }
+
+#ifdef DEBUG
+void crash_key_irq(int irq, struct iregs *regs)   // TODO: call this vis sysreq...
+{
+    int crash_type;
+    if (g_test_crashkey <= 0) {
+        return;
+    }
+
+    crash_type = g_test_crashkey;
+    g_test_crashkey = -1;
+    (void) irq;
+
+    // pick your poison
+    switch (crash_type) {
+        case 1:     // F1 - divide by zero
+            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
+            break;
+        case 2:     // F2 - simulate nmi (TODO: real NMI possible?)
+            __asm__ volatile ("int $2");
+            break;
+        case 3:     // F3 - debug break
+            __asm__ volatile ("int $3");
+            break;
+        case 4:     // F4 - panic()
+            panic("you fucked up!!");
+            break;
+        case 5:     // F5 - assert()
+            assert(true == false);
+            break;
+        case 6:     // F6 - unexpected device interrupt vector
+            __asm__ volatile ("int $0x2D");
+            break;
+        // case 7:     // F7 - kernel stack page fault
+        //     __asm__ volatile ("movl $0, %esp; popl %eax");
+        //     break;
+
+        case 7:     // F7 - spurious interrupt
+            __asm__ volatile ("int $0x27");
+            break;
+
+        case 8: {   // F8 - nullptr read
+            volatile uint32_t *badptr = NULL;
+            const int bad = *badptr;
+            (void) bad;
+            break;
+        }
+        case 9: {   // F9 - bad ptr write
+            volatile uint32_t *badptr = (uint32_t *) 0xCA55E77E;
+            *badptr = 0xBADC0DE;
+            break;
+        }
+        case 10: {  // F10 - software double fault
+            kprint("\nsoft double fault...");
+            g_test_soft_double_fault = true;
+            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
+            break;
+        }
+        case 11: {  // F11 - true double fault
+            kprint("\ndouble fault...");
+            volatile struct x86_desc *idt;
+            volatile struct table_desc idt_desc = { };
+            __sidt(idt_desc);
+            idt = (volatile struct x86_desc *) idt_desc.base;
+            idt[EXCEPTION_DE].trap.p = 0;   // remove divide error trap (1)
+            idt[EXCEPTION_NP].trap.p = 0;   // remove seg not present trap (2)
+            __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
+            break;
+        }
+        case 12: {  // F12 - triple fault
+            kprint("\ntriple fault...");
+            struct table_desc idt_desc = { .limit = 0, .base = 0 };
+            __lidt(idt_desc);   // yoink away the IDT :D
+            break;
+        }
+    }
+}
+#endif
 
 static const char *exception_names[NR_EXCEPTIONS] =
 {
