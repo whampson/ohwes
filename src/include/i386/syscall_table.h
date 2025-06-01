@@ -20,9 +20,9 @@
  */
 
 #ifdef __ASSEMBLER__
-#define SYSCALL_DECLARE(name)    .long sys_##name
+#define DECLARE_SYSCALL(name)    .long sys_##name
 #else
-#define SYSCALL_DECLARE(name)    _SYS_##name,
+#define DECLARE_SYSCALL(name)    _SYS_##name,
 enum _syscall_nr {
 #endif
 
@@ -31,15 +31,15 @@ enum _syscall_nr {
 // System Call Numbers
 //
 
-SYSCALL_DECLARE(_exit)
-SYSCALL_DECLARE(read)
-SYSCALL_DECLARE(write)
-SYSCALL_DECLARE(open)
-SYSCALL_DECLARE(close)
-SYSCALL_DECLARE(ioctl)
-SYSCALL_DECLARE(dup)
-SYSCALL_DECLARE(dup2)
-SYSCALL_DECLARE(fcntl)
+/*  0 */ DECLARE_SYSCALL(_exit)
+/*  1 */ DECLARE_SYSCALL(read)
+/*  2 */ DECLARE_SYSCALL(write)
+/*  3 */ DECLARE_SYSCALL(open)
+/*  4 */ DECLARE_SYSCALL(close)
+/*  5 */ DECLARE_SYSCALL(ioctl)
+/*  6 */ DECLARE_SYSCALL(dup)
+/*  7 */ DECLARE_SYSCALL(dup2)
+/*  8 */ DECLARE_SYSCALL(fcntl)
 
 
 #ifndef __ASSEMBLER__
@@ -47,4 +47,4 @@ NR_SYSCALLS
 };
 #endif
 
-#undef SYSCALL_DECLARE
+#undef DECLARE_SYSCALL

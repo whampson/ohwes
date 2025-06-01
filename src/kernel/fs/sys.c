@@ -36,7 +36,7 @@
 // corruption in the event of a task switch.
 // !!!!!!!
 
-SYSCALL_DEFINE(_exit, int status)
+DEFINE_SYSCALL(_exit, int status)
 {
     assert(getpl() == KERNEL_PL);
 
@@ -45,7 +45,7 @@ SYSCALL_DEFINE(_exit, int status)
     for (;;);
 }
 
-SYSCALL_DEFINE(read, int fd, void *buf, size_t count)
+DEFINE_SYSCALL(read, int fd, void *buf, size_t count)
 {
     struct file *f;
 
@@ -65,7 +65,7 @@ SYSCALL_DEFINE(read, int fd, void *buf, size_t count)
     return f->fops->read(f, buf, count);
 }
 
-SYSCALL_DEFINE(write, int fd, const void *buf, size_t count)
+DEFINE_SYSCALL(write, int fd, const void *buf, size_t count)
 {
     struct file *f;
 
@@ -85,7 +85,7 @@ SYSCALL_DEFINE(write, int fd, const void *buf, size_t count)
     return f->fops->write(f, buf, count);
 }
 
-SYSCALL_DEFINE(ioctl, int fd, int op, void *arg)
+DEFINE_SYSCALL(ioctl, int fd, int op, void *arg)
 {
     uint32_t seq;
     uint32_t code;
@@ -138,7 +138,7 @@ SYSCALL_DEFINE(ioctl, int fd, int op, void *arg)
     return f->fops->ioctl(f, op, arg);
 }
 
-SYSCALL_DEFINE(fcntl, int fd, int op, void *arg)
+DEFINE_SYSCALL(fcntl, int fd, int op, void *arg)
 {
     struct file *f;
 

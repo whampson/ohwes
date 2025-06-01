@@ -27,12 +27,12 @@
 // System Call Linkage
 //
 
-SYSCALL1_LINK_VOID(_exit, int,status)
-SYSCALL1_LINK(int,close, int,fd)
-SYSCALL1_LINK(int,dup, int,fd)
-SYSCALL2_LINK(int,dup2, int,fd, int,newfd)
-SYSCALL3_LINK(int,fcntl, int,fd, int,op, unsigned long,arg)
-SYSCALL3_LINK(int,ioctl, int,fd, int,op, unsigned long,arg)
-SYSCALL2_LINK(int,open, const char *,name, int,flags)
-SYSCALL3_LINK(int,read, int,fd, void *,buf, size_t,count)
-SYSCALL3_LINK(int,write, int,fd, const void *,buf, size_t,count)
+LINK_SYSCALL1_VOID(_exit, int,status)
+LINK_SYSCALL1(int,close, int,fd)
+LINK_SYSCALL1(int,dup, int,fd)
+LINK_SYSCALL2(int,dup2, int,fd, int,newfd)
+LINK_SYSCALL3(int,fcntl, int,fd, int,op, unsigned long,arg)
+LINK_SYSCALL3(int,ioctl, int,fd, int,op, unsigned long,arg)
+LINK_SYSCALL2(int,open, const char *,name, int,flags)
+LINK_SYSCALL3(int,read, int,fd, void *,buf, size_t,count)
+LINK_SYSCALL3(int,write, int,fd, const void *,buf, size_t,count)

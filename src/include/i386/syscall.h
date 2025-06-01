@@ -112,7 +112,7 @@
 //
 // Define the kernel side of a System Call function.
 //
-#define SYSCALL_DEFINE(name, ...) \
+#define DEFINE_SYSCALL(name, ...) \
     __syscall int sys_##name(__VA_ARGS__)
 
 // #ifndef __KERNEL__
@@ -137,7 +137,7 @@ do {                            \
     __SYSCALL_EPILOGUE_VOID;    \
     return __ret
 
-#define SYSCALL0_LINK(type,name)                                                \
+#define LINK_SYSCALL0(type,name)                                                \
 type name(void)                                                                 \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
@@ -145,7 +145,7 @@ type name(void)                                                                 
     __SYSCALL_EPILOGUE;                                                         \
 }
 
-#define SYSCALL1_LINK(type,name,arg0_t,arg0)                                    \
+#define LINK_SYSCALL1(type,name,arg0_t,arg0)                                    \
 type name(arg0_t arg0)                                                          \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
@@ -153,7 +153,7 @@ type name(arg0_t arg0)                                                          
     __SYSCALL_EPILOGUE;                                                         \
 }
 
-#define SYSCALL1_LINK_VOID(name,arg0_t,arg0)                                    \
+#define LINK_SYSCALL1_VOID(name,arg0_t,arg0)                                    \
 void name(arg0_t arg0)                                                          \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
@@ -162,7 +162,7 @@ void name(arg0_t arg0)                                                          
 }
 
 
-#define SYSCALL2_LINK(type,name,arg0_t,arg0,arg1_t,arg1)                        \
+#define LINK_SYSCALL2(type,name,arg0_t,arg0,arg1_t,arg1)                        \
 type name(arg0_t arg0, arg1_t arg1)                                             \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
@@ -170,7 +170,7 @@ type name(arg0_t arg0, arg1_t arg1)                                             
     __SYSCALL_EPILOGUE;                                                         \
 }
 
-#define SYSCALL3_LINK(type,name,arg0_t,arg0,arg1_t,arg1,arg2_t,arg2)            \
+#define LINK_SYSCALL3(type,name,arg0_t,arg0,arg1_t,arg1,arg2_t,arg2)            \
 type name(arg0_t arg0, arg1_t arg1, arg2_t arg2)                                \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
@@ -178,7 +178,7 @@ type name(arg0_t arg0, arg1_t arg1, arg2_t arg2)                                
     __SYSCALL_EPILOGUE;                                                         \
 }
 
-#define SYSCALL4_LINK(type,name,arg0_t,arg0,arg1_t,arg1,arg2_t,arg2,arg3_t,arg3)\
+#define LINK_SYSCALL4(type,name,arg0_t,arg0,arg1_t,arg1,arg2_t,arg2,arg3_t,arg3)\
 type name(arg0_t arg0, arg1_t arg1, arg2_t arg2, arg3_t arg3)                   \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
@@ -186,7 +186,7 @@ type name(arg0_t arg0, arg1_t arg1, arg2_t arg2, arg3_t arg3)                   
     __SYSCALL_EPILOGUE;                                                         \
 }
 
-#define SYSCALL5_LINK(type,name,arg0_t,arg0,arg1_t,arg1,arg2_t,arg2,arg3_t,arg3,arg4_t,arg4)\
+#define LINK_SYSCALL5(type,name,arg0_t,arg0,arg1_t,arg1,arg2_t,arg2,arg3_t,arg3,arg4_t,arg4)\
 type name(arg0_t arg0, arg1_t arg1, arg2_t arg2, arg3_t arg3, arg4_t arg4)      \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
