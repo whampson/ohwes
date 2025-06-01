@@ -3,7 +3,7 @@ TARGET_DEFINES := __KERNEL__
 SOURCES := \
     entry.S \
     cpu.c \
-    crash.c \
+    crash2.c \
     debug.c \
     gdbstub.c \
     interrupt.c \

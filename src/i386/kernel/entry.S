@@ -130,6 +130,7 @@ recv_interrupt:
         STORE_SEGMENT   %es, IREGS_ES(%esp)
         STORE_SEGMENT   %fs, IREGS_FS(%esp)
         STORE_SEGMENT   %gs, IREGS_GS(%esp)
+        movl            %esp, %ebp
         movl            %esp, %ecx              # ecx = fastcall param for iregs
         movl            IREGS_VEC_NUM(%esp), %eax
         test            %eax, %eax
@@ -144,9 +145,7 @@ irq_trampoline:
 
 exception_trampoline:
         pushl           $return_from_exception
-        cmpl            $NR_EXCEPTIONS, %eax
-        ja              _crash                  # crash if out of bounds
-        jmp             *exception_table(, %eax, 4)
+        jmp             handle_exception
 
 syscall_trampoline:
         movl            IREGS_EAX(%ecx), %eax
@@ -201,20 +200,9 @@ return_from_syscall:
         iret
 
 # -----------------------------------------------------------------------------
-# Exception Tables
-
-exception_table:
-        .long   _crash, _dbgbrk, _crash, _dbgbrk
-        .long   _crash, _crash, _crash, _crash
-        .long   _crash, _crash, _crash, _crash
-        .long   _crash, _crash, _crash, _crash
-        .long   _crash, _crash, _crash, _crash
-        .long   _crash, _crash, _crash, _crash
-        .long   _crash, _crash, _crash, _crash
-        .long   _crash, _crash, _crash, _crash
-
+# Syscall Table
 syscall_table:
-        #include <i386/syscall_table.h>
+  #include <i386/syscall_table.h>
 _syscall_table_end:
 
 NR_SYSCALLS = (_syscall_table_end - syscall_table) >> 2

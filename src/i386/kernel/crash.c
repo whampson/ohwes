@@ -58,11 +58,6 @@
 #define SHOW_SEGMENT_REGS   1   // should we dump segment registers?
 #define SHOW_ESP_ARROW      1   // show arrow pointing to top of stack?
 
-// fallback text-mode screen dimensions,
-// in case a crash occurs very early before we are able to collect VGA info
-#define DEFAULT_VGA_ROWS    25
-#define DEFAULT_VGA_COLUMNS 80
-
 // convenient ANSI escape sequence wrappers
 #define BOLD(s)             "\e[1m" s "\e[22m"
 #define ITALIC(s)           "\e[3m" s "\e[23m"
@@ -95,10 +90,17 @@ static void set_background(int bg);
 static void print_banner(const char *banner);
 static void center_text(const char *str, ...);
 
+extern void _print_msg_to_all_consoles(const char *buf, size_t nchars);
+
 static void soft_double_fault(struct iregs *regs)
 {
     assert(g_crash->reentrant);
     struct iregs *orig_regs = &g_crash->orig_iregs;
+
+    // TODO: need a failsafe way to print here.
+    //  what if we crash again while trying to register a console during the
+    //  first crash (which has happened...), prints will go to the console log
+    //  but not output anywhere because none of the consoles are initialized
 
     cprint("\r\n\e[0m\e[1;31m");
     cprint("fatal: double fault -- %s while handling %s\e[0m",
@@ -183,8 +185,8 @@ __fastcall void _crash(struct iregs *regs)
     regs = &_regs_copy;
 
     // current terminal info
-    struct terminal *cons = get_terminal(0);
-    struct tty *tty = cons->tty;
+    struct terminal *term = get_terminal(0);
+    struct tty *tty = (term) ? term->tty : NULL;
 
     // reentrancy check
     if (g_crash->reentrant) {
@@ -206,7 +208,7 @@ __fastcall void _crash(struct iregs *regs)
 #endif
 
     // for drawing later
-    const int NumTerminalRows = (g_vga->rows) ? g_vga->rows : DEFAULT_VGA_ROWS;
+    const int NumTerminalRows = vga_get_rows();
     const int OffsetFromBottom = (NumTerminalRows-CRASH_DUMP_OFFSET)-STACK_ROWS;
 
     //
@@ -215,14 +217,14 @@ __fastcall void _crash(struct iregs *regs)
     // -------------------------------------------------------------------------
     //
 
-    {
-        extern struct console *g_consoles;
+    // {
+    //     extern struct console *g_consoles;
 
-        if (g_consoles == NULL) {
-            // register an emergency console so we can print!
-            register_default_console();
-        }
-    }
+    //     if (g_consoles == NULL) {
+    //         // register an emergency console so we can print!
+    //         register_default_console();
+    //     }
+    // }
 
     // NOTE: PCem doesn't push an error code of 0 onto the stack when a true
     // double fault occurs, which violates the Intel spec. My inspection of the
@@ -281,7 +283,7 @@ __fastcall void _crash(struct iregs *regs)
     char old_fb[FB_SIZE];
     struct terminal_save_state saved_terminal;
     memcpy(old_fb, get_terminal_fb(current_terminal()), FB_SIZE);
-    terminal_save(cons, &saved_terminal);
+    terminal_save(term, &saved_terminal);
 
     assert(irq || nmi);
 
@@ -295,7 +297,7 @@ __fastcall void _crash(struct iregs *regs)
         cprint("\r\n    device is misconfigured or malfunctioning. If this persists, press");
         cprint("\r\n    Ctrl+Alt+Del to restart your computer.");
         cprint("\r\n\r\n\r\n");
-        if (cons->initialized) {
+        if (term->initialized) {
             center_text("Press any key to continue \e6");
         }
     }
@@ -308,7 +310,7 @@ __fastcall void _crash(struct iregs *regs)
         cprint("\r\n    A non-maskable interrupt was raised. If this persists, press Ctrl+Alt+Del");
         cprint("\r\n    to restart your computer.");
         cprint("\r\n\r\n\r\n");
-        if (cons->initialized) {
+        if (term->initialized) {
             center_text("Press any key to continue \e6");
         }
     }
@@ -324,16 +326,20 @@ done:
     pic_setmask(0xFFFF & ~(1 << IRQ_KEYBOARD));    // allow keyboard interrupts
 
     // disable character echo
-    tcflag_t lflag = tty->termios.c_lflag;
-    tty->termios.c_lflag &= ~(ECHO | ECHOCTL);
+    tcflag_t lflag = 0;
+    if (tty) {
+        lflag = tty->termios.c_lflag;
+        tty->termios.c_lflag &= ~(ECHO | ECHOCTL);
+    }
 
     // if we're destined to die, spin forever
-    if (die || !cons->initialized) {
+    if (die || !term->initialized) {
         // TODO: disable input buffer
         __sti(); for (;;);  // allow ctrl+alt+del
     }
 
     // otherwise, wait for keypress
+    // TODO: use console->waitkey()
     {
         char c; uint32_t oflag;
 
@@ -352,8 +358,10 @@ done:
     }
 
     // restore terminal state
-    tty->termios.c_lflag = lflag;
-    terminal_restore(cons, &saved_terminal);
+    if (tty) {
+        tty->termios.c_lflag = lflag;
+    }
+    terminal_restore(term, &saved_terminal);
     memcpy(get_terminal_fb(current_terminal()), old_fb, FB_SIZE);
     pic_setmask(pic_mask);
 
@@ -394,7 +402,7 @@ __noreturn void _double_fault(void)
 
 static void print_regs_and_stack(struct iregs *regs, bool print_stack)
 {
-    const int NumTerminalCols = (g_vga->cols) ? g_vga->cols : DEFAULT_VGA_COLUMNS;
+    const int NumTerminalCols = vga_get_cols();
     const int StackStartCol = NumTerminalCols-((8+1)*STACK_COLUMNS);
 
     uint32_t *stack_ptr = (uint32_t *) regs->esp;
@@ -504,7 +512,26 @@ static void cprint(const char *fmt, ...)
     nchars = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    terminal_write(get_terminal(0), buf, nchars);
+    kprint("%.*s", buf, nchars);
+
+    // extern struct console *g_consoles;
+    // if (g_consoles) {
+    //     _print_msg_to_all_consoles(buf, nchars);
+    // }
+    // else {
+        // struct vga_fb_info fb_info;
+        // vga_get_fb_info(&fb_info);
+        // uint8_t *fb = (uint8_t *) KERNEL_ADDR(fb_info.framebuf);   // TODO: keep FB pages identity mapped?
+        // for (int i = 0, pos = 0; i < nchars; i++, pos++) {
+        //     pos = i << 1;
+        //     fb[pos] = buf[i];
+        //     if (buf[i] == '\r') {
+        //         pos -= (VGA_ROWS)
+        //     }
+        // }
+        // print directly to frame buffer
+        // if serial console enabled, try printing directly to serial port
+    // }
 }
 
 static void set_background(int bg)
@@ -512,7 +539,7 @@ static void set_background(int bg)
     g_crash->bg_color = bg;
     // cprint("\e5\e[0H\e[4%dm\e[2J", bg);
     cprint("\e5");
-    for (int i = 0; i < g_vga->rows; i++) {
+    for (int i = 0; i < vga_get_rows(); i++) {
         cprint("\n");
     }
     cprint("\e[0H\e[4%dm\e[2J", bg);
@@ -527,8 +554,10 @@ static void print_banner(const char *banner)
 
 static void center_text(const char *str, ...)
 {
+    const int vga_cols = vga_get_cols();
+
     va_list args;
-    char buf[g_vga->cols];
+    char buf[vga_cols];
     int len;
     int col;
     char c;
@@ -571,7 +600,7 @@ static void center_text(const char *str, ...)
         len++;
     }
 
-    col = (g_vga->cols - len) / 2;
+    col = (vga_cols - len) / 2;
     if (col < 0) {
         col = 0;
     }
@@ -619,12 +648,12 @@ static_assert(countof(exception_names) == NR_EXCEPTIONS, "Bad exception_names le
 void _crash_key_proc(int irq, struct iregs *regs)   // TODO: call this vis sysreq...
 {
     int crash_type;
-    if (!g_test_crashkey) {
+    if (g_test_crashkey <= 0) {
         return;
     }
 
     crash_type = g_test_crashkey;
-    g_test_crashkey = 0;
+    g_test_crashkey = -1;
 
     // pick your poison
     switch (crash_type) {

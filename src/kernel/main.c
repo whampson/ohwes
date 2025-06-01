@@ -210,6 +210,9 @@ int main(void)
 
     printf("\e[5;33mHello from user mode!\e[m\n");
 
+    volatile unsigned int *bad = (volatile unsigned int *) 0xbaadc0de;
+    *bad = 0xdeadbeef;
+
     // open TTY serial port
     printf("Opening /dev/ttyS1...\n");
     int fd = CHECK(open("/dev/ttyS1", O_RDWR | O_NONBLOCK));
