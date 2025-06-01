@@ -25,7 +25,7 @@
 #include <kernel/ohwes.h>
 #include <kernel/kernel.h>
 
-uint32_t get_esp_after_interrupt(const struct iregs *regs)
+uint32_t get_esp(const struct iregs *regs)
 {
     uint32_t esp = did_privilege_level_change(regs)
         // if we changed privilege levels, ESP in iregs is valid
@@ -40,7 +40,7 @@ uint32_t get_esp_after_interrupt(const struct iregs *regs)
     return esp;
 }
 
-uint16_t get_ss_after_interrupt(const struct iregs *regs)
+uint16_t get_ss(const struct iregs *regs)
 {
     uint16_t curr_ss;
     store_ss(curr_ss);

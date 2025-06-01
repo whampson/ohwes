@@ -64,8 +64,8 @@ void dump_regs(const struct iregs *regs, uint32_t esp, uint16_t ss)
 __fastcall void _dbgbrk(struct iregs *regs)
 {
     bool pl_change = did_privilege_level_change(regs);
-    uint32_t esp = get_esp_after_interrupt(regs);
-    uint32_t ss = get_ss_after_interrupt(regs);
+    uint32_t esp = get_esp(regs);
+    uint32_t ss = get_ss(regs);
 
     // const char *brk_name = (regs->vec_num == 3)
     //     ? "BREAKPOINT"

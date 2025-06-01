@@ -152,8 +152,8 @@ struct iregs {
 __fastcall __noreturn void switch_context(struct iregs *regs);     // see entry.S
 
 // call these after receiving an interrupt
-uint32_t get_esp_after_interrupt(const struct iregs *regs); // see interrupt.c
-uint16_t get_ss_after_interrupt(const struct iregs *regs);
+uint32_t get_esp(const struct iregs *regs); // see interrupt.c
+uint16_t get_ss(const struct iregs *regs);
 bool did_privilege_level_change(const struct iregs *regs);
 
 typedef void (__fastcall *idt_thunk)(void);
