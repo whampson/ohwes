@@ -76,6 +76,10 @@ extern bool g_debug_port_available;
 extern void run_tests(void);
 #endif
 
+#ifdef DEBUG
+extern void crash_key_irq(int irq, struct iregs *regs);
+#endif
+
 extern void print_boot_info(void);
 extern void print_memory_info(void);
 extern void print_kernel_sections(void);
@@ -103,6 +107,10 @@ __fastcall void kmain(struct boot_info **info)
     init_pic();
     init_timer();
     init_rtc();
+
+#if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+FN to crash kernel
+    irq_register(IRQ_TIMER, crash_key_irq);
+#endif
 
     // setup the file system
     init_fs();
@@ -210,8 +218,8 @@ int main(void)
 
     printf("\e[5;33mHello from user mode!\e[m\n");
 
-    volatile unsigned int *bad = (volatile unsigned int *) 0xbaadc0de;
-    *bad = 0xdeadbeef;
+    // volatile unsigned int *bad = (volatile unsigned int *) 0xbaadc0de;
+    // *bad = 0xdeadbeef;
 
     // open TTY serial port
     printf("Opening /dev/ttyS1...\n");
