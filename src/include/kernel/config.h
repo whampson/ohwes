@@ -51,6 +51,9 @@
 #define SERIAL_CONSOLE_PORT COM2_PORT
 #define SERIAL_CONSOLE_BAUD BAUD_9600
 
+// log
+#define KERNEL_LOG_SIZE     (2*PAGE_SIZE)
+
 // debugging
 #define SERIAL_DEBUGGING    1   // enable debugging over COM port
 #define SERIAL_DEBUG_PORT   COM1_PORT
@@ -102,6 +105,7 @@
 // static memory
 #define KERNEL_PGDIR        (STATIC_MEMORY+(PAGE_SIZE*0))   // = 1C000-1CFFF
 #define KERNEL_PGTBL        (STATIC_MEMORY+(PAGE_SIZE*1))   // = 1D000-1DFFF
+#define KERNEL_LOG          (STATIC_MEMORY+(PAGE_SIZE*2))   // = 1E000-1FFFF
 #define KERNEL_BASE         (STATIC_MEMORY+(PAGE_SIZE*4))   // = 20000-?????
 
 #if !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)
@@ -128,6 +132,9 @@ static_assert(DEFAULT_VT >= 1 && DEFAULT_VT <= NR_TERMINAL,
     "invalid DEFAULT_VT value");
 static_assert(VT_CONSOLE_NUMBER >= 0 && VT_CONSOLE_NUMBER <= NR_TERMINAL,
     "invalid VT_CONSOLE_NUMBER value");
+
+static_assert(KERNEL_LOG + KERNEL_LOG_SIZE <= KERNEL_BASE,
+    "kernel log buffer is too large!");
 
 #endif  // !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)
 

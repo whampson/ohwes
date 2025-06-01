@@ -36,25 +36,16 @@
 #include <kernel/terminal.h>
 #include <kernel/queue.h>
 
-#define KLOG_BUFSIZ         4096
-#define KPRINT_BUFSIZ       KLOG_BUFSIZ
+#define KPRINT_BUFSIZ       1024
 #define PANIC_BUFSIZ        128
 
-#define __initmem __data_segment    // TODO: better name for this... __diskmem?
-                                    // to reflect that it's zeroed in the kernel
-                                    // image and will thus always be initialized
-                                    // to zero upon reboot but will also take up
-                                    // disk space
+#define __early __data_segment
 
-__initmem static int _log_start = 0;
-__initmem static int _log_size = 0;
+__early static int _log_start = 0;
+__early static int _log_size = 0;
+__early static char *_kernel_log = (char *) KERNEL_ADDR(KERNEL_LOG);
 
-// TODO: find a way to store this neither in init memory, nor in BSS;
-// we don't want to zero this buffer when BSS is initialized, but we also
-// don't want 4K of empty space occupying our kernel image!
-__initmem static char _kernel_log[KLOG_BUFSIZ];
-
-__initmem struct console *g_consoles = NULL;
+__early struct console *g_consoles = NULL;
 
 // TODO: remove
 __data_segment bool g_kb_initialized = false;
@@ -93,11 +84,11 @@ void register_console(struct console *cons)
     }
     if (cons->write) {
         log_ptr = &_kernel_log[_log_start];
-        if (_log_size < KLOG_BUFSIZ) {
+        if (_log_size < KERNEL_LOG_SIZE) {
             cons->write(cons, log_ptr, _log_size);
         }
         else {
-            cons->write(cons, log_ptr, KLOG_BUFSIZ - _log_start);
+            cons->write(cons, log_ptr, KERNEL_LOG_SIZE - _log_start);
             cons->write(cons, _kernel_log, _log_start);
         }
     }
@@ -133,40 +124,36 @@ void register_default_console(void)
     register_console(&vt_console);
 }
 
-int kprint(const char *fmt, ...)
+// print a message to the console(s) and kernel log
+int console_print(const char *str)
 {
-    char buf[KPRINT_BUFSIZ+1] = { };
-    va_list args;
-    int count;
-    int linefeed;
-
     const char *p;
     const char *line;
+    int linefeed;
     struct console *cons;
 
-    va_start(args, fmt);
-    count = vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
+    const int MaxCount = KERNEL_LOG_SIZE;
 
+    // ensure a console is registered
     if (g_consoles == NULL) {
         register_default_console();
     }
 
-    p = buf;
+    p = str;
     linefeed = 0;
-    while ((p - buf) < count) {
+    while ((p - str) < MaxCount && *p != '\0') {
         // add to the log 'til we see a linefeed or hit the end
-        for (line = p; (p - buf) < count; p++) {
+        for (line = p; (p - str) < MaxCount && *p != '\0'; p++) {
 #if E9_HACK
             outb(0xE9, *p);
 #endif
-            _kernel_log[(_log_start + _log_size) % KLOG_BUFSIZ] = *p;
-            if (_log_size < KLOG_BUFSIZ) {
+            _kernel_log[(_log_start + _log_size) % KERNEL_LOG_SIZE] = *p;
+            if (_log_size < KERNEL_LOG_SIZE) {
                 _log_size++;
             }
             else {
                 _log_start += 1;
-                _log_start %= KLOG_BUFSIZ;
+                _log_start %= KERNEL_LOG_SIZE;
             }
             linefeed = (*p == '\n');
             if (linefeed) {
@@ -189,7 +176,49 @@ int kprint(const char *fmt, ...)
         }
     }
 
-    return (p - buf);
+    return (p - str);
+}
+
+int kprint(const char *fmt, ...)
+{
+    char buf[KPRINT_BUFSIZ+1] = { };
+    va_list args;
+
+    va_start(args, fmt);
+    vsnprintf(buf, KPRINT_BUFSIZ, fmt, args);
+    va_end(args);
+
+    return console_print(buf);
+}
+
+void __noreturn panic(const char *fmt, ...)
+{
+    char buf[PANIC_BUFSIZ+1] = { };
+    va_list args;
+
+    irq_disable();
+
+    va_start(args, fmt);
+    vsnprintf(buf, PANIC_BUFSIZ, fmt, args);
+    va_end(args);
+
+    console_print("\n\e[1;31mpanic: ");
+    console_print(buf);
+    console_print("\e[0m");
+
+    // allow Ctrl+Alt+Del and timer interrupts
+    if (g_kb_initialized || g_timer_initialized) {
+        irq_setmask(IRQ_MASKALL);
+        if (g_kb_initialized) {
+            irq_unmask(IRQ_KEYBOARD);
+        }
+        if (g_timer_initialized) {
+            irq_unmask(IRQ_TIMER);
+        }
+        irq_enable();
+    }
+
+    for (;;);
 }
 
 #if 0
@@ -212,39 +241,6 @@ static void print_consoles(void)   // TODO: procfs for this
     // printf("\n");
 }
 #endif
-
-void __noreturn panic(const char *fmt, ...)
-{
-    char buf[PANIC_BUFSIZ+1] = { };
-    va_list args;
-
-    irq_disable();
-
-    va_start(args, fmt);
-    vsnprintf(buf, PANIC_BUFSIZ, fmt, args);
-    va_end(args);
-
-    if (g_consoles == NULL) {
-        register_default_console();
-    }
-
-    kprint("\n\e[1;31mpanic: ");
-    kprint(buf);
-    kprint("\e[0m");
-
-    if (g_kb_initialized || g_timer_initialized) {
-        irq_setmask(IRQ_MASKALL);
-        if (g_kb_initialized) {
-            irq_unmask(IRQ_KEYBOARD);   // TODO: disable echo
-        }
-        if (g_timer_initialized) {
-            irq_unmask(IRQ_TIMER);
-        }
-        irq_enable();
-    }
-
-    for (;;);
-}
 
 void print_boot_info(void)
 {
