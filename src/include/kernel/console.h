@@ -43,7 +43,7 @@ void unregister_console(struct console *cons);
 
 bool has_console(void);
 
-// print to all consoles
-int console_print(const char *str);
+// write a message to all consoles
+int console_write(const char *buf, size_t count);
 
 #endif // __CONSOLE_H

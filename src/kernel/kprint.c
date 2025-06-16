@@ -36,8 +36,7 @@
 #include <kernel/terminal.h>
 #include <kernel/queue.h>
 
-#define KPRINT_BUFSIZ       1024
-#define PANIC_BUFSIZ        128
+#define KPRINT_MAX          1024
 
 #define __early __data_segment
 
@@ -47,9 +46,10 @@ __early static char *_kernel_log = (char *) KERNEL_ADDR(KERNEL_LOG);
 
 __early struct console *g_consoles = NULL;
 
-// TODO: remove
+// TODO: move these
 __data_segment bool g_kb_initialized = false;
 __data_segment bool g_timer_initialized = false;
+__data_segment bool g_pic_initialized = false;
 
 void register_console(struct console *cons)
 {
@@ -93,6 +93,7 @@ void register_console(struct console *cons)
         }
     }
 }
+
 void unregister_console(struct console *cons)
 {
     struct console *currcons;
@@ -130,25 +131,29 @@ static void register_default_console(void)
 }
 
 // print a message to the console(s) and kernel log
-int console_print(const char *str)
+int console_write(const char *buf, size_t count)
 {
     const char *p;
     const char *line;
     int linefeed;
     struct console *cons;
 
-    const int MaxCount = KERNEL_LOG_SIZE;
-
+#if EARLY_PRINT
     // ensure a console is registered
     if (!has_console()) {
         register_default_console();
     }
+#endif
 
-    p = str;
+    if (count > KPRINT_MAX) {
+        count = KPRINT_MAX;
+    }
+
+    p = buf;
     linefeed = 0;
-    while ((p - str) < MaxCount && *p != '\0') {
+    while ((p - buf) < count && *p != '\0') {
         // add to the log 'til we see a linefeed or hit the end
-        for (line = p; (p - str) < MaxCount && *p != '\0'; p++) {
+        for (line = p; (p - buf) < count && *p != '\0'; p++) {
 #if E9_HACK
             outb(0xE9, *p);
 #endif
@@ -181,35 +186,39 @@ int console_print(const char *str)
         }
     }
 
-    return (p - str);
+    return (p - buf);
+}
+
+int _vkprint(const char *fmt, va_list args)
+{
+    size_t count;
+    char buf[KPRINT_MAX+1] = { };
+
+    count = vsnprintf(buf, KPRINT_MAX, fmt, args);
+    return console_write(buf, count);
 }
 
 int kprint(const char *fmt, ...)
 {
-    char buf[KPRINT_BUFSIZ+1] = { };
     va_list args;
+    size_t count;
 
     va_start(args, fmt);
-    vsnprintf(buf, KPRINT_BUFSIZ, fmt, args);
+    count =_vkprint(fmt, args);
     va_end(args);
 
-    return console_print(buf);
+    return count;
 }
 
 void __noreturn panic(const char *fmt, ...)
 {
-    char buf[PANIC_BUFSIZ+1] = { };
     va_list args;
 
     irq_disable();
 
     va_start(args, fmt);
-    vsnprintf(buf, PANIC_BUFSIZ, fmt, args);
+    kprint("\n\e[1;31mpanic: "); _vkprint(fmt, args); kprint("\e[0m");
     va_end(args);
-
-    console_print("\n\e[1;31mpanic: ");
-    console_print(buf);
-    console_print("\e[0m");
 
     // allow Ctrl+Alt+Del and timer interrupts
     if (g_kb_initialized || g_timer_initialized) {
