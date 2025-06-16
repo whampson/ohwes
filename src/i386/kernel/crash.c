@@ -53,28 +53,14 @@
 #define STACK_DUMP_ROWS     8
 #define STACK_DUMP_COLS     4
 
-#define __early __attribute__((section(".data")))
-
 #if DEBUG
-__early int g_test_crashkey = 0;
-__early int g_test_soft_double_fault = 0;
+__initmem int g_test_crashkey = 0;
+__initmem int g_test_soft_double_fault = 0;
 #endif
 
 extern struct console *g_consoles;
 
 static const char *exception_names[NR_EXCEPTIONS];
-
-struct cpu_state {
-    struct iregs iregs;
-    uint32_t cr0;
-    uint32_t cr2;
-    uint32_t cr3;
-    uint32_t cr4;
-    uint64_t gdtr;
-    uint64_t idtr;
-    uint16_t ldtr;
-    uint16_t tr;
-};
 
 static void cprint(const char *fmt, ...);
 static void fbprint(const char *fmt, ...);
@@ -217,8 +203,8 @@ __noreturn void handle_soft_double_fault(
 __fastcall void handle_exception(struct iregs *iregs)
 {
     // static vars for soft double-fault detection
-    __early static bool crashing = false;
-    __early static struct cpu_state orig_cpu;
+    __initmem static bool crashing = false;
+    __initmem static struct cpu_state orig_cpu;
 
     char msgbuf[CRASH_BUFSIZ];
     char errbuf[CRASH_BUFSIZ];

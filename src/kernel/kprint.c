@@ -38,18 +38,16 @@
 
 #define KPRINT_MAX          1024
 
-#define __early __data_segment
+__initmem static int _log_start = 0;
+__initmem static int _log_size = 0;
+__initmem static char *_kernel_log = (char *) KERNEL_ADDR(KERNEL_LOG);
 
-__early static int _log_start = 0;
-__early static int _log_size = 0;
-__early static char *_kernel_log = (char *) KERNEL_ADDR(KERNEL_LOG);
-
-__early struct console *g_consoles = NULL;
+__initmem struct console *g_consoles = NULL;
 
 // TODO: move these
-__data_segment bool g_kb_initialized = false;
-__data_segment bool g_timer_initialized = false;
-__data_segment bool g_pic_initialized = false;
+__initmem bool g_kb_initialized = false;
+__initmem bool g_timer_initialized = false;
+__initmem bool g_pic_initialized = false;
 
 void register_console(struct console *cons)
 {

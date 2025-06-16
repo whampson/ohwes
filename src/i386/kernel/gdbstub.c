@@ -77,7 +77,7 @@ static int gdb_cmd_write_regs(struct gdb_state *state, char *pkt, size_t pktlen)
 static int gdb_cmd_read_mem(struct gdb_state *state, char *pkt, size_t pktlen);
 static int gdb_cmd_write_mem(struct gdb_state *state, char *pkt, size_t pktlen);
 
-__data_segment bool g_debug_port_available = false;
+__initmem bool g_debug_port_available = false;
 
 int gdb_init_state(struct gdb_state *state,
     int signum, const struct iregs *regs)

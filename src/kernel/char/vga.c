@@ -39,7 +39,7 @@ void init_vga(void)
 
     // may get called twice: once during vt_console setup and another
     // during init_terminal to ensure frame buffer is set correctly
-    static __data_segment bool vga_initialized = false;
+    static __initmem bool vga_initialized = false;
     if (vga_initialized) {
         return;
     }

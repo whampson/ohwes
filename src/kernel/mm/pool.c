@@ -57,7 +57,7 @@ struct pool {
 
 static struct pool _pools[MAX_NR_POOLS];
 static struct chunk _chunks[MAX_NR_POOL_ITEMS];
-static __data_segment bool _pools_initialized = false;
+static __initmem bool _pools_initialized = false;
 
 static char _pool_mask[MAX_NR_POOLS>>3];    // bit[n]==1 => n'th slot free
 static char _chunk_mask[MAX_NR_POOL_ITEMS>>3];

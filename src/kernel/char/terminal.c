@@ -222,8 +222,8 @@ struct console vt_console =
 
 #define is_current(term)        ((term)->number == current_terminal())
 
-__data_segment struct terminal g_terminals[NR_TERMINAL] = { };
-__data_segment int g_currterm = 1;
+__initmem struct terminal g_terminals[NR_TERMINAL] = { };   // TODO: move this allocation off-disk
+__initmem int g_currterm = 1;
 
 enum terminal_state {
     S_NORM,

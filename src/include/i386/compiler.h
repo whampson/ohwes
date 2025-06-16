@@ -30,9 +30,6 @@
 #error "Please compile using GCC."
 #else
 
-#define __code_segment  __attribute__((section(".text")))
-#define __data_segment  __attribute__((section(".data")))
-
 /**
  * 'fastcall' calling convention.
  * Ensures the first two function arguments are passed through ECX and EDX

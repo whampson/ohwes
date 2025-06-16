@@ -23,8 +23,8 @@
 #define __CPU_H
 
 #include <stdbool.h>
+#include <i386/interrupt.h>
 #include <i386/x86.h>
-#include <kernel/kernel.h>
 
 /**
  * CPU Privilege Level
@@ -55,6 +55,18 @@ struct cpuid    // TODO: move to cpuid.h or something
     bool pat_support;           // page attribute table support (CR4.PAT bit)
     bool tsc_support;           // cpu has RDTSC instruction
     bool msr_support;           // cpu has RDMSR/WRMSR instrctions
+};
+
+struct cpu_state {
+    struct iregs iregs;
+    uint32_t cr0;
+    uint32_t cr2;
+    uint32_t cr3;
+    uint32_t cr4;
+    uint64_t gdtr;
+    uint64_t idtr;
+    uint16_t ldtr;
+    uint16_t tr;
 };
 
 bool cpu_has_cr4(void);
