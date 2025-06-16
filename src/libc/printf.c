@@ -592,6 +592,7 @@ do { \
         }
     }
 
+    _putchar('\0');
     retval = nwritten;
 
 #undef _putchar
