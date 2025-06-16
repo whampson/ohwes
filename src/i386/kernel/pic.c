@@ -35,8 +35,8 @@
 
 // Initialization Command Words (ICW)
 #define ICW1            0x11                // edge-triggered, 8 byte vectors, cascade mode, ICW4 needed
-#define ICW2_M          (VEC_IRQ)     // master PIC base interrupt vector
-#define ICW2_S          (VEC_IRQ+8)   // slave PIC base interrupt vector
+#define ICW2_M          (IRQ_BASE_VECTOR)   // master PIC base interrupt vector
+#define ICW2_S          (IRQ_BASE_VECTOR+8) // slave PIC base interrupt vector
 #define ICW3_M          (SLAVE_MASK)        // mask of slave IRQ line on master PIC
 #define ICW3_S          (IRQ_SLAVE)         // slave IRQ number, to be sent to master
 #define ICW4            0x01                // not special fully nested, not auto EOI, 8086 mode
@@ -48,7 +48,7 @@
 static void pic_write_cmd(int pic, uint8_t cmd);
 static void pic_write_data(int pic, uint8_t data);
 static uint8_t pic_read_data(int pic);
-static bool pic_initialized = false;
+extern bool g_pic_initialized;
 
 void init_pic(void)
 {
@@ -68,13 +68,13 @@ void init_pic(void)
     pic_write_data(MASTER_PIC, OCW1_MASK_ALL & ~SLAVE_MASK);
     pic_write_data(SLAVE_PIC, OCW1_MASK_ALL);
 
-    pic_initialized = true;
+    g_pic_initialized = true;
     pic_setmask(PIC_MASK_ALL);  // disable all device interrupts
 }
 
 void pic_eoi(uint8_t irq_num)
 {
-    if (!pic_initialized) {
+    if (!g_pic_initialized) {
         panic("PIC not yet initialized!");
     }
 
@@ -94,7 +94,7 @@ void pic_eoi(uint8_t irq_num)
 
 void pic_mask(uint8_t irq_num)
 {
-    if (!pic_initialized) {
+    if (!g_pic_initialized) {
         panic("PIC not yet initialized!");
     }
 
@@ -118,7 +118,7 @@ void pic_mask(uint8_t irq_num)
 
 void pic_unmask(uint8_t irq_num)
 {
-    if (!pic_initialized) {
+    if (!g_pic_initialized) {
         panic("PIC not yet initialized!");
     }
 
@@ -142,7 +142,7 @@ void pic_unmask(uint8_t irq_num)
 
 uint16_t pic_getmask(void)
 {
-    if (!pic_initialized) {
+    if (!g_pic_initialized) {
         panic("PIC not yet initialized!");
     }
 
@@ -160,7 +160,7 @@ uint16_t pic_getmask(void)
 
 void pic_setmask(uint16_t mask)
 {
-    if (!pic_initialized) {
+    if (!g_pic_initialized) {
         panic("PIC not yet initialized!");
     }
 
