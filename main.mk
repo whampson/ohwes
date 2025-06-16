@@ -3,9 +3,10 @@ DEBUG           := 1
 DEBUGOPT        := 1
 TEST_BUILD      := 0
 
-ERROR_FLAGS     := -Wall -Werror -Wno-unused-function
-ASFLAGS         := ${ERROR_FLAGS}
-CFLAGS          := ${ERROR_FLAGS}
+# default flags
+ASFLAGS         := -Wa,--fatal-warnings
+CFLAGS          := -Wall -Werror -Wno-unused-function
+LDFLAGS         := -Wl,--fatal-warnings
 
 ifeq "${DEBUG}" "1"
   ASFLAGS += -g
