@@ -21,9 +21,9 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <i386/cpu.h>
 #include <i386/syscall.h>
 #include <i386/paging.h>
-#include <i386/x86.h>
 #include <kernel/fs.h>
 #include <kernel/ioctl.h>
 #include <kernel/kernel.h>
