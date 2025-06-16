@@ -25,34 +25,34 @@
 /**
  * Important interrupt vector table numbers.
  */
-#define VEC_INTEL                   0x00    // Base vector for Intel exceptions.
-#define VEC_IRQ                     0x20    // Base vector for device IRQs.
-#define VEC_SYSCALL                 0x80    // Interrupt vector for syscalls.
-#define NR_VECS                     256
+#define EXCEPTION_BASE_VECTOR       0x00
+#define IRQ_BASE_VECTOR             0x20
+#define SYSCALL_VECTOR              0x80
+#define NR_INTERRUPT_VECTORS        256
 
 /**
  * Intel exception vector numbers.
  */
-#define EXCEPTION_DE                0x00    // Divide Error
-#define EXCEPTION_DB                0x01    // Debug Exception
-#define EXCEPTION_NMI               0x02    // Non-Maskable Interrupt
-#define EXCEPTION_BP                0x03    // Breakpoint
-#define EXCEPTION_OF                0x04    // Overflow
-#define EXCEPTION_BR                0x05    // BOUND Range Exceeded
-#define EXCEPTION_UD                0x06    // Invalid Opcode
-#define EXCEPTION_NM                0x07    // Device Not Available
-#define EXCEPTION_DF                0x08    // Double Fault
-#define EXCEPTION_TS                0x0A    // Invalid TSS
-#define EXCEPTION_NP                0x0B    // Segment Not Present
-#define EXCEPTION_SS                0x0C    // Stack Fault
-#define EXCEPTION_GP                0x0D    // General Protection Fault
-#define EXCEPTION_PF                0x0E    // Page Fault
-#define EXCEPTION_MF                0x10    // Math Fault (x87 FPU Error)
-#define EXCEPTION_AC                0x11    // Alignment Check
-#define EXCEPTION_MC                0x12    // Machine Check
-#define EXCEPTION_XM                0x13    // SIMD Floating-Point Exception
-#define EXCEPTION_VE                0x14    // Virtualization Exception
-#define EXCEPTION_CP                0x15    // Control Protection Exception
+#define DIVIDE_ERROR                0x00
+#define DEBUG_EXCEPTION             0x01
+#define NON_MASKABLE_INTERRUPT      0x02
+#define BREAKPOINT_EXCEPTION        0x03
+#define OVERFLOW_EXCEPTION          0x04
+#define BOUND_RANGE_EXCEEDED        0x05
+#define INVALID_OPCODE              0x06
+#define DEVICE_NOT_AVAILABLE        0x07
+#define DOUBLE_FAULT                0x08
+#define SEGMENT_OVERRUN             0x09
+#define INVALID_TSS                 0x0A
+#define SEGMENT_NOT_PRESENT         0x0B
+#define STACK_FAULT                 0x0C
+#define GENERAL_PROTECTION_FAULT    0x0D
+#define PAGE_FAULT                  0x0E
+#define MATH_FAULT                  0x10
+#define ALIGNMENT_CHECK             0x11
+#define MACHINE_CHECK               0x12
+#define SIMD_FAULT                  0x13
+
 #define NR_EXCEPTIONS               32
 
 /**
@@ -150,11 +150,6 @@ struct iregs {
 
 // perform a context switch
 __fastcall __noreturn void switch_context(struct iregs *regs);     // see entry.S
-
-// call these after receiving an interrupt
-uint32_t get_esp(const struct iregs *regs);
-uint16_t get_ss(const struct iregs *regs);
-int get_rpl(const struct iregs *regs);
 
 typedef void (__fastcall *idt_thunk)(void);
 

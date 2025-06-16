@@ -135,7 +135,7 @@ recv_interrupt:
         movl            IREGS_VEC_NUM(%esp), %eax
         test            %eax, %eax
         js              irq_trampoline
-        cmpl            $VEC_SYSCALL, %eax
+        cmpl            $SYSCALL_VECTOR, %eax
         je              syscall_trampoline
         jmp             exception_trampoline
 
@@ -280,39 +280,39 @@ irq_thunks:
 #      trap - executes instruction following trapping instruction
 #     abort - severe error, interrupted program cannot be resumed
 
-# 0-31                  processor exceptions           classification
-EXCEPTION_THUNK         (_except_00h, EXCEPTION_DE)    # fault
-EXCEPTION_THUNK         (_except_01h, EXCEPTION_DB)    # fault or trap
-EXCEPTION_THUNK         (_except_02h, EXCEPTION_NMI)   # n/a
-EXCEPTION_THUNK         (_except_03h, EXCEPTION_BP)    # trap
-EXCEPTION_THUNK         (_except_04h, EXCEPTION_OF)    # trap
-EXCEPTION_THUNK         (_except_05h, EXCEPTION_BR)    # fault
-EXCEPTION_THUNK         (_except_06h, EXCEPTION_UD)    # fault
-EXCEPTION_THUNK         (_except_07h, EXCEPTION_NM)    # fault
-EXCEPTION_THUNK_ERRCODE (_except_08h, EXCEPTION_DF)    # abort; error code is 0
-EXCEPTION_THUNK         (_except_09h, 9)               # abort; not used
-EXCEPTION_THUNK_ERRCODE (_except_0Ah, EXCEPTION_TS)    # fault
-EXCEPTION_THUNK_ERRCODE (_except_0Bh, EXCEPTION_NP)    # fault
-EXCEPTION_THUNK_ERRCODE (_except_0Ch, EXCEPTION_SS)    # fault
-EXCEPTION_THUNK_ERRCODE (_except_0Dh, EXCEPTION_GP)    # fault
-EXCEPTION_THUNK_ERRCODE (_except_0Eh, EXCEPTION_PF)    # fault
-EXCEPTION_THUNK         (_except_0Fh, 15)              # (Intel reserved)
-EXCEPTION_THUNK         (_except_10h, EXCEPTION_MF)    # fault
-EXCEPTION_THUNK_ERRCODE (_except_11h, EXCEPTION_AC)    # fault
-EXCEPTION_THUNK         (_except_12h, EXCEPTION_MC)    # abort
-EXCEPTION_THUNK         (_except_13h, EXCEPTION_XM)    # fault
-EXCEPTION_THUNK         (_except_14h, EXCEPTION_VE)    # fault
-EXCEPTION_THUNK_ERRCODE (_except_15h, EXCEPTION_CP)    # fault
-EXCEPTION_THUNK         (_except_16h, 22)              # (Intel reserved)
-EXCEPTION_THUNK         (_except_17h, 23)              # (Intel reserved)
-EXCEPTION_THUNK         (_except_18h, 24)              # (Intel reserved)
-EXCEPTION_THUNK         (_except_19h, 25)              # (Intel reserved)
-EXCEPTION_THUNK         (_except_1Ah, 26)              # (Intel reserved)
-EXCEPTION_THUNK         (_except_1Bh, 27)              # (Intel reserved)
-EXCEPTION_THUNK         (_except_1Ch, 28)              # (Intel reserved)
-EXCEPTION_THUNK         (_except_1Dh, 29)              # (Intel reserved)
-EXCEPTION_THUNK         (_except_1Eh, 30)              # (Intel reserved)
-EXCEPTION_THUNK         (_except_1Fh, 31)              # (Intel reserved)
+# 0-31                  processor exceptions                    classification
+EXCEPTION_THUNK         (_except_00h, DIVIDE_ERROR)             # fault
+EXCEPTION_THUNK         (_except_01h, DEBUG_EXCEPTION)          # fault or trap
+EXCEPTION_THUNK         (_except_02h, NON_MASKABLE_INTERRUPT)   # n/a
+EXCEPTION_THUNK         (_except_03h, BREAKPOINT_EXCEPTION)     # trap
+EXCEPTION_THUNK         (_except_04h, OVERFLOW_EXCEPTION)       # trap
+EXCEPTION_THUNK         (_except_05h, BOUND_RANGE_EXCEEDED)     # fault
+EXCEPTION_THUNK         (_except_06h, INVALID_OPCODE)           # fault
+EXCEPTION_THUNK         (_except_07h, DEVICE_NOT_AVAILABLE)     # fault
+EXCEPTION_THUNK_ERRCODE (_except_08h, DOUBLE_FAULT)             # abort; error code is 0
+EXCEPTION_THUNK         (_except_09h, SEGMENT_OVERRUN)          # abort; not used
+EXCEPTION_THUNK_ERRCODE (_except_0Ah, INVALID_TSS)              # fault
+EXCEPTION_THUNK_ERRCODE (_except_0Bh, SEGMENT_NOT_PRESENT)      # fault
+EXCEPTION_THUNK_ERRCODE (_except_0Ch, STACK_FAULT)              # fault
+EXCEPTION_THUNK_ERRCODE (_except_0Dh, GENERAL_PROTECTION_FAULT) # fault
+EXCEPTION_THUNK_ERRCODE (_except_0Eh, PAGE_FAULT)               # fault
+EXCEPTION_THUNK         (_except_0Fh, 0x0F)                     # (reserved)
+EXCEPTION_THUNK         (_except_10h, MATH_FAULT)               # fault
+EXCEPTION_THUNK_ERRCODE (_except_11h, ALIGNMENT_CHECK)          # fault
+EXCEPTION_THUNK         (_except_12h, MACHINE_CHECK)            # abort
+EXCEPTION_THUNK         (_except_13h, SIMD_FAULT)               # fault
+EXCEPTION_THUNK         (_except_14h, 0x14)                     # fault
+EXCEPTION_THUNK_ERRCODE (_except_15h, 0x15)                     # fault
+EXCEPTION_THUNK         (_except_16h, 0x16)                     # (reserved)
+EXCEPTION_THUNK         (_except_17h, 0x17)                     # (reserved)
+EXCEPTION_THUNK         (_except_18h, 0x18)                     # (reserved)
+EXCEPTION_THUNK         (_except_19h, 0x19)                     # (reserved)
+EXCEPTION_THUNK         (_except_1Ah, 0x1A)                     # (reserved)
+EXCEPTION_THUNK         (_except_1Bh, 0x1B)                     # (reserved)
+EXCEPTION_THUNK         (_except_1Ch, 0x1C)                     # (reserved)
+EXCEPTION_THUNK         (_except_1Dh, 0x1D)                     # (reserved)
+EXCEPTION_THUNK         (_except_1Eh, 0x1E)                     # (reserved)
+EXCEPTION_THUNK         (_except_1Fh, 0x1F)                     # (reserved)
 
 # 32-47                 device IRQs
 IRQ_THUNK               (_irq_00h, IRQ_TIMER)
@@ -335,6 +335,6 @@ IRQ_THUNK               (_irq_0Fh, IRQ_ATA2)
 # 48-79                 available
 
 # 80                    system call
-EXCEPTION_THUNK         (syscall_thunk, VEC_SYSCALL)
+EXCEPTION_THUNK         (syscall_thunk, SYSCALL_VECTOR)
 
 # 81-255                available

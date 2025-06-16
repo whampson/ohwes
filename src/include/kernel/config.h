@@ -44,6 +44,7 @@
 #define PRINT_PAGE_MAP      0   // show initial page table mappings
 #define PRINT_IOCTL         1   // show ioctl calls
 #define E9_HACK             1   // tee console output to I/O port 0xE9
+#define EARLY_PRINT         1   // register a console when first char is printed
 
 // console
 #define DEFAULT_VT          1   // initial virtual terminal activated

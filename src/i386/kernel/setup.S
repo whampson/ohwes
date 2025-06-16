@@ -257,7 +257,7 @@ setup_debug_port_done:
 
 # Interrupt Descriptor Table
 _idt:
-        .fill           NR_VECS, 8, 0
+        .fill           NR_INTERRUPT_VECTORS, 8, 0
 _idt_end:
 
 # -----------------------------------------------------------------------------

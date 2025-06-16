@@ -26,6 +26,16 @@
 #include <i386/x86.h>
 #include <kernel/kernel.h>
 
+/**
+ * CPU Privilege Level
+ */
+enum pl {
+    KERNEL_PL = 0,
+    USER_PL = 3,
+};
+
+#define getpl()     get_cpl()       // TODO: remove
+
 struct cpuid    // TODO: move to cpuid.h or something
 {
     char vendor_id[13];         // e.g. "GenuineIntel"
@@ -51,45 +61,17 @@ bool cpu_has_cr4(void);
 bool cpu_has_cpuid(void);
 bool get_cpu_info(struct cpuid *cpuid_info);    // cpuid
 
-static inline struct x86_pde * get_pgdir(void)
-{
-    uint32_t cr3; store_cr3(cr3);
-    return (struct x86_pde *) KERNEL_ADDR(cr3);
-}
+struct x86_desc * get_gdt(void);
+struct x86_desc * get_idt(void);
+struct tss * get_tss(void);
+struct tss * get_tss_from_gdt(uint16_t segsel);
+struct x86_pde * get_pgdir(void);
 
-static inline struct x86_desc * get_gdt(void)
-{
-    struct table_desc gdt_desc;
-    __sgdt(gdt_desc);
-
-    return (struct x86_desc *) KERNEL_ADDR(gdt_desc.base);
-}
-
-static inline struct x86_desc * get_idt(void)
-{
-    struct table_desc idt_desc;
-    __sidt(idt_desc);
-
-    return (struct x86_desc *) KERNEL_ADDR(idt_desc.base);
-}
-
-static inline struct tss * get_tss(uint16_t segsel)
-{
-    struct x86_desc *gdt = get_gdt();
-    struct x86_desc *tss_desc = x86_get_desc(gdt, segsel);
-
-    return (struct tss *) ((tss_desc->tss.basehi << 24) | tss_desc->tss.baselo);
-}
-
-static inline struct tss * get_curr_tss(void)
-{
-    uint16_t segsel; __str(segsel);
-    return get_tss(segsel);
-}
-
-static inline int get_cpl()
-{
-    return getpl();
-}
+// call these after receiving an interrupt
+int get_cpl(void);
+int get_rpl(uint16_t segsel);
+bool pl_changed(const struct iregs *regs);
+uint32_t get_esp(const struct iregs *regs);
+uint16_t get_ss(const struct iregs *regs);
 
 #endif // __CPU_H

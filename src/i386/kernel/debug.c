@@ -65,9 +65,9 @@ void dump_regs(const struct iregs *regs, uint32_t esp, uint16_t ss)
 
 __fastcall void _dbgbrk(struct iregs *regs)
 {
-    bool pl_change = (get_rpl(regs) != get_cpl());
     uint32_t esp = get_esp(regs);
     uint32_t ss = get_ss(regs);
+    struct iregs orig_regs = *regs;
 
     // const char *brk_name = (regs->vec_num == 3)
     //     ? "BREAKPOINT"
@@ -118,7 +118,7 @@ __fastcall void _dbgbrk(struct iregs *regs)
     regs->eflags = state.regs[GDB_REG_I386_EFLAGS];
     esp = state.regs[GDB_REG_I386_ESP];
     ss  = state.regs[GDB_REG_I386_SS ];
-    if (pl_change) {
+    if (pl_changed(&orig_regs)) {
         regs->esp = esp;
         regs->ss = ss;
     }

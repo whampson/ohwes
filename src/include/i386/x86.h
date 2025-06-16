@@ -150,9 +150,17 @@
 #define CR4_MCE             (1 << 6)    // Machine Check Enable
 
 /**
+ * Error Code Fields
+ */
+#define ERR_EXT             (1 << 0)    // External event caused exception
+#define ERR_IDT             (1 << 1)    // IDT Index
+#define ERR_TI              (1 << 2)    // GDT/LDT Index (1=LDT)
+#define ERR_INDEX           (0x1FFF<<3) // Segment Selector Index
+
+/**
  * Page Fault Error Code Fields
  */
-#define PF_P                (1 << 0)    // Page Not Present
+#define PF_P                (1 << 0)    // Protection Fault (0=Non-Present Page)
 #define PF_WR               (1 << 1)    // Read/Write Fault (1=Write)
 #define PF_US               (1 << 2)    // User/Supervisor Fault (1=User)
 #define PF_RSVD             (1 << 3)    // Reserved Bit Violation
@@ -173,21 +181,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-
-/**
- * CPU Privilege Level
- */
-enum pl {
-    KERNEL_PL = 0,
-    USER_PL = 3,
-};
-
-#define getpl()                         \
-({                                      \
-    struct segsel cs;                   \
-    store_cs(cs);                       \
-    cs.rpl;                             \
-})
 
 /**
  * EFLAGS Register

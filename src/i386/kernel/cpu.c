@@ -70,7 +70,7 @@ extern __noreturn void handle_double_fault(void);  // crash.c
 // but it'll work for now
 void push_kernel_stack(void)
 {
-    struct tss *tss = get_curr_tss();
+    struct tss *tss = get_tss();
     tss->esp0 -= FRAME_SIZE;
     if (tss->esp0 <= KERNEL_ADDR(INT_STACK_LIMIT)) {
         panic("too many nested interrupts!");
@@ -79,7 +79,7 @@ void push_kernel_stack(void)
 
 void pop_kernel_stack(void)
 {
-    struct tss *tss = get_curr_tss();
+    struct tss *tss = get_tss();
     tss->esp0 += FRAME_SIZE;
     if (tss->esp0 > KERNEL_ADDR(INT_STACK_BASE)) {
         panic("kernel stack underflow");
@@ -121,24 +121,28 @@ void setup_idt(void)
     for (int i = 0; i < NR_EXCEPTIONS; i++) {
         // interrupt gate for system exceptions;
         // each handler must explicitly enable interrupts if it wants them
-        make_intr_gate(&idt[VEC_INTEL + i], KERNEL_CS, KERNEL_PL, exception_thunks[i]);
+        make_intr_gate(&idt[EXCEPTION_BASE_VECTOR + i], KERNEL_CS, KERNEL_PL,
+            exception_thunks[i]);
     }
 
     for (int i = 0; i < NR_IRQS; i++) {
         // interrupt gate for device IRQs; prevent nested IRQs
-        make_intr_gate(&idt[VEC_IRQ + i], KERNEL_CS, KERNEL_PL, irq_thunks[i]);
+        make_intr_gate(&idt[IRQ_BASE_VECTOR + i], KERNEL_CS, KERNEL_PL,
+            irq_thunks[i]);
     }
 
     // user-mode interrupt gate for breakpoint handler
     // so user-mode programs can trigger it
-    make_intr_gate(&idt[EXCEPTION_BP], KERNEL_CS, USER_PL, exception_thunks[EXCEPTION_BP]);
+    make_intr_gate(&idt[BREAKPOINT_EXCEPTION], KERNEL_CS, USER_PL,
+        exception_thunks[BREAKPOINT_EXCEPTION]);
 
     // task gate for double fault handler to force a stack switch
     // so we don't lose original exception's stack
-    make_task_gate(&idt[EXCEPTION_DF], _TSS1_SEGMENT, KERNEL_PL);
+    make_task_gate(&idt[DOUBLE_FAULT], _TSS1_SEGMENT, KERNEL_PL);
 
     // trap gate for system calls; device interrupts are OK
-    make_trap_gate(&idt[VEC_SYSCALL], KERNEL_CS, USER_PL, &syscall_thunk);
+    make_trap_gate(&idt[SYSCALL_VECTOR], KERNEL_CS, USER_PL,
+        &syscall_thunk);
 }
 
 void setup_ldt(void)
@@ -159,7 +163,7 @@ static void setup_tss(void)
     make_tss_desc(
         x86_get_desc(get_gdt(), _TSS0_SEGMENT),
         KERNEL_PL, (uintptr_t) &_tss_table[0]);
-    struct tss *tss = get_tss(_TSS0_SEGMENT);
+    struct tss *tss = get_tss_from_gdt(_TSS0_SEGMENT);
     assert(tss == &_tss_table[0]);
     tss->esp0 = KERNEL_ADDR(INT_STACK_BASE);
     tss->ss0 = KERNEL_DS;
@@ -170,7 +174,7 @@ static void setup_tss(void)
         x86_get_desc(get_gdt(), _TSS1_SEGMENT),
         KERNEL_PL, (uintptr_t) &_tss_table[1]);
 
-    struct tss *crash_tss = get_tss(_TSS1_SEGMENT);
+    struct tss *crash_tss = get_tss_from_gdt(_TSS1_SEGMENT);
     assert(crash_tss == &_tss_table[1]);
     crash_tss->eip = (uint32_t) handle_double_fault;
     crash_tss->esp = KERNEL_ADDR(DOUBLE_FAULT_STACK);
@@ -261,6 +265,105 @@ bool cpu_has_cr4(void)
     return cpu.pse_support;
 }
 
+struct x86_desc * get_gdt(void)
+{
+    struct table_desc gdt_desc;
+    __sgdt(gdt_desc);
+
+    return (struct x86_desc *) KERNEL_ADDR(gdt_desc.base);
+}
+
+struct x86_desc * get_idt(void)
+{
+    struct table_desc idt_desc;
+    __sidt(idt_desc);
+
+    return (struct x86_desc *) KERNEL_ADDR(idt_desc.base);
+}
+
+struct tss * get_tss(void)
+{
+    uint16_t segsel; __str(segsel);
+    return get_tss_from_gdt(segsel);
+}
+
+struct tss * get_tss_from_gdt(uint16_t segsel)
+{
+    struct x86_desc *gdt = get_gdt();
+    struct x86_desc *tss_desc = x86_get_desc(gdt, segsel);
+
+    return (struct tss *) ((tss_desc->tss.basehi << 24) | tss_desc->tss.baselo);
+}
+
+struct x86_pde * get_pgdir(void)
+{
+    uint32_t cr3; store_cr3(cr3);
+    return (struct x86_pde *) KERNEL_ADDR(cr3);
+}
+
+int get_cpl(void)
+{
+    struct segsel cs; store_cs(cs);
+    return cs.rpl;
+}
+
+int get_rpl(uint16_t segsel)
+{
+    return ((struct segsel *) &segsel)->rpl;
+}
+
+bool pl_changed(const struct iregs *regs)
+{
+    return get_cpl() != get_rpl(regs->cs);
+}
+
+uint32_t get_esp(const struct iregs *regs)
+{
+    return pl_changed(regs) || (regs->vec_num == DOUBLE_FAULT)
+        // if we changed privilege levels, ESP in iregs is valid;
+        // if we experienced a hardware double-fault, ESP in iregs is also
+        // valid because the exception handler uses a task gateto force a
+        // task switch (causing a stack switch)
+        ? (uint32_t) regs->esp
+        // if we did not change privilege levels, no ESP (or SS) was pushed to
+        // the stack and the stack did not switch, so to find the top of the
+        // faulting stack, we must subtract the size of the iregs structure
+        // minus the ESP and SS values from the top of the interrupt stack;
+        // except this Intel and the stack is backwards, so we add add instead
+        : (uint32_t) (((char *) regs) + SIZEOF_IREGS_NO_PL_CHANGE);
+}
+
+uint16_t get_ss(const struct iregs *regs)
+{
+    uint16_t ss;
+    store_ss(ss);
+
+    // (see above)
+    return pl_changed(regs) || (regs->vec_num == DOUBLE_FAULT)
+        ? regs->ss  // old SS
+        : ss;       // current SS
+}
+
+bool cpl_change(const struct iregs *regs)
+{
+    struct segsel *regs_cs;
+    uint32_t _cs_storage;
+    int cpl;
+
+    regs_cs = (struct segsel *) &regs->cs;
+    store_cs(_cs_storage);
+    cpl = ((struct segsel *) &_cs_storage)->rpl;
+
+    if (regs_cs->rpl > cpl) {
+        return true;
+    }
+
+    return false;
+}
+
+//
+// TODO: I want to rewrite this
+//
 bool get_cpu_info(struct cpuid *info)
 {
     uint8_t ext_family, ext_model;
