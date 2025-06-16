@@ -196,10 +196,7 @@ void init_kb(void)
 
 int kb_getchar(void)
 {
-    extern bool g_timer_initialized;
-
     uint32_t flags;
-    uint16_t mask;
     char c;
 
     if (!g_kb_initialized) {
