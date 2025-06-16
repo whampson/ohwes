@@ -25,10 +25,9 @@
 
 #include <errno.h>
 #include <i386/interrupt.h>
-#include <i386/syscall.h>
 #include <i386/x86.h>
 #include <kernel/irq.h>
-#include <kernel/ohwes.h>
+#include <kernel/task.h>
 
 ##
 # -----------------------------------------------------------------------------
@@ -130,8 +129,9 @@ recv_interrupt:
         STORE_SEGMENT   %es, IREGS_ES(%esp)
         STORE_SEGMENT   %fs, IREGS_FS(%esp)
         STORE_SEGMENT   %gs, IREGS_GS(%esp)
-        movl            %esp, %ebp
-        movl            %esp, %ecx              # ecx = fastcall param for iregs
+        call            current_task            # eax = task ptr
+        movl            %esp, TASK_IREGS(%eax)  # esp = iregs ptr
+        movl            %esp, %ecx              # ecx = fastcall param
         movl            IREGS_VEC_NUM(%esp), %eax
         test            %eax, %eax
         js              irq_trampoline

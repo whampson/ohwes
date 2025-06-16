@@ -22,21 +22,29 @@
 #ifndef __TASK_H
 #define __TASK_H
 
-#include <kernel/fs.h>
-#include <kernel/tty.h>
-
 #define MAX_OPEN                    8
 #define MAX_TASK                    64
+
+#define TASK_IREGS                  0x0C
+
+#ifndef __ASSEMBLER__
+#include <i386/interrupt.h>
+#include <kernel/fs.h>
+#include <kernel/tty.h>
 
 struct task {
     int pid;
     int errno;
     struct tty *tty;
+    struct iregs *regs;
     struct file *files[MAX_OPEN];
 };
+static_assert(offsetof(struct task, regs) == TASK_IREGS,
+    "offsetof(task, regs) == TASK_IREGS");
 
 struct task * current_task(void);
 struct task * get_task(int pid);
 int get_pid(void);
 
+#endif // __ASSENMBLER
 #endif // __TASK_H

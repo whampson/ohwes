@@ -22,13 +22,13 @@
 #include <kernel/ohwes.h>
 #include <kernel/task.h>
 
-int _current_pid;
-struct task _task_list[MAX_TASK];
+__initmem int g_curr_pid = 0;
+struct task g_tasks[MAX_TASK];
 
 void init_tasks(void)
 {
-    _current_pid = 0;
-    zeromem(_task_list, sizeof(_task_list));
+    g_curr_pid = 0;
+    zeromem(g_tasks, sizeof(g_tasks));
 }
 
 struct task * current_task(void)
@@ -42,10 +42,10 @@ struct task * get_task(int pid)
         return NULL;
     }
 
-    return &_task_list[pid];
+    return &g_tasks[pid];
 }
 
 int get_pid(void)
 {
-    return _current_pid;
+    return g_curr_pid;
 }
