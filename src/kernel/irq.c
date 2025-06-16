@@ -29,10 +29,10 @@
 #include <kernel/kernel.h>
 
 #define MAX_ISR             8   // max ISR handlers per IRQ line
-#define SPURIOUS_THRESH     3   // show warning screen every n spurious interrupts
+#define SPURIOUS_THRESH     10
 
-#define IRQ_VALID(n)        ((n) >= 0 && (n) < NR_IRQS)
-#define IRQ_MASKED(n)       (irq_getmask() & (1 << (n)))
+#define _IRQ_VALID(n)        ((n) >= 0 && (n) < NR_IRQS)
+#define _IRQ_MASKED(n)       (irq_getmask() & (1 << (n)))
 
 struct irq_stats {
     int spur_pic0;
@@ -76,7 +76,7 @@ void irq_setmask(uint16_t mask)
 
 void irq_register(int irq, irq_handler func)
 {
-    assert(IRQ_VALID(irq));
+    assert(_IRQ_VALID(irq));
 
     bool registered = false;
     for (int i = 0; i < MAX_ISR; i++) {
@@ -94,7 +94,7 @@ void irq_register(int irq, irq_handler func)
 
 void irq_unregister(int irq, irq_handler func)
 {
-    assert(IRQ_VALID(irq));
+    assert(_IRQ_VALID(irq));
 
     bool unregistered = false;
     for (int i = 0; i < MAX_ISR; i++) {
@@ -113,7 +113,7 @@ __fastcall void handle_irq(struct iregs *regs)
 {
     int irq = ~regs->vec_num;
     bool handled = false;
-    bool masked = IRQ_MASKED(irq);
+    bool masked = _IRQ_MASKED(irq);
 
     // ack interrupt on hardware
     pic_eoi(irq);
@@ -125,7 +125,7 @@ __fastcall void handle_irq(struct iregs *regs)
             : (++g_irqstats->spur_pic1);
 
         alert("** spurious IRQ%d **\n", irq);
-        if (count > SPURIOUS_THRESH) {
+        if (count > 1 && ((count-1) % SPURIOUS_THRESH) == 0) {
             alert("more than %d spurious IRQs! what's going on??\n", count - 1);
         }
         return;     // no EOI for spurious IRQs
