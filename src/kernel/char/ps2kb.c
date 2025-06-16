@@ -28,6 +28,7 @@
 // https://www.win.tue.nl/~aeb/linux/kbd/scancodes-1.html
 
 #include <ctype.h>
+#include <errno.h>
 #include <string.h>
 #include <i386/boot.h>
 #include <i386/interrupt.h>
@@ -73,6 +74,7 @@ struct kb {
     int scrlk;
     int sysrq;
     char altchar;
+    char pollchar;
 
     // // key event buffer
     // struct ring eventq;            // TODO: make queue w/ generic type
@@ -192,6 +194,31 @@ void init_kb(void)
     g_kb_initialized = true;
 }
 
+int kb_getchar(void)
+{
+    extern bool g_timer_initialized;
+
+    uint32_t flags;
+    uint16_t mask;
+    char c;
+
+    if (!g_kb_initialized) {
+        return -EAGAIN;
+    }
+
+    cli_save(flags);
+
+    g_kb->pollchar = 0;
+    __sti();
+    while (g_kb->pollchar == 0) { }     // TODO: poll timeout
+    __cli();
+    c = g_kb->pollchar;
+
+    restore_flags(flags);
+
+    return c;
+}
+
 static void kb_putq(char c)
 {
     struct tty *tty = get_terminal(0)->tty;
@@ -201,7 +228,9 @@ static void kb_putq(char c)
     if (!tty->ldisc->recv) {
         panic("keyboard has no input receiver!");
     }
-    tty->ldisc->recv(tty, &c, 1);   // just drop chars if it's full...
+
+    tty->ldisc->recv(tty, &c, 1);
+    g_kb->pollchar = c;
 }
 
 static void update_leds(void)
@@ -409,15 +438,17 @@ static void kb_interrupt(int irq, struct iregs *regs)
     }
 
 #ifdef DEBUG
-    if (g_kb->ctrl && g_kb->alt) {
-        g_test_crashkey = fnkey_index(key);
+    if (g_kb->ctrl && g_kb->alt && is_fnkey(key)) {
+        if (!g_test_crashkey) {
+            g_test_crashkey = fnkey_index(key);
+        }
     }
 #endif
 
     // TODO: CTRL+SCRLK = print kernel output buffer?
 
     // ALT+<FN>: switch terminal
-    if (g_kb->alt && !g_kb->ctrl) {
+    if (!g_kb->ctrl && g_kb->alt && is_fnkey(key)) {
         int term = fnkey_index(key);
         if (term >= 1 && term <= NR_TERMINAL) {
             int ret = switch_terminal(term);

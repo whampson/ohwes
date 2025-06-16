@@ -30,6 +30,7 @@
 #include <i386/x86.h>
 #include <kernel/char.h>
 #include <kernel/console.h>
+#include <kernel/irq.h>
 #include <kernel/kernel.h>
 #include <kernel/ohwes.h>
 #include <kernel/tty.h>
@@ -200,8 +201,7 @@ static int vt_console_write(struct console *cons, const char *buf, size_t count)
 
 static int vt_console_waitkey(struct console *cons)
 {
-    // TODO
-    return -EBUSY;
+    return kb_getchar();
 }
 
 struct console vt_console =
@@ -498,7 +498,6 @@ struct terminal * get_terminal(int num)
 void * get_terminal_fb(int num)
 {
     char *fb;
-    struct vga_fb_info fb_info;
 
     if (num < 0 || num > NR_TERMINAL) {
         panic("attempt to get nonexistant terminal %d frame buffer!", num);
@@ -508,11 +507,18 @@ void * get_terminal_fb(int num)
     }
     assert(num > 0);
 
-    vga_get_fb_info(&fb_info);
-    fb = (char *) KERNEL_ADDR(fb_info.framebuf);
+    fb = (char *) get_vga_fb();
     fb += (num * FB_SIZE_PAGES) << PAGE_SHIFT;
 
     return fb;
+}
+
+void * get_vga_fb(void)
+{
+    struct vga_fb_info fb_info;
+    vga_get_fb_info(&fb_info);
+
+    return (void *) KERNEL_ADDR(fb_info.framebuf);
 }
 
 void terminal_save(struct terminal *term, struct terminal_save_state *save)

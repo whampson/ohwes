@@ -42,15 +42,15 @@
 #define TABSTOP_WIDTH           8       // TODO: make configurable
 
 // ESC[<x>m color code
-enum csi_color {
-    CSI_BLACK,
-    CSI_RED,
-    CSI_GREEN,
-    CSI_YELLOW,
-    CSI_BLUE,
-    CSI_MAGENTA,
-    CSI_CYAN,
-    CSI_WHITE
+enum ansi_color {
+    ANSI_BLACK   = 0,
+    ANSI_RED     = 1,
+    ANSI_GREEN   = 2,
+    ANSI_YELLOW  = 3,
+    ANSI_BLUE    = 4,
+    ANSI_MAGENTA = 5,
+    ANSI_CYAN    = 6,
+    ANSI_WHITE   = 7
 };
 
 struct terminal_save_state {
@@ -128,6 +128,12 @@ int switch_terminal(int num);
 
 // get a terminal's virtual frame buffer
 void * get_terminal_fb(int num);
+
+// get real VGA frame buffer
+void * get_vga_fb(void);
+
+// wait for a character keypress (NOTE: BLOCKS!!)
+int kb_getchar(void);
 
 // save/restore terminal state
 void terminal_save(struct terminal *term, struct terminal_save_state *save);
