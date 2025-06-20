@@ -194,7 +194,7 @@ void init_kb(void)
     g_kb_initialized = true;
 }
 
-int kb_getchar(void)
+int kb_getc(void)
 {
     uint32_t flags;
     char c;

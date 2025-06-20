@@ -133,7 +133,7 @@ void * get_terminal_fb(int num);
 void * get_vga_fb(void);
 
 // wait for a character keypress (NOTE: BLOCKS!!)
-int kb_getchar(void);
+int kb_getc(void);
 
 // save/restore terminal state
 void terminal_save(struct terminal *term, struct terminal_save_state *save);

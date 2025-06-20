@@ -137,7 +137,7 @@ static void wait_for_keypress(void)
 
     irq_enable();
 
-    kb_getchar();   // blocks until a char is sent
+    kb_getc();   // blocks until a char is sent
 
     irq_disable();
     irq_setmask(mask);
