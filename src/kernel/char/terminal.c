@@ -159,7 +159,7 @@ static size_t terminal_tty_write_room(struct tty *tty)
 
 static dev_t vt_console_device(struct console *cons)
 {
-    return __mkdev(TTY_MAJOR, (cons->index) ? cons->index : current_terminal());
+    return __mkttydev((cons->index) ? cons->index : current_terminal());
 }
 
 static void vt_console_setup(struct console *cons)
@@ -171,7 +171,7 @@ static void vt_console_setup(struct console *cons)
 
     struct terminal *term = get_terminal(cons->index);
     if (!term->initialized) {
-        int num = (cons->index) ? cons->index : current_terminal();
+        int num = _DEV_MIN(cons->device(cons));
         initialize_terminal(num, term);
         if (num == 1) {
             term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
@@ -199,20 +199,20 @@ static int vt_console_write(struct console *cons, const char *buf, size_t count)
     return (p - buf);
 }
 
-static int vt_console_waitkey(struct console *cons)
+static int vt_console_getc(struct console *cons)
 {
-    return kb_getchar();
+    return kb_getc();
 }
 
 struct console vt_console =
 {
     .name = "tty",
-    .index = VT_CONSOLE_NUMBER,
+    .index = VT_CONSOLE_NUM,
     .flags = 0,
     .device = vt_console_device,
     .setup = vt_console_setup,
     .write = vt_console_write,
-    .waitkey = vt_console_waitkey
+    .getc = vt_console_getc
 };
 
 // ----------------------------------------------------------------------------

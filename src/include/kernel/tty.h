@@ -45,8 +45,8 @@
 #define TTYS_MIN                (TTY_MAX+1)
 #define TTYS_MAX                (TTYS_MIN+NR_SERIAL)
 
+#define __mkttydev(num)         __mkdev(TTY_MAJOR, TTY_MIN+(num)-1)
 #define __mkserdev(num)         __mkdev(TTY_MAJOR, TTYS_MIN+(num)-1)
-#define __mkcondev(num)         __mkdev(TTY_MAJOR, TTY_MIN+(num)-1)
 
 // handy macros for working with termios flags
 #define _I_FLAG(tty,f)          ((tty)->termios.c_iflag & (f))
