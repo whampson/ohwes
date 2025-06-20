@@ -33,7 +33,7 @@ struct console {
     dev_t (*device)(struct console *);
     void (*setup)(struct console *);
     int (*write)(struct console *, const char *, size_t);
-    int (*waitkey)(struct console *);
+    int (*getc)(struct console *);
 
     struct console *next;
 };
@@ -45,5 +45,8 @@ bool has_console(void);
 
 // write a message to all consoles
 int console_write(const char *buf, size_t count);
+
+// wait for a character to be received by the default console
+int console_getc(void);
 
 #endif // __CONSOLE_H

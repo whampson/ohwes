@@ -30,36 +30,40 @@
 //
 
 // OS version info strings
-#define OS_NAME             "OH-WES"
-#define OS_VERSION          "0.1"
-#define OS_AUTHOR           "Wes Hampson"
-#define OS_COPYRIGHT        "Copyright (C) 2020-2025 " OS_AUTHOR ". All Rights Reserved."
+#define OS_NAME                 "OH-WES"
+#define OS_VERSION              "0.1"
+#define OS_AUTHOR               "Wes Hampson"
+#define OS_COPYRIGHT            "Copyright (C) 2020-2025 " OS_AUTHOR ". All Rights Reserved."
 
 // memory
-#define RAM_KBYTES          512 // let's see how long this lasts!
-#define HIGHER_GROUND       1   // map kernel in high virtual address space
+#define RAM_KBYTES              512 // let's see how long this lasts!
+#define HIGHER_GROUND           1   // map kernel in high virtual address space
+
+// terminal
+#define DEFAULT_VT              1   // initial virtual terminal activated
+#define VT_CONSOLE_NUM          0   // (0) print kernel messages to active virtual terminal
+
+// serial console
+#define SERIAL_CONSOLE          1   // use a serial port as a console interface
+#define SERIAL_CONSOLE_NUM      1   // serial console COM port
+#define SERIAL_CONSOLE_BAUD     BAUD_9600
+#define SERIAL_CONSOLE_DEFAULT  0   // make the serial console the default console
 
 // printing
-#define PRINT_LOGO          0   // show a special logo at boot
-#define PRINT_PAGE_MAP      0   // show initial page table mappings
-#define PRINT_IOCTL         1   // show ioctl calls
-#define E9_HACK             1   // tee console output to I/O port 0xE9
-#define EARLY_PRINT         1   // register a console when first char is printed
+#define PRINT_LOGO              0   // show a special logo at boot
+#define PRINT_PAGE_MAP          0   // show initial page table mappings
+#define PRINT_IOCTL             1   // show ioctl calls
+#define E9_HACK                 1   // tee console output to I/O port 0xE9
+#define EARLY_PRINT             1   // register default console when first char is printed
 
-// console
-#define DEFAULT_VT          1   // initial virtual terminal activated
-#define VT_CONSOLE_NUMBER   0   // print kernel messages to active terminal
-#define SERIAL_CONSOLE_PORT COM2_PORT
-#define SERIAL_CONSOLE_BAUD BAUD_9600
-
-// log
-#define KERNEL_LOG_SIZE     (2*PAGE_SIZE)
+// kernel log
+#define KERNEL_LOG_SIZE         (2*PAGE_SIZE)
 
 // debugging
-#define SERIAL_DEBUGGING    1   // enable debugging over COM port
-#define SERIAL_DEBUG_PORT   COM1_PORT
-#define SERIAL_DEBUG_BAUD   BAUD_115200
-#define ENABLE_CRASH_KEY    1   // test various crash scenarios w/ keystroke
+#define SERIAL_DEBUGGING        0   // enable debugging over COM port
+#define SERIAL_DEBUG_PORT       COM1_PORT
+#define SERIAL_DEBUG_BAUD       BAUD_115200
+#define ENABLE_CRASH_KEY        1   // test various crash scenarios w/ keystroke
 
 //
 // ----------------------------------------------------------------------------
@@ -131,8 +135,8 @@ static_assert(INT_STACK_LIMIT >= DOUBLE_FAULT_STACK, "Interrupt stacks overlap c
 
 static_assert(DEFAULT_VT >= 1 && DEFAULT_VT <= NR_TERMINAL,
     "invalid DEFAULT_VT value");
-static_assert(VT_CONSOLE_NUMBER >= 0 && VT_CONSOLE_NUMBER <= NR_TERMINAL,
-    "invalid VT_CONSOLE_NUMBER value");
+static_assert(VT_CONSOLE_NUM >= 0 && VT_CONSOLE_NUM <= NR_TERMINAL,
+    "invalid VT_CONSOLE_NUM value");
 
 static_assert(KERNEL_LOG + KERNEL_LOG_SIZE <= KERNEL_BASE,
     "kernel log buffer is too large!");

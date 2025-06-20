@@ -124,8 +124,13 @@ bool has_console()
 
 static void register_default_console(void)
 {
+#if SERIAL_CONSOLE_DEFAULT
+    extern struct console serial_console;
+    register_console(&serial_console);
+#else
     extern struct console vt_console;
     register_console(&vt_console);
+#endif
 }
 
 // print a message to the console(s) and kernel log
@@ -185,6 +190,15 @@ int console_write(const char *buf, size_t count)
     }
 
     return (p - buf);
+}
+
+int console_getc(void)
+{
+    if (!has_console() && !g_consoles->getc) {
+        return '\0';
+    }
+
+    return g_consoles->getc(g_consoles);
 }
 
 int _vkprint(const char *fmt, va_list args)

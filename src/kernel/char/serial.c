@@ -22,7 +22,11 @@
  */
 
 //
-// Serial Drivers - https://www.linux.it/~rubini/docs/serial/serial.html
+// Serial Drivers:
+//     https://www.linux.it/~rubini/docs/serial/serial.html
+//
+// Linux serial driver came in handy as well:
+//     https://elixir.bootlin.com/linux/2.2.26/source/drivers/char/serial.c
 //
 
 #include <assert.h>
@@ -98,7 +102,7 @@ struct com {
     // statistics
     struct serial_stats stats;
 };
-struct com g_com[NR_SERIAL];
+__initmem struct com g_com[NR_SERIAL] = { };
 
 // "serial" prefix refers to TTY functions
 // "com" prefix refers to UART functions
@@ -135,8 +139,8 @@ static void com_interrupt(struct com *com);
 static void com1_irq(int irq, struct iregs *regs);
 static void com2_irq(int irq, struct iregs *regs);
 
-static uint8_t com_in(struct com *com, uint8_t reg);
-static void com_out(struct com *com, uint8_t reg, uint8_t data);
+static inline uint8_t com_in(struct com *com, uint8_t reg);
+static inline void com_out(struct com *com, uint8_t reg, uint8_t data);
 
 static void shadow_regs(struct com *com);
 static bool set_baud(struct com *com, int baud_divisor);
@@ -159,6 +163,19 @@ static void recv_chars(struct com *com);
 static int get_modem_info(struct com *com, int *user_info);
 static int set_modem_info(struct com *com, const int *user_info);
 static int get_modem_stats(struct com *com, struct serial_stats *user_stats);
+
+// ----------------------------------------------------------------------------
+
+static uint16_t get_com_port(int num)
+{
+    switch (num) {
+        case 1: return COM1_PORT;
+        case 2: return COM2_PORT;
+        case 3: return COM3_PORT;
+        case 4: return COM4_PORT;
+    }
+    return 0;   // invalid
+}
 
 static struct com * get_com(int num)
 {
@@ -189,6 +206,155 @@ static int tty_get_com(struct tty *tty, struct com **com)
     return 0;
 }
 
+// ----------------------------------------------------------------------------
+//                        Serial Console Interface
+// Unlike the TTY, the serial console does not use interrupts, instead relying
+// on polling to determine when to transmit and receive characters.
+
+#if SERIAL_CONSOLE
+
+static inline char wait_and_recv(struct com *com)
+{
+    // TODO: timeout?
+    while ((com_in(com, UART_LSR) & UART_LSR_DR) == 0);
+    return com_in(com, UART_RX);
+}
+
+static inline void wait_and_send(struct com *com, char c)
+{
+    // TODO: timeout?
+    while ((com_in(com, UART_LSR) & UART_LSR_THRE) == 0);
+    com_out(com, UART_TX, c);
+}
+
+static dev_t serial_console_device(struct console *cons)
+{
+    return __mkserdev(cons->index);
+}
+
+static void serial_console_setup(struct console *cons)
+{
+    struct com *com;
+    uint8_t data;
+
+    com = get_com(cons->index);
+
+#if EARLY_PRINT
+    // COM struct might not have been initialized yet...
+    // do some partial initialization here
+    if (!com->num) {
+        com->num = cons->index;
+        if (com->num < COM1 || com->num > NR_SERIAL) {
+            panic("invalid serial console number '%d", com->num);
+        }
+    }
+    assert(com->num == cons->index);
+    if (!com->io_port) {
+        com->io_port = get_com_port(com->num);
+        if (!com->io_port) {
+            panic("invalid serial console number '%d'", com->num);
+        }
+    }
+#endif
+
+#if SERIAL_DEBUGGING
+    if (com->io_port == SERIAL_DEBUG_PORT) {
+        panic("serial console cannot share COM port with serial debugger!");
+    }
+#endif
+
+    // check for UART existence
+    com_out(com, UART_SCR, 0);
+    com_out(com, UART_SCR, 0x55);
+    data = com_in(com, UART_SCR);
+    if (data != 0x55) {
+        panic("unable to open serial console on IO port %Xh, "
+            "UART does not exist!", com->io_port);
+    }
+
+    // set baud rate
+    com_out(com, UART_LCR, 0x80);
+    com_out(com, UART_DLM, SERIAL_CONSOLE_BAUD >> 8);
+    com_out(com, UART_DLL, SERIAL_CONSOLE_BAUD & 0xFF);
+
+    // configure port params
+    com_out(com, UART_LCR, 0x03);  // 8 data bits, no party, 1 stop bit
+    com_out(com, UART_MCR, 0x0B);  // DTR RTS OUT2
+    com_out(com, UART_IER, 0);     // no interrupts
+    com_out(com, UART_FCR, 0xC7);  // use fifo
+
+    // clear pending reads
+    (void) com_in(com, UART_LSR);
+    (void) com_in(com, UART_MSR);
+    (void) com_in(com, UART_IIR);
+}
+
+static int serial_console_write(struct console *cons, const char *buf, size_t count)
+{
+    struct com *com;
+    const char *p;
+    uint8_t ier;
+
+    // get port info
+    com = get_com(cons->index);
+    assert(com->num == cons->index);
+
+    // disable interrupts
+    ier = com_in(com, UART_IER);
+    com_out(com, UART_IER, 0);
+
+    // send chars
+    p = buf;
+    while (*p != '\0' && (p - buf) < count) {
+        if (*p == '\n') {
+            wait_and_send(com, '\r');
+        }
+        wait_and_send(com, *p);
+        p++;
+    }
+
+    // restore interrupts and return
+    com_out(com, UART_IER, ier);
+    return (p - buf);
+}
+
+static int serial_console_getc(struct console *cons)
+{
+    struct com *com;
+    uint8_t ier;
+    char c;
+
+    // get port info
+    com = get_com(cons->index);
+    assert(com->num == cons->index);
+
+    // disable interrupts
+    ier = com_in(com, UART_IER);
+    com_out(com, UART_IER, 0);
+
+    // receive the character
+    c = wait_and_recv(com);
+
+    // restore interrupt and return
+    com_out(com, UART_IER, ier);
+    return c;
+}
+
+struct console serial_console =
+{
+    .name = "ttyS",
+    .index = SERIAL_CONSOLE_NUM,
+    .flags = 0,
+    .device = serial_console_device,
+    .setup = serial_console_setup,
+    .write = serial_console_write,
+    .getc = serial_console_getc
+};
+
+#endif
+
+// ----------------------------------------------------------------------------
+
 void init_serial(void)
 {
     struct com *com;
@@ -200,16 +366,12 @@ void init_serial(void)
     for (int i = COM1; i <= NR_SERIAL; i++) {
         // locate and init com struct
         com = get_com(i);
-        zeromem(com, sizeof(struct com));
         com->num = i;
-        switch (i) {
-            case 1: com->io_port = COM1_PORT; break;
-            case 2: com->io_port = COM2_PORT; break;
-            case 3: com->io_port = COM3_PORT; break;
-            case 4: com->io_port = COM4_PORT; break;
-            default: panic("assign port for COM%d!", i);
-        }
+        com->io_port = get_com_port(i);
+        assert(com->io_port);
 
+        // TODO: I kind of want to remove this and just explicitly check for
+        // serial debug port and skip...
         if (reserve_io_range(com->io_port, 8, "serial") < 0) {
             // serial port is reserved by another driver (e.g. debug interface)
             com->reserved = true;
@@ -224,7 +386,7 @@ void init_serial(void)
             continue;
         }
 
-        // sanity check: try storing a value in scratch reg
+        // try storing a value in scratch reg to determine port existence
         com_out(com, UART_SCR, 0);
         com_out(com, UART_SCR, 0x55);
         if (com_in(com, UART_SCR) != 0x55) {
@@ -235,6 +397,10 @@ void init_serial(void)
         com->valid = true;
         kprint("com%d: detected on port %Xh\n", com->num, com->io_port);
     }
+
+#if SERIAL_CONSOLE
+    register_console(&serial_console);
+#endif
 
     irq_register(IRQ_COM1, com1_irq);
     irq_register(IRQ_COM2, com2_irq);
@@ -564,24 +730,18 @@ static void serial_stop(struct tty *tty)
 // ----------------------------------------------------------------------------
 //                          COM Port Interface
 
-static uint8_t com_in(struct com *com, uint8_t reg)
+static inline uint8_t com_in(struct com *com, uint8_t reg)
 {
     assert(com);
-
-    if (reg > UART_SCR) {
-        panic("invalid COM register %d", reg);
-    }
+    assert(reg <= UART_SCR);
 
     return inb(com->io_port + reg);
 }
 
-static void com_out(struct com *com, uint8_t reg, uint8_t data)
+static inline void com_out(struct com *com, uint8_t reg, uint8_t data)
 {
     assert(com);
-
-    if (reg > UART_SCR) {
-        panic("invalid COM register %d", reg);
-    }
+    assert(reg <= UART_SCR);
 
     outb(com->io_port + reg, data);
 }

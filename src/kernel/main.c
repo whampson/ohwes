@@ -90,7 +90,7 @@ static void go_to_ring3(uint32_t stack);
 void init(void);    // user mode portion of setup
 int main(void);     // user mode program entry point
 
-__data_segment struct boot_info *g_boot;
+__initmem struct boot_info *g_boot;
 
 __fastcall void kmain(struct boot_info **info)
 {
@@ -132,6 +132,10 @@ __fastcall void kmain(struct boot_info **info)
         "per conubia nostra inceptos himenaeos.\n\n");
     kprint(
         "\e[1mDid it work? :p\e[0m\n\n");
+
+    kprint("Press any key to continue... ");
+    console_getc();
+    kprint("\n");
 
 #if TEST_BUILD
     run_tests();
@@ -260,25 +264,25 @@ int main(void)
     do {
         // read serial TTY, nonblocking
         ret0 = read(fd, &c0, 1);
-        if (ret0 < 0 && ret0 != -EAGAIN) {
+        if (ret0 < 0 && errno != EAGAIN) {
             perror("read(TTY)");
             break;
         }
 
         // read stdin, nonblocking
         ret1 = read(STDIN_FILENO, &c1, 1);
-        if (ret1 <0 && ret1 != -EAGAIN) {
+        if (ret1 < 0 && errno != EAGAIN) {
             perror("read(stdin)");
             break;
         }
 
         // write received chars from serial TTY to stdout
-        if (ret0 != -EAGAIN) {
+        if (ret0 > 0) {
             write(STDOUT_FILENO, &c0, 1);
         }
 
         // write received chars from stdin to serial TTY
-        if (ret1 != -EAGAIN) {
+        if (ret1 > 0) {
             write(fd, &c1, 1);
         }
     } while (c0 != 3 && c1 != 3);   // quit if CTRL+C pressed on either end
@@ -291,7 +295,7 @@ int main(void)
 
     int modem;
     ioctl(fd, TIOCMGET, &modem);
-    printf("modem=%xh\n", modem);
+    printf("modem=%Xh\n", modem);
     if (modem & TIOCM_DTR) {
         puts("  TIOCM_DTR is set");
     }
