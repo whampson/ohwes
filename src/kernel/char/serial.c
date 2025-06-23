@@ -102,7 +102,7 @@ struct com {
     // statistics
     struct serial_stats stats;
 };
-__initmem struct com g_com[NR_SERIAL] = { };
+struct com g_com[NR_SERIAL];
 
 // "serial" prefix refers to TTY functions
 // "com" prefix refers to UART functions

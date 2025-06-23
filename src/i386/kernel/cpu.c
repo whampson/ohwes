@@ -61,8 +61,8 @@ static void setup_tss(void);
 static void setup_idt(void);
 static void verify_gdt(void);
 
-__initmem static struct x86_desc _ldt[1];   // TODO: move this allocation off-disk
-__initmem static struct tss _tss_table[2];  // TODO: move this allocation off-disk
+static struct x86_desc _ldt[1];
+static struct tss _tss_table[2];
 
 extern __noreturn void handle_double_fault(void);  // crash.c
 

@@ -44,8 +44,6 @@
 #include <kernel/console.h>
 #include <kernel/task.h>
 
-#define __initmem   __attribute__((section(".data")))
-
 #define ALERT_FREQ  1725
 #define ALERT_TIME   100
 

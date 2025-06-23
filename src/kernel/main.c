@@ -90,7 +90,7 @@ static void go_to_ring3(uint32_t stack);
 void init(void);    // user mode portion of setup
 int main(void);     // user mode program entry point
 
-__initmem struct boot_info *g_boot;
+struct boot_info *g_boot;
 
 __fastcall void kmain(struct boot_info **info)
 {

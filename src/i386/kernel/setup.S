@@ -88,6 +88,13 @@ _ksetup_continue:
         movw            %ax, %fs                # fs = 0
         movw            %ax, %gs                # gs = 0
 
+        # now that virtual memory is set up, zero the BSS region;
+        # do this here to ensure all uninitialized variables are zeroed
+        # before we ever reach C code
+        movl            $_bss_size, %ecx
+        movl            $_bss_start, %edi
+   rep stosb
+
         # now we can build the CPU descriptor tables;
         # the GDT is partially initiailzed statically below (see _gdt)
         call            setup_cpu
@@ -212,7 +219,7 @@ setup_debug_port:
         movw            $SERIAL_DEBUG_PORT+UART_LCR, %dx
         movb            $0x80, %al
         outb            %al, %dx        # enable DLAB so we can set baud
-        movb            $SERIAL_DEBUG_BAUD >>8 , %al
+        movb            $SERIAL_DEBUG_BAUD >> 8, %al
         movw            $SERIAL_DEBUG_PORT+UART_DLM, %dx
         outb            %al, %dx        # set baud divisor high byte
         movw            $SERIAL_DEBUG_PORT+UART_DLL, %dx

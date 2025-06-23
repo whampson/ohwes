@@ -53,12 +53,5 @@ struct zone {
 
 void init_mm(void)
 {
-    init_bss();
     init_pools();
-}
-
-static void init_bss(void)
-{
-    // zero the BSS region
-    zeromem(&_bss_start, (size_t) &_bss_size);
 }

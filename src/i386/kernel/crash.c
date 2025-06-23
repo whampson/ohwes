@@ -54,8 +54,8 @@
 #define STACK_DUMP_COLS     4
 
 #if DEBUG
-__initmem int g_test_crashkey = 0;
-__initmem int g_test_soft_double_fault = 0;
+int g_test_crashkey = 0;
+int g_test_soft_double_fault = 0;
 #endif
 
 extern struct console *g_consoles;
@@ -203,8 +203,8 @@ __noreturn void handle_soft_double_fault(
 __fastcall void handle_exception(struct iregs *iregs)
 {
     // static vars for soft double-fault detection
-    __initmem static bool crashing = false;
-    __initmem static struct cpu_state orig_cpu;
+    static bool crashing = false;
+    static struct cpu_state orig_cpu;
 
     char msgbuf[CRASH_BUFSIZ];
     char errbuf[CRASH_BUFSIZ];

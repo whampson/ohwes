@@ -22,7 +22,7 @@
 #include <kernel/ohwes.h>
 #include <kernel/task.h>
 
-__initmem int g_curr_pid = 0;
+int g_curr_pid = 0;
 struct task g_tasks[MAX_TASK];
 
 void init_tasks(void)
