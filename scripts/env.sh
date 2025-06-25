@@ -33,16 +33,14 @@ if [[ "$(expr substr $(uname -s) 1 10)" == "MINGW32_NT" ]]; then # Windows/MINGW
     if [ -d "$QEMU_PATH" ]; then
         PATH=$PATH:$QEMU_PATH
     fi
+    ELF_TOOLS="$PROJ_ROOT/build/i686-elf-tools/bin"
+    if [ -d "$ELF_TOOLS" ]; then
+        PATH=$PATH:$ELF_TOOLS
+    else
+        echo "error: i868-elf-tools binaries not found!"
+    fi
 # else
 #     # TODO: darwin, linux
-fi
-
-# Add i686-elf-tools to PATH
-ELF_TOOLS="$PROJ_ROOT/build/i686-elf-tools/bin"
-if [ -d "$ELF_TOOLS" ]; then
-    PATH=$PATH:$ELF_TOOLS
-else
-    echo "error: i868-elf-tools binaries not found!"
 fi
 
 # Add native-built tools to PATH
