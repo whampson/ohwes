@@ -115,9 +115,6 @@ __fastcall void handle_irq(struct iregs *regs)
     bool handled = false;
     bool masked = _IRQ_MASKED(irq);
 
-    // ack interrupt on hardware
-    pic_eoi(irq);
-
     if ((irq == 7 && masked) || (irq == 15 && masked)) {
         bool pic0 = irq == 7;
         int count = (pic0)
@@ -130,6 +127,8 @@ __fastcall void handle_irq(struct iregs *regs)
         }
         return;     // no EOI for spurious IRQs
     }
+
+    pic_eoi(irq);
 
     if (!masked) {
         for (int i = 0; i < MAX_ISR; i++) {
