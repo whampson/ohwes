@@ -42,7 +42,7 @@
 # state is stored on the stack in an 'iregs' structure, to be restored upon
 # completion of the routine.
 #
-# Upon entry to this function, several registes will already be present on the
+# Upon entry to this function, several registers will already be present on the
 # stack. The CPU itself pushes some registers onto the stack automatically when
 # an interrupt occurs, but the number of registers pushed depends on whether the
 # interrupted process was executing as user or supervisor (kernel). In addition,
@@ -67,15 +67,15 @@
 #        es        pushed by recv_interrupt
 #        fs        pushed by recv_interrupt
 #        gs        pushed by recv_interrupt
-#        vec_num   pushed by recv_interrupt
-#        err_code  pushed by recv_interrupt
+#        vec       pushed by recv_interrupt
+#        err       pushed by recv_interrupt
 #        eip       pushed by recv_interrupt
 #        cs        pushed by recv_interrupt
 #        eflags    pushed by recv_interrupt
 #        esp       pushed by recv_interrupt
 #        ss        pushed by recv_interrupt
-# sp0 -> vec_num   pushed by thunk; interrupt vector number, 0x80 for syscall
-#        err_code  pushed by cpu or thunk depending on exception
+# sp0 -> vec       pushed by thunk; interrupt vector number, 0x80 for syscall
+#        err       pushed by cpu or thunk depending on exception
 #        eip       pushed by cpu
 #        cs        pushed by cpu
 #        eflags    pushed by cpu
@@ -84,10 +84,12 @@
 #
 # In the above diagram, 'sp0' refers to the stack pointer upon entry to this
 # routine, while 'sp1' refers to the stack pointer after all registers have been
-# pushed. After the registers are stored, the type of interrupt is determined
-# using the vector number: Exception, Device IRQ, or System Call. We then jump
-# to the corresponding 'trampoline' function, which pushes the appropriate
-# return address for the type of interrupt onto the stack then jumps to the
+# pushed.
+
+# After the registers are stored, the type of interrupt is determined using the
+# vector number: Exception, Device IRQ, or System Call. We then jump to the
+# corresponding 'trampoline' function, which pushes the appropriate return
+# address for the type of interrupt onto the stack then jumps to the
 # corresponding handler function. A pointer to the iregs structure is passed to
 # the interrupt handler via ECX. As such, handlers with C linkage callable
 # directly from the common interrupt handler should be declared with the
@@ -109,22 +111,22 @@
 # device IRQ number is encoded as the ones' compliment of the interrupt vector
 # number. This allows us to both determine that an interrupt originated
 # from a device and the device that raised the interrupt simply by taking the
-# bitwise NOT of the vector number! Device IRQs are expected by the PIC to be
+# bitwise NOT of the vector number. Device IRQs are expected by the PIC to be
 # acknowledged with an End of Interrupt (EOI) message upon completion of the
 # handler. Like exceptions, device IRQs do not return any meaningful value to
 # the user, but unlike exceptions they are always expected to return.
 #
-# A System Call is a software call into the kernel in order to perform some
-# privileged operation, such as reading/writing data to a device or allocating
-# memory. System calls are invoked using the 'int' instruction and always use
-# the interrupt vector number 0x80. The requested kernel function is specified
-# as a 32-bit number in EAX, while the parameters to the function are passed via
-# EBX, ECX, EDX, ESI, and EDI registers (in that order with respect to a C-style
-# function signature) for a total of up to five 32-bit parameters. Our common
-# interrupt handler places these parameters on the stack while it's saving
-# program state, allowing us to simply call the requested function. To ensure
-# that system calls with C linkage retrieve their parameters from the stack
-# only, we declare the kernel side of a system call using the __syscall
+# A System Call is a programmatic call into the kernel (trap) in order to
+# perform some privileged operation, such as reading/writing data to a device or
+# allocating memory. System calls are invoked using the 'int' instruction and
+# always use the interrupt vector number 0x80. The requested kernel function is
+# specified as a 32-bit number in EAX, while the parameters to the function are
+# passed via EBX, ECX, EDX, ESI, and EDI registers (in that order with respect
+# to a C-style function signature) for a total of up to five 32-bit parameters.
+# Our common interrupt handler places these parameters on the stack while it's
+# saving program state, allowing us to simply call the requested function. To
+# ensure that system calls with C linkage retrieve their parameters from the
+# stack only, we declare the kernel side of a system call using the __syscall
 # decorator:
 #
 #       int __syscall system_func(int param0, char *param1, size_t param2);
@@ -150,16 +152,16 @@ recv_interrupt:
         STORE_SEGMENT   %es, IREGS_ES(%esp)
         STORE_SEGMENT   %fs, IREGS_FS(%esp)
         STORE_SEGMENT   %gs, IREGS_GS(%esp)
-        MEM2MEM         IRET_VEC_NUM(%esp), IREGS_VEC_NUM(%esp)
-        MEM2MEM         IRET_ERR_CODE(%esp), IREGS_ERR_CODE(%esp)
-        MEM2MEM         IRET_EFLAGS(%esp), IREGS_EFLAGS(%esp)
-        MEM2MEM         IRET_EIP(%esp), IREGS_EIP(%esp)
-        MEM2MEM         IRET_CS(%esp), IREGS_CS(%esp)
+        MEM2MEM         SIZEOF_IREGS+IRET_VEC(%esp), IREGS_VEC(%esp)
+        MEM2MEM         SIZEOF_IREGS+IRET_ERR(%esp), IREGS_ERR(%esp)
+        MEM2MEM         SIZEOF_IREGS+IRET_EFLAGS(%esp), IREGS_EFLAGS(%esp)
+        MEM2MEM         SIZEOF_IREGS+IRET_EIP(%esp), IREGS_EIP(%esp)
+        MEM2MEM         SIZEOF_IREGS+IRET_CS(%esp), IREGS_CS(%esp)
         andl            $0x3, %eax
-        test            %eax, %eax               # priv level change check
+        test            %eax, %eax               # priv level check
         jz              _store_kernel_stack
-        MEM2MEM         IRET_ESP(%esp), IREGS_ESP(%esp)
-        MEM2MEM         IRET_SS(%esp), IREGS_SS(%esp)
+        MEM2MEM         SIZEOF_IREGS+IRET_ESP(%esp), IREGS_ESP(%esp)
+        MEM2MEM         SIZEOF_IREGS+IRET_SS(%esp), IREGS_SS(%esp)
         jmp             handle_interrupt
 
 _store_kernel_stack:
@@ -170,12 +172,15 @@ handle_interrupt:
         call            current_task            # eax = task ptr
         movl            %esp, TASK_IREGS(%eax)  # esp = iregs ptr
         movl            %esp, %ecx              # ecx = fastcall param
-        movl            IREGS_VEC_NUM(%esp), %eax
+        movl            IREGS_VEC(%esp), %eax
         test            %eax, %eax
         js              irq_trampoline
         cmpl            $SYSCALL_VECTOR, %eax
         je              syscall_trampoline
         jmp             exception_trampoline
+
+# -----------------------------------------------------------------------------
+# Non-Returning Stubs
 
 irq_trampoline:
         pushl           $return_from_irq
@@ -186,27 +191,19 @@ exception_trampoline:
         jmp             handle_exception
 
 syscall_trampoline:
-        movl            IREGS_EAX(%ecx), %eax
+        movl            IREGS_EAX(%ecx), %eax   # eax = syscall number
         cmpl            $NR_SYSCALLS, %eax
-        ja              _nosys
-        jmp             sys_enter
-_nosys:
-        movl            $-ENOSYS, %eax          # no such syscall exists
+        jbe             sys_enter
+        movl            $-ENOSYS, %eax
         jmp             return_from_syscall
 
 sys_enter:
         pushl           $sys_leave
-        pushl           %eax
-        call            push_kernel_stack
-        popl            %eax
-        sti                                     # we want interrupts!
+        sti
         jmp             *syscall_table(, %eax, 4)
 
 sys_leave:
         cli
-        pushl           %eax
-        call            pop_kernel_stack
-        popl            %eax
         jmp             return_from_syscall
 
 # -----------------------------------------------------------------------------
@@ -216,8 +213,7 @@ sys_leave:
 .globl switch_context
 switch_context:
         cli
-        movl            %ecx, %esp      # fastcall param
-                                        # fallthrough...
+        movl            %ecx, %esp              # ecx = iregs ptr
 return_from_exception:
 return_from_irq:
         movl            IREGS_EAX(%esp), %eax
@@ -228,27 +224,32 @@ return_from_syscall:
         movl            IREGS_EDX(%esp), %edx
         movl            IREGS_ECX(%esp), %ecx
         movl            IREGS_EBX(%esp), %ebx
-        movl            %eax, IREGS_ERR_CODE(%esp) # reuse error code slot to
-        LOAD_SEGMENT    IREGS_DS(%esp), %ds        #  temporarily store eax,
-        LOAD_SEGMENT    IREGS_ES(%esp), %es        #  used by these macros to
-        LOAD_SEGMENT    IREGS_FS(%esp), %fs        #  restore segment registers
+        movl            %eax, IREGS_ERR(%esp)   # reuse error code slot to
+        LOAD_SEGMENT    IREGS_DS(%esp), %ds     #  temporarily store eax; used
+        LOAD_SEGMENT    IREGS_ES(%esp), %es     #  by these macros to restore
+        LOAD_SEGMENT    IREGS_FS(%esp), %fs     #  segment registers
         LOAD_SEGMENT    IREGS_GS(%esp), %gs
-        MEM2MEM         IREGS_EFLAGS(%esp), IRET_EFLAGS(%esp)
-        MEM2MEM         IREGS_EIP(%esp), IRET_EIP(%esp)
-        MEM2MEM         IREGS_CS(%esp), IRET_CS(%esp)
+        MEM2MEM         IREGS_EFLAGS(%esp), SIZEOF_IREGS+IRET_EFLAGS(%esp)
+        MEM2MEM         IREGS_EIP(%esp), SIZEOF_IREGS+IRET_EIP(%esp)
+        MEM2MEM         IREGS_CS(%esp), SIZEOF_IREGS+IRET_CS(%esp)
         andl            $0x03, %eax
         test            %eax, %eax
         jz              return_from_interrupt
-        MEM2MEM         IREGS_ESP(%esp), IRET_ESP(%esp)
-        MEM2MEM         IREGS_SS(%esp), IRET_SS(%esp)
+        MEM2MEM         IREGS_ESP(%esp), SIZEOF_IREGS+IRET_ESP(%esp)
+        MEM2MEM         IREGS_SS(%esp), SIZEOF_IREGS+IRET_SS(%esp)
 
 return_from_interrupt:
-        movl            IREGS_ERR_CODE(%esp), %eax # restore eax
-        addl            $IRET_EIP, %esp
+        movl            IREGS_ERR(%esp), %eax   # restore eax
+        addl            $SIZEOF_IREGS+IRET_EIP, %esp
         iret
 
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 # Syscall Table
+
 syscall_table:
   #include <i386/syscall_table.h>
 _syscall_table_end:
@@ -256,8 +257,25 @@ _syscall_table_end:
 NR_SYSCALLS = (_syscall_table_end - syscall_table) >> 2
 
 # -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
+# Interrupt Thunk Tables
+
+.globl exception_thunks
+exception_thunks:
+        .long           _except_00h, _except_01h, _except_02h, _except_03h
+        .long           _except_04h, _except_05h, _except_06h, _except_07h
+        .long           _except_08h, _except_09h, _except_0Ah, _except_0Bh
+        .long           _except_0Ch, _except_0Dh, _except_0Eh, _except_0Fh
+        .long           _except_10h, _except_11h, _except_12h, _except_13h
+        .long           _except_14h, _except_15h, _except_16h, _except_17h
+        .long           _except_18h, _except_19h, _except_1Ah, _except_19h
+        .long           _except_1Ch, _except_1Ch, _except_1Eh, _except_1Fh
+
+.globl irq_thunks
+irq_thunks:
+        .long           _irq_00h, _irq_01h, _irq_02h, _irq_03h
+        .long           _irq_04h, _irq_05h, _irq_06h, _irq_07h
+        .long           _irq_08h, _irq_09h, _irq_0Ah, _irq_0Bh
+        .long           _irq_0Ch, _irq_0Dh, _irq_0Eh, _irq_0Fh
 
 # -----------------------------------------------------------------------------
 # Interrupt Thunk Routine Macros
@@ -300,27 +318,6 @@ thunk_name:                                                                    \
         jmp     recv_interrupt
 
 # -----------------------------------------------------------------------------
-# Interrupt Thunk Tables
-
-.globl exception_thunks
-exception_thunks:
-        .long           _except_00h, _except_01h, _except_02h, _except_03h
-        .long           _except_04h, _except_05h, _except_06h, _except_07h
-        .long           _except_08h, _except_09h, _except_0Ah, _except_0Bh
-        .long           _except_0Ch, _except_0Dh, _except_0Eh, _except_0Fh
-        .long           _except_10h, _except_11h, _except_12h, _except_13h
-        .long           _except_14h, _except_15h, _except_16h, _except_17h
-        .long           _except_18h, _except_19h, _except_1Ah, _except_19h
-        .long           _except_1Ch, _except_1Ch, _except_1Eh, _except_1Fh
-
-.globl irq_thunks
-irq_thunks:
-        .long           _irq_00h, _irq_01h, _irq_02h, _irq_03h
-        .long           _irq_04h, _irq_05h, _irq_06h, _irq_07h
-        .long           _irq_08h, _irq_09h, _irq_0Ah, _irq_0Bh
-        .long           _irq_0Ch, _irq_0Dh, _irq_0Eh, _irq_0Fh
-
-# -----------------------------------------------------------------------------
 # Interrupt Thunk Definitions
 
 # exception types and their return behavior:
@@ -337,8 +334,8 @@ EXCEPTION_THUNK         (_except_04h, OVERFLOW_EXCEPTION)       # trap
 EXCEPTION_THUNK         (_except_05h, BOUND_RANGE_EXCEEDED)     # fault
 EXCEPTION_THUNK         (_except_06h, INVALID_OPCODE)           # fault
 EXCEPTION_THUNK         (_except_07h, DEVICE_NOT_AVAILABLE)     # fault
-EXCEPTION_THUNK_ERRCODE (_except_08h, DOUBLE_FAULT)             # abort; error code is 0
-EXCEPTION_THUNK         (_except_09h, SEGMENT_OVERRUN)          # abort; not used
+EXCEPTION_THUNK_ERRCODE (_except_08h, DOUBLE_FAULT)             # abort; err=0
+EXCEPTION_THUNK         (_except_09h, SEGMENT_OVERRUN)          # abort; unused
 EXCEPTION_THUNK_ERRCODE (_except_0Ah, INVALID_TSS)              # fault
 EXCEPTION_THUNK_ERRCODE (_except_0Bh, SEGMENT_NOT_PRESENT)      # fault
 EXCEPTION_THUNK_ERRCODE (_except_0Ch, STACK_FAULT)              # fault

@@ -23,7 +23,7 @@
 #define __INTERRUPT_H
 
 /**
- * Important interrupt vector table numbers.
+ * Interrupt vector table regions.
  */
 #define EXCEPTION_BASE_VECTOR       0x00
 #define IRQ_BASE_VECTOR             0x20
@@ -52,7 +52,6 @@
 #define ALIGNMENT_CHECK             0x11
 #define MACHINE_CHECK               0x12
 #define SIMD_FAULT                  0x13
-
 #define NR_EXCEPTIONS               32
 
 /**
@@ -69,31 +68,81 @@
 #define IREGS_ES                    0x1E
 #define IREGS_FS                    0x20
 #define IREGS_GS                    0x22
-#define IREGS_VEC_NUM               0x24    // +0x00
-#define IREGS_ERR_CODE              0x28    // +0x04
+#define IREGS_VEC                   0x24    // +0x00
+#define IREGS_ERR                   0x28    // +0x04
 #define IREGS_EIP                   0x2C    // +0x08
 #define IREGS_CS                    0x30    // +0x0C
 #define IREGS_EFLAGS                0x34    // +0x10
 #define IREGS_ESP                   0x38    // +0x14
 #define IREGS_SS                    0x3C    // +0x18
-#define SIZEOF_IREGS                0x40
+#define SIZEOF_IREGS                64
 
 /**
- *
+ * Interrupt stack offsets after executing thunk routine.
  */
-#define IRET_VEC_NUM                SIZEOF_IREGS+0x00
-#define IRET_ERR_CODE               SIZEOF_IREGS+0x04
-#define IRET_EIP                    SIZEOF_IREGS+0x08
-#define IRET_CS                     SIZEOF_IREGS+0x0C
-#define IRET_EFLAGS                 SIZEOF_IREGS+0x10
-#define IRET_ESP                    SIZEOF_IREGS+0x14
-#define IRET_SS                     SIZEOF_IREGS+0x18
+#define IRET_VEC                    0x00
+#define IRET_ERR                    0x04
+#define IRET_EIP                    0x08    // technically, iret regs start here
+#define IRET_CS                     0x0C
+#define IRET_EFLAGS                 0x10
+#define IRET_ESP                    0x14
+#define IRET_SS                     0x18
 
 #ifndef __ASSEMBLER__
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+
+typedef void (__fastcall *idt_thunk)(void);
+
+struct iregs {
+    // program context regs
+    uint32_t ebx;   // syscall param0
+    uint32_t ecx;   // syscall param1
+    uint32_t edx;   // syscall param2
+    uint32_t esi;   // syscall param3
+    uint32_t edi;   // syscall param4
+    uint32_t ebp;   // syscall param5
+    uint32_t eax;   // syscall return value
+    uint16_t ds;
+    uint16_t es;
+    uint16_t fs;
+    uint16_t gs;
+
+// interrupt info
+    int32_t vec;    // interrupt vector number (negative for IRQ)
+    uint32_t err;   // exception error code
+
+// iret regs
+    uint32_t eip;
+    uint32_t cs;    // cpu pushes 32 bits
+    uint32_t eflags;
+    uint32_t esp;   // only present if user process interrupted
+    uint32_t ss;    // only present if user process interrupted
+};
+static_assert(offsetof(struct iregs, ebx) == IREGS_EBX, "offsetof(struct iregs, ebx)");
+static_assert(offsetof(struct iregs, ecx) == IREGS_ECX, "offsetof(struct iregs, ecx)");
+static_assert(offsetof(struct iregs, edx) == IREGS_EDX, "offsetof(struct iregs, edx)");
+static_assert(offsetof(struct iregs, esi) == IREGS_ESI, "offsetof(struct iregs, esi)");
+static_assert(offsetof(struct iregs, edi) == IREGS_EDI, "offsetof(struct iregs, edi)");
+static_assert(offsetof(struct iregs, ebp) == IREGS_EBP, "offsetof(struct iregs, ebp)");
+static_assert(offsetof(struct iregs, eax) == IREGS_EAX, "offsetof(struct iregs, eax)");
+static_assert(offsetof(struct iregs, ds) == IREGS_DS, "offsetof(struct iregs, ds)");
+static_assert(offsetof(struct iregs, es) == IREGS_ES, "offsetof(struct iregs, es)");
+static_assert(offsetof(struct iregs, fs) == IREGS_FS, "offsetof(struct iregs, fs)");
+static_assert(offsetof(struct iregs, gs) == IREGS_GS, "offsetof(struct iregs, gs)");
+static_assert(offsetof(struct iregs, vec) == IREGS_VEC, "offsetof(struct iregs, vec)");
+static_assert(offsetof(struct iregs, err) == IREGS_ERR, "offsetof(struct iregs, err)");
+static_assert(offsetof(struct iregs, eip) == IREGS_EIP, "offsetof(struct iregs, eip)");
+static_assert(offsetof(struct iregs, cs) == IREGS_CS, "offsetof(struct iregs, cs)");
+static_assert(offsetof(struct iregs, eflags) == IREGS_EFLAGS, "offsetof(struct iregs, eflags)");
+static_assert(offsetof(struct iregs, esp) == IREGS_ESP, "offsetof(struct iregs, esp)");
+static_assert(offsetof(struct iregs, ss) == IREGS_SS, "offsetof(struct iregs, ss)");
+static_assert(sizeof(struct iregs) == SIZEOF_IREGS, "sizeof(struct iregs)");
+
+__fastcall void switch_context(struct iregs *regs);     // see entry.S
+
 
 /**
  * Saves the EFLAGS register, then clears interrupts.
@@ -126,60 +175,6 @@ __asm__ volatile (                                                          \
     :                                                                       \
     : "r"(flags)                                                            \
 )
-
-/**
- * Register state upon receiving an interrupt.
- */
-struct iregs {
-// program context regs
-    uint32_t ebx;
-    uint32_t ecx;
-    uint32_t edx;
-    uint32_t esi;
-    uint32_t edi;
-    uint32_t ebp;
-    uint32_t eax;       // syscall return value; not restored for syscalls
-    uint16_t ds;
-    uint16_t es;
-    uint16_t fs;
-    uint16_t gs;
-
-// interrupt info
-    int32_t vec_num;
-    uint32_t err_code;
-
-// cpu control regs (system context; iret regs)
-    uint32_t eip;
-    uint32_t cs;        // bottom two bits contain previous privilege level
-    uint32_t eflags;
-    uint32_t esp;       // only present upon privilege level change
-    uint32_t ss;        // only present upon privilege level change
-} __align(4);
-
-// perform a context switch
-__fastcall __noreturn void switch_context(struct iregs *regs);     // see entry.S
-
-typedef void (__fastcall *idt_thunk)(void);
-
-static_assert(offsetof(struct iregs, ebx) == IREGS_EBX, "offsetof(struct iregs, ebx)");
-static_assert(offsetof(struct iregs, ecx) == IREGS_ECX, "offsetof(struct iregs, ecx)");
-static_assert(offsetof(struct iregs, edx) == IREGS_EDX, "offsetof(struct iregs, edx)");
-static_assert(offsetof(struct iregs, esi) == IREGS_ESI, "offsetof(struct iregs, esi)");
-static_assert(offsetof(struct iregs, edi) == IREGS_EDI, "offsetof(struct iregs, edi)");
-static_assert(offsetof(struct iregs, ebp) == IREGS_EBP, "offsetof(struct iregs, ebp)");
-static_assert(offsetof(struct iregs, eax) == IREGS_EAX, "offsetof(struct iregs, eax)");
-static_assert(offsetof(struct iregs, ds) == IREGS_DS, "offsetof(struct iregs, ds)");
-static_assert(offsetof(struct iregs, es) == IREGS_ES, "offsetof(struct iregs, es)");
-static_assert(offsetof(struct iregs, fs) == IREGS_FS, "offsetof(struct iregs, fs)");
-static_assert(offsetof(struct iregs, gs) == IREGS_GS, "offsetof(struct iregs, gs)");
-static_assert(offsetof(struct iregs, vec_num) == IREGS_VEC_NUM, "offsetof(struct iregs, vec_num)");
-static_assert(offsetof(struct iregs, err_code) == IREGS_ERR_CODE, "offsetof(struct iregs, err_code)");
-static_assert(offsetof(struct iregs, eip) == IREGS_EIP, "offsetof(struct iregs, eip)");
-static_assert(offsetof(struct iregs, cs) == IREGS_CS, "offsetof(struct iregs, cs)");
-static_assert(offsetof(struct iregs, eflags) == IREGS_EFLAGS, "offsetof(struct iregs, eflags)");
-static_assert(offsetof(struct iregs, esp) == IREGS_ESP, "offsetof(struct iregs, esp)");
-static_assert(offsetof(struct iregs, ss) == IREGS_SS, "offsetof(struct iregs, ss)");
-static_assert(sizeof(struct iregs) == SIZEOF_IREGS, "sizeof(struct iregs)");
 
 #endif /* __ASSEMBLER__ */
 
