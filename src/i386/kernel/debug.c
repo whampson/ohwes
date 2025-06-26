@@ -65,7 +65,7 @@ void dump_regs(const struct iregs *regs, uint32_t esp, uint16_t ss)
 
 __fastcall void handle_breakpoint(struct iregs *regs)
 {
-    // const char *brk_name = (regs->vec_num == 3)
+    // const char *brk_name = (regs->vec == 3)
     //     ? "BREAKPOINT"
     //     : "HW_BREAKPOINT";
 

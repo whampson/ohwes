@@ -111,7 +111,7 @@ void irq_unregister(int irq, irq_handler func)
 }
 __fastcall void handle_irq(struct iregs *regs)
 {
-    int irq = ~regs->vec_num;
+    int irq = ~regs->vec;
     bool handled = false;
     bool masked = _IRQ_MASKED(irq);
 

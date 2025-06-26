@@ -112,6 +112,7 @@ void setup_cpu(void)
 
 void setup_idt(void)
 {
+    // see entry.S
     extern idt_thunk exception_thunks[NR_EXCEPTIONS];
     extern idt_thunk irq_thunks[NR_IRQS];
     extern idt_thunk syscall_thunk;
@@ -121,7 +122,8 @@ void setup_idt(void)
     for (int i = 0; i < NR_EXCEPTIONS; i++) {
         // interrupt gate for system exceptions;
         // each handler must explicitly enable interrupts if it wants them
-        make_intr_gate(&idt[EXCEPTION_BASE_VECTOR + i], KERNEL_CS, KERNEL_PL,
+        make_intr_gate(&idt[EXCEPTION_BASE_VECTOR + i], KERNEL_CS,
+            (i == BREAKPOINT_EXCEPTION) ? USER_PL : KERNEL_PL,
             exception_thunks[i]);
     }
 
@@ -131,13 +133,7 @@ void setup_idt(void)
             irq_thunks[i]);
     }
 
-    // user-mode interrupt gate for breakpoint handler
-    // so user-mode programs can trigger it
-    make_intr_gate(&idt[BREAKPOINT_EXCEPTION], KERNEL_CS, USER_PL,
-        exception_thunks[BREAKPOINT_EXCEPTION]);
-
     // task gate for double fault handler to force a stack switch
-    // so we don't lose original exception's stack
     make_task_gate(&idt[DOUBLE_FAULT], _TSS1_SEGMENT, KERNEL_PL);
 
     // trap gate for system calls; device interrupts are OK

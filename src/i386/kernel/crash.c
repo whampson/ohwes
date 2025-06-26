@@ -97,8 +97,8 @@ void capture_cpu_state(struct cpu_state *state, struct iregs *iregs)
     state->iregs.es  = iregs->es;
     state->iregs.fs  = iregs->fs;
     state->iregs.gs  = iregs->gs;
-    state->iregs.vec_num = iregs->vec_num;
-    state->iregs.err_code = iregs->err_code;
+    state->iregs.vec = iregs->vec;
+    state->iregs.err = iregs->err;
     state->iregs.eip = iregs->eip;
     state->iregs.cs = iregs->cs;
     state->iregs.eflags = iregs->eflags;
@@ -178,17 +178,17 @@ __noreturn void handle_soft_double_fault(
     char msgbuf[CRASH_BUFSIZ];
 
     cprint("\n\n\e[1m" RED("*** FATAL: exception (1) occurred while handling previous exception (2)"));
-    cprint("\n\n(1) %s at %08X", exception_names[cpu->iregs.vec_num], cpu->iregs.eip);
+    cprint("\n\n(1) %s at %08X", exception_names[cpu->iregs.vec], cpu->iregs.eip);
     dump_cpu(cpu, cprint);
-    cprint("\n\n(2) %s at %08X", exception_names[orig_cpu->iregs.vec_num], orig_cpu->iregs.eip);
+    cprint("\n\n(2) %s at %08X", exception_names[orig_cpu->iregs.vec], orig_cpu->iregs.eip);
     dump_cpu(orig_cpu, cprint);
 
     snprintf(msgbuf, sizeof(msgbuf),
         "An exception %02X (%s) has occurred at %08X while handling a previous "
         "exception %02X (%s) that occurred at %08X. "
         MSG_TAIL,
-        cpu->iregs.vec_num, exception_names[cpu->iregs.vec_num], cpu->iregs.eip,
-        orig_cpu->iregs.vec_num, exception_names[orig_cpu->iregs.vec_num], orig_cpu->iregs.eip);
+        cpu->iregs.vec, exception_names[cpu->iregs.vec], cpu->iregs.eip,
+        orig_cpu->iregs.vec, exception_names[orig_cpu->iregs.vec], orig_cpu->iregs.eip);
 
     show_crash_screen(ANSI_RED, 5, "Double Fault", msgbuf, MSG_PROMPT);
 
@@ -228,27 +228,27 @@ __fastcall void handle_exception(struct iregs *iregs)
 #endif
 
     cprint("\n\n\e[1m" RED("*** FATAL: exception %02X occurred at %08X") "\n",
-        iregs->vec_num, exception_names[iregs->vec_num]);
+        iregs->vec, exception_names[iregs->vec]);
     dump_cpu(&cpu, cprint);
 
     // collect error info
-    if (iregs->vec_num == PAGE_FAULT) {
-        int us = iregs->err_code & PF_US;
-        int wr = iregs->err_code & PF_WR;
-        int p = iregs->err_code & PF_P;
-        int rsvd = iregs->err_code & PF_RSVD;
+    if (iregs->vec == PAGE_FAULT) {
+        int us = iregs->err & PF_US;
+        int wr = iregs->err & PF_WR;
+        int p = iregs->err & PF_P;
+        int rsvd = iregs->err & PF_RSVD;
         snprintf(errbuf, CRASH_BUFSIZ, " A %s mode %s %08X caused a %s.",
             (us) ? "user" : "kernel", (wr) ? "write to" : "read from", cpu.cr2,
             (p)
                 ? (rsvd) ? "reserved bit violation" : "access violation"
                 : "non-present page access violation");
     }
-    else if (iregs->err_code) {
+    else if (iregs->err) {
         snprintf(errbuf, sizeof(errbuf), " The issue occurred in %s(%02X)%s.",
-            (iregs->err_code & ERR_IDT) ? "IDT" :
-                (iregs->err_code & ERR_TI) ? "LDT" : "GDT",
-            (iregs->err_code & ERR_INDEX) >> 3,
-            (iregs->err_code & ERR_EXT) ? " and originated via an interrupt" : "");
+            (iregs->err & ERR_IDT) ? "IDT" :
+                (iregs->err & ERR_TI) ? "LDT" : "GDT",
+            (iregs->err & ERR_INDEX) >> 3,
+            (iregs->err & ERR_EXT) ? " and originated via an interrupt" : "");
     }
     else {
         snprintf(errbuf, sizeof(errbuf), "");
@@ -257,7 +257,7 @@ __fastcall void handle_exception(struct iregs *iregs)
     snprintf(msgbuf, sizeof(msgbuf),
         "A fatal exception %02X (%s) has occurred at %08X.%s "
         MSG_TAIL,
-        iregs->vec_num, exception_names[iregs->vec_num],
+        iregs->vec, exception_names[iregs->vec],
         iregs->eip, errbuf);
 
     show_crash_screen(CRASH_COLOR, CRASH_MARGIN, OS_NAME, msgbuf, MSG_PROMPT);
@@ -296,8 +296,8 @@ __noreturn void handle_double_fault(void)
     regs.es  = fault_tss->es;
     regs.fs  = fault_tss->fs;
     regs.gs  = fault_tss->gs;
-    regs.vec_num = DOUBLE_FAULT;
-    regs.err_code = 0;
+    regs.vec = DOUBLE_FAULT;
+    regs.err = 0;
     regs.eip = fault_tss->eip;
     regs.cs  = fault_tss->cs;
     regs.eflags = fault_tss->eflags;
@@ -315,8 +315,8 @@ static void dump_cpu(struct cpu_state *cpu, dumpfn dump)
     dump_stack(cpu, dump);
 #endif
 
-    if (cpu->iregs.err_code) {
-        dump("\nERR=%08X", cpu->iregs.err_code);
+    if (cpu->iregs.err) {
+        dump("\nERR=%08X", cpu->iregs.err);
     }
 
     dump_cntlregs(cpu, dump);
