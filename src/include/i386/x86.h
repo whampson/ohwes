@@ -165,18 +165,37 @@
 #define PF_US               (1 << 2)    // User/Supervisor Fault (1=User)
 #define PF_RSVD             (1 << 3)    // Reserved Bit Violation
 
-#ifdef __ASSEMBLER__
-// Assembler-only defines
+#ifdef __ASSEMBLER__    // Assembler-only defines
+
+/**
+ * Loads a segment register with a 16-bit value from memory.
+ * Clobbers AX.
+ */
 .macro LOAD_SEGMENT addr, reg
         movw            \addr, %ax
         movw            %ax, \reg
 .endm
+
+/**
+ * Stores a segment register in memory as a 16-bit value.
+ * Clobbers AX.
+ */
 .macro STORE_SEGMENT reg, addr
         movw            \reg, %ax
         movw            %ax, \addr
 .endm
-#else
-// C-only defines
+
+/**
+ * Performs a 32-bit memory-to-memory move.
+ * Clobbers EAX.
+ */
+.macro MEM2MEM src, dest
+    movl    \src, %eax
+    movl    %eax, \dest
+.endm
+
+#else       // C-only defines
+
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
