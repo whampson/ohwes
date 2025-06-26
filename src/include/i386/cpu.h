@@ -79,11 +79,7 @@ struct tss * get_tss(void);
 struct tss * get_tss_from_gdt(uint16_t segsel);
 struct x86_pde * get_pgdir(void);
 
-// call these after receiving an interrupt
 int get_cpl(void);
 int get_rpl(uint16_t segsel);
-bool pl_changed(const struct iregs *regs);
-uint32_t get_esp(const struct iregs *regs);
-uint16_t get_ss(const struct iregs *regs);
 
 #endif // __CPU_H

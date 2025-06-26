@@ -312,55 +312,6 @@ int get_rpl(uint16_t segsel)
     return ((struct segsel *) &segsel)->rpl;
 }
 
-bool pl_changed(const struct iregs *regs)
-{
-    return get_cpl() != get_rpl(regs->cs);
-}
-
-uint32_t get_esp(const struct iregs *regs)
-{
-    return pl_changed(regs) || (regs->vec_num == DOUBLE_FAULT)
-        // if we changed privilege levels, ESP in iregs is valid;
-        // if we experienced a hardware double-fault, ESP in iregs is also
-        // valid because the exception handler uses a task gateto force a
-        // task switch (causing a stack switch)
-        ? (uint32_t) regs->esp
-        // if we did not change privilege levels, no ESP (or SS) was pushed to
-        // the stack and the stack did not switch, so to find the top of the
-        // faulting stack, we must subtract the size of the iregs structure
-        // minus the ESP and SS values from the top of the interrupt stack;
-        // except this Intel and the stack is backwards, so we add add instead
-        : (uint32_t) (((char *) regs) + SIZEOF_IREGS_NO_PL_CHANGE);
-}
-
-uint16_t get_ss(const struct iregs *regs)
-{
-    uint16_t ss;
-    store_ss(ss);
-
-    // (see above)
-    return pl_changed(regs) || (regs->vec_num == DOUBLE_FAULT)
-        ? regs->ss  // old SS
-        : ss;       // current SS
-}
-
-bool cpl_change(const struct iregs *regs)
-{
-    struct segsel *regs_cs;
-    uint32_t _cs_storage;
-    int cpl;
-
-    regs_cs = (struct segsel *) &regs->cs;
-    store_cs(_cs_storage);
-    cpl = ((struct segsel *) &_cs_storage)->rpl;
-
-    if (regs_cs->rpl > cpl) {
-        return true;
-    }
-
-    return false;
-}
-
 //
 // TODO: I want to rewrite this
 //

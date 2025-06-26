@@ -35,38 +35,59 @@
 # -----------------------------------------------------------------------------
 # Common Interrupt Handler
 #
-# The Common Interrupt Handler serves as the main entry point for all interrupts
-# (traps) received by the kernel. Its purpose is to save interrupted process'
+# The Common Interrupt Handler serves as the main entry point for all CPU
+# interrupts and software traps. Its purpose is to save interrupted process'
 # state, determine the type of interrupt that occurred, set up the return stack,
 # then pass control on to the appropriate interrupt service routine. The process
 # state is stored on the stack in an 'iregs' structure, to be restored upon
 # completion of the routine.
 #
-# Registers are pushed onto the stack as follows:
-# sp -> ebx        pushed by recv_interrupt; syscall param 0
-#       ecx        pushed by recv_interrupt; syscall param 1
-#       edx        pushed by recv_interrupt; syscall param 2
-#       esi        pushed by recv_interrupt; syscall param 3
-#       edi        pushed by recv_interrupt; syscall param 4
-#       ebp        pushed by recv_interrupt
-#       eax        pushed by recv_interrupt; syscall number / return value
-#       ds         pushed by recv_interrupt
-#       es         pushed by recv_interrupt
-#       fs         pushed by recv_interrupt
-#       gs         pushed by recv_interrupt
-#       vec_num    pushed by thunk; interrupt vector number, 0x80 for syscall
-#       err_code   pushed by cpu or thunk depending on exception
-#       eip        pushed by cpu
-#       cs         pushed by cpu
-#       eflags     pushed by cpu
-#       esp        pushed by cpu; only present upon privilege level change
-#       ss         pushed by cpu; only present upon privilege level change
-# bp ->            (bp loaded by cpu from tss->esp0 upon privilege level change)
+# Upon entry to this function, several registes will already be present on the
+# stack. The CPU itself pushes some registers onto the stack automatically when
+# an interrupt occurs, but the number of registers pushed depends on whether the
+# interrupted process was executing as user or supervisor (kernel). In addition,
+# an exception error code and interrupt vector number are also pushed to the
+# stack, regardless of the type of interrupt that occurred. The following
+# routine will push the remaining context registers onto the stack to create the
+# iregs structure, then pass a pointer to that structure to the appropriate
+# interrupt servive routine. Because the number of registers iniitally pushed to
+# the stack by the CPU is variable, this routine will re-push those registers to
+# ensure the iregs structure is always fully initalized when it is receieved by
+# the interrupt service routine.
 #
-# After the registers are stored, the type of interrupt is determined using the
-# vector number: Exception, Device IRQ, or System Call. We then jump to the
-# corresponding 'trampoline' function, which pushes the appropriate return
-# address for the type of interrupt onto the stack then jumps to the
+# Registers are pushed onto the stack as follows:
+# sp1 -> ebx       pushed by recv_interrupt; syscall param 0
+#        ecx       pushed by recv_interrupt; syscall param 1
+#        edx       pushed by recv_interrupt; syscall param 2
+#        esi       pushed by recv_interrupt; syscall param 3
+#        edi       pushed by recv_interrupt; syscall param 4
+#        ebp       pushed by recv_interrupt
+#        eax       pushed by recv_interrupt; syscall number / return value
+#        ds        pushed by recv_interrupt
+#        es        pushed by recv_interrupt
+#        fs        pushed by recv_interrupt
+#        gs        pushed by recv_interrupt
+#        vec_num   pushed by recv_interrupt
+#        err_code  pushed by recv_interrupt
+#        eip       pushed by recv_interrupt
+#        cs        pushed by recv_interrupt
+#        eflags    pushed by recv_interrupt
+#        esp       pushed by recv_interrupt
+#        ss        pushed by recv_interrupt
+# sp0 -> vec_num   pushed by thunk; interrupt vector number, 0x80 for syscall
+#        err_code  pushed by cpu or thunk depending on exception
+#        eip       pushed by cpu
+#        cs        pushed by cpu
+#        eflags    pushed by cpu
+#        esp       pushed by cpu; only present upon privilege level change
+#        ss        pushed by cpu; only present upon privilege level change
+#
+# In the above diagram, 'sp0' refers to the stack pointer upon entry to this
+# routine, while 'sp1' refers to the stack pointer after all registers have been
+# pushed. After the registers are stored, the type of interrupt is determined
+# using the vector number: Exception, Device IRQ, or System Call. We then jump
+# to the corresponding 'trampoline' function, which pushes the appropriate
+# return address for the type of interrupt onto the stack then jumps to the
 # corresponding handler function. A pointer to the iregs structure is passed to
 # the interrupt handler via ECX. As such, handlers with C linkage callable
 # directly from the common interrupt handler should be declared with the
@@ -117,7 +138,7 @@
 ##
 recv_interrupt:
         cli
-        subl            $SIZEOF_IREGS_CTX_REGS, %esp
+        subl            $SIZEOF_IREGS, %esp
         movl            %ebx, IREGS_EBX(%esp)
         movl            %ecx, IREGS_ECX(%esp)
         movl            %edx, IREGS_EDX(%esp)
@@ -129,6 +150,23 @@ recv_interrupt:
         STORE_SEGMENT   %es, IREGS_ES(%esp)
         STORE_SEGMENT   %fs, IREGS_FS(%esp)
         STORE_SEGMENT   %gs, IREGS_GS(%esp)
+        MEM2MEM         IRET_VEC_NUM(%esp), IREGS_VEC_NUM(%esp)
+        MEM2MEM         IRET_ERR_CODE(%esp), IREGS_ERR_CODE(%esp)
+        MEM2MEM         IRET_EFLAGS(%esp), IREGS_EFLAGS(%esp)
+        MEM2MEM         IRET_EIP(%esp), IREGS_EIP(%esp)
+        MEM2MEM         IRET_CS(%esp), IREGS_CS(%esp)
+        andl            $0x3, %eax
+        test            %eax, %eax               # priv level change check
+        jz              _store_kernel_stack
+        MEM2MEM         IRET_ESP(%esp), IREGS_ESP(%esp)
+        MEM2MEM         IRET_SS(%esp), IREGS_SS(%esp)
+        jmp             handle_interrupt
+
+_store_kernel_stack:
+        movl            %esp, IREGS_ESP(%esp)
+        STORE_SEGMENT   %ss, IREGS_SS(%esp)
+
+handle_interrupt:
         call            current_task            # eax = task ptr
         movl            %esp, TASK_IREGS(%eax)  # esp = iregs ptr
         movl            %esp, %ecx              # ecx = fastcall param
@@ -195,8 +233,18 @@ return_from_syscall:
         LOAD_SEGMENT    IREGS_ES(%esp), %es        #  used by these macros to
         LOAD_SEGMENT    IREGS_FS(%esp), %fs        #  restore segment registers
         LOAD_SEGMENT    IREGS_GS(%esp), %gs
+        MEM2MEM         IREGS_EFLAGS(%esp), IRET_EFLAGS(%esp)
+        MEM2MEM         IREGS_EIP(%esp), IRET_EIP(%esp)
+        MEM2MEM         IREGS_CS(%esp), IRET_CS(%esp)
+        andl            $0x03, %eax
+        test            %eax, %eax
+        jz              return_from_interrupt
+        MEM2MEM         IREGS_ESP(%esp), IRET_ESP(%esp)
+        MEM2MEM         IREGS_SS(%esp), IRET_SS(%esp)
+
+return_from_interrupt:
         movl            IREGS_ERR_CODE(%esp), %eax # restore eax
-        addl            $IREGS_EIP, %esp
+        addl            $IRET_EIP, %esp
         iret
 
 # -----------------------------------------------------------------------------

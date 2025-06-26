@@ -63,12 +63,8 @@ void dump_regs(const struct iregs *regs, uint32_t esp, uint16_t ss)
     kprint("]\n");
 }
 
-__fastcall void _dbgbrk(struct iregs *regs)
+__fastcall void handle_breakpoint(struct iregs *regs)
 {
-    uint32_t esp = get_esp(regs);
-    uint32_t ss = get_ss(regs);
-    struct iregs orig_regs = *regs;
-
     // const char *brk_name = (regs->vec_num == 3)
     //     ? "BREAKPOINT"
     //     : "HW_BREAKPOINT";
@@ -93,8 +89,8 @@ __fastcall void _dbgbrk(struct iregs *regs)
     state.regs[GDB_REG_I386_EIP] = regs->eip;
     state.regs[GDB_REG_I386_CS ] = regs->cs;
     state.regs[GDB_REG_I386_EFLAGS] = regs->eflags;
-    state.regs[GDB_REG_I386_ESP] = esp;
-    state.regs[GDB_REG_I386_SS ] = ss;
+    state.regs[GDB_REG_I386_ESP] = regs->esp;
+    state.regs[GDB_REG_I386_SS ] = regs->ss;
 
 #if SERIAL_DEBUGGING
     gdb_main(&state);
@@ -116,12 +112,8 @@ __fastcall void _dbgbrk(struct iregs *regs)
     regs->eip = state.regs[GDB_REG_I386_EIP];
     regs->cs  = state.regs[GDB_REG_I386_CS ];
     regs->eflags = state.regs[GDB_REG_I386_EFLAGS];
-    esp = state.regs[GDB_REG_I386_ESP];
-    ss  = state.regs[GDB_REG_I386_SS ];
-    if (pl_changed(&orig_regs)) {
-        regs->esp = esp;
-        regs->ss = ss;
-    }
+    regs->esp = state.regs[GDB_REG_I386_ESP];
+    regs->ss  = state.regs[GDB_REG_I386_SS ];
 
     // kprint("\e[1;33m");
     // dump_regs(regs, esp, ss);

@@ -69,17 +69,25 @@
 #define IREGS_ES                    0x1E
 #define IREGS_FS                    0x20
 #define IREGS_GS                    0x22
-#define IREGS_VEC_NUM               0x24
-#define IREGS_ERR_CODE              0x28
-#define IREGS_EIP                   0x2C
-#define IREGS_CS                    0x30
-#define IREGS_EFLAGS                0x34
-#define IREGS_ESP                   0x38
-#define IREGS_SS                    0x3C
-
-#define SIZEOF_IREGS_CTX_REGS       (IREGS_VEC_NUM-IREGS_EBX)
+#define IREGS_VEC_NUM               0x24    // +0x00
+#define IREGS_ERR_CODE              0x28    // +0x04
+#define IREGS_EIP                   0x2C    // +0x08
+#define IREGS_CS                    0x30    // +0x0C
+#define IREGS_EFLAGS                0x34    // +0x10
+#define IREGS_ESP                   0x38    // +0x14
+#define IREGS_SS                    0x3C    // +0x18
 #define SIZEOF_IREGS                0x40
-#define SIZEOF_IREGS_NO_PL_CHANGE   (SIZEOF_IREGS - 8)
+
+/**
+ *
+ */
+#define IRET_VEC_NUM                SIZEOF_IREGS+0x00
+#define IRET_ERR_CODE               SIZEOF_IREGS+0x04
+#define IRET_EIP                    SIZEOF_IREGS+0x08
+#define IRET_CS                     SIZEOF_IREGS+0x0C
+#define IRET_EFLAGS                 SIZEOF_IREGS+0x10
+#define IRET_ESP                    SIZEOF_IREGS+0x14
+#define IRET_SS                     SIZEOF_IREGS+0x18
 
 #ifndef __ASSEMBLER__
 #include <assert.h>
@@ -171,8 +179,6 @@ static_assert(offsetof(struct iregs, cs) == IREGS_CS, "offsetof(struct iregs, cs
 static_assert(offsetof(struct iregs, eflags) == IREGS_EFLAGS, "offsetof(struct iregs, eflags)");
 static_assert(offsetof(struct iregs, esp) == IREGS_ESP, "offsetof(struct iregs, esp)");
 static_assert(offsetof(struct iregs, ss) == IREGS_SS, "offsetof(struct iregs, ss)");
-static_assert(offsetof(struct iregs, vec_num) == SIZEOF_IREGS_CTX_REGS, "offsetof(struct iregs, vec_num)");
-static_assert(offsetof(struct iregs, esp) == SIZEOF_IREGS_NO_PL_CHANGE, "offsetof(struct iregs, vec_num)");
 static_assert(sizeof(struct iregs) == SIZEOF_IREGS, "sizeof(struct iregs)");
 
 #endif /* __ASSEMBLER__ */

@@ -45,8 +45,8 @@
 #define RED(s)              "\e[31m" s "\e[39m"
 
 // optional visual information
-#define DUMP_SEGMENT_REGS   0
-#define DUMP_MM_REGS        0
+#define DUMP_SEGMENT_REGS   1
+#define DUMP_MM_REGS        1
 #define DUMP_STACK          1
 
 // stack dump dimensions
@@ -102,8 +102,8 @@ void capture_cpu_state(struct cpu_state *state, struct iregs *iregs)
     state->iregs.eip = iregs->eip;
     state->iregs.cs = iregs->cs;
     state->iregs.eflags = iregs->eflags;
-    state->iregs.esp = get_esp(iregs);
-    state->iregs.ss = get_ss(iregs);
+    state->iregs.esp = iregs->esp;
+    state->iregs.ss = iregs->ss;
     store_cr0(state->cr0);
     store_cr2(state->cr2);
     store_cr3(state->cr3);
@@ -735,6 +735,8 @@ void crash_key_irq(int irq, struct iregs *regs)   // TODO: call this vis sysreq.
             break;
         }
     }
+
+    g_test_crashkey = 0;
 }
 #endif
 
