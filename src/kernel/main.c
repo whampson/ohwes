@@ -85,7 +85,7 @@ extern void print_memory_info(void);
 extern void print_kernel_sections(void);
 extern void print_page_mappings(void);
 
-static void go_to_ring3(uint32_t stack);
+static void go_to_ring3(void *entry, uint32_t stack);
 
 void init(void);    // user mode portion of setup
 int main(void);     // user mode program entry point
@@ -142,7 +142,7 @@ __fastcall void kmain(struct boot_info **info)
 #endif
 
     kprint("entering user mode...\n");
-    go_to_ring3(KERNEL_ADDR(SETUP_STACK));  // reuse the setup stack
+    go_to_ring3(init, KERNEL_ADDR(KERNEL_STACK));
 
     // for future reference...
     // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
@@ -172,7 +172,7 @@ void init_boot(struct boot_info **info)
 #endif
 }
 
-static void go_to_ring3(uint32_t stack)
+static void go_to_ring3(void *entry, uint32_t stack)
 {
     assert(getpl() == KERNEL_PL);
 
@@ -180,8 +180,6 @@ static void go_to_ring3(uint32_t stack)
     struct eflags eflags;
     cli_save(eflags);
     eflags.intf = 1;        // enable interrupts
-
-    uint32_t entry = (uint32_t) init;
 
     // ring 3 initial register context
     struct iregs regs = {};
@@ -191,10 +189,11 @@ static void go_to_ring3(uint32_t stack)
     regs.es = USER_DS;
     regs.ebp = stack;
     regs.esp = stack;
-    regs.eip = entry;
+    regs.eip = (uint32_t) entry;
     regs.eflags = eflags._value;
 
     // drop to ring 3
+    __ltr(USER_TSS);
     switch_context(&regs);
 }
 

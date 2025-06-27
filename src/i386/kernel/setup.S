@@ -56,7 +56,7 @@ ksetup:
     rep movsb
 
         # setup the inititial stack
-        movl            $SETUP_STACK, %ebp
+        movl            $KERNEL_STACK, %ebp
         movl            %ebp, %esp
 
         # setup paging; first 1M of physical memory will be identity mapped
@@ -282,8 +282,8 @@ _gdt:
         .quad           0x00CFFA000000FFFF      # [0x23] USER_CS    rx  ring3
         .quad           0x00CFF2000000FFFF      # [0x2B] USER_DS    rw  ring3
         .quad           0                       # [0x30] _LDT_SEGMENT
-        .quad           0                       # [0x38] _TSS0_SEGMENT
-        .quad           0                       # [0x40] _TSS1_SEGMENT
+        .quad           0                       # [0x38] USER_TSS
+        .quad           0                       # [0x40] KERNEL_TSS
 _gdt_end:
 
 # -----------------------------------------------------------------------------

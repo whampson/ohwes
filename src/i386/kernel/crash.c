@@ -269,45 +269,6 @@ __fastcall void handle_exception(struct iregs *iregs)
     crashing = false;   // in case we ever return...
 }
 
-//
-// x86 Double Fault exception handler. An exception occurred within the CPU
-// while handling a different exception. Called by hardware; not to be called
-// directly.
-//
-// The IDT is set up to perform a task switch if a Double Fault exception
-// occurs, via a task gate. This is to ensure we end up with a known good stack
-// so we can print diagnostic information to the user. Grab the program context
-// from the faulting program's TSS and feed it to handle_exception().
-//
-__noreturn void handle_double_fault(void)
-{
-    struct tss *tss = get_tss();
-    struct tss *fault_tss = get_tss_from_gdt(tss->prev_task);
-
-    struct iregs regs = { };
-    regs.ebx = fault_tss->ebx;
-    regs.ecx = fault_tss->ecx;
-    regs.edx = fault_tss->edx;
-    regs.esi = fault_tss->esi;
-    regs.edi = fault_tss->edi;
-    regs.ebp = fault_tss->ebp;
-    regs.eax = fault_tss->eax;
-    regs.ds  = fault_tss->ds;
-    regs.es  = fault_tss->es;
-    regs.fs  = fault_tss->fs;
-    regs.gs  = fault_tss->gs;
-    regs.vec = DOUBLE_FAULT;
-    regs.err = 0;
-    regs.eip = fault_tss->eip;
-    regs.cs  = fault_tss->cs;
-    regs.eflags = fault_tss->eflags;
-    regs.esp = fault_tss->esp;
-    regs.ss  = fault_tss->ss;
-
-    handle_exception(&regs);
-    for (;;);
-}
-
 static void dump_cpu(struct cpu_state *cpu, dumpfn dump)
 {
 #if DUMP_STACK
@@ -723,7 +684,7 @@ void crash_key_irq(int irq, struct iregs *regs)   // TODO: call this vis sysreq.
             kprint("\ndouble fault...");
             volatile struct x86_desc *idt;
             idt = get_idt();
-            idt[BREAKPOINT_EXCEPTION].trap.p = 0;
+            idt[BREAKPOINT].trap.p = 0;
             idt[SEGMENT_NOT_PRESENT].trap.p = 0;
             __asm__ volatile("int3");
             break;
@@ -744,8 +705,8 @@ static const char *exception_names[NR_EXCEPTIONS] =
 {
     /*0x00*/ "DIVIDE_ERROR",
     /*0x01*/ "DEBUG_EXCEPTION",
-    /*0x02*/ "NON_MASKABLE_INTERRUPT",
-    /*0x03*/ "BREAKPOINT_EXCEPTION",
+    /*0x02*/ "NMI_INTERRUPT",
+    /*0x03*/ "BREAKPOINT",
     /*0x04*/ "OVERFLOW_EXCEPTION",
     /*0x05*/ "BOUND_RANGE_EXCEEDED",
     /*0x06*/ "INVALID_OPCODE",
@@ -755,7 +716,7 @@ static const char *exception_names[NR_EXCEPTIONS] =
     /*0x0A*/ "INVALID_TSS",
     /*0x0B*/ "SEGMENT_NOT_PRESENT",
     /*0x0C*/ "STACK_FAULT",
-    /*0x0D*/ "GENERAL_PROTECTION_FAULT",
+    /*0x0D*/ "PROTECTION_FAULT",
     /*0x0E*/ "PAGE_FAULT",
     /*0x0F*/ "INVALID_EXCEPTION_0F",
     /*0x10*/ "MATH_FAULT",

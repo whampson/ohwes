@@ -165,24 +165,58 @@
 #define PF_US               (1 << 2)    // User/Supervisor Fault (1=User)
 #define PF_RSVD             (1 << 3)    // Reserved Bit Violation
 
+/**
+ * TSS Field Offsets
+ */
+
+#define TSS_PREV            0x00
+#define TSS_ESP0            0x04
+#define TSS_SS0             0x08
+#define TSS_ESP1            0x0C
+#define TSS_SS1             0x10
+#define TSS_ESP2            0x14
+#define TSS_SS2             0x18
+#define TSS_CR3             0x1C
+#define TSS_EIP             0x20
+#define TSS_EFLAGS          0x24
+#define TSS_EAX             0x28
+#define TSS_ECX             0x2C
+#define TSS_EDX             0x30
+#define TSS_EBX             0x34
+#define TSS_ESP             0x38
+#define TSS_EBP             0x3C
+#define TSS_ESI             0x40
+#define TSS_EDI             0x44
+#define TSS_ES              0x48
+#define TSS_CS              0x4C
+#define TSS_SS              0x50
+#define TSS_DS              0x54
+#define TSS_FS              0x58
+#define TSS_GS              0x5C
+#define TSS_LDTSEG          0x60
+#define TSS_DBGTRAP         0x64
+#define TSS_IOBASE          0x68
+#define TSS_SSP             0x00
+
 #ifdef __ASSEMBLER__    // Assembler-only defines
 
 /**
- * Loads a segment register with a 16-bit value from memory.
- * Clobbers AX.
+ * Loads a segment register with the bottom 16 bits of a 32-bit value from
+ * memory. Clobbers AX.
  */
 .macro LOAD_SEGMENT addr, reg
-        movw            \addr, %ax
+        movl            \addr, %eax
         movw            %ax, \reg
 .endm
 
 /**
- * Stores a segment register in memory as a 16-bit value.
- * Clobbers AX.
+ * Stores a segment register in the bottom 16 bits of a 32-bit value in memory.
+ * Clobbers EAX.
  */
 .macro STORE_SEGMENT reg, addr
+        xorl            %eax, %eax
         movw            \reg, %ax
-        movw            %ax, \addr
+        movl            %eax, \addr
 .endm
 
 /**
@@ -422,17 +456,17 @@ static_assert(sizeof(struct table_desc) == 6, "sizeof(struct table_desc) == 6");
  * See Intel Software Developer's Manual, Volume 3A, section 7.2.
  */
 struct tss {
-    uint16_t prev_task;
-    uint16_t _reserved0;
+    uint32_t prev   : 16;
+    uint32_t        : 16;
     uint32_t esp0;
-    uint16_t ss0;
-    uint16_t _reserved1;
+    uint32_t ss0    : 16;
+    uint32_t        : 16;
     uint32_t esp1;
-    uint16_t ss1;
-    uint16_t _reserved2;
+    uint32_t ss1    : 16;
+    uint32_t        : 16;
     uint32_t esp2;
-    uint16_t ss2;
-    uint16_t _reserved3;
+    uint32_t ss2    : 16;
+    uint32_t        : 16;
     uint32_t cr3;
     uint32_t eip;
     uint32_t eflags;
@@ -444,24 +478,23 @@ struct tss {
     uint32_t ebp;
     uint32_t esi;
     uint32_t edi;
-    uint16_t es;
-    uint16_t _reserved4;
-    uint16_t cs;
-    uint16_t _reserved5;
-    uint16_t ss;
-    uint16_t _reserved6;
-    uint16_t ds;
-    uint16_t _reserved7;
-    uint16_t fs;
-    uint16_t _reserved8;
-    uint16_t gs;
-    uint16_t _reserved9;
-    uint16_t ldt_segsel;
-    uint16_t _reserved10;
-    uint16_t dbgtrap : 1;
-    uint16_t _reserved11 : 15;
-    uint16_t iomap_base;
-    uint32_t ssp;
+    uint32_t es     : 16;
+    uint32_t        : 16;
+    uint32_t cs     : 16;
+    uint32_t        : 16;
+    uint32_t ss     : 16;
+    uint32_t        : 16;
+    uint32_t ds     : 16;
+    uint32_t        : 16;
+    uint32_t fs     : 16;
+    uint32_t        : 16;
+    uint32_t gs     : 16;
+    uint32_t        : 16;
+    uint32_t ldtseg : 16;
+    uint32_t        : 16;
+    uint32_t dbgtrap: 1;
+    uint32_t        : 15;
+    uint32_t iobase;
 };
 static_assert(sizeof(struct tss) == TSS_SIZE, "sizeof(struct tss) == TSS_SIZE");
 
@@ -498,7 +531,7 @@ void make_ldt_desc(struct x86_desc *desc, int dpl, int base, int limit);
  * @param dpl TSS descriptor privilege level
  * @param base TSS base address
  */
-void make_tss_desc(struct x86_desc *desc, int dpl, int base);
+void make_tss_desc(struct x86_desc *desc, int dpl, struct tss *base);
 
 /**
  * Configures a System Segment Descriptor as a Task Gate.

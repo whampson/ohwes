@@ -30,8 +30,8 @@
 #define USER_CS                         0x23
 #define USER_DS                         0x2B
 #define _LDT_SEGMENT                    0x30
-#define _TSS0_SEGMENT                   0x38
-#define _TSS1_SEGMENT                   0x40
+#define USER_TSS                        0x38
+#define KERNEL_TSS                      0x40
 
 #ifndef __KERNEL__
 #error "Kernel-only defines live here!"

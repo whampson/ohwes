@@ -158,8 +158,8 @@ recv_interrupt:
         MEM2MEM         SIZEOF_IREGS+IRET_EIP(%esp), IREGS_EIP(%esp)
         MEM2MEM         SIZEOF_IREGS+IRET_CS(%esp), IREGS_CS(%esp)
         andl            $0x3, %eax
-        test            %eax, %eax               # priv level check
-        jz              _store_kernel_stack
+        test            %eax, %eax              # priv level check
+        jz              _store_kernel_stack     # if was ring0, store regs
         MEM2MEM         SIZEOF_IREGS+IRET_ESP(%esp), IREGS_ESP(%esp)
         MEM2MEM         SIZEOF_IREGS+IRET_SS(%esp), IREGS_SS(%esp)
         jmp             handle_interrupt
@@ -167,10 +167,49 @@ recv_interrupt:
 _store_kernel_stack:
         movl            %esp, IREGS_ESP(%esp)
         STORE_SEGMENT   %ss, IREGS_SS(%esp)
+        jmp             handle_interrupt
+
+##
+# -----------------------------------------------------------------------------
+# recv_interrupt_tss
+# -----------------------------------------------------------------------------
+# Like 'recv_interrupt', except called via a TSS, so the interrupted program
+# state is stored in the 'prev' link within the active TSS. This routine crafts
+# an iregs structure from the saved TSS and funnels control to handle_interrupt.
+##
+recv_interrupt_tss:
+        cli
+        call            get_curr_tss
+        pushl           TSS_PREV(%eax)
+        call            get_tss
+        addl            $4, %esp
+        movl            %eax, %ebx
+        subl            $SIZEOF_IREGS, %esp
+        MEM2MEM         TSS_EBX(%ebx), IREGS_EBX(%esp)
+        MEM2MEM         TSS_ECX(%ebx), IREGS_ECX(%esp)
+        MEM2MEM         TSS_EDX(%ebx), IREGS_EDX(%esp)
+        MEM2MEM         TSS_ESI(%ebx), IREGS_ESI(%esp)
+        MEM2MEM         TSS_EDI(%ebx), IREGS_EDI(%esp)
+        MEM2MEM         TSS_EBP(%ebx), IREGS_EBP(%esp)
+        MEM2MEM         TSS_EAX(%ebx), IREGS_EAX(%esp)
+        MEM2MEM         TSS_EIP(%ebx), IREGS_EIP(%esp)
+        MEM2MEM         TSS_ESP(%ebx), IREGS_ESP(%esp)
+        MEM2MEM         TSS_EFLAGS(%ebx), IREGS_EFLAGS(%esp)
+        MEM2MEM         TSS_CS(%ebx), IREGS_CS(%esp)
+        MEM2MEM         TSS_DS(%ebx), IREGS_DS(%esp)
+        MEM2MEM         TSS_ES(%ebx), IREGS_ES(%esp)
+        MEM2MEM         TSS_FS(%ebx), IREGS_FS(%esp)
+        MEM2MEM         TSS_GS(%ebx), IREGS_GS(%esp)
+        MEM2MEM         TSS_SS(%ebx), IREGS_SS(%esp)
+        MEM2MEM         SIZEOF_IREGS+IRET_VEC(%esp), IREGS_VEC(%esp)
+        MEM2MEM         SIZEOF_IREGS+IRET_ERR(%esp), IREGS_ERR(%esp)
+        jmp             handle_interrupt
+
+# -----------------------------------------------------------------------------
 
 handle_interrupt:
-        call            current_task            # eax = task ptr
-        movl            %esp, TASK_IREGS(%eax)  # esp = iregs ptr
+        call            current_task
+        movl            %esp, TASK_IREGS(%eax)  # store iregs in current task
         movl            %esp, %ecx              # ecx = fastcall param
         movl            IREGS_VEC(%esp), %eax
         test            %eax, %eax
@@ -180,14 +219,13 @@ handle_interrupt:
         jmp             exception_trampoline
 
 # -----------------------------------------------------------------------------
-# Non-Returning Stubs
 
 irq_trampoline:
-        pushl           $return_from_irq
+        pushl           $_return_from_irq
         jmp             handle_irq
 
 exception_trampoline:
-        pushl           $return_from_exception
+        pushl           $_return_from_exception
         jmp             handle_exception
 
 syscall_trampoline:
@@ -195,7 +233,7 @@ syscall_trampoline:
         cmpl            $NR_SYSCALLS, %eax
         jbe             sys_enter
         movl            $-ENOSYS, %eax
-        jmp             return_from_syscall
+        jmp             _return_from_syscall
 
 sys_enter:
         pushl           $sys_leave
@@ -204,7 +242,7 @@ sys_enter:
 
 sys_leave:
         cli
-        jmp             return_from_syscall
+        jmp             _return_from_syscall
 
 # -----------------------------------------------------------------------------
 # Interrupt Return / Task Switch
@@ -214,10 +252,10 @@ sys_leave:
 switch_context:
         cli
         movl            %ecx, %esp              # ecx = iregs ptr
-return_from_exception:
-return_from_irq:
+_return_from_exception:
+_return_from_irq:
         movl            IREGS_EAX(%esp), %eax
-return_from_syscall:
+_return_from_syscall:
         movl            IREGS_EBP(%esp), %ebp
         movl            IREGS_EDI(%esp), %edi
         movl            IREGS_ESI(%esp), %esi
@@ -234,11 +272,10 @@ return_from_syscall:
         MEM2MEM         IREGS_CS(%esp), SIZEOF_IREGS+IRET_CS(%esp)
         andl            $0x03, %eax
         test            %eax, %eax
-        jz              return_from_interrupt
+        jz              _return_from_interrupt
         MEM2MEM         IREGS_ESP(%esp), SIZEOF_IREGS+IRET_ESP(%esp)
         MEM2MEM         IREGS_SS(%esp), SIZEOF_IREGS+IRET_SS(%esp)
-
-return_from_interrupt:
+_return_from_interrupt:
         movl            IREGS_ERR(%esp), %eax   # restore eax
         addl            $SIZEOF_IREGS+IRET_EIP, %esp
         iret
@@ -259,8 +296,8 @@ NR_SYSCALLS = (_syscall_table_end - syscall_table) >> 2
 # -----------------------------------------------------------------------------
 # Interrupt Thunk Tables
 
-.globl exception_thunks
-exception_thunks:
+.globl _exception_thunks
+_exception_thunks:
         .long           _except_00h, _except_01h, _except_02h, _except_03h
         .long           _except_04h, _except_05h, _except_06h, _except_07h
         .long           _except_08h, _except_09h, _except_0Ah, _except_0Bh
@@ -270,8 +307,8 @@ exception_thunks:
         .long           _except_18h, _except_19h, _except_1Ah, _except_19h
         .long           _except_1Ch, _except_1Ch, _except_1Eh, _except_1Fh
 
-.globl irq_thunks
-irq_thunks:
+.globl _irq_thunks
+_irq_thunks:
         .long           _irq_00h, _irq_01h, _irq_02h, _irq_03h
         .long           _irq_04h, _irq_05h, _irq_06h, _irq_07h
         .long           _irq_08h, _irq_09h, _irq_0Ah, _irq_0Bh
@@ -286,36 +323,18 @@ irq_thunks:
 # value of zero for interrupts that do not automatically push an error code,
 # before jumping to the common interrupt handler.
 
-##
-# Intel exception thunk.
-# Pushes a zero in lieu of an error code.
-##
-#define EXCEPTION_THUNK(thunk_name, vec_num)                                   \
+#define IDT_THUNK(thunk_name, handler, vec_num)                                \
 .globl thunk_name;                                                             \
 thunk_name:                                                                    \
         pushl   $0;                                                            \
         pushl   $vec_num;                                                      \
-        jmp     recv_interrupt
+        jmp     handler
 
-##
-# Intel exception thunk with error code already pushed by CPU.
-##
-#define EXCEPTION_THUNK_ERRCODE(thunk_name, vec_num)                           \
+#define IDT_THUNK_ERR(thunk_name, handler, vec_num)                            \
 .globl thunk_name;                                                             \
 thunk_name:                                                                    \
         pushl   $vec_num;                                                      \
-        jmp     recv_interrupt
-
-##
-# Device IRQ thunk.
-# Pushes the ones' compliment of the IRQ line number.
-##
-#define IRQ_THUNK(thunk_name, irq_num)                                         \
-.globl thunk_name;                                                             \
-thunk_name:                                                                    \
-        pushl   $0;                                                            \
-        pushl   $~irq_num;                                                     \
-        jmp     recv_interrupt
+        jmp     handler
 
 # -----------------------------------------------------------------------------
 # Interrupt Thunk Definitions
@@ -325,61 +344,61 @@ thunk_name:                                                                    \
 #      trap - executes instruction following trapping instruction
 #     abort - severe error, interrupted program cannot be resumed
 
-# 0-31                  processor exceptions                    classification
-EXCEPTION_THUNK         (_except_00h, DIVIDE_ERROR)             # fault
-EXCEPTION_THUNK         (_except_01h, DEBUG_EXCEPTION)          # fault or trap
-EXCEPTION_THUNK         (_except_02h, NON_MASKABLE_INTERRUPT)   # n/a
-EXCEPTION_THUNK         (_except_03h, BREAKPOINT_EXCEPTION)     # trap
-EXCEPTION_THUNK         (_except_04h, OVERFLOW_EXCEPTION)       # trap
-EXCEPTION_THUNK         (_except_05h, BOUND_RANGE_EXCEEDED)     # fault
-EXCEPTION_THUNK         (_except_06h, INVALID_OPCODE)           # fault
-EXCEPTION_THUNK         (_except_07h, DEVICE_NOT_AVAILABLE)     # fault
-EXCEPTION_THUNK_ERRCODE (_except_08h, DOUBLE_FAULT)             # abort; err=0
-EXCEPTION_THUNK         (_except_09h, SEGMENT_OVERRUN)          # abort; unused
-EXCEPTION_THUNK_ERRCODE (_except_0Ah, INVALID_TSS)              # fault
-EXCEPTION_THUNK_ERRCODE (_except_0Bh, SEGMENT_NOT_PRESENT)      # fault
-EXCEPTION_THUNK_ERRCODE (_except_0Ch, STACK_FAULT)              # fault
-EXCEPTION_THUNK_ERRCODE (_except_0Dh, GENERAL_PROTECTION_FAULT) # fault
-EXCEPTION_THUNK_ERRCODE (_except_0Eh, PAGE_FAULT)               # fault
-EXCEPTION_THUNK         (_except_0Fh, 0x0F)                     # (reserved)
-EXCEPTION_THUNK         (_except_10h, MATH_FAULT)               # fault
-EXCEPTION_THUNK_ERRCODE (_except_11h, ALIGNMENT_CHECK)          # fault
-EXCEPTION_THUNK         (_except_12h, MACHINE_CHECK)            # abort
-EXCEPTION_THUNK         (_except_13h, SIMD_FAULT)               # fault
-EXCEPTION_THUNK         (_except_14h, 0x14)                     # fault
-EXCEPTION_THUNK_ERRCODE (_except_15h, 0x15)                     # fault
-EXCEPTION_THUNK         (_except_16h, 0x16)                     # (reserved)
-EXCEPTION_THUNK         (_except_17h, 0x17)                     # (reserved)
-EXCEPTION_THUNK         (_except_18h, 0x18)                     # (reserved)
-EXCEPTION_THUNK         (_except_19h, 0x19)                     # (reserved)
-EXCEPTION_THUNK         (_except_1Ah, 0x1A)                     # (reserved)
-EXCEPTION_THUNK         (_except_1Bh, 0x1B)                     # (reserved)
-EXCEPTION_THUNK         (_except_1Ch, 0x1C)                     # (reserved)
-EXCEPTION_THUNK         (_except_1Dh, 0x1D)                     # (reserved)
-EXCEPTION_THUNK         (_except_1Eh, 0x1E)                     # (reserved)
-EXCEPTION_THUNK         (_except_1Fh, 0x1F)                     # (reserved)
+# 0-31                  processor exceptions                        classification
+IDT_THUNK       (_except_00h, recv_interrupt, DIVIDE_ERROR)         # fault
+IDT_THUNK       (_except_01h, recv_interrupt, DEBUG_EXCEPTION)      # fault or trap
+IDT_THUNK       (_except_02h, recv_interrupt, NMI_INTERRUPT)        # n/a
+IDT_THUNK       (_except_03h, recv_interrupt, BREAKPOINT)           # trap
+IDT_THUNK       (_except_04h, recv_interrupt, OVERFLOW_EXCEPTION)   # trap
+IDT_THUNK       (_except_05h, recv_interrupt, BOUND_RANGE_EXCEEDED) # fault
+IDT_THUNK       (_except_06h, recv_interrupt, INVALID_OPCODE)       # fault
+IDT_THUNK       (_except_07h, recv_interrupt, DEVICE_NOT_AVAILABLE) # fault
+IDT_THUNK_ERR   (_except_08h, recv_interrupt_tss, DOUBLE_FAULT)     # abort; err=0
+IDT_THUNK       (_except_09h, recv_interrupt, SEGMENT_OVERRUN)      # abort; unused
+IDT_THUNK_ERR   (_except_0Ah, recv_interrupt, INVALID_TSS)          # fault
+IDT_THUNK_ERR   (_except_0Bh, recv_interrupt, SEGMENT_NOT_PRESENT)  # fault
+IDT_THUNK_ERR   (_except_0Ch, recv_interrupt, STACK_FAULT)          # fault
+IDT_THUNK_ERR   (_except_0Dh, recv_interrupt, PROTECTION_FAULT)     # fault
+IDT_THUNK_ERR   (_except_0Eh, recv_interrupt, PAGE_FAULT)           # fault
+IDT_THUNK       (_except_0Fh, recv_interrupt, 0x0F)                 # (reserved)
+IDT_THUNK       (_except_10h, recv_interrupt, MATH_FAULT)           # fault
+IDT_THUNK_ERR   (_except_11h, recv_interrupt, ALIGNMENT_CHECK)      # fault
+IDT_THUNK       (_except_12h, recv_interrupt, MACHINE_CHECK)        # abort
+IDT_THUNK       (_except_13h, recv_interrupt, SIMD_FAULT)           # fault
+IDT_THUNK       (_except_14h, recv_interrupt, 0x14)                 # fault
+IDT_THUNK_ERR   (_except_15h, recv_interrupt, 0x15)                 # fault
+IDT_THUNK       (_except_16h, recv_interrupt, 0x16)                 # (reserved)
+IDT_THUNK       (_except_17h, recv_interrupt, 0x17)                 # (reserved)
+IDT_THUNK       (_except_18h, recv_interrupt, 0x18)                 # (reserved)
+IDT_THUNK       (_except_19h, recv_interrupt, 0x19)                 # (reserved)
+IDT_THUNK       (_except_1Ah, recv_interrupt, 0x1A)                 # (reserved)
+IDT_THUNK       (_except_1Bh, recv_interrupt, 0x1B)                 # (reserved)
+IDT_THUNK       (_except_1Ch, recv_interrupt, 0x1C)                 # (reserved)
+IDT_THUNK       (_except_1Dh, recv_interrupt, 0x1D)                 # (reserved)
+IDT_THUNK       (_except_1Eh, recv_interrupt, 0x1E)                 # (reserved)
+IDT_THUNK       (_except_1Fh, recv_interrupt, 0x1F)                     # (reserved)
 
-# 32-47                 device IRQs
-IRQ_THUNK               (_irq_00h, IRQ_TIMER)
-IRQ_THUNK               (_irq_01h, IRQ_KEYBOARD)
-IRQ_THUNK               (_irq_02h, IRQ_SLAVE)
-IRQ_THUNK               (_irq_03h, IRQ_COM2)
-IRQ_THUNK               (_irq_04h, IRQ_COM1)
-IRQ_THUNK               (_irq_05h, IRQ_LPT2)
-IRQ_THUNK               (_irq_06h, IRQ_FLOPPY)
-IRQ_THUNK               (_irq_07h, IRQ_LPT1)
-IRQ_THUNK               (_irq_08h, IRQ_RTC)
-IRQ_THUNK               (_irq_09h, IRQ_ACPI)
-IRQ_THUNK               (_irq_0Ah, IRQ_MISC1)
-IRQ_THUNK               (_irq_0Bh, IRQ_MISC2)
-IRQ_THUNK               (_irq_0Ch, IRQ_MOUSE)
-IRQ_THUNK               (_irq_0Dh, IRQ_COPOCESSOR)
-IRQ_THUNK               (_irq_0Eh, IRQ_ATA1)
-IRQ_THUNK               (_irq_0Fh, IRQ_ATA2)
+# 32-47         device IRQs
+IDT_THUNK       (_irq_00h, recv_interrupt, ~IRQ_TIMER)
+IDT_THUNK       (_irq_01h, recv_interrupt, ~IRQ_KEYBOARD)
+IDT_THUNK       (_irq_02h, recv_interrupt, ~IRQ_SLAVE)
+IDT_THUNK       (_irq_03h, recv_interrupt, ~IRQ_COM2)
+IDT_THUNK       (_irq_04h, recv_interrupt, ~IRQ_COM1)
+IDT_THUNK       (_irq_05h, recv_interrupt, ~IRQ_LPT2)
+IDT_THUNK       (_irq_06h, recv_interrupt, ~IRQ_FLOPPY)
+IDT_THUNK       (_irq_07h, recv_interrupt, ~IRQ_LPT1)
+IDT_THUNK       (_irq_08h, recv_interrupt, ~IRQ_RTC)
+IDT_THUNK       (_irq_09h, recv_interrupt, ~IRQ_ACPI)
+IDT_THUNK       (_irq_0Ah, recv_interrupt, ~IRQ_MISC1)
+IDT_THUNK       (_irq_0Bh, recv_interrupt, ~IRQ_MISC2)
+IDT_THUNK       (_irq_0Ch, recv_interrupt, ~IRQ_MOUSE)
+IDT_THUNK       (_irq_0Dh, recv_interrupt, ~IRQ_COPOCESSOR)
+IDT_THUNK       (_irq_0Eh, recv_interrupt, ~IRQ_ATA1)
+IDT_THUNK       (_irq_0Fh, recv_interrupt, ~IRQ_ATA2)
 
-# 48-79                 available
+# 48-79         available
 
-# 80                    system call
-EXCEPTION_THUNK         (syscall_thunk, SYSCALL_VECTOR)
+# 80            system call
+IDT_THUNK       (_syscall_thunk, recv_interrupt, SYSCALL_VECTOR)
 
-# 81-255                available
+# 81-255        available

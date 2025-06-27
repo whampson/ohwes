@@ -75,8 +75,8 @@ bool get_cpu_info(struct cpuid *cpuid_info);    // cpuid
 
 struct x86_desc * get_gdt(void);
 struct x86_desc * get_idt(void);
-struct tss * get_tss(void);
-struct tss * get_tss_from_gdt(uint16_t segsel);
+struct tss * get_curr_tss(void);
+struct tss * get_tss(uint16_t segsel);
 struct x86_pde * get_pgdir(void);
 
 int get_cpl(void);

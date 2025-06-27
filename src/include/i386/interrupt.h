@@ -35,8 +35,8 @@
  */
 #define DIVIDE_ERROR                0x00
 #define DEBUG_EXCEPTION             0x01
-#define NON_MASKABLE_INTERRUPT      0x02
-#define BREAKPOINT_EXCEPTION        0x03
+#define NMI_INTERRUPT               0x02
+#define BREAKPOINT                  0x03
 #define OVERFLOW_EXCEPTION          0x04
 #define BOUND_RANGE_EXCEEDED        0x05
 #define INVALID_OPCODE              0x06
@@ -46,7 +46,7 @@
 #define INVALID_TSS                 0x0A
 #define SEGMENT_NOT_PRESENT         0x0B
 #define STACK_FAULT                 0x0C
-#define GENERAL_PROTECTION_FAULT    0x0D
+#define PROTECTION_FAULT            0x0D
 #define PAGE_FAULT                  0x0E
 #define MATH_FAULT                  0x10
 #define ALIGNMENT_CHECK             0x11
@@ -65,17 +65,17 @@
 #define IREGS_EBP                   0x14
 #define IREGS_EAX                   0x18
 #define IREGS_DS                    0x1C
-#define IREGS_ES                    0x1E
-#define IREGS_FS                    0x20
-#define IREGS_GS                    0x22
-#define IREGS_VEC                   0x24    // +0x00
-#define IREGS_ERR                   0x28    // +0x04
-#define IREGS_EIP                   0x2C    // +0x08
-#define IREGS_CS                    0x30    // +0x0C
-#define IREGS_EFLAGS                0x34    // +0x10
-#define IREGS_ESP                   0x38    // +0x14
-#define IREGS_SS                    0x3C    // +0x18
-#define SIZEOF_IREGS                64
+#define IREGS_ES                    0x20
+#define IREGS_FS                    0x24
+#define IREGS_GS                    0x28
+#define IREGS_VEC                   0x2C
+#define IREGS_ERR                   0x30
+#define IREGS_EIP                   0x34
+#define IREGS_CS                    0x38
+#define IREGS_EFLAGS                0x3C
+#define IREGS_ESP                   0x40
+#define IREGS_SS                    0x44
+#define SIZEOF_IREGS                72
 
 /**
  * Interrupt stack offsets after executing thunk routine.
@@ -105,10 +105,10 @@ struct iregs {
     uint32_t edi;   // syscall param4
     uint32_t ebp;   // syscall param5
     uint32_t eax;   // syscall return value
-    uint16_t ds;
-    uint16_t es;
-    uint16_t fs;
-    uint16_t gs;
+    uint32_t ds;
+    uint32_t es;
+    uint32_t fs;
+    uint32_t gs;
 
 // interrupt info
     int32_t vec;    // interrupt vector number (negative for IRQ)

@@ -1,3 +1,24 @@
+/* =============================================================================
+ * Copyright (C) 2023-2024 Wes Hampson. All Rights Reserved.
+ *
+ * This file is part of the OH-WES Operating System.
+ * OH-WES is free software; you may redistribute it and/or modify it under the
+ * terms of the GNU GPLv2. See the LICENSE file in the root of this repository.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ * -----------------------------------------------------------------------------
+ *         File: src/i386/kernel/x86.c
+ *      Created: May 13, 2025
+ *       Author: Wes Hampson
+ * =============================================================================
+ */
+
 #include <i386/x86.h>
 
 
@@ -31,13 +52,13 @@ void make_ldt_desc(struct x86_desc *desc, int dpl, int base, int limit)
     desc->seg.p = 1;       // 1 = present in memory
 }
 
-void make_tss_desc(struct x86_desc *desc, int dpl, int base)
+void make_tss_desc(struct x86_desc *desc, int dpl, struct tss *base)
 {
     desc->_value = 0;
     desc->tss.type = DESCTYPE_TSS32;
     desc->tss.dpl = dpl;
-    desc->tss.baselo = ((base) & 0x00FFFFFF);
-    desc->tss.basehi = ((base) & 0xFF000000) >> 24;
+    desc->tss.baselo = (((uint32_t) base) & 0x00FFFFFF);
+    desc->tss.basehi = (((uint32_t) base) & 0xFF000000) >> 24;
     desc->tss.limitlo = ((TSS_SIZE-1) & 0x0FFFF);
     desc->tss.limithi = ((TSS_SIZE-1) & 0xF0000) >> 16;
     desc->tss.g = 0;    // 0 = byte granularity
