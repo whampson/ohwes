@@ -101,22 +101,15 @@
 #define STATIC_MEMORY       0x1C000
 
 // stack memory
-#define SETUP_STACK         (STACK_MEMORY+(FRAME_SIZE*0))   // = 0F000-0FFFF
-#define DOUBLE_FAULT_STACK  (STACK_MEMORY+(FRAME_SIZE*1))   // = 10000-10FFF
-#define INT_STACK_LIMIT     (DOUBLE_FAULT_STACK)
-#define INT_STACK_BASE      (STACK_MEMORY+(FRAME_SIZE*4))
-#define NR_INT_STACKS       ((INT_STACK_BASE - INT_STACK_LIMIT) / FRAME_SIZE)
+#define KERNEL_STACK        (STACK_MEMORY+(FRAME_SIZE*1))
+#define USER_STACK          (STACK_MEMORY+(FRAME_SIZE*2))
+#define USER_KERNEL_STACK   (STACK_MEMORY+(FRAME_SIZE*3))
 
 // static memory
 #define KERNEL_PGDIR        (STATIC_MEMORY+(PAGE_SIZE*0))   // = 1C000-1CFFF
 #define KERNEL_PGTBL        (STATIC_MEMORY+(PAGE_SIZE*1))   // = 1D000-1DFFF
 #define KERNEL_LOG          (STATIC_MEMORY+(PAGE_SIZE*2))   // = 1E000-1FFFF
 #define KERNEL_BASE         (STATIC_MEMORY+(PAGE_SIZE*4))   // = 20000-?????
-
-#if !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)
-static_assert(INT_STACK_BASE <= KERNEL_PGDIR, "Interrupt stacks overlap static data!");
-static_assert(INT_STACK_LIMIT >= DOUBLE_FAULT_STACK, "Interrupt stacks overlap critical stacks!");
-#endif
 
 // kernel virtual address space
 // the lower 1MB of physical memory is identity-mapped mapped

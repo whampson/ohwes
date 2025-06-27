@@ -305,8 +305,10 @@ void print_kernel_sections(void)
     // TODO: pack kernel.elf header into image and extract info from there
 
     struct section sections[] = {
-        { "setup stack",        (void *) SETUP_STACK-FRAME_SIZE,        (void *) SETUP_STACK },
-        { "interrupt stacks",   (void *) INT_STACK_LIMIT,               (void *) INT_STACK_BASE },
+        // TODO: dynamically allocate stacks and pgdir/table
+        { "kernel stack",       (void *) KERNEL_STACK-FRAME_SIZE,       (void *) KERNEL_STACK },
+        { "user stack",         (void *) USER_STACK-FRAME_SIZE,         (void *) USER_STACK },
+        { "user kernel stack",  (void *) USER_KERNEL_STACK-FRAME_SIZE,  (void *) USER_KERNEL_STACK },
         { "page directory",     (void *) KERNEL_PGDIR,                  (void *) KERNEL_PGDIR+PAGE_SIZE },
         { "kernel page table",  (void *) KERNEL_PGTBL,                  (void *) KERNEL_PGTBL+PAGE_SIZE },
         { "kernel image:",      &_kernel_start,                         &_kernel_end },
@@ -324,7 +326,6 @@ void print_kernel_sections(void)
             sec->start, sec->end-1, sec->name);
     }
 
-    kprint("kernel stack space allows for %d nested interrupts\n", NR_INT_STACKS);
     kprint("kernel image takes up %dk bytes (%d pages)\n",
         align((size_t) &_kernel_size, 1024) >> 10,
         PAGE_ALIGN((size_t) &_kernel_size) >> PAGE_SHIFT);
