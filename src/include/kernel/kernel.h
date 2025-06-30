@@ -25,13 +25,13 @@
 #include <kernel/config.h>
 
 // x86 segment selectors (TODO: move to some x86 header)
+#define KERNEL_LDT                      0x08
 #define KERNEL_CS                       0x10
 #define KERNEL_DS                       0x18
 #define USER_CS                         0x23
 #define USER_DS                         0x2B
-#define _LDT_SEGMENT                    0x30
-#define USER_TSS                        0x38
-#define KERNEL_TSS                      0x40
+#define USER_TSS                        0x30
+#define KERNEL_TSS                      0x38
 
 #ifndef __KERNEL__
 #error "Kernel-only defines live here!"

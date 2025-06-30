@@ -123,11 +123,11 @@ void setup_cpu(void)
 
     // dummy LDT descriptor so CPU doesn't freak out
     make_ldt_desc(
-        x86_get_desc(get_gdt(), _LDT_SEGMENT),
+        x86_get_desc(get_gdt(), KERNEL_LDT),
         KERNEL_PL, (uintptr_t) _ldt, sizeof(_ldt) - 1);
 
     verify_gdt();
-    __lldt(_LDT_SEGMENT);
+    __lldt(KERNEL_LDT);
 }
 
 static void verify_gdt(void)
@@ -166,7 +166,7 @@ static void verify_gdt(void)
     assert(user_ds->seg.g == 1);
     assert(user_ds->seg.p == 1);
 
-    struct x86_desc *ldt_desc = x86_get_desc(gdt, _LDT_SEGMENT);
+    struct x86_desc *ldt_desc = x86_get_desc(gdt, KERNEL_LDT);
     assert(ldt_desc->seg.type == DESCTYPE_LDT);
     assert(ldt_desc->seg.dpl == KERNEL_PL);
     assert(ldt_desc->seg.s == 0);
