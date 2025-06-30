@@ -25,11 +25,11 @@
 #include <stdint.h>
 
 // linker script symbols -- use operator& to get assigned value
-extern uint32_t _kernel_start, _kernel_end, _kernel_size;
-extern uint32_t _setup_start, _setup_end, _setup_size;
-extern uint32_t _text_start, _text_end, _text_size;
-extern uint32_t _data_start, _data_end, _data_size;
-extern uint32_t _rodata_start, _rodata_end, _rodata_size;
-extern uint32_t _bss_start, _bss_end, _bss_size;
+extern uint32_t __kernel_start, __kernel_end, __kernel_size;
+extern uint32_t __setup_start, __setup_end, __setup_size;
+extern uint32_t __text_start, __text_end, __text_size;
+extern uint32_t __data_start, __data_end, __data_size;
+extern uint32_t __rodata_start, __rodata_end, __rodata_size;
+extern uint32_t __bss_start, __bss_end, __bss_size;
 
 #endif  // __MM_H

@@ -29,7 +29,7 @@
 #include <kernel/serial.h>
 
 .code32
-.section .setup, "ax", @progbits
+.section .setup.text, "ax", @progbits
 
 ##
 # -----------------------------------------------------------------------------
@@ -91,13 +91,13 @@ _ksetup_continue:
         # now that virtual memory is set up, zero the BSS region;
         # do this here to ensure all uninitialized variables are zeroed
         # before we ever reach C code
-        movl            $_bss_size, %ecx
-        movl            $_bss_start, %edi
+        movl            $__bss_size, %ecx
+        movl            $__bss_start, %edi
    rep stosb
 
         # now we can build the CPU descriptor tables;
         # the GDT is partially initiailzed statically below (see _gdt)
-        call            setup_cpu
+        call            setup_cpu               # see cpu.c
 
 #if SERIAL_DEBUGGING
         call            setup_debug_port
@@ -120,7 +120,7 @@ _idle:  # we should never end up here... but in case we do, spin forever
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
 # -----------------------------------------------------------------------------
-.section .setup, "ax", @progbits
+.section .setup.text, "ax", @progbits
 
 ##
 # -----------------------------------------------------------------------------
@@ -255,16 +255,7 @@ setup_debug_port_done:
 # -----------------------------------------------------------------------------
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
-.align 64, 0
-
-# -----------------------------------------------------------------------------
-# IDT
-
-# Interrupt Descriptor Table
-.align 8
-_idt:
-        .fill           NR_INTERRUPT_VECTORS, 8, 0
-_idt_end:
+.section .setup.data, "aw", @progbits
 
 # -----------------------------------------------------------------------------
 # GDT
@@ -276,25 +267,14 @@ _idt_end:
 .align 8
 _gdt:
         .quad           0                       # (must be 0)
-        .quad           0                       # (not used)
+        .quad           0                       # [0x08] KERNEL_LDT
         .quad           0x00CF9A000000FFFF      # [0x10] KERNEL_CS  rx  ring0
         .quad           0x00CF92000000FFFF      # [0x18] KERNEL_DS  rw  ring0
         .quad           0x00CFFA000000FFFF      # [0x23] USER_CS    rx  ring3
         .quad           0x00CFF2000000FFFF      # [0x2B] USER_DS    rw  ring3
-        .quad           0                       # [0x30] _LDT_SEGMENT
-        .quad           0                       # [0x38] USER_TSS
-        .quad           0                       # [0x40] KERNEL_TSS
+        .quad           0                       # [0x30] USER_TSS
+        .quad           0                       # [0x38] KERNEL_TSS
 _gdt_end:
-
-# -----------------------------------------------------------------------------
-# IDT Descriptor
-
-        .word           0                       # align
-idt_desc:
-idt_limit:
-        .word           _idt_end - _idt - 1
-idt_ptr:
-        .long           _idt
 
 # -----------------------------------------------------------------------------
 # GDT Descriptor
@@ -305,6 +285,16 @@ gdt_limit:
         .word           _gdt_end - _gdt - 1
 gdt_ptr:
         .long           _gdt
+
+# -----------------------------------------------------------------------------
+# IDT Descriptor
+
+        .word           0                       # align
+idt_desc:
+idt_limit:
+        .word           IDT_BASE + (NR_INTERRUPT_VECTORS << 3) - 1
+idt_ptr:
+        .long           IDT_BASE
 
 # -----------------------------------------------------------------------------
 # Boot Info

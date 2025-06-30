@@ -28,57 +28,75 @@ OUTPUT_ARCH("i386")
 OUTPUT_FORMAT("elf32-i386")
 ENTRY(ENTRY_POINT)
 
+MEMORY
+{
+    SETUP_RAM("WX")  : ORIGIN = KERNEL_BASE, LENGTH = 4K
+    KERNEL_ROM("RX") : ORIGIN = KERNEL_VA, LENGTH = 512K
+    KERNEL_RAM("WX") : ORIGIN = KERNEL_VA, LENGTH = 512K
+}
+
 SECTIONS
 {
-    _kernel_lma = KERNEL_BASE;
-    _kernel_vma = KERNEL_VA + _kernel_lma;
-    _kernel_start = _kernel_vma;
+    __kernel_start = KERNEL_BASE;
 
-    _setup_lma = _kernel_lma;
-    .setup _setup_lma :
+    __setup_offset = .;
+    .setup :
     {
-        _setup_start = .;
-        LONG(ENTRY_POINT);
+        __setup_start = .;
+        LONG(ENTRY_POINT);  /* TODO: ELF header */
         *(.setup)
-        _setup_end = .;
-    }
-    _setup_size = SIZEOF(.setup);
-    . = ALIGN(PAGE_SIZE);
+        *(.setup.*)
+        __setup_end = .;
+    } > SETUP_RAM
+    __setup_size = SIZEOF(.setup);
+    . = __setup_start + __setup_size;
 
-    _text_lma = .;
-    _text_vma = KERNEL_VA + _text_lma;
-    .text _text_vma : AT (_text_lma)
+    __text_offset = .;
+    .text KERNEL_VA + __text_offset : AT(__text_offset)
     {
-        _text_start = .;
-        *(.text*)
-    }
-    _text_end = .;
-    _text_size = SIZEOF(.text);
+        __text_start = .;
+        *(.text)
+        *(.text.*)
+        __text_end = .;
+    } > KERNEL_ROM
+    __text_size = SIZEOF(.text);
+    . = __text_offset + __text_size;
 
-    .data :
+    __rodata_offset = .;
+    .rodata KERNEL_VA + __rodata_offset : AT(__rodata_offset)
     {
-        _data_start = .;
-        *(.data*)
-    }
-    _data_end = .;
-    _data_size = SIZEOF(.data);
+        __rodata_start = .;
+        *(.rodata)
+        *(.rodata.*)
+        __rodata_end = .;
+    } > KERNEL_ROM
+    __rodata_size = SIZEOF(.rodata);
+    . = __rodata_offset + __rodata_size;
 
-    .rodata :
+    __data_offset = .;
+    .data KERNEL_VA + __data_offset : AT(__data_offset)
     {
-        _rodata_start = .;
-        *(.rodata*)
-    }
-    _rodata_end = .;
-    _rodata_size = SIZEOF(.rodata);
+        __data_start = .;
+        *(.data)
+        *(.data.*)
+        __data_end = .;
+    } > KERNEL_RAM
+    __data_size = SIZEOF(.data);
+    . = __data_offset + __data_size;
 
-    .bss :
+    __bss_offset = .;
+    .bss KERNEL_VA + __bss_offset : AT(__bss_offset)
     {
-        _bss_start = .;
-        *(.bss*)
-    }
-    _bss_end = .;
-    _bss_size = SIZEOF(.bss);
+        __bss_start = .;
+        *(.bss)
+        *(.bss.*)
+        __bss_end = .;
+    } > KERNEL_RAM
+    __bss_size = SIZEOF(.bss);
+    . = __bss_offset + __bss_size;
 
-    _kernel_end = .;
-    _kernel_size = _kernel_end - _kernel_start;
+    __kernel_end = .;
+    __kernel_size = __kernel_end - __kernel_start;
+
+    /DISCARD/ : { *(.eh_frame) *(.eh_frame_hdr) }
 }

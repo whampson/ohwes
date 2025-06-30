@@ -311,12 +311,12 @@ void print_kernel_sections(void)
         { "user kernel stack",  (void *) USER_KERNEL_STACK-FRAME_SIZE,  (void *) USER_KERNEL_STACK },
         { "page directory",     (void *) KERNEL_PGDIR,                  (void *) KERNEL_PGDIR+PAGE_SIZE },
         { "kernel page table",  (void *) KERNEL_PGTBL,                  (void *) KERNEL_PGTBL+PAGE_SIZE },
-        { "kernel image:",      &_kernel_start,                         &_kernel_end },
-        { ".setup",             &_setup_start,                          &_setup_end },
-        { ".text",              &_text_start,                           &_text_end },
-        { ".data",              &_data_start,                           &_data_end },
-        { ".rodata",            &_rodata_start,                         &_rodata_end },
-        { ".bss",               &_bss_start,                            &_bss_end },
+        { "kernel image:",      &__kernel_start,                         &__kernel_end },
+        { ".setup",             &__setup_start,                          &__setup_end },
+        { ".text",              &__text_start,                           &__text_end },
+        { ".rodata",            &__rodata_start,                         &__rodata_end },
+        { ".data",              &__data_start,                           &__data_end },
+        { ".bss",               &__bss_start,                            &__bss_end },
     };
 
     for (int i = 0; i < countof(sections); i++) {
@@ -327,8 +327,8 @@ void print_kernel_sections(void)
     }
 
     kprint("kernel image takes up %dk bytes (%d pages)\n",
-        align((size_t) &_kernel_size, 1024) >> 10,
-        PAGE_ALIGN((size_t) &_kernel_size) >> PAGE_SHIFT);
+        align((size_t) &__kernel_size, 1024) >> 10,
+        PAGE_ALIGN((size_t) &__kernel_size) >> PAGE_SHIFT);
 }
 
 void print_memory_info(void)
