@@ -174,8 +174,10 @@ _store_kernel_stack:
 # recv_interrupt_tss
 # -----------------------------------------------------------------------------
 # Like 'recv_interrupt', except called via a TSS, so the interrupted program
-# state is stored in the 'prev' link within the active TSS. This routine crafts
-# an iregs structure from the saved TSS and funnels control to handle_interrupt.
+# state is stored in the 'prev' link within the active TSS. A stack switch also
+# occurs, regardless of whether a privilege level change occurred. This routine
+# crafts an iregs structure from the saved TSS and funnels control to
+# handle_interrupt.
 ##
 recv_interrupt_tss:
         cli
@@ -247,11 +249,17 @@ sys_leave:
 # -----------------------------------------------------------------------------
 # Interrupt Return / Task Switch
 
-# context switch
+##
+# -----------------------------------------------------------------------------
+# switch_context
+# -----------------------------------------------------------------------------
+# Performs a context switch. A pointer to the desired task's iregs is passed
+# via ECX.
+##
 .globl switch_context
 switch_context:
         cli
-        movl            %ecx, %esp              # ecx = iregs ptr
+        movl            %ecx, %esp
 _return_from_exception:
 _return_from_irq:
         movl            IREGS_EAX(%esp), %eax
@@ -376,7 +384,7 @@ IDT_THUNK       (_except_1Bh, recv_interrupt, 0x1B)                 # (reserved)
 IDT_THUNK       (_except_1Ch, recv_interrupt, 0x1C)                 # (reserved)
 IDT_THUNK       (_except_1Dh, recv_interrupt, 0x1D)                 # (reserved)
 IDT_THUNK       (_except_1Eh, recv_interrupt, 0x1E)                 # (reserved)
-IDT_THUNK       (_except_1Fh, recv_interrupt, 0x1F)                     # (reserved)
+IDT_THUNK       (_except_1Fh, recv_interrupt, 0x1F)                 # (reserved)
 
 # 32-47         device IRQs
 IDT_THUNK       (_irq_00h, recv_interrupt, ~IRQ_TIMER)

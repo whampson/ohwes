@@ -97,13 +97,14 @@
 #define FRAME_SIZE          (PAGE_SIZE*2)
 
 // memory regions
+#define IDT_BASE            0x0F000
 #define STACK_MEMORY        0x10000
 #define STATIC_MEMORY       0x1C000
 
 // stack memory
-#define KERNEL_STACK        (STACK_MEMORY+(FRAME_SIZE*1))
-#define USER_STACK          (STACK_MEMORY+(FRAME_SIZE*2))
-#define USER_KERNEL_STACK   (STACK_MEMORY+(FRAME_SIZE*3))
+#define KERNEL_STACK        (STACK_MEMORY+(FRAME_SIZE*1))   // = 11FFF-10000
+#define USER_STACK          (STACK_MEMORY+(FRAME_SIZE*2))   // = 13FFF-12000
+#define USER_KERNEL_STACK   (STACK_MEMORY+(FRAME_SIZE*3))   // = 15FFF-14000
 
 // static memory
 #define KERNEL_PGDIR        (STATIC_MEMORY+(PAGE_SIZE*0))   // = 1C000-1CFFF
