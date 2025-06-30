@@ -42,5 +42,4 @@ TARGET_LDLIBS := \
 TARGET_LDFLAGS      := -Wl,--start-group
 TARGET_LDFLAGS_POST := -Wl,--end-group
 
-RAWBIN_ARGS := -R .eh_frame	# no .eh_frame gobbledygook
-$(eval $(call make-rawbin,ohwes.sys,${RAWBIN_ARGS}))
+$(eval $(call make-rawbin,ohwes.sys))

@@ -5,8 +5,8 @@ TEST_BUILD      := 0
 
 # default flags
 ASFLAGS         := -Wa,--fatal-warnings
-CFLAGS          := -Wall -Werror -Wno-unused-function
 LDFLAGS         := -Wl,--fatal-warnings
+CFLAGS          := -Wall -Werror -Wno-unused-function
 
 ifeq "${DEBUG}" "1"
   ASFLAGS += -g
