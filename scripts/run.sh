@@ -37,8 +37,8 @@ if [ "$1" = "qemu" ]; then
     QEMU_FLAGS+=" -fda $2"
     QEMU_FLAGS+=" -monitor stdio"
     QEMU_FLAGS+=" -d cpu_reset"
-    QEMU_FLAGS+=" -serial telnet:127.0.0.1:23456,server=on,nowait" # com1 (gdb)
-    QEMU_FLAGS+=" -serial telnet:127.0.0.1:50000,server=on,nowait" # com2 (output)
+    QEMU_FLAGS+=" -serial telnet:127.0.0.1:50001,server=on,nowait" # com1
+    QEMU_FLAGS+=" -serial telnet:127.0.0.1:50002,server=on,nowait" # com2
 
     ##
     ## TODO: need to do parameter list or something because this is ridiculous
