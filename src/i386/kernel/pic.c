@@ -48,7 +48,6 @@
 static void pic_write_cmd(int pic, uint8_t cmd);
 static void pic_write_data(int pic, uint8_t data);
 static uint8_t pic_read_data(int pic);
-extern bool g_pic_initialized;
 
 void init_pic(void)
 {
@@ -68,16 +67,11 @@ void init_pic(void)
     pic_write_data(MASTER_PIC, OCW1_MASK_ALL & ~SLAVE_MASK);
     pic_write_data(SLAVE_PIC, OCW1_MASK_ALL);
 
-    g_pic_initialized = true;
     pic_setmask(PIC_MASK_ALL);  // disable all device interrupts
 }
 
 void pic_eoi(uint8_t irq_num)
 {
-    if (!g_pic_initialized) {
-        panic("PIC not yet initialized!");
-    }
-
     uint32_t flags;
     cli_save(flags);
 
@@ -94,10 +88,6 @@ void pic_eoi(uint8_t irq_num)
 
 void pic_mask(uint8_t irq_num)
 {
-    if (!g_pic_initialized) {
-        panic("PIC not yet initialized!");
-    }
-
     uint32_t flags;
     cli_save(flags);
 
@@ -118,10 +108,6 @@ void pic_mask(uint8_t irq_num)
 
 void pic_unmask(uint8_t irq_num)
 {
-    if (!g_pic_initialized) {
-        panic("PIC not yet initialized!");
-    }
-
     uint32_t flags;
     cli_save(flags);
 
@@ -142,10 +128,6 @@ void pic_unmask(uint8_t irq_num)
 
 uint16_t pic_getmask(void)
 {
-    if (!g_pic_initialized) {
-        panic("PIC not yet initialized!");
-    }
-
     uint32_t flags;
     cli_save(flags);
 
@@ -160,10 +142,6 @@ uint16_t pic_getmask(void)
 
 void pic_setmask(uint16_t mask)
 {
-    if (!g_pic_initialized) {
-        panic("PIC not yet initialized!");
-    }
-
     uint32_t flags;
     cli_save(flags);
 

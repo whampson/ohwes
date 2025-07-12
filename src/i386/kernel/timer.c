@@ -57,7 +57,6 @@ struct pit_state {
     uint64_t pcspk_ticks;
     uint64_t sleep_ticks;
 };
-extern bool g_timer_initialized;
 
 static struct pit_state _pit = { };
 struct pit_state *g_pit = &_pit;
@@ -82,7 +81,6 @@ void init_timer(void)
     irq_register(IRQ_TIMER, timer_interrupt);
 
     irq_unmask(IRQ_TIMER);
-    g_timer_initialized = true;
 }
 
 static uint16_t calculate_divisor(int freq)

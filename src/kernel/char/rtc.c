@@ -159,11 +159,6 @@ void init_rtc(void)
     nmi_disable();
 
     //
-    // zero RTC structure
-    //
-    zeromem(&_rtc, sizeof(struct rtc));
-
-    //
     // flush RTC
     //
     (void) rd_c();
@@ -189,8 +184,7 @@ void init_rtc(void)
     data = rd_b();
     data &= ~REG_B_UIE; // disable 'update ended' interrupts
     data &= ~REG_B_AIE; // disable alarm interrupts
-    // data &= ~REG_B_PIE; // disable periodic interrupts
-    data |= REG_B_PIE;
+    data &= ~REG_B_PIE; // disable periodic interrupts
     data &= ~REG_B_DSE; // disable 'daylight saving enable'
     wr_b(data);
 
