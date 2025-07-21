@@ -43,11 +43,7 @@ static int _log_size = 0;
 static char *_kernel_log = (char *) KERNEL_ADDR(KERNEL_LOG);
 
 struct console *g_consoles = NULL;
-
-// TODO: move these
-bool g_kb_initialized = false;
-bool g_timer_initialized = false;
-bool g_pic_initialized = false;
+extern bool g_kb_initialized;
 
 void register_console(struct console *cons)
 {
@@ -124,13 +120,8 @@ bool has_console()
 
 static void register_default_console(void)
 {
-#if SERIAL_CONSOLE_DEFAULT
-    extern struct console serial_console;
-    register_console(&serial_console);
-#else
     extern struct console vt_console;
     register_console(&vt_console);
-#endif
 }
 
 // print a message to the console(s) and kernel log
@@ -226,23 +217,29 @@ void __noreturn panic(const char *fmt, ...)
 {
     va_list args;
 
-    irq_disable();
-
     va_start(args, fmt);
     kprint("\n\e[1;31mpanic: "); _vkprint(fmt, args); kprint("\e[0m");
     va_end(args);
 
-    // allow Ctrl+Alt+Del and timer interrupts
-    if (g_kb_initialized || g_timer_initialized) {
-        irq_setmask(IRQ_MASKALL);
-        if (g_kb_initialized) {
-            irq_unmask(IRQ_KEYBOARD);
-        }
-        if (g_timer_initialized) {
-            irq_unmask(IRQ_TIMER);
-        }
-        irq_enable();
+    irq_disable();
+    irq_setmask(IRQ_MASKALL);
+
+#if SERIAL_DEBUGGING
+    if (SERIAL_DEBUG_PORT == COM1_PORT || SERIAL_DEBUG_PORT == COM3_PORT) {
+        irq_unmask(IRQ_COM1);
     }
+    else {
+        irq_unmask(IRQ_COM2);
+    }
+#endif
+
+    irq_unmask(IRQ_TIMER);
+    if (g_kb_initialized) {
+        irq_unmask(IRQ_KEYBOARD);
+    }
+
+    irq_enable();
+    __int3();
 
     for (;;);
 }
@@ -306,9 +303,9 @@ void print_kernel_sections(void)
 
     struct section sections[] = {
         // TODO: dynamically allocate stacks and pgdir/table
-        { "kernel stack",       (void *) KERNEL_STACK-FRAME_SIZE,       (void *) KERNEL_STACK },
         { "user stack",         (void *) USER_STACK-FRAME_SIZE,         (void *) USER_STACK },
-        { "user kernel stack",  (void *) USER_KERNEL_STACK-FRAME_SIZE,  (void *) USER_KERNEL_STACK },
+        { "kernel stack",       (void *) KERNEL_STACK-FRAME_SIZE,       (void *) KERNEL_STACK },
+        { "emerg stack",        (void *) EMERG_STACK-FRAME_SIZE,        (void *) EMERG_STACK },
         { "page directory",     (void *) KERNEL_PGDIR,                  (void *) KERNEL_PGDIR+PAGE_SIZE },
         { "kernel page table",  (void *) KERNEL_PGTBL,                  (void *) KERNEL_PGTBL+PAGE_SIZE },
         { "kernel image:",      &__kernel_start,                         &__kernel_end },

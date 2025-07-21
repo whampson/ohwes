@@ -126,10 +126,10 @@ void init_tty(void)
         ttys[i].device = __mkdev(TTY_MAJOR, i);
     }
 
+    init_kb();
     init_n_tty();
     init_serial();
     init_terminal();
-    init_kb();
 
     // TODO: figure out which TTYs are valid
     // (like, no ttyS3 if dev has 1 serial port)

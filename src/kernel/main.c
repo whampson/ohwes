@@ -35,11 +35,11 @@
 #include <i386/syscall.h>
 #include <i386/x86.h>
 #include <kernel/config.h>
-#include <kernel/debug.h>
 #include <kernel/io.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
 #include <kernel/kernel.h>
+#include <kernel/mm.h>
 #include <kernel/ohwes.h>
 #include <kernel/pool.h>
 #include <kernel/serial.h>
@@ -68,10 +68,6 @@ extern void init_rtc(void);
 extern void init_timer(void);
 extern void init_tty(void);
 
-#if SERIAL_DEBUGGING
-extern bool g_debug_port_available;
-#endif
-
 #if TEST_BUILD
 extern void run_tests(void);
 #endif
@@ -96,17 +92,11 @@ __fastcall void kmain(struct boot_info **info)
 {
     init_boot(info);
 
-    // initialize static memory and setup memory manager,
-    // do this as early as possible to ensure BSS is zeroed
+    // initialize static memory and setup memory manager
     init_mm();
 
     // setup I/O stuff
     init_io();
-
-    // initialize interrupts and timers
-    init_pic();
-    init_timer();
-    init_rtc();
 
 #if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+FN to crash kernel
     irq_register(IRQ_TIMER, crash_key_irq);
@@ -118,31 +108,12 @@ __fastcall void kmain(struct boot_info **info)
     // get the TTY subsystem working for real
     init_tty();
 
-    kprint(
-        "Let's print something large to see whether console printing to "
-        "both the VGA display and COM port works properly! Some lorem "
-        "ipsum for ya...\n\n");
-    kprint(
-        "Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque "
-        "faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi "
-        "pretium tellus duis convallis. Tempus leo eu aenean sed diam urna "
-        "tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. "
-        "Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut "
-        "hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent "
-        "per conubia nostra inceptos himenaeos.\n\n");
-    kprint(
-        "\e[1mDid it work? :p\e[0m\n\n");
-
-    kprint("Press any key to continue... ");
-    console_getc();
-    kprint("\n");
-
 #if TEST_BUILD
     run_tests();
 #endif
 
     kprint("entering user mode...\n");
-    go_to_ring3(init, KERNEL_ADDR(KERNEL_STACK));
+    go_to_ring3(init, KERNEL_ADDR(USER_STACK));
 
     // for future reference...
     // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
@@ -156,13 +127,6 @@ void init_boot(struct boot_info **info)
     kprint("%s\n", OS_COPYRIGHT);
     kprint("Compiled on %s at %s using GCC %s\e[0m\n\n",
             __DATE__, __TIME__, __VERSION__);
-
-#if SERIAL_DEBUGGING
-    if (!g_debug_port_available) {
-        kprint("warning: remote debugging not available, "
-            "no serial port found on I/O port %Xh!\n", SERIAL_DEBUG_PORT);
-    }
-#endif
 
     print_boot_info();
     print_memory_info();
@@ -193,7 +157,6 @@ static void go_to_ring3(void *entry, uint32_t stack)
     regs.eflags = eflags._value;
 
     // drop to ring 3
-    __ltr(USER_TSS);
     switch_context(&regs);
 }
 
@@ -202,8 +165,6 @@ void init(void)
     // TODO: this should run in ring0 as a kernel task,
     // then call execve("/bin/init") or similar to drop to ring3
     // assert(getpl() == KERNEL_PL);
-
-    putchar('a');
 
     CHECK(open("/dev/tty1", O_RDWR));   // stdin
     CHECK(dup(0));                      // stdout
@@ -218,15 +179,11 @@ int main(void)
     // Runs in ring 3.
     //
     assert(getpl() == USER_PL);
-
     printf("\e[5;33mHello from user mode!\e[m\n");
 
-    // volatile unsigned int *bad = (volatile unsigned int *) 0xbaadc0de;
-    // *bad = 0xdeadbeef;
-
     // open TTY serial port
-    printf("Opening /dev/ttyS1...\n");
-    int fd = CHECK(open("/dev/ttyS1", O_RDWR | O_NONBLOCK));
+    printf("Opening /dev/ttyS2...\n");
+    int fd = CHECK(open("/dev/ttyS2", O_RDWR | O_NONBLOCK));
 
     // set serial TTY termios flags
     //  disable local echo, enable flow control
@@ -286,12 +243,10 @@ int main(void)
         }
     } while (c0 != 3 && c1 != 3);   // quit if CTRL+C pressed on either end
 
-    // restore stdin termios
-    ioctl(STDIN_FILENO, TCSETS, &orig_tio);
+    ioctl(STDIN_FILENO, TCSETS, &orig_tio);     // restore stdin termios
+    fcntl(STDIN_FILENO, F_SETFL, orig_cntl);    // restore stdin flags
 
-    // restore stdin flags
-    fcntl(STDIN_FILENO, F_SETFL, orig_cntl);
-
+    // show modem status
     int modem;
     ioctl(fd, TIOCMGET, &modem);
     printf("modem=%Xh\n", modem);
@@ -302,6 +257,7 @@ int main(void)
         puts("  TIOCM_DTR is not set");
     }
 
+    // show some stats
     struct serial_stats stats;
     ioctl(fd, TIOCGICOUNT, &stats);
     printf("serial stats:\n");
@@ -311,6 +267,7 @@ int main(void)
     printf("  cts:%d dsr:%d ri:%d dcd:%d\n",
         stats.n_cts, stats.n_dsr, stats.n_ring, stats.n_dcd);
 
+    // close 'er out -- TODO: need to make this actually work
     close(fd);
     return 0;
 }

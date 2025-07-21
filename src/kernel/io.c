@@ -50,7 +50,7 @@ void init_io(void)
     }
 
 #if SERIAL_DEBUGGING
-    if (reserve_io_range(SERIAL_DEBUG_PORT, 8, "serial_debug") < 0) {
+    if (reserve_io_range(SERIAL_DEBUG_PORT, NR_COM_REGS, "serial_debug") < 0) {
         panic("unable to reserve I/O ports for serial debugging!");
     }
 #endif

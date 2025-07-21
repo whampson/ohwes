@@ -35,7 +35,6 @@
 #include <i386/io.h>
 #include <i386/ps2.h>
 #include <i386/x86.h>
-#include <kernel/debug.h>
 #include <kernel/input.h>
 #include <kernel/irq.h>
 #include <kernel/ohwes.h>
@@ -88,7 +87,7 @@ struct kb {
 
 static struct kb _kb = { };
 struct kb *g_kb = &_kb;
-extern bool g_kb_initialized;
+bool g_kb_initialized;
 
 #ifdef DEBUG
 extern int g_test_crashkey;  // crash.c
@@ -104,7 +103,7 @@ static const char * g_keynames[122];
 #endif
 
 static void sysrq(char c);
-static void hard_reset(void);
+void hard_reset(void);
 
 static void update_leds(void);
 static void kb_interrupt(int irq, struct iregs *regs);
@@ -590,7 +589,7 @@ static void sysrq(char c)
             load_ss(0x00);
             break;
         case 'g':
-            __dbgbrk();
+            __int3();
             break;
         case 'r':
             hard_reset();
@@ -598,7 +597,7 @@ static void sysrq(char c)
     }
 }
 
-static void hard_reset(void)
+void hard_reset(void)
 {
     // first, try resetting via the PS/2 controller
     ps2_cmd(PS2_CMD_SYSRESET);
