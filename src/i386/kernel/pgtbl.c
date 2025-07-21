@@ -13,31 +13,44 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/include/kernel/mm.h
- *      Created: June 25, 2024
+ *         File: i386/kernel/pgtbl.c
+ *      Created: July 11, 2025
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __MM_H
-#define __MM_H
+#include <kernel/kernel.h>
+#include <kernel/mm.h>
+#include <i386/paging.h>
+#include <i386/x86.h>
 
-#include <stdint.h>
+bool virt_addr_valid(void *va)
+{
+    pte_t *pte;
+    if (!walk_page_table((uint32_t) va, &pte)) {
+        return false;
+    }
 
-// check whether reading or writing a virtual address would cause a page fault
-bool virt_addr_valid(void *va);
+    return pte_present(*pte);
+}
 
-// walk the page table and return the PTE pointed to by the virtual address
-bool walk_page_table(uint32_t va, pte_t **pte);
+bool walk_page_table(uint32_t va, pte_t **pte)
+{
+    pde_t *pgdir;
+    pde_t *pde;
 
-// TODO: virt_to_phys
+    if (!pte) {
+        return false;
+    }
 
-// linker script symbols -- use operator& to get assigned value
-extern uint32_t __kernel_start, __kernel_end, __kernel_size;
-extern uint32_t __setup_start, __setup_end, __setup_size;
-extern uint32_t __text_start, __text_end, __text_size;
-extern uint32_t __data_start, __data_end, __data_size;
-extern uint32_t __rodata_start, __rodata_end, __rodata_size;
-extern uint32_t __bss_start, __bss_end, __bss_size;
+    // TODO: usage of KERNEL_ADDR here feels wrong...
 
-#endif  // __MM_H
+    store_cr3(pgdir);
+    pde = (pde_t *) KERNEL_ADDR(pde_offset(pgdir, va));
+    if (!pde_present(*pde)) {
+        return false;
+    }
+
+    *pte = (pte_t *) KERNEL_ADDR(pte_offset(pde, va));
+    return true;
+}

@@ -22,6 +22,8 @@
 #ifndef __SERIAL_H
 #define __SERIAL_H
 
+// TODO: clarify "COM" and "UART" naming
+
 //
 // UART Base IO Port Numbers
 //
@@ -30,6 +32,11 @@
 #define COM3_PORT           0x3E8
 #define COM4_PORT           0x2E8
 // could go up to 8... but 4 will do!
+
+//
+// Number of I/O address associated with each COM port.
+//
+#define NR_COM_REGS         8
 
 //
 // UART IO Port Registers
@@ -84,6 +91,8 @@
 #include <assert.h>
 #include <stdint.h>
 #include <kernel/config.h>
+#include <kernel/queue.h>
+#include <i386/io.h>
 
 //
 // Interrupt Enable Register
@@ -373,6 +382,98 @@ struct msr {
     };
 };
 static_assert(sizeof(struct msr) == 1, "sizeof(struct msr)");
+
+// ----------------------------------------------------------------------------
+//                          COM Port Interface
+
+//
+// COM port identifiers
+//
+enum {
+    COM1 = 1,
+    COM2 = 2,
+    COM3 = 3,
+    COM4 = 4,
+};
+
+//
+// COM port state
+//
+struct com {
+    // port info
+    int num;                    // COM port number
+    uint16_t io_port;           // I/O base port number
+    struct tty *tty;            // TTY
+
+    // flags
+    bool valid      : 1;        // port exists and is usable
+    bool open       : 1;        // port is currently in use
+    bool reserved   : 1;        // port exists, but is reserved by another driver
+
+    // buffers
+    struct ring tx_ring;        // output queue
+    char _txbuf[TTY_BUFFER_SIZE];
+    char xchar;                 // high-priority control character
+
+    // register shadows
+    struct iir iir;             // interrupt indicator register
+    struct ier ier;             // interrupt enable register
+    struct lcr lcr;             // line control register
+    struct lsr lsr;             // line status register
+    struct mcr mcr;             // modem control register
+    struct msr msr;             // modem status register
+    uint16_t baud_divisor;      // baud rate divisor
+
+    // statistics
+    struct serial_stats stats;
+};
+
+struct com * get_com(int num);
+int tty_get_com(struct tty *tty, struct com **com);
+
+static inline uint16_t get_com_port(int num)
+{
+    switch (num) {
+        case 1: return COM1_PORT;
+        case 2: return COM2_PORT;
+        case 3: return COM3_PORT;
+        case 4: return COM4_PORT;
+    }
+    return 0;   // invalid
+}
+
+static inline int get_com_num(uint16_t port)
+{
+    switch (port) {
+        case COM1_PORT: return 1;
+        case COM2_PORT: return 2;
+        case COM3_PORT: return 3;
+        case COM4_PORT: return 4;
+    }
+    return 0;   // invalid
+}
+
+static inline uint8_t com_in(struct com *com, uint8_t reg)
+{
+    assert(com);
+    assert(reg <= UART_SCR);
+
+    if (reg == UART_RX) {
+        com->stats.n_rx++;
+    }
+    return inb(com->io_port + reg);
+}
+
+static inline void com_out(struct com *com, uint8_t reg, uint8_t data)
+{
+    assert(com);
+    assert(reg <= UART_SCR);
+
+    if (reg == UART_TX) {
+        com->stats.n_tx++;
+    }
+    outb(com->io_port + reg, data);
+}
 
 #endif // __ASSEMBLER__
 

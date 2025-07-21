@@ -13,31 +13,16 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/include/kernel/mm.h
- *      Created: June 25, 2024
+ *         File: include/signal.h
+ *      Created: July 9, 2025
  *       Author: Wes Hampson
  * =============================================================================
  */
 
-#ifndef __MM_H
-#define __MM_H
+#ifndef __SIGNAL_H
+#define __SIGNAL_H
 
-#include <stdint.h>
+#define SIGINT  2
+#define SIGTRAP 5
 
-// check whether reading or writing a virtual address would cause a page fault
-bool virt_addr_valid(void *va);
-
-// walk the page table and return the PTE pointed to by the virtual address
-bool walk_page_table(uint32_t va, pte_t **pte);
-
-// TODO: virt_to_phys
-
-// linker script symbols -- use operator& to get assigned value
-extern uint32_t __kernel_start, __kernel_end, __kernel_size;
-extern uint32_t __setup_start, __setup_end, __setup_size;
-extern uint32_t __text_start, __text_end, __text_size;
-extern uint32_t __data_start, __data_end, __data_size;
-extern uint32_t __rodata_start, __rodata_end, __rodata_size;
-extern uint32_t __bss_start, __bss_end, __bss_size;
-
-#endif  // __MM_H
+#endif // __SIGNAL_H

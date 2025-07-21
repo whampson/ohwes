@@ -109,6 +109,9 @@ struct pginfo {
 };
 static_assert(sizeof(struct pginfo) == sizeof(uint32_t), "bad size!");
 
+#define PTE_NONE                    0
+#define PDE_NONE                    0
+
 #define __pte(x)                    ((pte_t) (x))
 #define __pde(x)                    ((pde_t) (x))
 #define __pgflags(x)                ((pgflags_t) (x))
@@ -131,19 +134,37 @@ static inline void * pde_page(pde_t pde)        { return (void *) (pde & PAGE_MA
 static inline bool pde_none(pde_t pde)          { return !pde; }
 static inline void pde_clear(pde_t *pde)        { *pde = 0; }
 
-static inline bool pde_large(pde_t pde)         { return (pde & _PAGE_LARGE) == _PAGE_LARGE; }
-static inline bool pde_bad(pde_t pde)
-{
-    return ((pde & (_PAGE_PDE|_PAGE_PRESENT)) != (_PAGE_PDE|_PAGE_PRESENT))
-        || (pde_large(pde) && __ptn(pde) != 0);
-}
-
 static inline pde_t * pde_offset(pde_t *pde, uint32_t va)
 {
     return pde + __pdn(va);
 }
 
-// ---------------------------------------------
+static inline bool pde_read(pde_t pde)          { return (pde & _PAGE_USER) == _PAGE_USER; }
+static inline bool pde_exec(pde_t pde)          { return (pde & _PAGE_USER) == _PAGE_USER; }
+static inline bool pde_write(pde_t pde)         { return (pde & _PAGE_RW) == _PAGE_RW; }
+static inline bool pde_user(pde_t pde)          { return (pde & _PAGE_USER) == _PAGE_USER; }
+static inline bool pde_dirty(pde_t pde)         { return (pde & _PAGE_DIRTY) == _PAGE_DIRTY; }
+static inline bool pde_large(pde_t pde)         { return (pde & _PAGE_LARGE) == _PAGE_LARGE; }
+static inline bool pde_present(pde_t pde)       { return (pde & _PAGE_PRESENT) == _PAGE_PRESENT; }
+static inline bool pde_bad(pde_t pde)   // i.e. misconfigured
+{
+    return ((pde & (_PAGE_PDE|_PAGE_PRESENT)) != (_PAGE_PDE|_PAGE_PRESENT))
+        || (pde_large(pde) && __ptn(pde) != 0);
+}
+
+static inline pde_t pde_mkread(pde_t pde)       { pde |= _PAGE_USER; return pde; }
+static inline pde_t pde_mkexec(pde_t pde)       { pde |= _PAGE_USER; return pde; }
+static inline pde_t pde_mkwrite(pde_t pde)      { pde |= _PAGE_RW; return pde; }
+static inline pde_t pde_mkuser(pde_t pde)       { pde |= _PAGE_USER; return pde; }
+static inline pde_t pde_mkdirty(pde_t pde)      { pde |= _PAGE_DIRTY; return pde; }
+static inline pde_t pde_mkclean(pde_t pde)      { pde &= ~_PAGE_DIRTY; return pde; }
+static inline pde_t pde_mkpresent(pde_t pde)    { pde &= _PAGE_PRESENT; return pde; }
+
+static inline pde_t pde_rdprotect(pde_t pde)    { pde &= ~_PAGE_USER; return pde; }
+static inline pde_t pde_exprotect(pde_t pde)    { pde &= ~_PAGE_USER; return pde; }
+static inline pde_t pde_wrprotect(pde_t pde)    { pde &= ~_PAGE_RW; return pde; }
+
+// ------------------------------------------------------------------------------------------------
 
 static inline uint32_t pte_index(pte_t pte)     { return __ptn(pte); }
 static inline void * pte_page(pte_t pte)        { return (void *) (pte & PAGE_MASK); }
@@ -151,7 +172,7 @@ static inline void * pte_page(pte_t pte)        { return (void *) (pte & PAGE_MA
 static inline bool pte_none(pte_t pte)          { return !pte; }
 static inline void pte_clear(pte_t *pte)        { *pte = 0; }
 
-static inline pde_t * pte_offset(pde_t *pde, uint32_t va)
+static inline pte_t * pte_offset(pde_t *pde, uint32_t va)
 {
     return ((pte_t *) pde_page(*pde)) + __ptn(va);
 }
@@ -161,6 +182,7 @@ static inline bool pte_exec(pte_t pte)          { return (pte & _PAGE_USER) == _
 static inline bool pte_write(pte_t pte)         { return (pte & _PAGE_RW) == _PAGE_RW; }
 static inline bool pte_user(pte_t pte)          { return (pte & _PAGE_USER) == _PAGE_USER; }
 static inline bool pte_dirty(pte_t pte)         { return (pte & _PAGE_DIRTY) == _PAGE_DIRTY; }
+static inline bool pte_present(pte_t pte)       { return (pte & _PAGE_PRESENT) == _PAGE_PRESENT; }
 
 static inline pte_t pte_mkread(pte_t pte)       { pte |= _PAGE_USER; return pte; }
 static inline pte_t pte_mkexec(pte_t pte)       { pte |= _PAGE_USER; return pte; }
@@ -168,6 +190,7 @@ static inline pte_t pte_mkwrite(pte_t pte)      { pte |= _PAGE_RW; return pte; }
 static inline pte_t pte_mkuser(pte_t pte)       { pte |= _PAGE_USER; return pte; }
 static inline pte_t pte_mkdirty(pte_t pte)      { pte |= _PAGE_DIRTY; return pte; }
 static inline pte_t pte_mkclean(pte_t pte)      { pte &= ~_PAGE_DIRTY; return pte; }
+static inline pte_t pte_mkpresent(pte_t pte)    { pte &= _PAGE_PRESENT; return pte; }
 
 static inline pte_t pte_rdprotect(pte_t pte)    { pte &= ~_PAGE_USER; return pte; }
 static inline pte_t pte_exprotect(pte_t pte)    { pte &= ~_PAGE_USER; return pte; }

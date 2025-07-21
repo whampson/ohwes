@@ -59,7 +59,7 @@
 static void setup_ldt(void);
 static void setup_tss(void);
 static void setup_idt(void);
-static void verify_gdt(void);
+static void validate_gdt(void);
 
 static struct x86_desc _ldt[1];
 static struct tss _tss_table[2];
@@ -70,68 +70,63 @@ extern idt_thunk _syscall_thunk;
 
 void setup_cpu(void)
 {
+    validate_gdt();
+
     struct x86_desc *idt = get_idt();
-    struct tss *tss_kernel = &_tss_table[0];
-    struct tss *tss_user = &_tss_table[1];
+    struct tss *tss_emerg = &_tss_table[0];
+    struct tss *tss_kernl = &_tss_table[1];
 
     for (int i = 0; i < NR_EXCEPTIONS; i++) {
-        struct x86_desc *idt_desc;
-        struct tss *tss;
-        idt_thunk entry;
-        int pl;
-
-        tss = tss_kernel;
-        idt_desc = &idt[EXCEPTION_BASE_VECTOR + i];
-        entry = _exception_thunks[i];
-        pl = (i == BREAKPOINT) ? USER_PL : KERNEL_PL;
+        struct x86_desc *idt_desc = &idt[EXCEPTION_BASE_VECTOR + i];
+        idt_thunk entry = _exception_thunks[i];
 
         if (i == DOUBLE_FAULT) {
-            // ensure we have a fresh stack for double faults
-            make_task_gate(idt_desc, KERNEL_TSS, pl);
-            tss->cr3 = KERNEL_PGDIR;
-            tss->esp = KERNEL_ADDR(KERNEL_STACK);
-            tss->ebp = KERNEL_ADDR(KERNEL_STACK);
-            tss->eip = (uint32_t) entry;
-            tss->cs = KERNEL_CS; tss->ss = KERNEL_DS;
-            tss->ds = KERNEL_DS; tss->es = KERNEL_DS;
+            // double fault, ensure we have a fresh stack
+            make_task_gate(idt_desc, EMERG_TSS, KERNEL_PL);
+            tss_emerg->cr3 = KERNEL_PGDIR;
+            tss_emerg->esp = KERNEL_ADDR(EMERG_STACK);
+            tss_emerg->ebp = KERNEL_ADDR(EMERG_STACK);
+            tss_emerg->eip = (uint32_t) entry;
+            tss_emerg->cs = KERNEL_CS; tss_emerg->ss = KERNEL_DS;
+            tss_emerg->ds = KERNEL_DS; tss_emerg->es = KERNEL_DS;
         }
         else {
-            // interrupt gate for generic exceptions
-            make_intr_gate(idt_desc, KERNEL_CS, pl, entry);
+            // exceptions, ensure int3 can be executed from user mode
+            int pl = (i == BREAKPOINT) ? USER_PL : KERNEL_PL;
+            make_trap_gate(idt_desc, KERNEL_CS, pl, entry);
         }
     }
 
     for (int i = 0; i < NR_IRQS; i++) {
-        // interrupt gate for device IRQs to prevent nested IRQs
+        // device interrupts, disallow nested interrupts
         make_intr_gate(
             &idt[IRQ_BASE_VECTOR + i], KERNEL_CS,
             KERNEL_PL, _irq_thunks[i]);
     }
 
-    // trap gate for system calls; device interrupts are OK
+    // system call trap
     make_trap_gate(&idt[SYSCALL_VECTOR], KERNEL_CS, USER_PL, &_syscall_thunk);
 
-    // initialize TSS
-    make_tss_desc(
-        x86_get_desc(get_gdt(), KERNEL_TSS),
-        KERNEL_PL, tss_kernel);
-    make_tss_desc(
-        x86_get_desc(get_gdt(), USER_TSS),
-        KERNEL_PL, tss_user);
-    tss_user->esp0 = KERNEL_ADDR(USER_KERNEL_STACK);
-    tss_user->ss0 = KERNEL_DS;
+    // TSS for kernel calls from user mode
+    make_tss_desc(x86_get_desc(get_gdt(), KERNEL_TSS), KERNEL_PL, tss_kernl);
+    tss_kernl->esp0 = KERNEL_ADDR(KERNEL_STACK);
+    tss_kernl->ss0 = KERNEL_DS;
+    __ltr(KERNEL_TSS);
 
     // dummy LDT descriptor so CPU doesn't freak out
     make_ldt_desc(
         x86_get_desc(get_gdt(), KERNEL_LDT),
-        KERNEL_PL, (uintptr_t) _ldt, sizeof(_ldt) - 1);
-
-    verify_gdt();
+        KERNEL_PL, (int) _ldt, sizeof(_ldt) - 1);
     __lldt(KERNEL_LDT);
 }
 
-static void verify_gdt(void)
+static void validate_gdt(void)
 {
+    // verify that hardcoded GDT from setup is valid
+
+    // TODO: panic if fucked up
+    // TODO: verify base/limit in kernel space
+
     struct x86_desc *gdt = get_gdt();
 
     struct x86_desc *kernel_cs = x86_get_desc(gdt, KERNEL_CS);
@@ -165,27 +160,6 @@ static void verify_gdt(void)
     assert(user_ds->seg.s == 1);
     assert(user_ds->seg.g == 1);
     assert(user_ds->seg.p == 1);
-
-    struct x86_desc *ldt_desc = x86_get_desc(gdt, KERNEL_LDT);
-    assert(ldt_desc->seg.type == DESCTYPE_LDT);
-    assert(ldt_desc->seg.dpl == KERNEL_PL);
-    assert(ldt_desc->seg.s == 0);
-    assert(ldt_desc->seg.g == 0);
-    assert(ldt_desc->seg.p == 1);
-
-    struct x86_desc *tss_desc = x86_get_desc(gdt, USER_TSS);
-    assert(tss_desc->tss.type == DESCTYPE_TSS32);
-    assert(tss_desc->tss.dpl == KERNEL_PL);
-    assert(tss_desc->tss.g == 0);
-    assert(tss_desc->tss.p == 1);
-
-    tss_desc = x86_get_desc(gdt, KERNEL_TSS);
-    assert(tss_desc->tss.type == DESCTYPE_TSS32);
-    assert(tss_desc->tss.dpl == KERNEL_PL);
-    assert(tss_desc->tss.g == 0);
-    assert(tss_desc->tss.p == 1);
-
-    // TODO: verify base/limit in kernel space
 }
 
 bool cpu_has_cpuid(void)

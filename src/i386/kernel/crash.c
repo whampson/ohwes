@@ -21,13 +21,17 @@
 
 #include <ctype.h>
 #include <stdarg.h>
+#include <signal.h>
+#include <i386/bitops.h>
 #include <i386/cpu.h>
+#include <i386/gdbstub.h>
 #include <i386/interrupt.h>
 #include <i386/x86.h>
 #include <kernel/kernel.h>
 #include <kernel/ohwes.h>
 #include <kernel/irq.h>
 #include <kernel/terminal.h>
+#include <kernel/serial.h>
 #include <kernel/vga.h>
 
 #define CRASH_BUFSIZ        1024
@@ -54,27 +58,27 @@
 #define STACK_DUMP_COLS     4
 
 #if DEBUG
-int g_test_crashkey = 0;
-int g_test_soft_double_fault = 0;
+int g_test_crashkey;
+int g_test_soft_double_fault;
 #endif
 
 extern struct console *g_consoles;
 
 static const char *exception_names[NR_EXCEPTIONS];
 
-static void cprint(const char *fmt, ...);
-static void fbprint(const char *fmt, ...);
-static void fbwrite(const char *buf, size_t count);
+static int cprint(const char *fmt, ...);
+static int fbprint(const char *fmt, ...);
+static int fbwrite(const char *buf, size_t count);
 
 static void center_text(int maxwidth, const char *fmt, ...);
 static void wrap_text(int margin, const char *fmt, ...);
 
-typedef void (*dumpfn)(const char *fmt, ...);
+typedef int (*dumpfn)(const char *fmt, ...);
 
 // all the "dump" functions print a leading newline
 static void dump_cpu(struct cpu_state *cpu, dumpfn to);
 static void dump_cntlregs(struct cpu_state *cpu, dumpfn to);
-static void dump_gpregs(struct cpu_state *cpu, dumpfn to);
+static void dump_regs(struct iregs *regs, dumpfn to);
 static void dump_segregs(struct cpu_state *cpu, dumpfn to);
 static void dump_mmregs(struct cpu_state *cpu, dumpfn to);
 static void dump_stack(struct cpu_state *cpu, dumpfn to);
@@ -210,12 +214,21 @@ __fastcall void handle_exception(struct iregs *iregs)
     char errbuf[CRASH_BUFSIZ];
     struct cpu_state cpu;
 
+#if SERIAL_DEBUGGING
+    if (iregs->vec == BREAKPOINT || iregs->vec == DEBUG_EXCEPTION) {
+        struct gdb_state state;
+        gdb_init(&state, get_com(get_com_num(SERIAL_DEBUG_PORT)));
+        gdb_main(&state, iregs, SIGTRAP);
+        return;
+    }
+#endif
+
     // get the remaining regs
     capture_cpu_state(&cpu, iregs);
 
     // if we're already crashing... well... that's not good... handle it here!
-    if (crashing) {
-        handle_soft_double_fault(&cpu, &orig_cpu);
+    if (test_and_set_bit(&crashing, 0)) {
+        handle_soft_double_fault(&cpu, &orig_cpu);  // noreturn
     }
     crashing = true;
     orig_cpu = cpu;
@@ -266,7 +279,8 @@ __fastcall void handle_exception(struct iregs *iregs)
     while (true) {
         wait_for_keypress();
     }
-    crashing = false;   // in case we ever return...
+
+    clear_bit(&crashing, 0);
 }
 
 static void dump_cpu(struct cpu_state *cpu, dumpfn dump)
@@ -281,7 +295,7 @@ static void dump_cpu(struct cpu_state *cpu, dumpfn dump)
     }
 
     dump_cntlregs(cpu, dump);
-    dump_gpregs(cpu, dump);
+    dump_regs(&cpu->iregs, dump);
 
 #if DUMP_SEGMENT_REGS
     // cprint("\n");
@@ -300,9 +314,8 @@ static void dump_cntlregs(struct cpu_state *cpu, dumpfn dump)
         cpu->cr0, cpu->cr2, cpu->cr3, cpu->cr4);
 }
 
-static void dump_gpregs(struct cpu_state *cpu, dumpfn dump)
+static void dump_regs(struct iregs *regs, dumpfn dump)
 {
-    struct iregs *regs = &cpu->iregs;
     struct eflags *flags = (struct eflags *) &regs->eflags;
 
     dump("\nEAX=%08X EBX=%08X ECX=%08X EDX=%08X",
@@ -396,7 +409,7 @@ static void dump_segsel(struct segsel *segsel, dumpfn dump)
 
 // like kprint but with a smaller stack footprint and will write directly to
 // frame buffer if no console is registered
-void cprint(const char *fmt, ...)
+static int cprint(const char *fmt, ...)
 {
     char buf[CRASH_BUFSIZ] = { };
     va_list args;
@@ -407,15 +420,13 @@ void cprint(const char *fmt, ...)
     va_end(args);
 
     if (has_console()) {
-        console_write(buf, count);
+        return console_write(buf, count);
     }
-    else {
-        fbwrite(buf, count);
-    }
+    return fbwrite(buf, count);
 }
 
 // print directly to active the terminal's VGA frame buffer
-static void fbprint(const char *fmt, ...)
+static int fbprint(const char *fmt, ...)
 {
     va_list args;
     size_t count;
@@ -425,10 +436,10 @@ static void fbprint(const char *fmt, ...)
     count = vsnprintf(buf, CRASH_BUFSIZ, fmt, args);
     va_end(args);
 
-    fbwrite(buf, count);
+    return fbwrite(buf, count);
 }
 
-static void fbwrite(const char *buf, size_t count)
+static int fbwrite(const char *buf, size_t count)
 {
     struct terminal *term;
     const char *p;
@@ -448,6 +459,8 @@ static void fbwrite(const char *buf, size_t count)
         }
         p += terminal_putchar(term, *p);
     }
+
+    return (p - buf);
 }
 
 static void center_text(int maxwidth, const char *fmt, ...)

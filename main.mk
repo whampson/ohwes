@@ -2,6 +2,7 @@
 DEBUG           := 1
 DEBUGOPT        := 1
 TEST_BUILD      := 0
+OPT_LEVEL       := 2
 
 # default flags
 ASFLAGS         := -Wa,--fatal-warnings
@@ -12,6 +13,8 @@ ifeq "${DEBUG}" "1"
   ASFLAGS += -g
   CFLAGS += -g
   DEFINES += DEBUG
+else
+  CFLAGS += -O${OPT_LEVEL} -fomit-frame-pointer
 endif
 ifeq "${DEBUGOPT}" "1"
   CFLAGS += -Og

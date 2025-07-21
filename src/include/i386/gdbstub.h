@@ -50,24 +50,29 @@ enum gdb_i386_regs { // do not change the order!
     GDB_NUM_I386_REGS,
 };
 
-enum gdb_signals {
-    GDB_SIGINT  = 2,
-    GDB_SIGTRAP = 5,
-    GDB_SIGEMT  = 7,
-};
-
 struct gdb_state {
     int signum;                             // break signal number
+    char pending_char;                      // pending character to be read
     gdb_i386_reg regs[GDB_NUM_I386_REGS];   // register shadow
     char tx_buf[GDB_MAXLEN];                // last packet transmitted
     size_t tx_len;                          // length of last packet transmitted
-    size_t nack_count;                      // number of NACKs seen in a row
+    uint32_t ack_count;
+    uint32_t nack_count;                    // number of NACKs seen
+    uint32_t txpkt_count;
+    uint32_t rxpkt_count;
+    struct com *com;                        // COM port state at time of entry
 };
 
-// initialize state struct
-int gdb_init_state(struct gdb_state *state, int signum, const struct iregs *regs);
+// initialize debug session state
+void gdb_init(struct gdb_state *state, struct com *com);
 
 // main debugging loop
-void gdb_main(struct gdb_state *state);
+void gdb_main(struct gdb_state *state, struct iregs *regs, int signum);
+
+// capture process state
+void gdb_capture(struct gdb_state *state, const struct iregs *regs, int signum);
+
+// apply process state
+void gdb_apply(struct gdb_state *state, struct iregs *regs);
 
 #endif // __GDBSTUB_H

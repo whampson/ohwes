@@ -44,10 +44,9 @@
 #define VT_CONSOLE_NUM          0   // (0) print kernel messages to active virtual terminal
 
 // serial console
-#define SERIAL_CONSOLE          1   // use a serial port as a console interface
-#define SERIAL_CONSOLE_NUM      1   // serial console COM port
+#define SERIAL_CONSOLE          0   // use a serial port as a console interface
+#define SERIAL_CONSOLE_COM      2   // serial console COM port number
 #define SERIAL_CONSOLE_BAUD     BAUD_9600
-#define SERIAL_CONSOLE_DEFAULT  0   // make the serial console the default console
 
 // printing
 #define PRINT_LOGO              0   // show a special logo at boot
@@ -60,7 +59,7 @@
 #define KERNEL_LOG_SIZE         (2*PAGE_SIZE)
 
 // debugging
-#define SERIAL_DEBUGGING        0   // enable debugging over COM port
+#define SERIAL_DEBUGGING        1   // enable debugging over COM port
 #define SERIAL_DEBUG_PORT       COM1_PORT
 #define SERIAL_DEBUG_BAUD       BAUD_115200
 #define ENABLE_CRASH_KEY        1   // test various crash scenarios w/ keystroke
@@ -97,14 +96,14 @@
 #define FRAME_SIZE          (PAGE_SIZE*2)
 
 // memory regions
-#define IDT_BASE            0x0F000
+#define IDT_BASE            0x04000
 #define STACK_MEMORY        0x10000
 #define STATIC_MEMORY       0x1C000
 
 // stack memory
-#define KERNEL_STACK        (STACK_MEMORY+(FRAME_SIZE*1))   // = 11FFF-10000
-#define USER_STACK          (STACK_MEMORY+(FRAME_SIZE*2))   // = 13FFF-12000
-#define USER_KERNEL_STACK   (STACK_MEMORY+(FRAME_SIZE*3))   // = 15FFF-14000
+#define EMERG_STACK         (STACK_MEMORY+(FRAME_SIZE*1))
+#define KERNEL_STACK        (STACK_MEMORY+(FRAME_SIZE*2))
+#define USER_STACK          (STACK_MEMORY+(FRAME_SIZE*3))
 
 // static memory
 #define KERNEL_PGDIR        (STATIC_MEMORY+(PAGE_SIZE*0))   // = 1C000-1CFFF

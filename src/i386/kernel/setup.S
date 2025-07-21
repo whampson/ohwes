@@ -59,6 +59,10 @@ ksetup:
         movl            $KERNEL_STACK, %ebp
         movl            %ebp, %esp
 
+#if SERIAL_DEBUGGING
+        call            setup_debug_port
+#endif
+
         # setup paging; first 1M of physical memory will be identity mapped
         call            setup_paging
 
@@ -95,17 +99,22 @@ _ksetup_continue:
         movl            $__bss_start, %edi
    rep stosb
 
+#if HIGHER_GROUND
+        movl            $0, KERNEL_PGDIR        # clear identity mapping
+#endif
+
+        #
+        # safe to call C code now
+        #
+
         # now we can build the CPU descriptor tables;
         # the GDT is partially initiailzed statically below (see _gdt)
         call            setup_cpu               # see cpu.c
 
-#if SERIAL_DEBUGGING
-        call            setup_debug_port
-#endif
-
-#if HIGHER_GROUND
-        movl            $0, KERNEL_PGDIR        # clear identity mapping
-#endif
+        # initialize interrupts and timers
+        call            init_pic                # see pic.c
+        call            init_timer              # see timer.c
+        call            init_rtc                # see rtc.c
 
         # pass control off to the kernel
         movl            %cr3, %eax
@@ -231,9 +240,9 @@ setup_debug_port:
         movw            $SERIAL_DEBUG_PORT+UART_MCR, %dx
         movb            $0x0B, %al
         outb            %al, %dx        # MCR = dtr rts out2
-        xorb            %al, %al
+        movb            $0x01, %al
         movw            $SERIAL_DEBUG_PORT+UART_IER, %dx
-        outb            %al, %dx        # no serial interrupts
+        outb            %al, %dx        # interrupts on
         movw            $SERIAL_DEBUG_PORT+UART_FCR, %dx
         movb            $0xC7, %al
         outb            %al, %dx        # enable FIFO
@@ -245,8 +254,6 @@ setup_debug_port:
         inb             %dx, %al
         movw            $SERIAL_DEBUG_PORT+UART_IIR, %dx
         inb             %dx, %al
-
-        movl            $1, g_debug_port_available
 
 setup_debug_port_done:
         ret
@@ -272,8 +279,8 @@ _gdt:
         .quad           0x00CF92000000FFFF      # [0x18] KERNEL_DS  rw  ring0
         .quad           0x00CFFA000000FFFF      # [0x23] USER_CS    rx  ring3
         .quad           0x00CFF2000000FFFF      # [0x2B] USER_DS    rw  ring3
-        .quad           0                       # [0x30] USER_TSS
-        .quad           0                       # [0x38] KERNEL_TSS
+        .quad           0                       # [0x30] KERNEL_TSS
+        .quad           0                       # [0x38] EMERG_TSS
 _gdt_end:
 
 # -----------------------------------------------------------------------------

@@ -30,8 +30,8 @@
 #define KERNEL_DS                       0x18
 #define USER_CS                         0x23
 #define USER_DS                         0x2B
-#define USER_TSS                        0x30
-#define KERNEL_TSS                      0x38
+#define KERNEL_TSS                      0x30
+#define EMERG_TSS                       0x38
 
 #ifndef __KERNEL__
 #error "Kernel-only defines live here!"
@@ -64,7 +64,7 @@ extern void beep(int hz, int ms);
 //  interrupts must be ON or this will beep forever!
 #define alert(...) \
 do { \
-    kprint("\e[1;33malert: " __VA_ARGS__); kprint("\e[0m"); \
+    kprint("\n\e[1;33malert: " __VA_ARGS__); kprint("\e[0m"); \
     beep(ALERT_FREQ, ALERT_TIME); \
 } while (0)
 

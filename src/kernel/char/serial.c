@@ -31,6 +31,9 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <signal.h>
+#include <i386/bitops.h>
+#include <i386/gdbstub.h>
 #include <i386/interrupt.h>
 #include <i386/io.h>
 #include <kernel/io.h>
@@ -61,47 +64,6 @@
 #define COM_WARN(...) \
     alert(__VA_ARGS__)
 
-//
-// COM port identifiers
-//
-enum {
-    COM1 = 1,
-    COM2 = 2,
-    COM3 = 3,
-    COM4 = 4,
-};
-
-//
-// COM port state
-//
-struct com {
-    // port info
-    int num;                    // COM port number
-    uint16_t io_port;           // I/O base port number
-    struct tty *tty;            // TTY
-
-    // flags
-    bool valid      : 1;        // port exists and is usable
-    bool open       : 1;        // port is currently in use
-    bool reserved   : 1;        // port exists, but is reserved by another driver
-
-    // buffers
-    struct ring tx_ring;        // output queue
-    char _txbuf[TTY_BUFFER_SIZE];
-    char xchar;                 // high-priority control character
-
-    // register shadows
-    struct iir iir;             // interrupt indicator register
-    struct ier ier;             // interrupt enable register
-    struct lcr lcr;             // line control register
-    struct lsr lsr;             // line status register
-    struct mcr mcr;             // modem control register
-    struct msr msr;             // modem status register
-    uint16_t baud_divisor;      // baud rate divisor
-
-    // statistics
-    struct serial_stats stats;
-};
 struct com g_com[NR_SERIAL];
 
 // "serial" prefix refers to TTY functions
@@ -135,12 +97,9 @@ struct tty_driver serial_driver = {
     .stop = serial_stop
 };
 
-static void com_interrupt(struct com *com);
 static void com1_irq(int irq, struct iregs *regs);
 static void com2_irq(int irq, struct iregs *regs);
-
-static inline uint8_t com_in(struct com *com, uint8_t reg);
-static inline void com_out(struct com *com, uint8_t reg, uint8_t data);
+static void com_interrupt(struct com *com, struct iregs *regs);
 
 static void shadow_regs(struct com *com);
 static bool set_baud(struct com *com, int baud_divisor);
@@ -166,18 +125,7 @@ static int get_modem_stats(struct com *com, struct serial_stats *user_stats);
 
 // ----------------------------------------------------------------------------
 
-static uint16_t get_com_port(int num)
-{
-    switch (num) {
-        case 1: return COM1_PORT;
-        case 2: return COM2_PORT;
-        case 3: return COM3_PORT;
-        case 4: return COM4_PORT;
-    }
-    return 0;   // invalid
-}
-
-static struct com * get_com(int num)
+struct com * get_com(int num)
 {
     static_assert(COM4 - COM1 + 1 == NR_SERIAL, "NR_SERIAL");
     if (num < COM1 || num > COM4) {
@@ -186,7 +134,7 @@ static struct com * get_com(int num)
     return &g_com[num - COM1];
 }
 
-static int tty_get_com(struct tty *tty, struct com **com)
+int tty_get_com(struct tty *tty, struct com **com)
 {
     if (!tty || !com) {
         return -EINVAL;
@@ -343,7 +291,7 @@ static int serial_console_getc(struct console *cons)
 struct console serial_console =
 {
     .name = "ttyS",
-    .index = SERIAL_CONSOLE_NUM,
+    .index = SERIAL_CONSOLE_COM,
     .flags = 0,
     .device = serial_console_device,
     .setup = serial_console_setup,
@@ -374,8 +322,9 @@ void init_serial(void)
         // serial debug port and skip...
         if (reserve_io_range(com->io_port, 8, "serial") < 0) {
             // serial port is reserved by another driver (e.g. debug interface)
+            com->open = true;
             com->reserved = true;
-            kprint("com%d: I/O port %Xh reserved, not usable as TTY device\n",
+            kprint("com%d: I/O port %Xh reserved for debugging, not usable as a TTY device\n",
                 com->num, com->io_port);
             continue;
         }
@@ -730,22 +679,6 @@ static void serial_stop(struct tty *tty)
 // ----------------------------------------------------------------------------
 //                          COM Port Interface
 
-static inline uint8_t com_in(struct com *com, uint8_t reg)
-{
-    assert(com);
-    assert(reg <= UART_SCR);
-
-    return inb(com->io_port + reg);
-}
-
-static inline void com_out(struct com *com, uint8_t reg, uint8_t data)
-{
-    assert(com);
-    assert(reg <= UART_SCR);
-
-    outb(com->io_port + reg, data);
-}
-
 static void shadow_regs(struct com *com)
 {
     // shadow register state
@@ -1069,9 +1002,10 @@ static void recv_chars(struct com *com)
 #endif
 }
 
-static void com_interrupt(struct com *com)
+static void com_interrupt(struct com *com, struct iregs *regs)
 {
     int npass;
+    (void) regs;
 
     com->iir._value = com_in(com, UART_IIR);
     if (com->iir.no_int) {
@@ -1082,6 +1016,16 @@ static void com_interrupt(struct com *com)
     com->ier._value = com_in(com, UART_IER);
     com->lcr._value = com_in(com, UART_LCR);
     com->mcr._value = com_in(com, UART_MCR);
+
+#if SERIAL_DEBUGGING
+    if (com->io_port == SERIAL_DEBUG_PORT) {
+        struct gdb_state state;
+        gdb_init(&state, com);
+        state.pending_char = com_in(com, UART_RX);
+        gdb_main(&state, regs, SIGTRAP);
+        return;
+    }
+#endif
 
     npass = 0;
     do {
@@ -1115,27 +1059,27 @@ static void com_interrupt(struct com *com)
 #endif
 }
 
-#define _do_com_irq(port)   \
-do {                        \
-    struct com *__c;        \
-    __c = get_com(port);    \
-    if (__c->open) {        \
-        com_interrupt(__c); \
-    }                       \
+#define _do_com_irq(port,regs)      \
+do {                                \
+    struct com *__c;                \
+    __c = get_com(port);            \
+    if (__c->open) {                \
+        com_interrupt(__c, regs);   \
+    }                               \
 } while (0);
 
 static void com1_irq(int irq, struct iregs *regs)
 {
     assert(irq == IRQ_COM1);
 
-    _do_com_irq(COM1);
-    _do_com_irq(COM3);
+    _do_com_irq(COM1, regs);
+    _do_com_irq(COM3, regs);
 }
 
 static void com2_irq(int irq, struct iregs *regs)
 {
     assert(irq == IRQ_COM2);
 
-    _do_com_irq(COM2);
-    _do_com_irq(COM4);
+    _do_com_irq(COM2, regs);
+    _do_com_irq(COM4, regs);
 }

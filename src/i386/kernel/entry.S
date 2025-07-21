@@ -165,7 +165,9 @@ recv_interrupt:
         jmp             handle_interrupt
 
 _store_kernel_stack:
-        movl            %esp, IREGS_ESP(%esp)
+        movl            %esp, %eax
+        addl            $SIZEOF_IREGS+IRET_ESP, %eax
+        movl            %eax, IREGS_ESP(%esp)
         STORE_SEGMENT   %ss, IREGS_SS(%esp)
         jmp             handle_interrupt
 
@@ -210,8 +212,6 @@ recv_interrupt_tss:
 # -----------------------------------------------------------------------------
 
 handle_interrupt:
-        call            current_task
-        movl            %esp, TASK_IREGS(%eax)  # store iregs in current task
         movl            %esp, %ecx              # ecx = fastcall param
         movl            IREGS_VEC(%esp), %eax
         test            %eax, %eax
@@ -352,57 +352,57 @@ thunk_name:                                                                    \
 #      trap - executes instruction following trapping instruction
 #     abort - severe error, interrupted program cannot be resumed
 
-# 0-31                  processor exceptions                        classification
-IDT_THUNK       (_except_00h, recv_interrupt, DIVIDE_ERROR)         # fault
-IDT_THUNK       (_except_01h, recv_interrupt, DEBUG_EXCEPTION)      # fault or trap
-IDT_THUNK       (_except_02h, recv_interrupt, NMI_INTERRUPT)        # n/a
-IDT_THUNK       (_except_03h, recv_interrupt, BREAKPOINT)           # trap
-IDT_THUNK       (_except_04h, recv_interrupt, OVERFLOW_EXCEPTION)   # trap
-IDT_THUNK       (_except_05h, recv_interrupt, BOUND_RANGE_EXCEEDED) # fault
-IDT_THUNK       (_except_06h, recv_interrupt, INVALID_OPCODE)       # fault
-IDT_THUNK       (_except_07h, recv_interrupt, DEVICE_NOT_AVAILABLE) # fault
-IDT_THUNK_ERR   (_except_08h, recv_interrupt_tss, DOUBLE_FAULT)     # abort; err=0
-IDT_THUNK       (_except_09h, recv_interrupt, SEGMENT_OVERRUN)      # abort; unused
-IDT_THUNK_ERR   (_except_0Ah, recv_interrupt, INVALID_TSS)          # fault
-IDT_THUNK_ERR   (_except_0Bh, recv_interrupt, SEGMENT_NOT_PRESENT)  # fault
-IDT_THUNK_ERR   (_except_0Ch, recv_interrupt, STACK_FAULT)          # fault
-IDT_THUNK_ERR   (_except_0Dh, recv_interrupt, PROTECTION_FAULT)     # fault
-IDT_THUNK_ERR   (_except_0Eh, recv_interrupt, PAGE_FAULT)           # fault
-IDT_THUNK       (_except_0Fh, recv_interrupt, 0x0F)                 # (reserved)
-IDT_THUNK       (_except_10h, recv_interrupt, MATH_FAULT)           # fault
-IDT_THUNK_ERR   (_except_11h, recv_interrupt, ALIGNMENT_CHECK)      # fault
-IDT_THUNK       (_except_12h, recv_interrupt, MACHINE_CHECK)        # abort
-IDT_THUNK       (_except_13h, recv_interrupt, SIMD_FAULT)           # fault
-IDT_THUNK       (_except_14h, recv_interrupt, 0x14)                 # fault
-IDT_THUNK_ERR   (_except_15h, recv_interrupt, 0x15)                 # fault
-IDT_THUNK       (_except_16h, recv_interrupt, 0x16)                 # (reserved)
-IDT_THUNK       (_except_17h, recv_interrupt, 0x17)                 # (reserved)
-IDT_THUNK       (_except_18h, recv_interrupt, 0x18)                 # (reserved)
-IDT_THUNK       (_except_19h, recv_interrupt, 0x19)                 # (reserved)
-IDT_THUNK       (_except_1Ah, recv_interrupt, 0x1A)                 # (reserved)
-IDT_THUNK       (_except_1Bh, recv_interrupt, 0x1B)                 # (reserved)
-IDT_THUNK       (_except_1Ch, recv_interrupt, 0x1C)                 # (reserved)
-IDT_THUNK       (_except_1Dh, recv_interrupt, 0x1D)                 # (reserved)
-IDT_THUNK       (_except_1Eh, recv_interrupt, 0x1E)                 # (reserved)
-IDT_THUNK       (_except_1Fh, recv_interrupt, 0x1F)                 # (reserved)
+# 0-31           thunk        handler             vector                classification
+IDT_THUNK       (_except_00h, recv_interrupt,     DIVIDE_ERROR)         # fault
+IDT_THUNK       (_except_01h, recv_interrupt,     DEBUG_EXCEPTION)      # fault or trap
+IDT_THUNK       (_except_02h, recv_interrupt,     NMI_INTERRUPT)        # n/a
+IDT_THUNK       (_except_03h, recv_interrupt,     BREAKPOINT)           # trap
+IDT_THUNK       (_except_04h, recv_interrupt,     OVERFLOW_EXCEPTION)   # trap
+IDT_THUNK       (_except_05h, recv_interrupt,     BOUND_RANGE_EXCEEDED) # fault
+IDT_THUNK       (_except_06h, recv_interrupt,     INVALID_OPCODE)       # fault
+IDT_THUNK       (_except_07h, recv_interrupt,     DEVICE_NOT_AVAILABLE) # fault
+IDT_THUNK_ERR   (_except_08h, recv_interrupt_tss, DOUBLE_FAULT)         # abort; err=0
+IDT_THUNK       (_except_09h, recv_interrupt,     SEGMENT_OVERRUN)      # abort; unused
+IDT_THUNK_ERR   (_except_0Ah, recv_interrupt,     INVALID_TSS)          # fault
+IDT_THUNK_ERR   (_except_0Bh, recv_interrupt,     SEGMENT_NOT_PRESENT)  # fault
+IDT_THUNK_ERR   (_except_0Ch, recv_interrupt,     STACK_FAULT)          # fault
+IDT_THUNK_ERR   (_except_0Dh, recv_interrupt,     PROTECTION_FAULT)     # fault
+IDT_THUNK_ERR   (_except_0Eh, recv_interrupt,     PAGE_FAULT)           # fault
+IDT_THUNK       (_except_0Fh, recv_interrupt,     0x0F)                 # (reserved)
+IDT_THUNK       (_except_10h, recv_interrupt,     MATH_FAULT)           # fault
+IDT_THUNK_ERR   (_except_11h, recv_interrupt,     ALIGNMENT_CHECK)      # fault
+IDT_THUNK       (_except_12h, recv_interrupt,     MACHINE_CHECK)        # abort
+IDT_THUNK       (_except_13h, recv_interrupt,     SIMD_FAULT)           # fault
+IDT_THUNK       (_except_14h, recv_interrupt,     0x14)                 # fault
+IDT_THUNK_ERR   (_except_15h, recv_interrupt,     0x15)                 # fault
+IDT_THUNK       (_except_16h, recv_interrupt,     0x16)                 # (reserved)
+IDT_THUNK       (_except_17h, recv_interrupt,     0x17)                 # (reserved)
+IDT_THUNK       (_except_18h, recv_interrupt,     0x18)                 # (reserved)
+IDT_THUNK       (_except_19h, recv_interrupt,     0x19)                 # (reserved)
+IDT_THUNK       (_except_1Ah, recv_interrupt,     0x1A)                 # (reserved)
+IDT_THUNK       (_except_1Bh, recv_interrupt,     0x1B)                 # (reserved)
+IDT_THUNK       (_except_1Ch, recv_interrupt,     0x1C)                 # (reserved)
+IDT_THUNK       (_except_1Dh, recv_interrupt,     0x1D)                 # (reserved)
+IDT_THUNK       (_except_1Eh, recv_interrupt,     0x1E)                 # (reserved)
+IDT_THUNK       (_except_1Fh, recv_interrupt,     0x1F)                 # (reserved)
 
-# 32-47         device IRQs
-IDT_THUNK       (_irq_00h, recv_interrupt, ~IRQ_TIMER)
-IDT_THUNK       (_irq_01h, recv_interrupt, ~IRQ_KEYBOARD)
-IDT_THUNK       (_irq_02h, recv_interrupt, ~IRQ_SLAVE)
-IDT_THUNK       (_irq_03h, recv_interrupt, ~IRQ_COM2)
-IDT_THUNK       (_irq_04h, recv_interrupt, ~IRQ_COM1)
-IDT_THUNK       (_irq_05h, recv_interrupt, ~IRQ_LPT2)
-IDT_THUNK       (_irq_06h, recv_interrupt, ~IRQ_FLOPPY)
-IDT_THUNK       (_irq_07h, recv_interrupt, ~IRQ_LPT1)
-IDT_THUNK       (_irq_08h, recv_interrupt, ~IRQ_RTC)
-IDT_THUNK       (_irq_09h, recv_interrupt, ~IRQ_ACPI)
-IDT_THUNK       (_irq_0Ah, recv_interrupt, ~IRQ_MISC1)
-IDT_THUNK       (_irq_0Bh, recv_interrupt, ~IRQ_MISC2)
-IDT_THUNK       (_irq_0Ch, recv_interrupt, ~IRQ_MOUSE)
-IDT_THUNK       (_irq_0Dh, recv_interrupt, ~IRQ_COPOCESSOR)
-IDT_THUNK       (_irq_0Eh, recv_interrupt, ~IRQ_ATA1)
-IDT_THUNK       (_irq_0Fh, recv_interrupt, ~IRQ_ATA2)
+# 32-47          thunk        handler             vector
+IDT_THUNK       (_irq_00h,    recv_interrupt,     ~IRQ_TIMER)
+IDT_THUNK       (_irq_01h,    recv_interrupt,     ~IRQ_KEYBOARD)
+IDT_THUNK       (_irq_02h,    recv_interrupt,     ~IRQ_SLAVE)
+IDT_THUNK       (_irq_03h,    recv_interrupt,     ~IRQ_COM2)
+IDT_THUNK       (_irq_04h,    recv_interrupt,     ~IRQ_COM1)
+IDT_THUNK       (_irq_05h,    recv_interrupt,     ~IRQ_LPT2)
+IDT_THUNK       (_irq_06h,    recv_interrupt,     ~IRQ_FLOPPY)
+IDT_THUNK       (_irq_07h,    recv_interrupt,     ~IRQ_LPT1)
+IDT_THUNK       (_irq_08h,    recv_interrupt,     ~IRQ_RTC)
+IDT_THUNK       (_irq_09h,    recv_interrupt,     ~IRQ_ACPI)
+IDT_THUNK       (_irq_0Ah,    recv_interrupt,     ~IRQ_MISC1)
+IDT_THUNK       (_irq_0Bh,    recv_interrupt,     ~IRQ_MISC2)
+IDT_THUNK       (_irq_0Ch,    recv_interrupt,     ~IRQ_MOUSE)
+IDT_THUNK       (_irq_0Dh,    recv_interrupt,     ~IRQ_COPOCESSOR)
+IDT_THUNK       (_irq_0Eh,    recv_interrupt,     ~IRQ_ATA1)
+IDT_THUNK       (_irq_0Fh,    recv_interrupt,     ~IRQ_ATA2)
 
 # 48-79         available
 
