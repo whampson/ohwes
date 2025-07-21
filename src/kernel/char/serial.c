@@ -937,7 +937,6 @@ static void send_chars(struct com *com)
         com_out(com, UART_TX, com->xchar);
         com->xchar = 0;
         com->stats.n_xchar++;
-        com->stats.n_tx++;
     }
 
     // no chars to send or output stopped? disable transmitter
@@ -951,7 +950,6 @@ static void send_chars(struct com *com)
     do {
         c = ring_get(&com->tx_ring);
         com_out(com, UART_TX, c);
-        com->stats.n_tx++;
         if (ring_empty(&com->tx_ring)) {
             break;
         }
@@ -985,7 +983,6 @@ static void recv_chars(struct com *com)
         // accept char and put it in the ldisc
         c = com_in(com, UART_RX);
         ldisc->recv(tty, &c, 1);
-        com->stats.n_rx++;
 
         // read new line status, continue receiving while data is available
         check_line_status(com);
