@@ -155,7 +155,7 @@ int tty_open_internal(struct tty *tty)
     // associate and open line discipline
     tty->ldisc = &ldiscs[N_TTY];
     if (!tty->ldisc->open) {
-        assert(!"where's ldisc->open??");
+        assert(!"where's tty->ldisc->open()??");
         return -ENOSYS; // no open fn registered on line discipline! (panic?)
     }
     ret = tty->ldisc->open(tty);
@@ -186,7 +186,7 @@ int tty_open_internal(struct tty *tty)
 
     // open the tty driver
     if (!tty->driver.open) {
-        assert(!"where's driver.open??");
+        assert(!"where's tty->driver.open()??");
         return -ENOSYS;
     }
     ret = tty->driver.open(tty);
@@ -212,7 +212,7 @@ int tty_putchar(struct tty *tty, char c)
         return -ENXIO;
     }
     if (!tty->ldisc->write) {
-        assert(!"where's ldisc->write??");
+        assert(!"where's tty->ldisc.write()??");
         return -ENOSYS;
     }
 
@@ -253,6 +253,7 @@ static int tty_open(struct inode *inode, struct file *file)
     // set file state
     tty->file = file;
     file->fops = &tty_fops;
+    file->inode = inode;
     file->private_data = tty;
 
     return 0;
@@ -261,8 +262,24 @@ static int tty_open(struct inode *inode, struct file *file)
 static int tty_close(struct file *file)
 {
     // TODO: flush buffers, close ldisc, close/detach, driver
-    assert(!"implement me!");
-    return -ENOSYS;
+
+    int ret;
+    struct tty *tty;
+
+    if (!file || !file->inode) {
+        return -EINVAL;
+    }
+
+    ret = get_tty(file->inode->device, &tty);
+    if (ret < 0) {
+        return -ENODEV; // not a TTY device
+    }
+
+    if (!tty->driver.close) {
+        assert(!"where's tty->driver.close()??");
+        return -ENOSYS;
+    }
+    return tty->driver.close(tty);  // driver should flush before close
 }
 
 static ssize_t tty_read(struct file *file, char *buf, size_t count)
@@ -281,7 +298,7 @@ static ssize_t tty_read(struct file *file, char *buf, size_t count)
         return -ENXIO;
     }
     if (!tty->ldisc->read) {
-        assert(!"where's ldisc->read??");
+        assert(!"where's tty->ldisc->read()??");
         return -ENOSYS;
     }
 
@@ -304,7 +321,7 @@ static ssize_t tty_write(struct file *file, const char *buf, size_t count)
         return -ENXIO;
     }
     if (!tty->ldisc->write) {
-        assert(!"where's ldisc->write??");
+        assert(!"where's tty->ldisc->write()??");
         return -ENOSYS;
     }
 

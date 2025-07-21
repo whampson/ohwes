@@ -89,9 +89,7 @@ static int n_tty_open(struct tty *tty)
 
 static int n_tty_close(struct tty *tty)
 {
-    // TODO: flush etc.
-    assert(!"implement me!");
-    return -ENOSYS;
+    return 0;
 }
 
 void n_tty_clear(struct tty *tty)

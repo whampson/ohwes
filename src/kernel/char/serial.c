@@ -460,10 +460,11 @@ static int serial_close(struct tty *tty)
         return ret;
     }
 
-    // TODO: flush, etc.
+    serial_flush(tty);
 
     com->tty = NULL;
     com->open = false;
+    // TODO: anything else? hang up??
     return 0;
 }
 
@@ -509,6 +510,7 @@ static void serial_flush(struct tty *tty)
     if (!ring_empty(&com->tx_ring) && !tty->stopped && !tty->hw_stopped) {
         tx_enable(com);
     }
+    // TODO: block til flushed?
     restore_flags(flags);
 }
 

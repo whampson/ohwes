@@ -59,6 +59,7 @@ struct file_ops {
 struct file {
     uint32_t f_oflag;
     struct file_ops *fops;
+    struct inode *inode;
     void *private_data;     // TODO: needed?
 };
 
