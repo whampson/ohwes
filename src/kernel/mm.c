@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/mm/mm.c
+ *         File: kernel/mm.c
  *      Created: July 3, 2024
  *       Author: Wes Hampson
  *
@@ -32,8 +32,6 @@
 #include <kernel/mm.h>
 #include <kernel/ohwes.h>
 #include <kernel/pool.h>
-
-static void init_bss(void);
 
 extern void init_pools(void);   // see pool.c
 

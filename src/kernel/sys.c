@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/sys.c
+ *         File: kernel/sys.c
  *      Created: March 24, 2024
  *       Author: Wes Hampson
  * =============================================================================

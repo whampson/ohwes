@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/mm/pool.c
+ *         File: kernel/pool.c
  *      Created: December 13, 2024
  *       Author: Wes Hampson
  * =============================================================================

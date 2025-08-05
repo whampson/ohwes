@@ -13,7 +13,7 @@
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 * SOFTWARE.
 * -----------------------------------------------------------------------------
-*         File: src/kernel/kernel.ld
+*         File: i386/kernel/kernel.ld
 *      Created: June 3, 2024
 *       Author: Wes Hampson
 * =============================================================================

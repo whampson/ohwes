@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/irq.c
+ *         File: kernel/irq.c
  *      Created: December 23, 2020
  *       Author: Wes Hampson
  * =============================================================================

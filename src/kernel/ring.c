@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/ring.c
+ *         File: kernel/ring.c
  *      Created: June 15, 2024
  *       Author: Wes Hampson
  * =============================================================================

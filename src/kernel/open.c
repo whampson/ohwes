@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/fs/open.c
+ *         File: kernel/open.c
  *      Created: April 2, 2024
  *       Author: Wes Hampson
  * =============================================================================

@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/kernel/list.c
+ *         File: kernel/list.c
  *      Created: November 20, 2024
  *       Author: Wes Hampson
  * =============================================================================

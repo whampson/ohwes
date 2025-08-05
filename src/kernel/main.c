@@ -47,26 +47,11 @@
 #include <kernel/termios.h>
 #include <sys/ioctl.h>
 
-#define CHECK(sys)              \
-({                              \
-    int __ret = (sys);          \
-    if (__ret < 0) {            \
-        int __errno = errno;    \
-        perror(#sys);           \
-        _exit(__errno);         \
-    }                           \
-    __ret;                      \
-})
-
-void init_boot(struct boot_info **info);
 extern void init_cpu(void);
-extern void init_fs(void);
-extern void init_io(void);
-extern void init_mm(void);
-extern void init_pic(void);
-extern void init_rtc(void);
-extern void init_timer(void);
-extern void init_tty(void);
+extern void init_fs(void);  // fs/fs.c
+extern void init_io(void);  // io.c
+extern void init_mm(void);  // mm/mm.c
+extern void init_tty(void); // char/tty.c
 
 #if TEST_BUILD
 extern void run_tests(void);
@@ -90,37 +75,6 @@ struct boot_info *g_boot;
 
 __fastcall void kmain(struct boot_info **info)
 {
-    init_boot(info);
-
-    // initialize static memory and setup memory manager
-    init_mm();
-
-    // setup I/O stuff
-    init_io();
-
-#if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+FN to crash kernel
-    irq_register(IRQ_TIMER, crash_key_irq);
-#endif
-
-    // setup the file system
-    init_fs();
-
-    // get the TTY subsystem working for real
-    init_tty();
-
-#if TEST_BUILD
-    run_tests();
-#endif
-
-    kprint("entering user mode...\n");
-    go_to_ring3(init, KERNEL_ADDR(USER_STACK));
-
-    // for future reference...
-    // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
-}
-
-void init_boot(struct boot_info **info)
-{
     g_boot = *info;
 
     kprint("\n\e[0;1m%s %s\n", OS_NAME, OS_VERSION);
@@ -134,6 +88,25 @@ void init_boot(struct boot_info **info)
 #if PRINT_PAGE_MAP
     print_page_mappings();
 #endif
+
+    init_mm();
+    init_io();
+    init_fs();
+    init_tty();
+
+#if TEST_BUILD
+    run_tests();
+#endif
+
+#if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+FN to crash kernel
+    irq_register(IRQ_TIMER, crash_key_irq);
+#endif
+
+    kprint("entering user mode...\n");
+    go_to_ring3(init, KERNEL_ADDR(USER_STACK));
+
+    // for future reference...
+    // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
 }
 
 static void go_to_ring3(void *entry, uint32_t stack)
@@ -160,16 +133,32 @@ static void go_to_ring3(void *entry, uint32_t stack)
     switch_context(&regs);
 }
 
+// ----------------------------------------------------------------------------
+// ----------------------------- Ring 3 ---------------------------------------
+// ----------------------------------------------------------------------------
+
+// Return if False/Failed
+#define RIF(sys)                \
+({                              \
+    int __ret = (sys);          \
+    if (__ret < 0) {            \
+        int __errno = errno;    \
+        perror(#sys);           \
+        _exit(__errno);         \
+    }                           \
+    __ret;                      \
+})
+
 void init(void)
 {
-    // TODO: this should run in ring0 as a kernel task,
-    // then call execve("/bin/init") or similar to drop to ring3
-    // assert(getpl() == KERNEL_PL);
+    // TODO: this should be /bin/init
+    assert(getpl() == USER_PL);
 
-    CHECK(open("/dev/tty1", O_RDWR));   // stdin
-    CHECK(dup(0));                      // stdout
-    CHECK(dup(0));                      // stderr
+    RIF(open("/dev/tty1", O_RDWR));   // stdin
+    RIF(dup(0));                      // stdout
+    RIF(dup(0));                      // stderr
 
+    // TODO: exec("/bin/sh")
     _exit(main());
 }
 
@@ -183,7 +172,7 @@ int main(void)
 
     // open TTY serial port
     printf("Opening /dev/ttyS2...\n");
-    int fd = CHECK(open("/dev/ttyS2", O_RDWR | O_NONBLOCK));
+    int fd = RIF(open("/dev/ttyS2", O_RDWR | O_NONBLOCK));
 
     // set serial TTY termios flags
     //  disable local echo, enable flow control

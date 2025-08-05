@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: kernel/kprint.c
+ *         File: kernel/console.c
  *      Created: April 28, 2025
  *       Author: Wes Hampson
  * =============================================================================

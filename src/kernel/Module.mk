@@ -1,13 +1,20 @@
 TARGET := kernel.elf
 TARGET_EXE := ohwes.sys
 
+MODULES := char
+
 SOURCES := \
+    console.c \
+    fs.c \
     io.c \
     irq.c \
-    kprint.c \
     list.c \
     main.c \
+    mm.c \
+    open.c \
+    pool.c \
     ring.c \
+    sys.c \
     task.c \
 
 ifeq "${TEST_BUILD}" "1"
@@ -24,12 +31,8 @@ endif
 
 TARGET_DEFINES := __KERNEL__
 TARGET_CFLAGS  := -Wno-unused-function -Wno-multichar
-TARGET_LDSCRIPT:= kernel.ld	# TODO: move to arch directory?
-
-MODULES := \
-    char \
-    fs \
-    mm \
+TARGET_LDSCRIPT:= ../${ARCH}/kernel/kernel.ld
+# TARGET_LDSCRIPT:= kernel.ld
 
 SUBMAKEFILES := $(addsuffix /Module.mk,${MODULES})
 
