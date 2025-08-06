@@ -29,8 +29,8 @@
 
 #define CHATTY_POOL         1
 
-#define POOL_MAGIC          'loop'  // 'pool'
-#define CHUNK_MAGIC         'knhc'  // 'chnk'
+#define POOL_MAGIC          'lwep'
+#define CHUNK_MAGIC         'nuhc'
 
 #define POOL_NAME_LENGTH    32
 
@@ -59,7 +59,7 @@ static struct pool _pools[MAX_NR_POOLS];
 static struct chunk _chunks[MAX_NR_POOL_ITEMS];
 static bool _pools_initialized = false;
 
-static char _pool_mask[MAX_NR_POOLS>>3];    // bit[n]==1 => n'th slot free
+static char _pool_mask[MAX_NR_POOLS>>3];        // bit[n]==1 => n'th slot free
 static char _chunk_mask[MAX_NR_POOL_ITEMS>>3];
 
 // bitmap fns require bitstrings to be in DWORDs...
@@ -88,13 +88,10 @@ static size_t get_capacity(pool_t pool);
 static bool pool_valid(pool_t);                     // pool desc valid?
 static bool addr_valid(pool_t pool, void *addr);    // item addr in pool range?
 
-void init_pools(void)
+void init_pool(void)
 {
-    zeromem(_pools, sizeof(_pools));
-    zeromem(_chunks, sizeof(_chunks));
     memset(_pool_mask, 0xFF, sizeof(_pool_mask));
     memset(_chunk_mask, 0xFF, sizeof(_chunk_mask));
-    _pools_initialized = true;
 
 #if CHATTY_POOL
     size_t data_size = sizeof(_pools) + sizeof(_chunks) + sizeof(_pool_mask)
@@ -102,9 +99,11 @@ void init_pools(void)
     kprint("pool data takes up %d bytes (%d pages)\n",
         data_size, PAGE_ALIGN(data_size) >> PAGE_SHIFT);
 #endif
+
+    _pools_initialized = true;
 }
 
-pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capacity)
+pool_t pool_create(void *addr, const char *name, size_t item_size, size_t capacity)
 {
     int pool_index;
     struct pool *p;
@@ -168,7 +167,7 @@ pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capaci
     return pool2desc(p);
 }
 
-void destroy_pool(pool_t pool)
+void pool_destroy(pool_t pool)
 {
     struct pool *p;
 

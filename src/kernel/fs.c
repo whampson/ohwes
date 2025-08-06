@@ -44,18 +44,18 @@ extern struct file_ops chdev_ops;
 void init_fs(void)
 {
     list_init(&inodes);
-    inode_pool = create_pool(_inode_pool, "inodes", MAX_NR_INODES, sizeof(struct inode));
+    inode_pool = pool_create(_inode_pool, "inodes", MAX_NR_INODES, sizeof(struct inode));
     if (!inode_pool) {
         panic("failed to create inode pool!");
     }
 
     list_init(&dentries);
-    dentry_pool = create_pool(_dentry_pool, "dentries", MAX_NR_DENTRIES, sizeof(struct dentry));
+    dentry_pool = pool_create(_dentry_pool, "dentries", MAX_NR_DENTRIES, sizeof(struct dentry));
     if (!inode_pool) {
         panic("failed to create dentry pool!");
     }
 
-    file_pool = create_pool(_file_pool, "files", MAX_NR_TOTAL_OPEN, sizeof(struct file));
+    file_pool = pool_create(_file_pool, "files", MAX_NR_TOTAL_OPEN, sizeof(struct file));
     if (!inode_pool) {
         panic("failed to create file pool!");
     }

@@ -31,12 +31,12 @@ typedef void * pool_t;
 /**
  * Create a new pool.
  */
-pool_t create_pool(void *addr, const char *name, size_t item_size, size_t capacity);
+pool_t pool_create(void *addr, const char *name, size_t item_size, size_t capacity);
 
 /**
  * Destroy an existing pool.
  */
-void destroy_pool(pool_t pool);
+void pool_destroy(pool_t pool);
 
 /**
  * Get an existing pool by name.

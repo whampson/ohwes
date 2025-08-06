@@ -40,7 +40,7 @@ pool_t io_ranges_pool = NULL;
 
 void init_io(void)
 {
-    io_ranges_pool = create_pool(
+    io_ranges_pool = pool_create(
         _io_ranges_pool,
         "io_ranges",
         MAX_NR_IO_RANGES,

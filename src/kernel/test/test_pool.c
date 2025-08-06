@@ -46,12 +46,12 @@ void test_pool(void)
     memset(zeros, 0, sizeof(zeros));
 
     // create/destroy single pool
-    p0 = create_pool(_pool0, "p0", sizeof(struct thing), _MAX_SLOTS);
+    p0 = pool_create(_pool0, "p0", sizeof(struct thing), _MAX_SLOTS);
     VERIFY_IS_NOT_ZERO(p0);
-    destroy_pool(p0);
+    pool_destroy(p0);
 
     // fill pool
-    p0 = create_pool(_pool0, "p0", sizeof(struct thing), _MAX_SLOTS);
+    p0 = pool_create(_pool0, "p0", sizeof(struct thing), _MAX_SLOTS);
     VERIFY_IS_NOT_ZERO(p0);
     for (int i = 0; i < _MAX_SLOTS; i++) {
         things[i] = pool_alloc(p0);
@@ -79,11 +79,11 @@ void test_pool(void)
     VERIFY_IS_ZERO(memcmp(zeros, thing0, sizeof(struct thing)));
 
     // destroy pool
-    destroy_pool(p0);
+    pool_destroy(p0);
 
     // create multiple concurrent pools, ensure there is no crosstalk
-    p0 = create_pool(_pool0, "p0", sizeof(struct thing), _MAX_SLOTS);
-    p1 = create_pool(_pool1, "p1", sizeof(struct thing), _MAX_SLOTS);
+    p0 = pool_create(_pool0, "p0", sizeof(struct thing), _MAX_SLOTS);
+    p1 = pool_create(_pool1, "p1", sizeof(struct thing), _MAX_SLOTS);
     VERIFY_IS_NOT_ZERO(p0);
     VERIFY_IS_NOT_ZERO(p1);
     VERIFY_ARE_NOT_EQUAL(p1, p0);
@@ -114,6 +114,6 @@ void test_pool(void)
     }
 
     // destroy pools
-    destroy_pool(p1);
-    destroy_pool(p0);
+    pool_destroy(p1);
+    pool_destroy(p0);
 }
