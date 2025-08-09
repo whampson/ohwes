@@ -55,7 +55,7 @@ ksetup:
         cld
     rep movsb
 
-        # setup the inititial stack
+        # set up the inititial stack
         movl            $KERNEL_STACK, %ebp
         movl            %ebp, %esp
 
@@ -63,23 +63,36 @@ ksetup:
         call            setup_debug_port
 #endif
 
-        # setup paging; first 1M of physical memory will be identity mapped
+        # set up paging; first 1M of physical memory will be identity mapped
         call            setup_paging
 
         # now that paging is enabled and kernel space is mapped at KERNEL_VA,
-        # adjust the descriptor table pointers and boot info pointers to point
-        # to kernel space
+        # reload the stack pointer and adjust the adjust the boot info pointer
+        # to point to kernel space
         addl            $KERNEL_VA, %ebp
         movl            %ebp, %esp
-        addl            $KERNEL_VA, gdt_ptr
-        addl            $KERNEL_VA, idt_ptr
         addl            $KERNEL_VA, boot_info_ptr
 
         # load the GDT and IDT descriptor registers, perform the jump that
         # reloads CS to begin execution in kernel space, then reload the
         # segment registers with new values from the GDT
+
+        leal            __gdt, %eax
+        movl            %eax, gdt_ptr
+        leal            __gdt_end, %edx
+        subl            %eax, %edx
+        decl            %edx
+        movw            %dx, gdt_limit
         lgdt            gdt_desc
+
+        leal            __idt, %eax
+        movl            %eax, idt_ptr
+        leal            __idt_end, %edx
+        subl            %eax, %edx
+        decl            %edx
+        movw            %dx, idt_limit
         lidt            idt_desc
+
         ljmp            $KERNEL_CS, $_ksetup_continue
 
 .text   # we're executing in kernel-space now...
@@ -100,11 +113,11 @@ _ksetup_continue:
    rep stosb
 
 #if HIGHER_GROUND
-        movl            $0, KERNEL_PGDIR        # clear identity mapping
+        movl            $0, __page_dir          # clear identity mapping
 #endif
 
         #
-        # safe to call C code now
+        # !!! safe to call C code now !!!
         #
 
         # now we can build the CPU descriptor tables;
@@ -157,16 +170,16 @@ TABLE_COUNT = PAGE_SIZE >> 2
         # zero the page directory
         xorl            %eax, %eax
         movl            $TABLE_COUNT, %ecx
-        movl            $KERNEL_PGDIR, %edi
+        leal            __page_dir, %edi
     rep stosl
 
         # zero the page table
         movl            $TABLE_COUNT, %ecx
-        movl            $KERNEL_PGTBL, %edi
+        leal            __page_tbl, %edi
     rep stosl
 
         # open up low 1M in page table
-        movl            $KERNEL_PGTBL, %edi         # pgtbl
+        leal            __page_tbl, %edi            # pgtbl
         xorl            %ebx, %ebx                  # pfn (page frame number)
         xorl            %ecx, %ecx                  # count
 _map_low_1M_loop:
@@ -185,8 +198,8 @@ _map_low_1M_loop:
         # setup page directory
         #  map virt:00000000-000FFFFF to phys:00000000-000FFFFF (temp for setup)
         #  map virt:C0000000-C00FFFFF to phys:00000000-000FFFFF (kernel)
-        movl            $KERNEL_PGDIR, %edi
-        movl            $KERNEL_PGTBL, %eax
+        leal            __page_dir, %edi
+        leal            __page_tbl, %eax
         orl             $PAGE_FLAGS, %eax
         orl             $_PAGE_PDE, %eax
         movl            %eax, 0(%edi)               # identity map
@@ -195,7 +208,7 @@ _map_low_1M_loop:
 #endif
 
         # enable paging
-        movl            $KERNEL_PGDIR, %eax
+        leal            __page_dir, %eax
         movl            %eax, %cr3
         movl            %cr0, %eax
         orl             $CR0_PG, %eax               # PG = paging enable
@@ -263,45 +276,27 @@ setup_debug_port_done:
 # ----------------------------------- Data ------------------------------------
 # -----------------------------------------------------------------------------
 .section .setup.data, "aw", @progbits
-
-# -----------------------------------------------------------------------------
-# GDT
-
-# Global Descriptor Table
-# We load the real GDT here and not in stage2 so we can keep it in kernel space.
-# The LDT and TSS segments are loaded later, after we've begun executing the
-# higher-half kernel.
-.align 8
-_gdt:
-        .quad           0                       # (must be 0)
-        .quad           0                       # [0x08] KERNEL_LDT
-        .quad           0x00CF9A000000FFFF      # [0x10] KERNEL_CS  rx  ring0
-        .quad           0x00CF92000000FFFF      # [0x18] KERNEL_DS  rw  ring0
-        .quad           0x00CFFA000000FFFF      # [0x23] USER_CS    rx  ring3
-        .quad           0x00CFF2000000FFFF      # [0x2B] USER_DS    rw  ring3
-        .quad           0                       # [0x30] KERNEL_TSS
-        .quad           0                       # [0x38] EMERG_TSS
-_gdt_end:
+.align 4
 
 # -----------------------------------------------------------------------------
 # GDT Descriptor
 
-        .word           0                       # align
+        .word           0       # (align)
 gdt_desc:
 gdt_limit:
-        .word           _gdt_end - _gdt - 1
+        .word           0       # (filled-in by ksetup)
 gdt_ptr:
-        .long           _gdt
+        .long           0       # (filled-in by ksetup)
 
 # -----------------------------------------------------------------------------
 # IDT Descriptor
 
-        .word           0                       # align
+        .word           0       # (align)
 idt_desc:
 idt_limit:
-        .word           IDT_BASE + (NR_INTERRUPT_VECTORS << 3) - 1
+        .word           0       # (filled-in by ksetup)
 idt_ptr:
-        .long           IDT_BASE
+        .long           0       # (filled-in by ksetup)
 
 # -----------------------------------------------------------------------------
 # Boot Info

@@ -40,4 +40,6 @@ extern char __data_start[], __data_end[], __data_size[];
 extern char __rodata_start[], __rodata_end[], __rodata_size[];
 extern char __bss_start[], __bss_end[], __bss_size[];
 
+extern char __page_dir[], __page_tbl[];
+
 #endif  // __MM_H

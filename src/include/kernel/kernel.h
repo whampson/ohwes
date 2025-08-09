@@ -68,6 +68,11 @@ do { \
     beep(ALERT_FREQ, ALERT_TIME); \
 } while (0)
 
+#define warn(...) \
+do { \
+    kprint("\n\e[1;33mwarning: " __VA_ARGS__); kprint("\e[0m"); \
+} while (0)
+
 // zero memory
 #define zeromem(p,n)    memset(p, 0, n)
 

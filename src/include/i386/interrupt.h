@@ -28,7 +28,6 @@
 #define EXCEPTION_BASE_VECTOR       0x00
 #define IRQ_BASE_VECTOR             0x20
 #define SYSCALL_VECTOR              0x80
-#define NR_INTERRUPT_VECTORS        256
 
 /**
  * Intel exception vector numbers.

@@ -59,17 +59,17 @@
 #define KERNEL_LOG_SIZE         (2*PAGE_SIZE)
 
 // debugging
-#if DEBUG
 #define SERIAL_DEBUGGING        1   // enable debugging over COM port
 #define SERIAL_DEBUG_PORT       COM1_PORT
 #define SERIAL_DEBUG_BAUD       BAUD_115200
 #define ENABLE_CRASH_KEY        1   // test various crash scenarios w/ keystroke
-#endif
 
 //
 // ----------------------------------------------------------------------------
 // Counts of Things
 //
+
+#define NR_IDT_VECTORS      256
 
 // memory
 #define MAX_NR_POOLS        32    // max num concurrent pools
@@ -98,7 +98,6 @@
 #define FRAME_SIZE          (PAGE_SIZE*2)
 
 // memory regions
-#define IDT_BASE            0x04000
 #define STACK_MEMORY        0x10000
 #define STATIC_MEMORY       0x1C000
 
@@ -108,8 +107,6 @@
 #define USER_STACK          (STACK_MEMORY+(FRAME_SIZE*3))
 
 // static memory
-#define KERNEL_PGDIR        (STATIC_MEMORY+(PAGE_SIZE*0))   // = 1C000-1CFFF
-#define KERNEL_PGTBL        (STATIC_MEMORY+(PAGE_SIZE*1))   // = 1D000-1DFFF
 #define KERNEL_LOG          (STATIC_MEMORY+(PAGE_SIZE*2))   // = 1E000-1FFFF
 #define KERNEL_BASE         (STATIC_MEMORY+(PAGE_SIZE*4))   // = 20000-?????
 

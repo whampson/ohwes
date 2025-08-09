@@ -27,6 +27,7 @@
 #include <i386/paging.h>
 #include <kernel/config.h>
 #include <kernel/irq.h>
+#include <kernel/mm.h>
 #include <kernel/ohwes.h>
 
 //
@@ -83,7 +84,7 @@ void setup_cpu(void)
         if (i == DOUBLE_FAULT) {
             // double fault, ensure we have a fresh stack
             make_task_gate(idt_desc, EMERG_TSS, KERNEL_PL);
-            tss_emerg->cr3 = KERNEL_PGDIR;
+            tss_emerg->cr3 = (uint32_t) __page_dir;
             tss_emerg->esp = KERNEL_ADDR(EMERG_STACK);
             tss_emerg->ebp = KERNEL_ADDR(EMERG_STACK);
             tss_emerg->eip = (uint32_t) entry;

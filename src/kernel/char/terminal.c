@@ -32,6 +32,7 @@
 #include <kernel/console.h>
 #include <kernel/irq.h>
 #include <kernel/kernel.h>
+#include <kernel/mm.h>
 #include <kernel/ohwes.h>
 #include <kernel/tty.h>
 #include <kernel/terminal.h>
@@ -432,7 +433,7 @@ int switch_terminal(int num)
 #if HIGHER_GROUND
     // enable kernel identity mapping so we can operate on page tables
     pde_t *ident_pde = &pgdir[0];
-    *ident_pde = __mkpde(KERNEL_PGTBL, _PAGE_RW);
+    *ident_pde = __mkpde((uint32_t) __page_tbl, _PAGE_RW);
 #endif
 
     // identity map old frame buffer, so it will write to back buffer
