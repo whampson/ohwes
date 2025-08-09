@@ -24,10 +24,9 @@
 
 /* TERMINOLOGY:
     _base   == base physical address
-    _limit  == end physical address less 1 (Intel convention)
     _start  == base virtual address
     _end    == end virtual address
-    _size   == (_end - start) == (_limit - _base + 1)
+    _size   == _end - start
 */
 
 #define DEFINE_SECTION(sect)    \
@@ -40,12 +39,11 @@
     __##sect##_base = .
 
 #define SECTION_EPILOGUE(sect)                              \
+    __##sect##_base = LOADADDR(.sect);                      \
     __##sect##_size = SIZEOF(.sect);                        \
     __##sect##_start = ADDR(.sect);                         \
     __##sect##_end = __##sect##_start + __##sect##_size;    \
-    __##sect##_base = LOADADDR(.sect);                      \
-    . = __##sect##_base + __##sect##_size;                  \
-    __##sect##_limit = (. - 1)
+    . = __##sect##_base + __##sect##_size
 
 #define ENTRY_POINT ksetup
 
@@ -67,8 +65,8 @@ MEMORY
 
 SECTIONS
 {
-    __kernel_start = KERNEL_VA;
     __kernel_base = KERNEL_BASE;
+    __kernel_start = KERNEL_VA + __kernel_base;
 
     . = __kernel_base;
 
@@ -76,38 +74,38 @@ SECTIONS
     /* ---------------------------- Kernel Image --------------------------- */
     /* ----------------------------------------------------------------------*/
 
-    /* initial bootstrap code */
     SECTION_PROLOGUE(setup);
     DEFINE_SECTION_PHYSICAL(setup)
     {
+        /* initial bootstrap code */
         /* NOTE: this section does NOT execute in high memory */
         LONG(ENTRY_POINT);  /* TODO: ELF header, preferably condensed */
         *(.setup*)
     } > RAM_PHYSICAL
     SECTION_EPILOGUE(setup);
 
-    /* code */
     SECTION_PROLOGUE(text);
     DEFINE_SECTION(text)
     {
+        /* kernel code */
         *(.text*)
     } > ROM_VIRTUAL
     SECTION_EPILOGUE(text);
 
-    /* read-only data */
     SECTION_PROLOGUE(rodata);
     DEFINE_SECTION(rodata)
     {
+        /* read-only data */
         *(.rodata*)
     } > ROM_VIRTUAL
     SECTION_EPILOGUE(rodata);
 
     /* TODO: page boundary to ensure writable data get their own pages! */
 
-    /* writable data */
     SECTION_PROLOGUE(data);
     DEFINE_SECTION(data)
     {
+        /* writable data */
         *(.data*)
 
         /* sneak the GDT in here */
@@ -131,10 +129,10 @@ SECTIONS
     } > RAM_VIRTUAL
     SECTION_EPILOGUE(data);
 
-    /* uninitialized data */
     SECTION_PROLOGUE(bss);
     DEFINE_SECTION(bss)
     {
+        /* uninitialized data */
         *(.bss*)
     } > RAM_VIRTUAL
     SECTION_EPILOGUE(bss);
@@ -143,69 +141,89 @@ SECTIONS
     /* ---------------------------- Static Data ---------------------------- */
     /* ----------------------------------------------------------------------*/
 
-    /* interrupt descriptor table */
     . = ALIGN(16);
+
     SECTION_PROLOGUE(idt);
     DEFINE_SECTION(idt)
     {
+        /* interrupt descriptor table */
         __idt = .;
         . += (NR_IDT_VECTORS << 3);
-        __idt_end = .;
-
     } > RAM_VIRTUAL
     SECTION_EPILOGUE(idt);
 
-    /* system memory structures */
     . = ALIGN(PAGE_SIZE);
-    SECTION_PROLOGUE(paging);
-    DEFINE_SECTION_PHYSICAL(paging)
+
+    SECTION_PROLOGUE(pgdir);
+    DEFINE_SECTION_PHYSICAL(pgdir)
     {
         /* kernel page directory */
         __page_dir = .;
         . += PAGE_SIZE;
+    } > RAM_PHYSICAL
+    SECTION_EPILOGUE(pgdir);
 
+    SECTION_PROLOGUE(pgtbl);
+    DEFINE_SECTION_PHYSICAL(pgtbl)
+    {
         /* kernel page table */
         __page_tbl = .;
         . += PAGE_SIZE;
+    } > RAM_PHYSICAL
+    SECTION_EPILOGUE(pgtbl);
 
+    SECTION_PROLOGUE(pgmap);
+    DEFINE_SECTION_PHYSICAL(pgmap)
+    {
         /* page frame bitmap */
         __page_map = .;
-        . += 32 * PAGE_SIZE; /* 32 = (((4G / 4096) / 8) / 4096) */
-
+        . += PAGE_MAP_SIZE;
     } > RAM_PHYSICAL
-    SECTION_EPILOGUE(paging);
+    SECTION_EPILOGUE(pgmap);
 
-    /* TODO: put kernel log and stacks here! */
+    SECTION_PROLOGUE(klog);
+    DEFINE_SECTION(klog)
+    {
+        /* kernel console log buffer */
+        __klog = .;
+        . += KERNEL_LOG_SIZE;
+    } > RAM_VIRTUAL
+    SECTION_EPILOGUE(klog);
+
+
+    SECTION_PROLOGUE(kstack);
+    DEFINE_SECTION(kstack)
+    {
+        /* kernel stack */
+        __kstack = .;
+        . += FRAME_SIZE;
+    } > RAM_VIRTUAL
+    SECTION_EPILOGUE(kstack);
+
+    SECTION_PROLOGUE(ustack);
+    DEFINE_SECTION(ustack)
+    {
+        /* user stack */
+        __ustack = .;
+        . += FRAME_SIZE;
+    } > RAM_VIRTUAL
+    SECTION_EPILOGUE(ustack);
+
+    SECTION_PROLOGUE(estack);
+    DEFINE_SECTION(estack)
+    {
+        /* emergency stack */
+        __estack = .;
+        . += FRAME_SIZE;
+    } > RAM_VIRTUAL
+    SECTION_EPILOGUE(estack);
 
     /* ----------------------------------------------------------------------*/
     /* ------------------------- End Kernel Space -------------------------- */
     /* ----------------------------------------------------------------------*/
 
-    __kernel_size = .;
-    __kernel_end = __kernel_start + __kernel_base + __kernel_size;
-    __kernel_limit = __kernel_base + (. - 1);
+    __kernel_end = KERNEL_VA + .;
+    __kernel_size = __kernel_end - __kernel_start;
 
     /DISCARD/ : { *(.eh_frame) *(.eh_frame_hdr) }
 }
-
-ASSERT((__setup_start == __setup_base),      ".setup start mismatch!");
-ASSERT((  __setup_end == __setup_limit + 1), ".setup end mismatch!");
-
-ASSERT((  __text_start == KERNEL_VA +   __text_base),   ".text start mismatch!");
-ASSERT((__rodata_start == KERNEL_VA + __rodata_base), ".rodata start mismatch!");
-ASSERT((  __data_start == KERNEL_VA +   __data_base),   ".data start mismatch!");
-ASSERT((   __bss_start == KERNEL_VA +    __bss_base),    ".bss start mismatch!");
-/* ASSERT((__paging_start == KERNEL_VA + __paging_base), ".paging start mismatch!"); */
-
-ASSERT((  __text_end == KERNEL_VA +   __text_limit + 1),   ".text end mismatch!");
-ASSERT((__rodata_end == KERNEL_VA + __rodata_limit + 1), ".rodata end mismatch!");
-ASSERT((  __data_end == KERNEL_VA +   __data_limit + 1),   ".data end mismatch!");
-ASSERT((   __bss_end == KERNEL_VA +    __bss_limit + 1),    ".bss end mismatch!");
-/* ASSERT((__paging_end == KERNEL_VA + __paging_limit + 1), ".paging end mismatch!"); */
-
-ASSERT(( __setup_end -  __setup_start ==  __setup_limit -  __setup_base + 1),  ".setup size mismatch!");
-ASSERT((  __text_end -   __text_start ==   __text_limit -   __text_base + 1),   ".text size mismatch!");
-ASSERT((__rodata_end - __rodata_start == __rodata_limit - __rodata_base + 1), ".rodata size mismatch!");
-ASSERT((  __data_end -   __data_start ==   __data_limit -   __data_base + 1),   ".data size mismatch!");
-ASSERT((   __bss_end -    __bss_start ==    __bss_limit -    __bss_base + 1),    ".bss size mismatch!");
-/* ASSERT((__paging_end - __paging_start == __paging_limit - __paging_base + 1), ".paging size mismatch!"); */

@@ -40,7 +40,7 @@
 
 static int _log_start = 0;
 static int _log_size = 0;
-static char *_kernel_log = (char *) KERNEL_ADDR(KERNEL_LOG);
+static char *_kernel_log = (char *) __klog;
 
 struct console *g_consoles = NULL;
 extern bool g_kb_initialized;
@@ -290,122 +290,6 @@ void print_boot_info(struct boot_info *boot)
     kprint("bios-boot: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
     kprint("bios-boot: video mode is %02Xh\n", boot->vga_mode & 0x7F);
     if (boot->ebda_base) kprint("bios-boot: EBDA=%08X,%Xh\n", boot->ebda_base, ebda_size);
-}
-
-void print_kernel_sections(void)
-{
-    struct section {
-        const char *name;
-        void *start, *end;
-    };
-
-    // TODO: pack kernel.elf header into image and extract info from there
-
-    struct section sections[] = {
-        // TODO: dynamically allocate stacks and pgdir/table
-        { "user stack",         (void *) USER_STACK-FRAME_SIZE,         (void *) USER_STACK },
-        { "kernel stack",       (void *) KERNEL_STACK-FRAME_SIZE,       (void *) KERNEL_STACK },
-        { "emerg stack",        (void *) EMERG_STACK-FRAME_SIZE,        (void *) EMERG_STACK },
-        { "page directory",     __page_dir,                             __page_dir+PAGE_SIZE },
-        { "kernel page table",  __page_tbl,                             __page_tbl+PAGE_SIZE },
-        { "kernel image:",      __kernel_start,                         __kernel_end },
-        { ".setup",             __setup_start,                          __setup_end },
-        { ".text",              __text_start,                           __text_end },
-        { ".rodata",            __rodata_start,                         __rodata_end },
-        { ".data",              __data_start,                           __data_end },
-        { ".bss",               __bss_start,                            __bss_end },
-    };
-
-    for (int i = 0; i < countof(sections); i++) {
-        struct section *sec = &sections[i];
-        kprint("PA:%08X-%08X VA:%08X-%08X %s\n",
-            PHYSICAL_ADDR(sec->start), PHYSICAL_ADDR(sec->end)-1,
-            sec->start, sec->end-1, sec->name);
-    }
-
-    kprint("kernel image takes up %dk bytes (%d pages)\n",
-        align((size_t) __kernel_size, 1024) >> 10,
-        PAGE_ALIGN((size_t) __kernel_size) >> PAGE_SHIFT);
-}
-
-void print_memory_info(struct boot_info *boot)
-{
-    int kb_total = 0;
-    int kb_free = 0;
-    int kb_reserved = 0;
-    int kb_acpi = 0;
-    int kb_bad = 0;
-
-    int kb_free_low = 0;    // between 0 and 640k
-    int kb_free_1M = 0;     // between 1M and 16M
-    int kb_free_16M = 0;    // between 1M and 4G
-
-    if (!boot->mem_map) {
-        kprint("bios-e820: memory map not available\n");
-        if (boot->kb_high_e801h != 0) {
-            kb_free_1M = boot->kb_high_e801h;
-            kb_free_16M = (boot->kb_extended << 6);
-        }
-        else {
-            kprint("bios-e801: memory map not available\n");
-            kb_free_1M = boot->kb_high;
-        }
-        kb_free_low = boot->kb_low;
-        kb_free = kb_free_low + kb_free_1M + kb_free_16M;
-    }
-    else {
-        const struct acpi_mmap_entry *e = (const struct acpi_mmap_entry *) KERNEL_ADDR(boot->mem_map);
-        for (; e->type != 0; e++) {
-            uint32_t base = (uint32_t) e->base;
-            uint32_t limit = (uint32_t) e->length - 1;
-
-            kprint("bios-e820: %08lX-%08lX ", base, base+limit, e->attributes, e->type);
-            switch (e->type) {
-                case ACPI_MMAP_TYPE_USABLE: kprint("free"); break;
-                case ACPI_MMAP_TYPE_RESERVED: kprint("reserved"); break;
-                case ACPI_MMAP_TYPE_ACPI: kprint("reserved ACPI"); break;
-                case ACPI_MMAP_TYPE_NVS: kprint("reserved ACPI non-volatile"); break;
-                case ACPI_MMAP_TYPE_BAD: kprint("bad"); break;
-                default: kprint("unknown (%d)", e->type); break;
-            }
-            if (e->attributes) {
-                kprint(" (attributes = %X)", e->attributes);
-            }
-            kprint("\n");
-
-            // TODO: kb count does not account for overlapping regions
-
-            int kb = (e->length >> 10);
-            kb_total += kb;
-
-            switch (e->type) {
-                case ACPI_MMAP_TYPE_USABLE:
-                    kb_free += kb;
-                    break;
-                case ACPI_MMAP_TYPE_ACPI:
-                case ACPI_MMAP_TYPE_NVS:
-                    kb_acpi += kb;
-                    break;
-                case ACPI_MMAP_TYPE_BAD:
-                    kb_bad += kb;
-                    break;
-                default:
-                    kb_reserved += kb;
-                    break;
-            }
-        }
-    }
-
-    kprint("bios-boot: ");
-    if (kb_total) kprint("%dk total, ", kb_total);
-    kprint("%dk free", kb_free);
-    if (kb_bad) kprint(", %dk bad", kb_bad);
-    kprint("\n");
-
-    if (kb_free < RAM_KBYTES) {
-        panic("not enough memory! " OS_NAME " needs least %dk to operate!",
-                RAM_KBYTES);
-    }
 }
 
 static void print_page_info(uint32_t va, const struct pginfo *page)

@@ -85,8 +85,8 @@ void setup_cpu(void)
             // double fault, ensure we have a fresh stack
             make_task_gate(idt_desc, EMERG_TSS, KERNEL_PL);
             tss_emerg->cr3 = (uint32_t) __page_dir;
-            tss_emerg->esp = KERNEL_ADDR(EMERG_STACK);
-            tss_emerg->ebp = KERNEL_ADDR(EMERG_STACK);
+            tss_emerg->esp = (uint32_t) __estack;
+            tss_emerg->ebp = (uint32_t) __estack;
             tss_emerg->eip = (uint32_t) entry;
             tss_emerg->cs = KERNEL_CS; tss_emerg->ss = KERNEL_DS;
             tss_emerg->ds = KERNEL_DS; tss_emerg->es = KERNEL_DS;
@@ -110,7 +110,7 @@ void setup_cpu(void)
 
     // TSS for kernel calls from user mode
     make_tss_desc(x86_get_desc(get_gdt(), KERNEL_TSS), KERNEL_PL, tss_kernl);
-    tss_kernl->esp0 = KERNEL_ADDR(KERNEL_STACK);
+    tss_kernl->esp0 = (uint32_t) __kstack;
     tss_kernl->ss0 = KERNEL_DS;
     __ltr(KERNEL_TSS);
 

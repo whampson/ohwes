@@ -54,7 +54,7 @@ void init_ps2(void)
     cfg = ps2_read();
     port2 = !has_flag(cfg, PS2_CFG_P2CLKOFF);
     if (port2) {
-        kprint("PS/2 mouse detected\n");
+        kprint("ps2: PS/2 mouse detected\n");
     }
 
     //

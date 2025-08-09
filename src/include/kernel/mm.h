@@ -32,14 +32,30 @@ bool walk_page_table(uint32_t va, pte_t **pte);
 
 // TODO: virt_to_phys
 
+
+//
 // linker script symbols
+//
+extern char __page_dir[];
+extern char __page_tbl[];
+extern char __page_map[];
+extern char __pgdir_start[], __pgdir_end[], __pgdir_size[];
+extern char __pgtbl_start[], __pgtbl_end[], __pgtbl_size[];
+extern char __pgmap_start[], __pgmap_end[], __pgmap_size[];
+
+extern char __idt[], __idt_start[], __idt_end[], __idt_size[];
+
+extern char __klog[], __klog_start[], __klog_end[], __klog_size[];
+
+extern char __kstack[], __kstack_start[], __kstack_end[], __kstack_size[];
+extern char __ustack[], __ustack_start[], __ustack_end[], __ustack_size[];
+extern char __estack[], __estack_start[], __estack_end[], __estack_size[];
+
 extern char __kernel_start[], __kernel_end[], __kernel_size[];
 extern char __setup_start[], __setup_end[], __setup_size[];
 extern char __text_start[], __text_end[], __text_size[];
 extern char __data_start[], __data_end[], __data_size[];
 extern char __rodata_start[], __rodata_end[], __rodata_size[];
 extern char __bss_start[], __bss_end[], __bss_size[];
-
-extern char __page_dir[], __page_tbl[];
 
 #endif  // __MM_H

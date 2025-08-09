@@ -96,7 +96,7 @@ void init_pool(void)
 #if CHATTY_POOL
     size_t data_size = sizeof(_pools) + sizeof(_chunks) + sizeof(_pool_mask)
         + sizeof(_chunk_mask);
-    kprint("pool data takes up %d bytes (%d pages)\n",
+    kprint("mem: pool data takes up %d bytes (%d pages)\n",
         data_size, PAGE_ALIGN(data_size) >> PAGE_SHIFT);
 #endif
 
@@ -159,9 +159,9 @@ pool_t pool_create(void *addr, const char *name, size_t item_size, size_t capaci
     }
 
 #if CHATTY_POOL
-    kprint("pool[%d]: create: %08X-%08X capacity=%d item_size=%d %s\n",
-        get_pool_index(p), get_base(p), get_limit(p),
-         get_item_size(p), get_capacity(p), get_pool_name(p));
+    kprint("mem: pool_create: %08X-%08X index=%d capacity=%d item_size=%d %s\n",
+        get_base(p), get_limit(p), get_pool_index(p),
+        get_item_size(p), get_capacity(p), get_pool_name(p));
 #endif
 
     return pool2desc(p);
@@ -187,7 +187,7 @@ void pool_destroy(pool_t pool)
     zeromem(p, sizeof(struct pool));
 
 #if CHATTY_POOL
-    kprint("pool[%d]: destroyed: %s\n",
+    kprint("mem: pool_destroy: destroyed %s\n",
         get_pool_index(&copy), get_pool_name(&copy));
 #endif
 }

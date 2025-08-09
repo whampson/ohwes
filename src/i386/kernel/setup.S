@@ -56,7 +56,7 @@ ksetup:
     rep movsb
 
         # set up the inititial stack
-        movl            $KERNEL_STACK, %ebp
+        leal            __kstack_base, %ebp
         movl            %ebp, %esp
 
 #if SERIAL_DEBUGGING

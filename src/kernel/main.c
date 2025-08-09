@@ -61,11 +61,9 @@ extern void crash_key_irq(int irq, struct iregs *regs);
 #endif
 
 extern void print_boot_info(struct boot_info *);
-extern void print_memory_info(struct boot_info *);
-extern void print_kernel_sections(void);
 extern void print_page_mappings(void);
 
-static void go_to_ring3(void *entry, uint32_t stack);
+static void go_to_ring3(void *entry, void *stack);
 
 void init(void);    // user mode portion of setup
 int main(void);     // user mode program entry point
@@ -82,8 +80,6 @@ __fastcall void kmain(struct boot_info **info)
             __DATE__, __TIME__, __VERSION__);
 
     print_boot_info(boot_info);
-    print_memory_info(boot_info);
-    print_kernel_sections();
 #if PRINT_PAGE_MAP
     print_page_mappings();
 #endif
@@ -102,13 +98,13 @@ __fastcall void kmain(struct boot_info **info)
 #endif
 
     kprint("entering user mode...\n");
-    go_to_ring3(init, KERNEL_ADDR(USER_STACK));
+    go_to_ring3(init, __ustack);
 
     // for future reference...
     // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
 }
 
-static void go_to_ring3(void *entry, uint32_t stack)
+static void go_to_ring3(void *entry, void *stack)
 {
     assert(getpl() == KERNEL_PL);
 
@@ -123,8 +119,8 @@ static void go_to_ring3(void *entry, uint32_t stack)
     regs.ss = USER_DS;
     regs.ds = USER_DS;
     regs.es = USER_DS;
-    regs.ebp = stack;
-    regs.esp = stack;
+    regs.ebp = (uint32_t) stack;
+    regs.esp = (uint32_t) stack;
     regs.eip = (uint32_t) entry;
     regs.eflags = eflags._value;
 

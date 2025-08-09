@@ -36,7 +36,7 @@
 #define OS_COPYRIGHT            "Copyright (C) 2020-2025 " OS_AUTHOR ". All Rights Reserved."
 
 // memory
-#define RAM_KBYTES              512 // let's see how long this lasts!
+#define MEMORY_REQUIRED         512 // let's see how long this lasts!
 #define HIGHER_GROUND           1   // map kernel in high virtual address space
 
 // terminal
@@ -89,33 +89,19 @@
 //
 // ----------------------------------------------------------------------------
 // Important Memory Addresses
-// All addresses are physical unless otherwise noted.
-//
-// Stacks are PAGE_SIZE bytes and /grow in the negative direction/ towards 0.
-// Stack base addresses are offset by +4 bytes from the written data.
 //
 
 #define FRAME_SIZE          (PAGE_SIZE*2)
 
-// memory regions
-#define STACK_MEMORY        0x10000
-#define STATIC_MEMORY       0x1C000
-
-// stack memory
-#define EMERG_STACK         (STACK_MEMORY+(FRAME_SIZE*1))
-#define KERNEL_STACK        (STACK_MEMORY+(FRAME_SIZE*2))
-#define USER_STACK          (STACK_MEMORY+(FRAME_SIZE*3))
-
-// static memory
-#define KERNEL_LOG          (STATIC_MEMORY+(PAGE_SIZE*2))   // = 1E000-1FFFF
-#define KERNEL_BASE         (STATIC_MEMORY+(PAGE_SIZE*4))   // = 20000-?????
+// kernel base physical address
+#define KERNEL_BASE         0x20000
 
 // kernel virtual address space
 // the lower 1MB of physical memory is identity-mapped mapped
 #if HIGHER_GROUND
-  #define KERNEL_VA     0xC0000000
+  #define KERNEL_VA         0xC0000000
 #else
-  #define KERNEL_VA     0x0
+  #define KERNEL_VA         0x0
 #endif
 
 //
@@ -129,9 +115,6 @@ static_assert(DEFAULT_VT >= 1 && DEFAULT_VT <= NR_TERMINAL,
     "invalid DEFAULT_VT value");
 static_assert(VT_CONSOLE_NUM >= 0 && VT_CONSOLE_NUM <= NR_TERMINAL,
     "invalid VT_CONSOLE_NUM value");
-
-static_assert(KERNEL_LOG + KERNEL_LOG_SIZE <= KERNEL_BASE,
-    "kernel log buffer is too large!");
 
 #endif  // !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)
 
