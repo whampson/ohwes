@@ -433,7 +433,7 @@ readkey_then_reset:
 ##
 .globl reset
 reset:
-        movw            $WARMBOOT, %gs:BDA_RESETFLAG
+        movw            $RESETFLAG_WARMBOOT, %gs:BDA_RESETFLAG
         ljmp            $0xFFFF, $0x0000
 
 ##

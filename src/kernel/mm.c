@@ -260,7 +260,7 @@ static void print_kernel_sections(void)
             sec_size, sec->name);
     }
 
-    kprint("kern-mem: kernel uses %d pages for static memory\n",
-        align((size_t) __kernel_size, 1024) >> 10,
+    kprint("kern-mem: kernel uses %dk (%d pages) for static memory\n",
+        align((size_t) __kernel_size, KB) >> KB_SHIFT,
         PAGE_ALIGN((size_t) __kernel_size) >> PAGE_SHIFT);
 }

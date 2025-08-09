@@ -237,9 +237,11 @@ void __noreturn panic(const char *fmt, ...)
     if (g_kb_initialized) {
         irq_unmask(IRQ_KEYBOARD);
     }
-
     irq_enable();
+
+#if SERIAL_DEBUGGING
     __int3();
+#endif
 
     for (;;);
 }
@@ -290,6 +292,8 @@ void print_boot_info(struct boot_info *boot)
     kprint("bios-boot: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
     kprint("bios-boot: video mode is %02Xh\n", boot->vga_mode & 0x7F);
     if (boot->ebda_base) kprint("bios-boot: EBDA=%08X,%Xh\n", boot->ebda_base, ebda_size);
+    kprint("bios-boot: kernel uses %u bytes (%d sectors) on disk\n",
+        boot->kernel_size, div_ceil(boot->kernel_size, 512));
 }
 
 static void print_page_info(uint32_t va, const struct pginfo *page)

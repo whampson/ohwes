@@ -41,26 +41,25 @@
 // 03C00-079FF: (free)
 // 07A00-07BFF: real mode stack
 // 07C00-07DFF: stage 1
-// 07E00-0FFFF: stage 2
-// 10000-9FBFF: kernel image
+// 07E00-09FFF: stage 2
+// 0A000-9FBFF: kernel image
 // 9FC00-9FFFF: reserved; EBDA
 // A0000-FFFFF: reserved; ROM, hardware
-
-#define seg2flat(seg,off)   (((seg)<<4)+(off))
-
-#define SEGMENT_SHIFT       16
-#define SEGMENT_SIZE        (1 << SEGMENT_SHIFT)
-
-#define BDA_SEGMENT         0x0040
-#define KERNEL_SEGMENT      (KERNEL_BASE >> 4)
-
-#define BOOT_CS             0x08
-#define BOOT_DS             0x10
 
 #define MEMMAP_BASE         0x1000
 #define ROOTDIR_BASE        0x2000
 #define STACK_BASE          0x7C00
 #define STAGE2_BASE         0x7E00
+#define KERNEL_LOAD         0xA000
+
+#define BOOT_CS             0x08
+#define BOOT_DS             0x10
+
+#define SEGMENT_SHIFT       16
+#define SEGMENT_SIZE        (1 << SEGMENT_SHIFT)
+
+#define BDA_SEGMENT         0x0040
+#define KERNEL_SEGMENT      (KERNEL_LOAD >> 4)
 
 /*----------------------------------------------------------------------------*
  * BIOS Data Area
@@ -72,9 +71,9 @@
 #define BDA_RESETFLAG       0x0072  // reset mode address
 
 // values that can be written to BDA_RESETFLAG
-#define WARMBOOT            0x1234  // perform a warm boot (no memory test)
-#define KEEPMEM             0x4321  // preserve memory
-#define SUSPEND             0x5678  // suspend instead of reboot
+#define RESETFLAG_WARMBOOT  0x1234  // perform a warm boot (no memory test)
+#define RESETFLAG_KEEPMEM   0x4321  // preserve memory
+#define RESETFLAG_SUSPEND   0x5678  // suspend instead of reboot
 
 /*----------------------------------------------------------------------------*
  * Real Mode VGA Stuff

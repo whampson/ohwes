@@ -32,7 +32,18 @@
 
 // ----------------------------------------------------------------------------
 
-#define BI_SIZE             0x24    // boot info size
+// TODO: use these in bootloader asm to ensure proper struct field access
+#define BI_EBDA_BASE        0x00
+#define BI_MEM_MAP          0x04
+#define BI_KB_LOW           0x08
+#define BI_KB_HIGH          0x0C
+#define BI_KB_HIGH_E801h    0x10
+#define BI_KB_EXTENDED      0x14
+#define BI_KERNEL_SIZE      0x18
+#define BI_HWFKLAGS         0x1C
+#define BI_A20_METHOD       0x20
+#define BI_VGA_MODE         0x24
+#define BI_SIZE             0x28    // boot info size
 
 #ifndef __ASSEMBLER__
 // C-only defines from here on out!
@@ -134,6 +145,7 @@ struct boot_info {
     uint32_t kb_high;               // 1K blocks 1M to 16M (INT 15h,AX=88h)
     uint32_t kb_high_e801h;         // 1K blocks 1M to 16M (INT 15h,AX=E801h)
     uint32_t kb_extended;           // 64K blocks 16M to 4G (INT 15h,AX=E801h)
+    uint32_t kernel_size;
 
     // hardware info
     struct hwflags hwflags;         // system hardware flags (INT 11h)
@@ -142,6 +154,17 @@ struct boot_info {
     // terminal info
     uint32_t vga_mode;              // VGA video mode (INT 10h,AH=0Fh)
 };
+
+static_assert(offsetof(struct boot_info, ebda_base) == BI_EBDA_BASE, "offsetof(struct boot_info, ebda_base)");
+static_assert(offsetof(struct boot_info, mem_map) == BI_MEM_MAP, "offsetof(struct boot_info, mem_map)");
+static_assert(offsetof(struct boot_info, kb_low) == BI_KB_LOW, "offsetof(struct boot_info, kb_low)");
+static_assert(offsetof(struct boot_info, kb_high) == BI_KB_HIGH, "offsetof(struct boot_info, kb_high)");
+static_assert(offsetof(struct boot_info, kb_high_e801h) == BI_KB_HIGH_E801h, "offsetof(struct boot_info, kb_high_e801h)");
+static_assert(offsetof(struct boot_info, kb_extended) == BI_KB_EXTENDED, "offsetof(struct boot_info, kb_extended)");
+static_assert(offsetof(struct boot_info, kernel_size) == BI_KERNEL_SIZE, "offsetof(struct boot_info, kernel_size)");
+static_assert(offsetof(struct boot_info, hwflags) == BI_HWFKLAGS, "offsetof(struct boot_info, hwflags)");
+static_assert(offsetof(struct boot_info, a20_method) == BI_A20_METHOD, "offsetof(struct boot_info, a20_method)");
+static_assert(offsetof(struct boot_info, vga_mode) == BI_VGA_MODE, "offsetof(struct boot_info, vga_mode)");
 static_assert(sizeof(struct boot_info) == BI_SIZE, "sizeof(struct boot_info)");
 
 #endif  // __ASSEMBLER__

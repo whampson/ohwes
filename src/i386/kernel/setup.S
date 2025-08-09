@@ -63,7 +63,7 @@ ksetup:
         call            setup_debug_port
 #endif
 
-        # set up paging; first 1M of physical memory will be identity mapped
+        # set up paging; first 2M of physical memory will be identity mapped
         call            setup_paging
 
         # now that paging is enabled and kernel space is mapped at KERNEL_VA,
@@ -149,14 +149,14 @@ _idle:  # we should never end up here... but in case we do, spin forever
 # setup_paging
 # -----------------------------------------------------------------------------
 # Create the initial page tables for kernel setup and initialization and enable
-# paging on the CPU. Right now, we only care about the low 1M of physical
-# memory. We know our kernel is under 1M in size because we loaded it in Real
+# paging on the CPU. Right now, we only care about the low 2M of physical
+# memory. We know our kernel is under 2M in size because we loaded it in Real
 # Mode from the boot loader, which can only address 1M. Thus, we need just one
 # page table in addition to the page directory. If the kernel ever grows larger
 # than about 512k, we will need to adjust this scheme :-) The kernel is linked
 # with a base virtual address of KERNEL_VA, while this setup code is linked with
 # a base address of 0, so it can bridge the gap between the boot loader and the
-# kernel. Therefore, we must create two mappings for the low 1M of physical
+# kernel. Therefore, we must create two mappings for the low 2M of physical
 # memory: one for the kernel at C0000000-C00FFFFF and another temporary identity
 # mapping so this setup code can continue execution.
 ##
@@ -165,16 +165,17 @@ setup_paging:
 PAGE_FLAGS = _PAGE_PRESENT | _PAGE_RW
 PAGE_FLAGS = PAGE_FLAGS |  _PAGE_USER   # TODO: don't map kernel memory with user privileges lol
 KERNEL_PDN = KERNEL_VA >> (PGDIR_SHIFT - 2)
-TABLE_COUNT = PAGE_SIZE >> 2
+NR_ENTRIES = PAGE_SIZE >> 2
+NR_PAGES   = 0x200      // 512 pages = 2M
 
         # zero the page directory
         xorl            %eax, %eax
-        movl            $TABLE_COUNT, %ecx
+        movl            $NR_ENTRIES, %ecx
         leal            __page_dir, %edi
     rep stosl
 
         # zero the page table
-        movl            $TABLE_COUNT, %ecx
+        movl            $NR_ENTRIES, %ecx
         leal            __page_tbl, %edi
     rep stosl
 
@@ -182,15 +183,15 @@ TABLE_COUNT = PAGE_SIZE >> 2
         leal            __page_tbl, %edi            # pgtbl
         xorl            %ebx, %ebx                  # pfn (page frame number)
         xorl            %ecx, %ecx                  # count
-_map_low_1M_loop:
+_map_low_loop:
         movl            %ebx, %eax                  # pte = pfn << PAGE_SHIFT
         shll            $PAGE_SHIFT, %eax
         orl             $PAGE_FLAGS, %eax           # pte |= PAGE_FLAGS
         movl            %eax, 0(%edi, %ebx, 4)      # pgtbl[pfn] = pte
         incl            %ebx                        # pfn++
         incl            %ecx                        # count++
-        cmpl            $0x100, %ecx
-        jb              _map_low_1M_loop
+        cmpl            $NR_PAGES, %ecx
+        jb              _map_low_loop
 
         # setup null pointer trap
         andl            $~_PAGE_PRESENT, 0(%edi)

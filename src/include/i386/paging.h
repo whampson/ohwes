@@ -40,11 +40,17 @@
 #define PDE_COUNT               1024                // PDEs per page directory
 #define PTE_COUNT               1024                // PTEs per page table
 
+// TODO: move this elsewhere
 #define PAGE_MAP_SIZE           (PAGE_SIZE << 5)    // 32 = (((4G / 4096) / 8) / 4096)
 
-#define KB                      (1 << 10)
-#define MB                      (1 << 20)
-#define GB                      (1 << 30)
+// TODO: move these elsewhere
+#define KB_SHIFT                10
+#define MB_SHIFT                20
+#define GB_SHIFT                30
+
+#define KB                      (1 << KB_SHIFT)
+#define MB                      (1 << MB_SHIFT)
+#define GB                      (1 << GB_SHIFT)
 
 //   10987654321098765432109876543210
 //  +---------+---------+-----------+

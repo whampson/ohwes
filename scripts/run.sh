@@ -32,7 +32,7 @@ fi
 #   done
 
 if [ "$1" = "qemu" ]; then
-    QEMU_FLAGS+=" -m 1M"
+    QEMU_FLAGS+=" -m 4M"
     QEMU_FLAGS+=" -boot a"
     QEMU_FLAGS+=" -fda $2"
     QEMU_FLAGS+=" -monitor stdio"

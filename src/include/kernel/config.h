@@ -36,7 +36,7 @@
 #define OS_COPYRIGHT            "Copyright (C) 2020-2025 " OS_AUTHOR ". All Rights Reserved."
 
 // memory
-#define MEMORY_REQUIRED         512 // let's see how long this lasts!
+#define MEMORY_REQUIRED         (1536 * KB)
 #define HIGHER_GROUND           1   // map kernel in high virtual address space
 
 // terminal
@@ -59,7 +59,7 @@
 #define KERNEL_LOG_SIZE         (2*PAGE_SIZE)
 
 // debugging
-#define SERIAL_DEBUGGING        1   // enable debugging over COM port
+#define SERIAL_DEBUGGING        0   // enable debugging over COM port
 #define SERIAL_DEBUG_PORT       COM1_PORT
 #define SERIAL_DEBUG_BAUD       BAUD_115200
 #define ENABLE_CRASH_KEY        1   // test various crash scenarios w/ keystroke
@@ -94,7 +94,7 @@
 #define FRAME_SIZE          (PAGE_SIZE*2)
 
 // kernel base physical address
-#define KERNEL_BASE         0x20000
+#define KERNEL_BASE         (1 * MB)
 
 // kernel virtual address space
 // the lower 1MB of physical memory is identity-mapped mapped

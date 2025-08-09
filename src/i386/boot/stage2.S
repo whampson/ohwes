@@ -59,6 +59,7 @@ stage2:
         leaw            sz_kernel_filename, %si
         call            find_file               # returns: di = dir entry ptr
         movl            FILESIZE(%di), %ecx
+        movl            %ecx, kernel_size
         call            check_kernel_size       # make sure it fits in low mem
         LOAD_SEGMENT    $KERNEL_SEGMENT, %es
         xorl            %ebx, %ebx
@@ -70,24 +71,33 @@ stage2:
         movl            %cr0, %eax
         orl             $CR0_PE, %eax           # enable Protected Mode
         movl            %eax, %cr0
+        ljmpl           $BOOT_CS, $stage2_32
 
+stage2_32:
+.code32
         # set up boot segment selectors
         movw            $BOOT_DS, %ax
         movw            %ax, %ds
         movw            %ax, %es
         movw            %ax, %ss
 
+        # move the kernel to its new home
+        movl            $KERNEL_LOAD, %esi
+        movl            $KERNEL_BASE, %edi
+        movl            kernel_size, %ecx
+        cld
+    rep movsb
+
         # long jump to the kernel setup
-        leal            boot_info, %ecx         # pass bootparams ptr to kernel
+        leal            boot_info, %ecx         # pass boot info ptr to kernel
         movl            $KERNEL_BASE, %ebx
         movl            0(%ebx), %ebx           # load kernel entry point addr
-        pushl           $BOOT_CS
-        pushl           %ebx
-        ljmpl           *(%esp)                 # long jump to 32-bit kernel
+        jmpl            *%ebx                   # jump to kernel
 
 # -----------------------------------------------------------------------------
 # ------------------------------- Subroutines ---------------------------------
 # -----------------------------------------------------------------------------
+.code16
 
 ##
 # -----------------------------------------------------------------------------
@@ -173,13 +183,23 @@ _vga_error:
 # detect_memory
 # -----------------------------------------------------------------------------
 # Gets memory capacity and physical memory map (if available) using BIOS
-# routines. If all methods fail, the system will display an error and halt.
+# routines. If all methods fail, or if there is not enough memory to run the
+# operating system, the system will display an error and halt.
 ##
 detect_memory:
         call            _detectmem_e820h        # newest method (2002+)
         call            _detectmem_e801h        # newer method  (1994+)
         call            _detectmem_legacy       # oldest method (all 386s)
+
+        movl            kb_high, %eax
+        cmpl            $(MEMORY_REQUIRED >> 10) - 1024, %eax
+        jb              _not_enough_memory
+
         ret
+
+_not_enough_memory:
+        PRINT           sz_not_enough_memory
+        jmp             readkey_then_reset
 
 ####
 # Gets the physical address space map.
@@ -424,7 +444,7 @@ _kb_flush_done:
 #       ecx - kernel image size
 ##
 check_kernel_size:
-        movl            $KERNEL_BASE, %eax
+        movl            $KERNEL_LOAD, %eax
         cmpl            $0, ebda_base
         jz              _no_ebda_info
         movl            ebda_base, %ebx # EBDA = effective top of low memory
@@ -435,7 +455,7 @@ _no_ebda_info:
         shll            $10, %ebx       # stored as 1K blocks, multiply by 1024
 
 _size_check:
-        subl            %eax, %ebx      # Capacity = pTopOfMem - pKernelBase
+        subl            %eax, %ebx      # Capacity = pTopOfMem - pKernelLoad
         cmpl            %ecx, %ebx      # Capacity - KernelSize < 0?
         jl              _kernel_too_big #   yep, fail
 
@@ -463,6 +483,7 @@ boot_info:
   kb_high:              .long   0
   kb_high_e801h:        .long   0
   kb_extended:          .long   0
+  kernel_size:          .long   0
   hwflags:              .long   0
   a20_method:           .long   A20_NONE
   vga_mode:             .long   0
@@ -498,3 +519,5 @@ sz_a20_error:
         .asciz          "\r\A20 error!"
 sz_kernel_too_big:
         .asciz          "\r\nKernel image too big!"
+sz_not_enough_memory:
+        .asciz          "\r\nNot enough system memory!"
