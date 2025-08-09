@@ -52,9 +52,9 @@ void init_ps2(void)
     ps2_cmd(PS2_CMD_P2ON);
     ps2_cmd(PS2_CMD_RDCFG);
     cfg = ps2_read();
-    port2 = !has_flag(cfg, PS2_CFG_P2CLKOFF) && g_boot->hwflags.has_ps2mouse;
-    if (!port2) {
-        kprint("PS/2 mouse not detected\n");
+    port2 = !has_flag(cfg, PS2_CFG_P2CLKOFF);
+    if (port2) {
+        kprint("PS/2 mouse detected\n");
     }
 
     //

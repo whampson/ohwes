@@ -42,8 +42,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-extern struct boot_info *g_boot;
-
 /*----------------------------------------------------------------------------*
  * Hardware Flags
  *----------------------------------------------------------------------------*/
@@ -98,7 +96,7 @@ enum acpi_mmap_type {
     ACPI_MMAP_TYPE_USABLE   = 1,    // Available, free for use
     ACPI_MMAP_TYPE_RESERVED = 2,    // Reserved, do not use
     ACPI_MMAP_TYPE_ACPI     = 3,    // ACPI tables, can be reclaimed
-    ACPI_MMAP_TYPE_ACPI_NVS = 4,    // ACPI non-volatile storage, do not use
+    ACPI_MMAP_TYPE_NVS      = 4,    // ACPI non-volatile storage, do not use
     ACPI_MMAP_TYPE_BAD      = 5,    // Bad memory, do not use
     // Other values are reserved or OEM-specific, do not use
 };
@@ -114,13 +112,6 @@ struct acpi_mmap_entry {
     uint32_t attributes;
 };
 static_assert(sizeof(struct acpi_mmap_entry) == 24, "sizeof(struct acpi_mmap_entry) == 24");
-
-/**
- * ACPI Memory Map
- * Memory map is an array of acpi_mmap_entry elements; final element is zeros.
- */
-typedef struct acpi_mmap_entry acpi_mmap_t;
-
 
 /*----------------------------------------------------------------------------*
  * System Boot Info
@@ -138,7 +129,7 @@ struct boot_info {
     intptr_t ebda_base;             // Extended BIOS Data Area
 
     // memory size/layout information
-    const acpi_mmap_t *mem_map;     // ACPI Memory Map (INT 15h,AX=E820h)
+    struct acpi_mmap_entry *mem_map;// ACPI Memory Map (INT 15h,AX=E820h)
     uint32_t kb_low;                // 1K blocks 0 to 640K (INT 12h)
     uint32_t kb_high;               // 1K blocks 1M to 16M (INT 15h,AX=88h)
     uint32_t kb_high_e801h;         // 1K blocks 1M to 16M (INT 15h,AX=E801h)

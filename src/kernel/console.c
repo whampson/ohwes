@@ -265,31 +265,31 @@ static void print_consoles(void)   // TODO: procfs for this
 }
 #endif
 
-void print_boot_info(void)
+void print_boot_info(struct boot_info *boot)
 {
-    int nfloppies = g_boot->hwflags.has_diskette_drive;
+    int nfloppies = boot->hwflags.has_diskette_drive;
     if (nfloppies) {
-        nfloppies += g_boot->hwflags.num_other_diskette_drives;
+        nfloppies += boot->hwflags.num_other_diskette_drives;
     }
 
-    int nserial = g_boot->hwflags.num_serial_ports;
-    int nparallel = g_boot->hwflags.num_parallel_ports;
-    bool gameport = g_boot->hwflags.has_gameport;
-    bool mouse = g_boot->hwflags.has_ps2mouse;
-    uint32_t ebda_size = 0xA0000 - g_boot->ebda_base;
+    int nserial = boot->hwflags.num_serial_ports;
+    int nparallel = boot->hwflags.num_parallel_ports;
+    bool gameport = boot->hwflags.has_gameport;
+    bool mouse = boot->hwflags.has_ps2mouse;
+    uint32_t ebda_size = 0xA0000 - boot->ebda_base;
 
     kprint("bios-boot: %d %s, %d serial %s, %d parallel %s\n",
         nfloppies, PLURAL2(nfloppies, "floppy", "floppies"),
         nserial, PLURAL(nserial, "port"),
         nparallel, PLURAL(nparallel, "port"));
     kprint("bios-boot: A20 mode is %s\n",
-        (g_boot->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
-        (g_boot->a20_method == A20_PORT92) ? "A20_PORT92" :
-        (g_boot->a20_method == A20_BIOS) ? "A20_BIOS" :
+        (boot->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
+        (boot->a20_method == A20_PORT92) ? "A20_PORT92" :
+        (boot->a20_method == A20_BIOS) ? "A20_BIOS" :
         "A20_NONE");
     kprint("bios-boot: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
-    kprint("bios-boot: video mode is %02Xh\n", g_boot->vga_mode & 0x7F);
-    if (g_boot->ebda_base) kprint("bios-boot: EBDA=%08X,%Xh\n", g_boot->ebda_base, ebda_size);
+    kprint("bios-boot: video mode is %02Xh\n", boot->vga_mode & 0x7F);
+    if (boot->ebda_base) kprint("bios-boot: EBDA=%08X,%Xh\n", boot->ebda_base, ebda_size);
 }
 
 void print_kernel_sections(void)
@@ -308,12 +308,12 @@ void print_kernel_sections(void)
         { "emerg stack",        (void *) EMERG_STACK-FRAME_SIZE,        (void *) EMERG_STACK },
         { "page directory",     (void *) KERNEL_PGDIR,                  (void *) KERNEL_PGDIR+PAGE_SIZE },
         { "kernel page table",  (void *) KERNEL_PGTBL,                  (void *) KERNEL_PGTBL+PAGE_SIZE },
-        { "kernel image:",      &__kernel_start,                         &__kernel_end },
-        { ".setup",             &__setup_start,                          &__setup_end },
-        { ".text",              &__text_start,                           &__text_end },
-        { ".rodata",            &__rodata_start,                         &__rodata_end },
-        { ".data",              &__data_start,                           &__data_end },
-        { ".bss",               &__bss_start,                            &__bss_end },
+        { "kernel image:",      __kernel_start,                         __kernel_end },
+        { ".setup",             __setup_start,                          __setup_end },
+        { ".text",              __text_start,                           __text_end },
+        { ".rodata",            __rodata_start,                         __rodata_end },
+        { ".data",              __data_start,                           __data_end },
+        { ".bss",               __bss_start,                            __bss_end },
     };
 
     for (int i = 0; i < countof(sections); i++) {
@@ -324,11 +324,11 @@ void print_kernel_sections(void)
     }
 
     kprint("kernel image takes up %dk bytes (%d pages)\n",
-        align((size_t) &__kernel_size, 1024) >> 10,
-        PAGE_ALIGN((size_t) &__kernel_size) >> PAGE_SHIFT);
+        align((size_t) __kernel_size, 1024) >> 10,
+        PAGE_ALIGN((size_t) __kernel_size) >> PAGE_SHIFT);
 }
 
-void print_memory_info(void)
+void print_memory_info(struct boot_info *boot)
 {
     int kb_total = 0;
     int kb_free = 0;
@@ -340,21 +340,21 @@ void print_memory_info(void)
     int kb_free_1M = 0;     // between 1M and 16M
     int kb_free_16M = 0;    // between 1M and 4G
 
-    if (!g_boot->mem_map) {
+    if (!boot->mem_map) {
         kprint("bios-e820: memory map not available\n");
-        if (g_boot->kb_high_e801h != 0) {
-            kb_free_1M = g_boot->kb_high_e801h;
-            kb_free_16M = (g_boot->kb_extended << 6);
+        if (boot->kb_high_e801h != 0) {
+            kb_free_1M = boot->kb_high_e801h;
+            kb_free_16M = (boot->kb_extended << 6);
         }
         else {
             kprint("bios-e801: memory map not available\n");
-            kb_free_1M = g_boot->kb_high;
+            kb_free_1M = boot->kb_high;
         }
-        kb_free_low = g_boot->kb_low;
+        kb_free_low = boot->kb_low;
         kb_free = kb_free_low + kb_free_1M + kb_free_16M;
     }
     else {
-        const acpi_mmap_t *e = (const acpi_mmap_t *) KERNEL_ADDR(g_boot->mem_map);
+        const struct acpi_mmap_entry *e = (const struct acpi_mmap_entry *) KERNEL_ADDR(boot->mem_map);
         for (; e->type != 0; e++) {
             uint32_t base = (uint32_t) e->base;
             uint32_t limit = (uint32_t) e->length - 1;
@@ -364,7 +364,7 @@ void print_memory_info(void)
                 case ACPI_MMAP_TYPE_USABLE: kprint("free"); break;
                 case ACPI_MMAP_TYPE_RESERVED: kprint("reserved"); break;
                 case ACPI_MMAP_TYPE_ACPI: kprint("reserved ACPI"); break;
-                case ACPI_MMAP_TYPE_ACPI_NVS: kprint("reserved ACPI non-volatile"); break;
+                case ACPI_MMAP_TYPE_NVS: kprint("reserved ACPI non-volatile"); break;
                 case ACPI_MMAP_TYPE_BAD: kprint("bad"); break;
                 default: kprint("unknown (%d)", e->type); break;
             }
@@ -383,7 +383,7 @@ void print_memory_info(void)
                     kb_free += kb;
                     break;
                 case ACPI_MMAP_TYPE_ACPI:
-                case ACPI_MMAP_TYPE_ACPI_NVS:
+                case ACPI_MMAP_TYPE_NVS:
                     kb_acpi += kb;
                     break;
                 case ACPI_MMAP_TYPE_BAD:

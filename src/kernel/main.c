@@ -47,11 +47,10 @@
 #include <kernel/termios.h>
 #include <sys/ioctl.h>
 
-extern void init_cpu(void);
-extern void init_fs(void);  // fs/fs.c
-extern void init_io(void);  // io.c
-extern void init_mm(void);  // mm/mm.c
-extern void init_tty(void); // char/tty.c
+extern void init_fs(void);
+extern void init_io(void);
+extern void init_mm(struct boot_info *);
+extern void init_tty(void);
 
 #if TEST_BUILD
 extern void run_tests(void);
@@ -61,8 +60,8 @@ extern void run_tests(void);
 extern void crash_key_irq(int irq, struct iregs *regs);
 #endif
 
-extern void print_boot_info(void);
-extern void print_memory_info(void);
+extern void print_boot_info(struct boot_info *);
+extern void print_memory_info(struct boot_info *);
 extern void print_kernel_sections(void);
 extern void print_page_mappings(void);
 
@@ -71,25 +70,25 @@ static void go_to_ring3(void *entry, uint32_t stack);
 void init(void);    // user mode portion of setup
 int main(void);     // user mode program entry point
 
-struct boot_info *g_boot;
+static struct boot_info *boot_info;
 
 __fastcall void kmain(struct boot_info **info)
 {
-    g_boot = *info;
+    boot_info = *info;  // copy boot info into kernel memory
 
     kprint("\n\e[0;1m%s %s\n", OS_NAME, OS_VERSION);
     kprint("%s\n", OS_COPYRIGHT);
     kprint("Compiled on %s at %s using GCC %s\e[0m\n\n",
             __DATE__, __TIME__, __VERSION__);
 
-    print_boot_info();
-    print_memory_info();
+    print_boot_info(boot_info);
+    print_memory_info(boot_info);
     print_kernel_sections();
 #if PRINT_PAGE_MAP
     print_page_mappings();
 #endif
 
-    init_mm();
+    init_mm(boot_info);
     init_io();
     init_fs();
     init_tty();
