@@ -192,7 +192,8 @@ struct x86_desc * get_gdt(void)
     struct table_desc gdt_desc;
     __sgdt(gdt_desc);
 
-    return (struct x86_desc *) KERNEL_ADDR(gdt_desc.base);
+    assert(gdt_desc.base == (uint32_t) __gdt);
+    return (struct x86_desc *) gdt_desc.base;
 }
 
 struct x86_desc * get_idt(void)
@@ -200,7 +201,8 @@ struct x86_desc * get_idt(void)
     struct table_desc idt_desc;
     __sidt(idt_desc);
 
-    return (struct x86_desc *) KERNEL_ADDR(idt_desc.base);
+    assert(idt_desc.base == (uint32_t) __idt);
+    return (struct x86_desc *) idt_desc.base;
 }
 
 struct tss * get_curr_tss(void)
@@ -220,6 +222,8 @@ struct tss * get_tss(uint16_t segsel)
 struct x86_pde * get_pgdir(void)
 {
     uint32_t cr3; store_cr3(cr3);
+
+    assert(cr3 == (uint32_t) __page_dir);
     return (struct x86_pde *) KERNEL_ADDR(cr3);
 }
 

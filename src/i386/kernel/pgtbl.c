@@ -21,6 +21,7 @@
 
 #include <kernel/kernel.h>
 #include <kernel/mm.h>
+#include <i386/cpu.h>
 #include <i386/paging.h>
 #include <i386/x86.h>
 
@@ -43,9 +44,7 @@ bool walk_page_table(uint32_t va, pte_t **pte)
         return false;
     }
 
-    // TODO: usage of KERNEL_ADDR here feels wrong...
-
-    store_cr3(pgdir);
+    pgdir = (pde_t *) get_pgdir();
     pde = (pde_t *) KERNEL_ADDR(pde_offset(pgdir, va));
     if (!pde_present(*pde)) {
         return false;

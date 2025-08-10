@@ -125,7 +125,7 @@ do { \
         const struct acpi_mmap_entry *e;
 
         p = phys_mmap;
-        e  = (const struct acpi_mmap_entry *) KERNEL_ADDR(boot->mem_map);  // warning: this a is pointer to the boot area
+        e  = (const struct acpi_mmap_entry *) KERNEL_ADDR(boot->mem_map);
 
         for (i = 0;
              i < countof(phys_mmap) && e->type != ACPI_MMAP_TYPE_INVALID;
