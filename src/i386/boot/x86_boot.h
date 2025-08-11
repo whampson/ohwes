@@ -99,13 +99,23 @@
 #define VGA_FONT            _VGA_FONT_8x14
 
 /*----------------------------------------------------------------------------*
- * Floppy Stuff
+ * Disk Stuff
  *----------------------------------------------------------------------------*/
 
 #define RETRY_COUNT         3
 
 #define SECTOR_SHIFT        9
 #define SECTOR_SIZE         (1 << SECTOR_SHIFT)
+
+#if HDD_BOOT
+  #define DRIVE_NUMBER      0x80
+  #define DISK_HEADS        255
+  #define DISK_SPT          63
+#else // floppy
+  #define DRIVE_NUMBER      0
+  #define DISK_HEADS        2
+  #define DISK_SPT          18
+#endif
 
 
 /*----------------------------------------------------------------------------*

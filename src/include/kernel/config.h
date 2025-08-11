@@ -22,18 +22,15 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
-#include <i386/paging.h>    // for PAGE_SIZE
+#include <i386/paging.h>        // for PAGE_SIZE
 
 //
 // ----------------------------------------------------------------------------
 // General Configuration
 //
 
-// OS version info strings
-#define OS_NAME                 "OH-WES"
-#define OS_VERSION              "0.1"
-#define OS_AUTHOR               "Wes Hampson"
-#define OS_COPYRIGHT            "Copyright (C) 2020-2025 " OS_AUTHOR ". All Rights Reserved."
+// booting
+#define HDD_BOOT                0   // set for USB boot as well
 
 // memory
 #define MEMORY_REQUIRED         (1536 * KB)
@@ -64,44 +61,51 @@
 #define SERIAL_DEBUG_BAUD       BAUD_115200
 #define ENABLE_CRASH_KEY        1   // test various crash scenarios w/ keystroke
 
+// OS version info strings
+#define OS_NAME                 "OH-WES"
+#define OS_VERSION              "0.1"
+#define OS_AUTHOR               "Wes Hampson"
+#define OS_COPYRIGHT            "Copyright (C) 2020-2025 " OS_AUTHOR ". All Rights Reserved."
+
+
 //
 // ----------------------------------------------------------------------------
 // Counts of Things
 //
 
-#define NR_IDT_VECTORS      256
+#define NR_IDT_VECTORS          256
 
 // memory
-#define MAX_NR_POOLS        32    // max num concurrent pools
-#define MAX_NR_POOL_ITEMS   256   // max pool memory capacity across all pools
+#define MAX_NR_POOLS            32    // max num concurrent pools
+#define MAX_NR_POOL_ITEMS       256   // max pool memory capacity across all pools
 
 // filesystem
-#define MAX_NR_INODES       64    // max num inodes
-#define MAX_NR_DENTRIES     64    // max num directory entries
-#define MAX_NR_TOTAL_OPEN   64    // max num open files on system
-#define MAX_NR_IO_RANGES    32    // max num I/O range reservations
+#define MAX_NR_INODES           64    // max num inodes
+#define MAX_NR_DENTRIES         64    // max num directory entries
+#define MAX_NR_TOTAL_OPEN       64    // max num open files on system
+#define MAX_NR_IO_RANGES        32    // max num I/O range reservations
 
 // i/o
-#define NR_TERMINAL         7     // number of virtual terminals
-#define NR_SERIAL           4     // number of serial ports
-#define MAX_PRINTBUF        4096  // max num chars in print buffer
+#define NR_TERMINAL             7     // number of virtual terminals
+#define NR_SERIAL               4     // number of serial ports
+#define MAX_PRINTBUF            4096  // max num chars in print buffer
 
 //
 // ----------------------------------------------------------------------------
 // Important Memory Addresses
 //
 
-#define FRAME_SIZE          (PAGE_SIZE*2)
+#define FRAME_SIZE              (PAGE_SIZE*2)
 
 // kernel base physical address
-#define KERNEL_BASE         (1 * MB)
+#define KERNEL_BASE             (1 * MB)
 
 // kernel virtual address space
 // the lower 1MB of physical memory is identity-mapped mapped
 #if HIGHER_GROUND
-  #define KERNEL_VA         0xC0000000
+  #define KERNEL_VA             0xC0000000
 #else
-  #define KERNEL_VA         0x0
+  #define KERNEL_VA             0x0
 #endif
 
 //

@@ -66,11 +66,11 @@ bios_param_block:
   sector_count:         .short          2880
   media_type:           .byte           0xF0
   sectors_per_fat:      .short          9
-  sectors_per_track:    .short          18
-  head_count:           .short          2
+  sectors_per_track:    .short          DISK_SPT
+  head_count:           .short          DISK_HEADS
   hidden_sectors:       .int            0
   sector_count32:       .int            0
-  drive_number:         .byte           0
+  drive_number:         .byte           DRIVE_NUMBER
   _reserved:            .byte           0
   extended_boot_sig:    .byte           0x29
   volume_id:            .int            0xCA55E77E
@@ -218,9 +218,6 @@ load_file:
         decl            %ecx                    # calculate num clusters to read
         shrl            $SECTOR_SHIFT, %ecx     #  nsectors=((nbytes-1)/512)+1
         incw            %cx
-        // xchgw           %ax, %cx                # convert nclusters to nsectors
-        // mulb            sectors_per_cluster     #  nclusters=(nsectors*spt)
-        // xchgw           %ax, %cx
         addw            first_cluster, %ax      # calculate abs. sector address
 
         call            load_sectors            # read it in!
