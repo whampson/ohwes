@@ -56,16 +56,16 @@ extern int kprint(const char *fmt, ...);
 // halt and catch fire
 extern __noreturn void panic(const char *fmt, ...);
 
-// beep at hz for millis (nonblocking);
-//  interrupts must be ON or it will beep forever!
-extern void beep(int hz, int ms);
+// beep at hz for millis;
+//  interrupts must be ON or it will beep/block forever!
+extern void beep(int hz, int ms, bool block);
 
 // print alert message and beep, then continue;
 //  interrupts must be ON or this will beep forever!
 #define alert(...) \
 do { \
     kprint("\n\e[1;33malert: " __VA_ARGS__); kprint("\e[0m"); \
-    beep(ALERT_FREQ, ALERT_TIME); \
+    beep(ALERT_FREQ, ALERT_TIME, false); \
 } while (0)
 
 #define warn(...) \

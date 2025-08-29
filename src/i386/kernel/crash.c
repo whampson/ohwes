@@ -152,6 +152,7 @@ static void wait_for_keypress(void)
 }
 
 static void show_crash_screen(
+    int vector,
     int color, int margin,
     const char *banner,
     const char *primary_text,
@@ -167,6 +168,18 @@ static void show_crash_screen(
     wrap_text(margin, primary_text);
     fbprint("\n\n");
     center_text(MaxWidth, secondary_text);
+
+    if (vector != IRQ_TIMER) {
+        uint16_t oldmask = irq_getmask();
+        irq_setmask(IRQ_MASKALL);
+        irq_unmask(IRQ_TIMER);
+        __sti();
+        beep(913, 276, true);
+        beep(1370, 276, true);
+        beep(1777, 380, true);
+        __cli();
+        irq_setmask(oldmask);
+    }
 }
 
 //
@@ -194,7 +207,7 @@ __noreturn void handle_soft_double_fault(
         cpu->iregs.vec, exception_names[cpu->iregs.vec], cpu->iregs.eip,
         orig_cpu->iregs.vec, exception_names[orig_cpu->iregs.vec], orig_cpu->iregs.eip);
 
-    show_crash_screen(ANSI_RED, 5, "Double Fault", msgbuf, MSG_PROMPT);
+    show_crash_screen(-1, ANSI_RED, 5, "Double Fault", msgbuf, MSG_PROMPT);
 
     while (true) {
         wait_for_keypress();
@@ -273,7 +286,7 @@ __fastcall void handle_exception(struct iregs *iregs)
         iregs->vec, exception_names[iregs->vec],
         iregs->eip, errbuf);
 
-    show_crash_screen(CRASH_COLOR, CRASH_MARGIN, OS_NAME, msgbuf, MSG_PROMPT);
+    show_crash_screen(iregs->vec, CRASH_COLOR, CRASH_MARGIN, OS_NAME, msgbuf, MSG_PROMPT);
     // dump_cpu(&cpu, fbprint);
 
     while (true) {

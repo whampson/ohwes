@@ -112,11 +112,15 @@ static void pcspk_off(void)
     outb(0x61, data);
 }
 
-void beep(int hz, int ms)
+void beep(int hz, int ms, bool block)
 {
     uint32_t flags;
     uint8_t mode;
     uint16_t div;
+
+    // TODO: get rid of this
+    //      make it a write to /dev/beep somehow
+    //      to block: read from /dev/beep, it will return when beep done
 
     cli_save(flags);
 
@@ -132,6 +136,8 @@ void beep(int hz, int ms)
     pcspk_on(); // turned off in interrupt handler
 
     restore_flags(flags);
+
+    while (block && g_pit->pcspk_ticks > 0);
 }
 
 void timer_interrupt(int irq, struct iregs *regs)

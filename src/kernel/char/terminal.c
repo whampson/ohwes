@@ -607,7 +607,7 @@ int terminal_putchar(struct terminal *term, char c)
     // control characters
     switch (c) {
         case '\a':      // ^G - BEL - beep!
-            beep(BELL_FREQ, BELL_TIME);         // TODO: ioctl to control beep tone/time
+            beep(BELL_FREQ, BELL_TIME, false);         // TODO: ioctl to control beep tone/time
             break;
         case '\b':      // ^H - BS - backspace
             backspace(term);
