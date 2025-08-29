@@ -581,7 +581,8 @@ static void sysrq(char c)
 {
     switch (c) {
         default:
-            kprint("sysrq: crash(c) debug-break(g) reboot(r)\n");
+            beep(ALERT_FREQ, ALERT_TIME, false);
+            kprint("\nsysrq: crash(c) debug-break(g) reboot(r)");
             break;
         case 'c':
             kb_enable();
