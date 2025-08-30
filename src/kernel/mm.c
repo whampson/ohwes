@@ -66,6 +66,16 @@ struct phys_mmap_entry {
     bool bad      : 1;
 };
 
+struct zone
+{
+    enum zone_type type;
+
+    uint32_t base;
+    uint32_t free_pages;
+
+    struct page *page_map;
+};
+
 static struct phys_mmap_entry phys_mmap[64];
 
 extern void init_pool(void);
@@ -174,6 +184,7 @@ do { \
         }
     }
 
+#undef __mkentry
 
     total_kb = 0;
     total_kb_free = 0;
@@ -220,7 +231,37 @@ do { \
     //     PAGE_ALIGN(__kernel_end), "free_list",
     //     sizeof(struct free_page), 0 /* num_page_frames */);
 
-#undef __mkentry
+
+    char *mem_start;
+    char *mem_end = NULL;
+    char *bitmap;
+
+    // find size of first contiguous free region above 1M
+    for (p = phys_mmap; p->zone != ZONE_INVALID; p++) {
+        if (p->base >= (1 * MB)) {
+            mem_end = (char *) PHYSICAL_ADDR((uint32_t) p->limit + 1);
+            break;
+        }
+    }
+
+    mem_start = (char *) PHYSICAL_ADDR(PAGE_ALIGN((uint32_t) __kernel_end));
+    size_t num_pages = PAGE_ALIGN(mem_end - mem_start) / PAGE_SIZE;
+
+    size_t num_pages_for_bitmap = PAGE_ALIGN(div_ceil(num_pages, 8)) / PAGE_SIZE;
+    bitmap = (char *) KERNEL_ADDR(mem_start);
+    mem_start += num_pages_for_bitmap * PAGE_SIZE;
+
+    kprint("num_pages_for_bitmap = %d\n", num_pages_for_bitmap);
+    kprint("bitmap = %08X\n", bitmap);
+    kprint("mem_start = %08X, mem_end = %08X, num_pages = %d\n", mem_start, mem_end, num_pages);
+
+    zeromem(bitmap, num_pages_for_bitmap * PAGE_SIZE);
+
+
+
+    kprint("\n");
+
+    for(;;);
 }
 
 static void print_kernel_sections(void)
