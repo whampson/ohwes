@@ -87,16 +87,17 @@ __fastcall void kmain(struct boot_info **info)
     init_mm(boot_info);
 
     {
+        const uint32_t pa = 0x200000; // 2M
+        const uint32_t va = KERNEL_ADDR(pa);
+        const size_t   num = 10;
+
         // OK, can map pages between 0-4M...
-        uint32_t pa = 0x200000; // 2M
-        uint32_t va = KERNEL_ADDR(pa);
-        kprint("PA=%08X VA=%08X\n", pa, va);
         assert(false == virt_addr_valid((void *) va));
-        (void) map_page(va, pa, _PAGE_RW);
+        update_page_mappings(va, pa, num, _PAGE_RW | _PAGE_PRESENT);
         assert(true == virt_addr_valid((void *) va));
 
         // ... and unmap...
-        unmap_page(va);
+        update_page_mappings(va, pa, num, 0);
         assert(false == virt_addr_valid((void *) va));
     }
 

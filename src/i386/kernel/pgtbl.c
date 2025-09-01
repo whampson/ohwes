@@ -54,42 +54,46 @@ bool walk_page_table(uint32_t va, pte_t **pte)
     return true;
 }
 
-pte_t * map_page(uint32_t va, uint32_t pa, pgflags_t flags)
+void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flags)
 {
     pde_t *pgdir;
     pde_t *pde;
     pte_t *pte;
+    bool map;
+
+    // TODO: these "page mappings" should probably be managed somewhere in a
+    // structure if we're going to be "updating" them. So we can disallow
+    // duplicate mappings and know how many pages are in each "mapping"
+
+    // ... or we can be hardcore and leave it up to the caller!
+    // TODO: allow map modding by calling again with valid VA?
+    //       or warn about double-mapping?
 
     pgdir = (pde_t *) get_pgdir();
-    pde = (pde_t *) KERNEL_ADDR(pde_offset(pgdir, va));
-    if (!pde_present(*pde)) {
-        // TODO: map a new PDE and associated page table...
-        panic("mm: mappings that require a new new page table not yet implemented! pa(%08X) va(%08X)\n", pa, va);
-        return NULL;
+    map = (flags != 0 && pa >= PAGE_SIZE);
+    // TODO: check/validate/filter flags
+
+    if (map) kprint("mem: mapping %d pages at PA:%08X VA:%08X flags %02Xh...\n", count, pa, va, flags);
+    else     kprint("mem: unmapping %d pages at VA:%08X...\n", count, va);
+
+    for (int i = 0; i < count; i++) {
+        pde = (pde_t *) KERNEL_ADDR(pde_offset(pgdir, va));
+        if (!pde_present(*pde)) {
+            // TODO: map a new PDE and associated page table...
+            panic("mem: mappings that require a new PDE and page table not yet implemented! pa(%08X) va(%08X)\n", pa, va);
+        }
+
+        pte = (pte_t *) KERNEL_ADDR(pte_offset(pde, va));
+        pte_clear(pte);
+
+        if (map) {
+            *pte = __mkpte(pa, flags);
+        }
+
+        va += PAGE_SIZE;
+        pa += PAGE_SIZE;
     }
 
-    // TODO: check flags
-    // TODO: allow map modding by calling again with valid VA?
-    //       ...or warn about double-mapping?
-
-    pte = (pte_t *) KERNEL_ADDR(pte_offset(pde, va));
-    pte_clear(pte);
-    *pte = __mkpte(pa, flags | _PAGE_PRESENT);
-
-    flush_tlb();        // TODO: be able to control this w/ flag
-    return pte;
-}
-
-bool unmap_page(uint32_t va)
-{
-    pte_t *pte;
-    if (!walk_page_table(va, &pte)) {
-        panic("mm: attempt to free a non-mapped page! va(%08X)\n", va);
-        return false;
-    }
-
-    pte_clear(pte);
-
+    // TODO: be able to control this w/ flag
     flush_tlb();
-    return true;
 }
