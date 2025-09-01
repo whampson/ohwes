@@ -85,22 +85,6 @@ __fastcall void kmain(struct boot_info **info)
 #endif
 
     init_mm(boot_info);
-
-    {
-        const uint32_t pa = 0x200000; // 2M
-        const uint32_t va = KERNEL_ADDR(pa);
-        const size_t   num = 10;
-
-        // OK, can map pages between 0-4M...
-        assert(false == virt_addr_valid((void *) va));
-        update_page_mappings(va, pa, num, _PAGE_RW | _PAGE_PRESENT);
-        assert(true == virt_addr_valid((void *) va));
-
-        // ... and unmap...
-        update_page_mappings(va, pa, num, 0);
-        assert(false == virt_addr_valid((void *) va));
-    }
-
     init_io();
     init_fs();
     init_tty();

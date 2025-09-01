@@ -235,6 +235,8 @@ do { \
     char *mem_start;
     char *mem_end = NULL;
     char *bitmap;
+    size_t mem_size_pages;
+    size_t bitmap_size_pages;
 
     // find size of first contiguous free region above 1M
     for (p = phys_mmap; p->zone != ZONE_INVALID; p++) {
@@ -244,17 +246,25 @@ do { \
         }
     }
 
+    // physical memory bounds
     mem_start = (char *) PHYSICAL_ADDR(PAGE_ALIGN((uint32_t) __kernel_end));
-    size_t mem_size_pages = PAGE_ALIGN(mem_end - mem_start + 1) / PAGE_SIZE;
-    // TODO: somehow mem_size_pages seems to be off-by-one...
+    (void) mem_end;
+    mem_size_pages = PAGE_ALIGN(mem_end - mem_start + 1) >> PAGE_SHIFT;
 
-    size_t bitmap_size_pages = PAGE_ALIGN(div_ceil(mem_size_pages, 8)) / PAGE_SIZE;
+    // bitmap for keeping track of physical page alloc status
+    bitmap_size_pages = PAGE_ALIGN(div_ceil(mem_size_pages, 8)) >> PAGE_SHIFT;
     bitmap = (char *) KERNEL_ADDR(mem_start);
-    mem_start += bitmap_size_pages * PAGE_SIZE;
+    mem_start += bitmap_size_pages << PAGE_SHIFT;
+    mem_size_pages -= bitmap_size_pages;
 
+    kprint("mem: zeroing bitmap at %08X size_pages=%d...\n", bitmap, bitmap_size_pages);
+    zeromem(bitmap, bitmap_size_pages << PAGE_SHIFT);
     kprint("mem: mem_start=%08X, mem_end=%08X, mem_size_pages=%d\n", mem_start, mem_end, mem_size_pages);
-    kprint("mem: zeroing bitmap at %08X size_pages %d...\n", bitmap, bitmap_size_pages);
-    zeromem(bitmap, bitmap_size_pages * PAGE_SIZE);
+
+    // ensure pages begin unmapped
+    char *top = min((char *) (4*MB), mem_end+1); // TODO: temp workaround for update_page_mappings 4M limit...
+    size_t size_pages = (top - mem_start) >> PAGE_SHIFT;
+    update_page_mappings(KERNEL_ADDR(mem_start), (uint32_t) mem_start, size_pages, 0);
 
     // TODO: slab allocator
 }
