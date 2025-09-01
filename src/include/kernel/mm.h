@@ -33,6 +33,9 @@ bool walk_page_table(uint32_t va, pte_t **pte);
 // TODO: virt_to_phys
 
 
+pte_t * map_page(uint32_t va, uint32_t pa, pgflags_t flags);
+bool unmap_page(uint32_t va);
+
 //
 // linker script symbols
 //

@@ -239,29 +239,24 @@ do { \
     // find size of first contiguous free region above 1M
     for (p = phys_mmap; p->zone != ZONE_INVALID; p++) {
         if (p->base >= (1 * MB)) {
-            mem_end = (char *) PHYSICAL_ADDR((uint32_t) p->limit + 1);
+            mem_end = (char *) PHYSICAL_ADDR((uint32_t) p->limit);
             break;
         }
     }
 
     mem_start = (char *) PHYSICAL_ADDR(PAGE_ALIGN((uint32_t) __kernel_end));
-    size_t num_pages = PAGE_ALIGN(mem_end - mem_start) / PAGE_SIZE;
+    size_t mem_size_pages = PAGE_ALIGN(mem_end - mem_start + 1) / PAGE_SIZE;
+    // TODO: somehow mem_size_pages seems to be off-by-one...
 
-    size_t num_pages_for_bitmap = PAGE_ALIGN(div_ceil(num_pages, 8)) / PAGE_SIZE;
+    size_t bitmap_size_pages = PAGE_ALIGN(div_ceil(mem_size_pages, 8)) / PAGE_SIZE;
     bitmap = (char *) KERNEL_ADDR(mem_start);
-    mem_start += num_pages_for_bitmap * PAGE_SIZE;
+    mem_start += bitmap_size_pages * PAGE_SIZE;
 
-    kprint("num_pages_for_bitmap = %d\n", num_pages_for_bitmap);
-    kprint("bitmap = %08X\n", bitmap);
-    kprint("mem_start = %08X, mem_end = %08X, num_pages = %d\n", mem_start, mem_end, num_pages);
+    kprint("mem: mem_start=%08X, mem_end=%08X, mem_size_pages=%d\n", mem_start, mem_end, mem_size_pages);
+    kprint("mem: zeroing bitmap at %08X size_pages %d...\n", bitmap, bitmap_size_pages);
+    zeromem(bitmap, bitmap_size_pages * PAGE_SIZE);
 
-    zeromem(bitmap, num_pages_for_bitmap * PAGE_SIZE);
-
-
-
-    kprint("\n");
-
-    for(;;);
+    // TODO: slab allocator
 }
 
 static void print_kernel_sections(void)

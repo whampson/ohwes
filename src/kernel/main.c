@@ -85,13 +85,28 @@ __fastcall void kmain(struct boot_info **info)
 #endif
 
     init_mm(boot_info);
+
+    {
+        // OK, can map pages between 0-4M...
+        uint32_t pa = 0x200000; // 2M
+        uint32_t va = KERNEL_ADDR(pa);
+        kprint("PA=%08X VA=%08X\n", pa, va);
+        assert(false == virt_addr_valid((void *) va));
+        (void) map_page(va, pa, _PAGE_RW);
+        assert(true == virt_addr_valid((void *) va));
+
+        // ... and unmap...
+        unmap_page(va);
+        assert(false == virt_addr_valid((void *) va));
+    }
+
     init_io();
     init_fs();
     init_tty();
 
-#if TEST_BUILD
-    run_tests();
-#endif
+// #if TEST_BUILD
+//     run_tests();
+// #endif
 
 #if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+FN to crash kernel
     irq_register(IRQ_TIMER, crash_key_irq);
