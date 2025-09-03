@@ -41,8 +41,8 @@
 #define has_flag(x,f)                   (((x)&(f))==(f))
 #define countof(x)                      (sizeof(x)/sizeof(x[0]))
 
-#define align(x, n)                     (((x) + (n) - 1) & ~((n) - 1))
-#define aligned(x,n)                    ((x) == align(x,n))
+#define align(x, n)                     (((uintptr_t) (x) + (n) - 1) & ~((n) - 1))
+#define aligned(x,n)                    ((uintptr_t) (x) == align(x,n))
 
 #define ispow2(x)                       ((x) == 1 || ((x) & ((x) - 1)) == 0)
 

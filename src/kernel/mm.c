@@ -109,7 +109,7 @@ void init_mm(struct boot_info *boot)
     int total_kb_free;
     int free_pages;
 
-    const int KernelEndPhys = PAGE_ALIGN(PHYSICAL_ADDR((uint32_t) &__kernel_end));
+    const int KernelEndPhys = PAGE_ALIGN(PHYSICAL_ADDR(&__kernel_end));
 
     kb_free_low = boot->kb_low;
     if (boot->kb_high_e801h != 0) {
@@ -258,13 +258,13 @@ do { \
     // find size of first contiguous free region above 1M
     for (p = phys_mmap; p->zone != ZONE_INVALID; p++) {
         if (p->base >= (1 * MB)) {
-            mem_end = (char *) PHYSICAL_ADDR((uint32_t) p->limit);
+            mem_end = (char *) PHYSICAL_ADDR(p->limit);
             break;
         }
     }
 
     // physical memory bounds
-    mem_start = (char *) PHYSICAL_ADDR(PAGE_ALIGN((uint32_t) __kernel_end));
+    mem_start = (char *) PHYSICAL_ADDR(PAGE_ALIGN(__kernel_end));
     (void) mem_end;
     mem_size_pages = PAGE_ALIGN(mem_end - mem_start + 1) >> PAGE_SHIFT;
 
@@ -354,7 +354,7 @@ void * kmap_alloc_pages(size_t count)
         // check range: DWORD aligned case
         if (!found_start) {
             assert(aligned(start_index, 32));
-            assert(aligned((uint32_t) bitmap_ptr, 4));
+            assert(aligned(bitmap_ptr, 4));
             int bitmap_offset = (bitmap_ptr - zone->bitmap);
             start_index = bit_scan_forward(bitmap_ptr, bitmap_size_bytes - bitmap_offset);
             start_index += (bitmap_offset << 3);
@@ -416,7 +416,7 @@ void * kmap_alloc_pages(size_t count)
 
 void kmap_free_pages(void *addr)
 {
-    if (addr == 0 || !aligned((uint32_t) addr, PAGE_SIZE)) {
+    if (addr == 0 || !aligned(addr, PAGE_SIZE)) {
         return;
     }
 
@@ -495,6 +495,6 @@ static void print_kernel_sections(void)
     }
 
     kprint("kern-mem: kernel uses %dk (%d pages) for static memory\n",
-        align((size_t) __kernel_size, KB) >> KB_SHIFT,
-        PAGE_ALIGN((size_t) __kernel_size) >> PAGE_SHIFT);
+        align(__kernel_size, KB) >> KB_SHIFT,
+        PAGE_ALIGN(__kernel_size) >> PAGE_SHIFT);
 }
