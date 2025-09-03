@@ -34,8 +34,8 @@ bool walk_page_table(uint32_t va, pte_t **pte);
 //   flags set to 0 will clear the mapping
 void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flags);
 
-void * kmap_alloc_pages(size_t count);
-void kmap_free_pages(void *addr);
+void * alloc_pages(int flags, size_t count);    // TODO: count => order
+void free_pages(void *addr, size_t count);
 
 //
 // linker script symbols

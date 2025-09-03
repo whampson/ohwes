@@ -67,28 +67,17 @@ struct phys_mmap_entry {
     bool bad      : 1;
 };
 
-struct page_allocation {
-    struct page_allocation *next;
-    uint32_t pfn : 20;      // can address any frame
-    uint32_t count : 12;    // up to 16M per alloc
-} __pack;
-static_assert(sizeof(struct page_allocation) == 8, "sizeof(struct page_allocation)");
-
 struct zone {
     // enum zone_type type;    // TODO
 
     char *base;
-    uint32_t base_physical;
+    uint32_t base_pfn;
 
     size_t size_pages;
     size_t free_pages;
 
     size_t bitmap_size_pages;       // TODO: can probably calculate this
     char *bitmap;
-
-    size_t alloc_pool_size_pages;   // TODO: can probably calculate this
-    struct page_allocation *alloc_pool;
-    struct page_allocation *alloc_list;
 };
 
 static struct phys_mmap_entry phys_mmap[64];
@@ -250,8 +239,6 @@ do { \
     char *mem_start;
     char *mem_end = NULL;
     char *bitmap;
-    char *alloc_pool;
-    size_t alloc_pool_size_pages;
     size_t mem_size_pages;
     size_t bitmap_size_pages;
 
@@ -274,28 +261,14 @@ do { \
     mem_start += bitmap_size_pages << PAGE_SHIFT;
     mem_size_pages -= bitmap_size_pages;
 
-    // alloc pool for keeping track of allocations
-    alloc_pool_size_pages = PAGE_ALIGN(mem_size_pages * sizeof(struct page_allocation)) >> PAGE_SHIFT;
-    alloc_pool = (char *) KERNEL_ADDR(mem_start);
-    mem_start += alloc_pool_size_pages << PAGE_SHIFT;
-    mem_size_pages -= alloc_pool_size_pages;
-
-
-    g_default_zone->base = (void *) KERNEL_ADDR(mem_start);
-    g_default_zone->base_physical = (uint32_t) mem_start;
+    g_default_zone->base_pfn = __pfn(mem_start);
     g_default_zone->size_pages = mem_size_pages;
     g_default_zone->free_pages = mem_size_pages;
     g_default_zone->bitmap_size_pages = bitmap_size_pages;
     g_default_zone->bitmap = bitmap;
-    g_default_zone->alloc_pool = (struct page_allocation *) alloc_pool;
-    g_default_zone->alloc_list = (struct page_allocation *) alloc_pool;
-    g_default_zone->alloc_pool_size_pages = alloc_pool_size_pages;
 
     kprint("mem: initializing bitmap at %08X size_pages=%d...\n", bitmap, bitmap_size_pages);
     memset(bitmap, 0xFF, bitmap_size_pages << PAGE_SHIFT);
-
-    kprint("mem: initializing alloc pool at %08X size_pages=%d...\n", alloc_pool, alloc_pool_size_pages);
-    zeromem(alloc_pool, alloc_pool_size_pages << PAGE_SHIFT);
 
     kprint("mem: mem_start=%08X, mem_end=%08X, mem_size_pages=%d\n", mem_start, mem_end, mem_size_pages);
 
@@ -311,14 +284,14 @@ do { \
     // TODO: slab allocator
 }
 
-void * kmap_alloc_pages(size_t count)
+void * alloc_pages(int flags, size_t count)
 {
+    (void) flags;
+
     struct zone *zone = g_default_zone;
     size_t bitmap_size_bytes = (zone->bitmap_size_pages << PAGE_SHIFT);
     int start_index = 0;
     bool found = false;
-
-    assert(zone->size_pages <= (bitmap_size_bytes << 3));
 
     if (count == 0 || count > zone->free_pages) {
         return NULL;    // not enough free pages left!
@@ -386,76 +359,26 @@ void * kmap_alloc_pages(size_t count)
         clear_bit(zone->bitmap, start_index + i);
     }
     zone->free_pages -= count;
+    assert(zone->free_pages <= zone->size_pages);
 
-    uint32_t alloc_base = (uint32_t) (zone->base + (start_index << PAGE_SHIFT));
-    kprint("found %d free pages at %08X (index %d), %d free pages left\n",
-        count, alloc_base,
-        start_index, zone->free_pages);
-
-
-    // add allocation to linked list
-    // TODO: optimize storage space for this
-
-    struct page_allocation *alloc;
-    struct page_allocation *curr = zone->alloc_list;
-
-    alloc = &zone->alloc_pool[start_index];
-    assert(alloc->next == NULL);
-
-    alloc->pfn = PHYSICAL_ADDR(alloc_base) >> PAGE_SHIFT;
-    alloc->count = count;
-
-    while (curr->next != NULL) {
-        curr = curr->next;
-    }
-    curr->next = alloc;
-    alloc->next = NULL;
-
-    return (void *) alloc_base;
+    return (void *) KERNEL_ADDR((zone->base_pfn + start_index) << PAGE_SHIFT);
 }
 
-void kmap_free_pages(void *addr)
+void free_pages(void *addr, size_t count)
 {
-    if (addr == 0 || !aligned(addr, PAGE_SIZE)) {
+    struct zone *zone = g_default_zone;
+    uint32_t index = __pfn(PHYSICAL_ADDR(addr)) - zone->base_pfn;
+
+    if (index >= zone->size_pages ||
+        zone->free_pages + count > zone->size_pages) {
         return;
     }
 
-    struct zone *zone = g_default_zone;
-    struct page_allocation *prev = NULL;
-    struct page_allocation *curr = zone->alloc_list;
-    struct page_allocation *alloc = NULL;
-    uint32_t phys_addr = PHYSICAL_ADDR(addr);
-
-    do {
-        if (curr->pfn == (phys_addr >> PAGE_SHIFT)) {
-            alloc = curr;
-            break;
-        }
-        prev = curr;
-        curr = curr->next;
-    } while (curr != NULL);
-
-    if (alloc == NULL) {
-        panic("attempt to free non-existent page allocation at %08X\n", addr);
+    for (int i = 0; i < count; i++) {
+        set_bit(zone->bitmap, index + i);
     }
-    kprint("freeing %d pages at %08X...\n", alloc->count, alloc->pfn << PAGE_SHIFT);
-
-    uint32_t pfn_offset = alloc->pfn - (PHYSICAL_ADDR((uint32_t) zone->base) >> PAGE_SHIFT);    // TODO: this is a bit janky...
-    for (int i = 0; i < alloc->count; i++) {
-        set_bit(zone->bitmap, pfn_offset + i);
-    }
-
-    zone->free_pages += alloc->count;
-    if (prev != NULL) {
-        prev->next = curr->next;
-    }
-    else {
-        zone->alloc_list = curr->next;
-        if (zone->alloc_list == NULL) {
-            zone->alloc_list = zone->alloc_pool;
-        }
-    }
-    zeromem(alloc, sizeof(struct page_allocation));
+    zone->free_pages += count;
+    assert(zone->free_pages <= zone->size_pages);
 }
 
 static void print_kernel_sections(void)
