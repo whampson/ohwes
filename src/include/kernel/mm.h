@@ -30,12 +30,12 @@ bool virt_addr_valid(void *va);
 // walk the page table and return the PTE pointed to by the virtual address
 bool walk_page_table(uint32_t va, pte_t **pte);
 
-// TODO: virt_to_phys
-
-
 // update a range of contiguous page mappings with the specified attributes,
 //   flags set to 0 will clear the mapping
 void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flags);
+
+void * kmap_alloc_pages(size_t count);
+void kmap_free_pages(void *addr);
 
 //
 // linker script symbols

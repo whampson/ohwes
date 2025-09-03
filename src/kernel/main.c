@@ -85,6 +85,11 @@ __fastcall void kmain(struct boot_info **info)
 #endif
 
     init_mm(boot_info);
+
+    assert(kmap_alloc_pages(1) !=  NULL);
+    assert(kmap_alloc_pages(100) !=  NULL);
+    assert(kmap_alloc_pages(12) != NULL);
+
     init_io();
     init_fs();
     init_tty();

@@ -24,6 +24,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <i386/bitops.h>
 #include <i386/boot.h>
 #include <i386/cpu.h>
 #include <i386/paging.h>
@@ -66,17 +67,25 @@ struct phys_mmap_entry {
     bool bad      : 1;
 };
 
-struct zone
-{
-    enum zone_type type;
-
-    uint32_t base;
-    uint32_t free_pages;
-
-    struct page *page_map;
+struct zone {
+    // enum zone_type type;    // TODO
+    char *base;
+    uint32_t base_physical;
+    size_t size_pages;
+    size_t free_pages;
+    size_t bitmap_size_pages;
+    char *bitmap;
 };
 
+struct page_allocation {
+    uint32_t frame_number : 20;
+    uint32_t size_pages : 12;
+} __pack;
+static_assert(sizeof(struct page_allocation) == 4, "sizeof(struct page_allocation)");
+
 static struct phys_mmap_entry phys_mmap[64];
+static struct zone _default_zone = {};
+static struct zone *g_default_zone = &_default_zone;
 
 extern void init_pool(void);
 static void print_kernel_sections(void);
@@ -227,10 +236,8 @@ do { \
     print_kernel_sections();
 
     init_pool();
-    // pool_create(
-    //     PAGE_ALIGN(__kernel_end), "free_list",
-    //     sizeof(struct free_page), 0 /* num_page_frames */);
 
+    // ------------------------------------------------------------------------
 
     char *mem_start;
     char *mem_end = NULL;
@@ -257,16 +264,117 @@ do { \
     mem_start += bitmap_size_pages << PAGE_SHIFT;
     mem_size_pages -= bitmap_size_pages;
 
-    kprint("mem: zeroing bitmap at %08X size_pages=%d...\n", bitmap, bitmap_size_pages);
-    zeromem(bitmap, bitmap_size_pages << PAGE_SHIFT);
+    g_default_zone->base = (void *) KERNEL_ADDR(mem_start);
+    g_default_zone->base_physical = (uint32_t) mem_start;
+    g_default_zone->size_pages = mem_size_pages;
+    g_default_zone->free_pages = mem_size_pages;
+    g_default_zone->bitmap_size_pages = bitmap_size_pages;
+    g_default_zone->bitmap = bitmap;
+
+    kprint("mem: initializing bitmap at %08X size_pages=%d...\n", bitmap, bitmap_size_pages);
+    memset(bitmap, 0xFF, bitmap_size_pages << PAGE_SHIFT);
     kprint("mem: mem_start=%08X, mem_end=%08X, mem_size_pages=%d\n", mem_start, mem_end, mem_size_pages);
 
-    // ensure pages begin unmapped
+    // ensure pages are mapped to speed up allocation time
     char *top = min((char *) (4*MB), mem_end+1); // TODO: temp workaround for update_page_mappings 4M limit...
     size_t size_pages = (top - mem_start) >> PAGE_SHIFT;
-    update_page_mappings(KERNEL_ADDR(mem_start), (uint32_t) mem_start, size_pages, 0);
+    pgflags_t flags = _PAGE_RW | _PAGE_PRESENT;
+    update_page_mappings(KERNEL_ADDR(mem_start), (uint32_t) mem_start, size_pages, flags);
+
+    // TODO: could calculate how many page tables are needed to alloc all of
+    // "Normal" memory, then stuff them before the bitmap too...
 
     // TODO: slab allocator
+}
+
+void * kmap_alloc_pages(size_t count)
+{
+    struct zone *zone = g_default_zone;
+    size_t bitmap_size_bytes = (zone->bitmap_size_pages << PAGE_SHIFT);
+    int start_index = 0;
+    bool found = false;
+
+    assert(zone->size_pages <= (bitmap_size_bytes << 3));
+
+    if (count == 0 || count > zone->free_pages) {
+        return NULL;    // not enough free pages left!
+    }
+
+    // locate start of contiguous region
+    do {
+        bool found_start = false;
+
+        int bit_offset = (start_index % 8);
+        char *bitmap_ptr = (char *) (zone->bitmap +
+            (align(start_index, 8) >> 3) +
+            ((bit_offset > 0) ? -1 : 0));
+
+        // check range: non-DWORD-aligned case
+        if (!aligned(start_index, 32)) {
+            while (!found_start) {
+                for (; bit_offset < 8; bit_offset++) {
+                    if (test_bit(bitmap_ptr, bit_offset)) {
+                        found_start = true;
+                        break;
+                    }
+                    start_index++;
+                }
+                bitmap_ptr++;
+                bit_offset = 0;
+                if (aligned(start_index, 32)) {
+                    break;
+                }
+            }
+        }
+
+        // check range: DWORD aligned case
+        if (!found_start) {
+            assert(aligned(start_index, 32));
+            assert(aligned((uint32_t) bitmap_ptr, 4));
+            int bitmap_offset = (bitmap_ptr - zone->bitmap);
+            start_index = bit_scan_forward(bitmap_ptr, bitmap_size_bytes - bitmap_offset);
+            start_index += (bitmap_offset << 3);
+        }
+
+        if (start_index + count > zone->size_pages) {
+            return NULL;    // not enough contiguous memory to fit allocation!
+        }
+
+        // check if contiguous region will fit requested memory
+        found = true;
+        for (int i = 0; i < count; i++) {
+            // TODO: optimize by checking whole DWORDs or larger
+            if (test_bit(zone->bitmap, start_index + i) == 0) {
+                found = false;
+                start_index += (i + 1); // not enough pages in range
+                break;                  // advance start_index and continue search
+            }
+        }
+    } while (!found && start_index + count < zone->size_pages);
+
+    if (!found) {
+        return NULL;
+    }
+
+    // zero the bitmap region
+    for (int i = 0; i < count; i++) {
+        // TODO: optimize by setting whole DWORDs or larger
+        clear_bit(zone->bitmap, start_index + i);
+    }
+    zone->free_pages -= count;
+
+    uint32_t alloc_base = (uint32_t) (zone->base + (start_index << PAGE_SHIFT));
+    kprint("found %d free pages at %08X (index %d), %d free pages left\n",
+        count, alloc_base,
+        start_index, zone->free_pages);
+
+    // TODO: add allocation to linked list
+    return (void *) alloc_base;
+}
+
+void kmap_free_pages(void *addr)
+{
+    (void) addr;
 }
 
 static void print_kernel_sections(void)
@@ -280,21 +388,20 @@ static void print_kernel_sections(void)
 
     // TODO: make this into a sorted list; collect regions at boot
     struct section sections[] = {
-        { "kernel image:",  __kernel_start,                         __kernel_end },
-        { ".setup",         __setup_start,                          __setup_end },
-        { ".text",          __text_start,                           __text_end },
-        { ".rodata",        __rodata_start,                         __rodata_end },
-        { ".data",          __data_start,                           __data_end },
-        { ".bss",           __bss_start,                            __bss_end },
-        { ".idt",           __idt_start,                            __idt_end },
-        { ".pgdir",         __pgdir_start,                          __pgdir_end },
-        { ".pgtbl",         __pgtbl_start,                          __pgtbl_end },
-        { ".pgmap",         __pgmap_start,                          __pgmap_end },
-        { ".klog",          __klog_start,                           __klog_end },
-        { ".kstack",        __kstack_start,                         __kstack_end },
-        { ".ustack",        __ustack_start,                         __ustack_end },
-        { ".estack",        __estack_start,                         __estack_end },
-
+        { "kernel image:",  __kernel_start,     __kernel_end },
+        { ".setup",         __setup_start,      __setup_end },
+        { ".text",          __text_start,       __text_end },
+        { ".rodata",        __rodata_start,     __rodata_end },
+        { ".data",          __data_start,       __data_end },
+        { ".bss",           __bss_start,        __bss_end },
+        { ".idt",           __idt_start,        __idt_end },
+        { ".pgdir",         __pgdir_start,      __pgdir_end },
+        { ".pgtbl",         __pgtbl_start,      __pgtbl_end },
+        { ".pgmap",         __pgmap_start,      __pgmap_end },
+        { ".klog",          __klog_start,       __klog_end },
+        { ".kstack",        __kstack_start,     __kstack_end },
+        { ".ustack",        __ustack_start,     __ustack_end },
+        { ".estack",        __estack_start,     __estack_end },
     };
 
     for (int i = 0; i < countof(sections); i++) {
