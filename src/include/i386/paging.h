@@ -63,9 +63,9 @@
 // PTN = Page Table Number      offset of pte_t in page table
 // PFN = Page Frame Number      physical page number
 
-#define __ptn(addr)             ((addr >> PAGE_SHIFT) & (PTE_COUNT - 1))
-#define __pdn(addr)             ((addr >> PGDIR_SHIFT) & (PDE_COUNT - 1))
-#define __pfn(addr)             (addr >> PAGE_SHIFT)
+#define __ptn(addr)             (((uintptr_t) (addr) >> PAGE_SHIFT) & (PTE_COUNT - 1))
+#define __pdn(addr)             (((uintptr_t) (addr) >> PGDIR_SHIFT) & (PDE_COUNT - 1))
+#define __pfn(addr)             ((uintptr_t)  (addr) >> PAGE_SHIFT)
 
 #define PAGE_ALIGN(addr)        ((uintptr_t) ((addr) + (PAGE_SIZE - 1)) & PAGE_MASK)
 #define LARGE_PAGE_ALIGN(addr)  ((uintptr_t) ((addr) + (LARGE_PAGE_SIZE - 1)) & LARGE_PAGE_MASK)
