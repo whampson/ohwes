@@ -80,11 +80,26 @@ __fastcall void kmain(struct boot_info **info)
             __DATE__, __TIME__, __VERSION__);
 
     print_boot_info(boot_info);
+
+    init_mm(boot_info);
 #if PRINT_PAGE_MAP
     print_page_mappings();
 #endif
 
-    init_mm(boot_info);
+    void *alloc0 = alloc_pages(0, 1);
+    void *alloc1 = alloc_pages(0, 100);
+    void *alloc2 = alloc_pages(0, 12);
+
+    (void) alloc0;
+    free_pages(alloc1, 100);
+    (void) alloc2;
+
+    void *alloc3 = alloc_pages(0, 25);
+
+    free_pages(alloc0, 1);
+    free_pages(alloc2, 12);
+    free_pages(alloc3, 25);
+
     init_io();
     init_fs();
     init_tty();
@@ -98,7 +113,7 @@ __fastcall void kmain(struct boot_info **info)
 #endif
 
     kprint("entering user mode...\n");
-    go_to_ring3(init, __ustack);
+    go_to_ring3(init, __ustack_end);
 
     // for future reference...
     // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779

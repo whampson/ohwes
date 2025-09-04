@@ -36,41 +36,14 @@
 
 #define MAX_ORDER   11
 
-struct free_page {
-    struct free_page *next;
-    uint16_t pfn;
-} __pack;
-
-// struct zone {
-//     uintptr_t zone_base;
-//     struct free_area free_area[MAX_ORDER];
-//     pool_t free_list_pool;
-// };
-
-enum zone_type {
-    ZONE_INVALID,
-    ZONE_STATIC,
-    ZONE_DYNAMIC,
-    ZONE_DMA,
-    ZONE_ACPI,
-};
-
-struct phys_mmap_entry {
-    struct acpi_mmap_entry acpi_entry;
-
-    uint64_t base;
-    uint64_t limit;
-
-    enum zone_type zone;
-
-    bool reserved : 1;
-    bool bad      : 1;
-};
+// struct free_page {
+//     struct free_page *next;
+//     uint16_t pfn;
+// } __pack;
 
 struct zone {
     // enum zone_type type;    // TODO
 
-    char *base;
     uint32_t base_pfn;
 
     size_t size_pages;
@@ -80,154 +53,69 @@ struct zone {
     char *bitmap;
 };
 
-static struct phys_mmap_entry phys_mmap[64];
+static struct acpi_mmap_entry phys_mmap[64];
 static struct zone _default_zone = {};
 static struct zone *g_default_zone = &_default_zone;
 
 extern void init_pool(void);
 static void print_kernel_sections(void);
 
+static void init_mmap(struct acpi_mmap_entry *map, struct boot_info *boot);
+static void init_mmap_legacy(struct acpi_mmap_entry *map, struct boot_info *boot);
+
 void init_mm(struct boot_info *boot)
 {
-    struct phys_mmap_entry *p;
-    int kb_free_low;    //   0 - 640K
-    int kb_free_1M;     //  1M - 16M
-    int kb_free_16M;    // 16M - 4G
+    // initialize physical memory map
+    zeromem(phys_mmap, sizeof(phys_mmap));
+    init_mmap(phys_mmap, boot);
 
-    int total_kb;
-    int total_kb_free;
-    int free_pages;
+    // ------------------------------------------------------------------------
 
-    const int KernelEndPhys = PAGE_ALIGN(PHYSICAL_ADDR(&__kernel_end));
+    int total_kb = 0;
+    int free_kb = 0;
+    int bad_kb = 0;
+    int free_pages = 0;
+    struct acpi_mmap_entry *e;
 
-    kb_free_low = boot->kb_low;
-    if (boot->kb_high_e801h != 0) {
-        kb_free_1M = boot->kb_high_e801h;
-        kb_free_16M = (boot->kb_extended << 6);
-    }
-    else {
-        kprint("bios-e081: memory map not available\n");
-        kb_free_1M = boot->kb_high;
-        kb_free_16M = 0;
-    }
-
-#define __mkentry(ntry,bas,siz,zon) \
-do { \
-    (ntry)->base = (bas);   \
-    (ntry)->limit = (bas)+(siz)-1;   \
-    (ntry)->zone = (zon);   \
-} while (0)
-
-    if (!boot->mem_map) {
-        kprint("bios-e820: memory map not available\n");
-        p = phys_mmap;
-        if (kb_free_low) {
-            __mkentry(p, 0, (kb_free_low << 10), ZONE_DMA);
-            p++;
-        }
-        if (kb_free_1M) {
-            __mkentry(p, (1 << 20), (kb_free_1M << 10),
-                (KernelEndPhys < (1 << 20)) ? ZONE_DYNAMIC : ZONE_STATIC);
-            p++;
-        }
-        if (kb_free_16M) {
-            __mkentry(p, (1 << 24), (kb_free_16M << 10),
-                (KernelEndPhys < (1 << 24)) ? ZONE_DYNAMIC : ZONE_STATIC);
-            p++;
-        }
-    }
-    else {
-        int i;
-        const struct acpi_mmap_entry *e;
-
-        p = phys_mmap;
-        e  = (const struct acpi_mmap_entry *) KERNEL_ADDR(boot->mem_map);
-
-        for (i = 0;
-             i < countof(phys_mmap) && e->type != ACPI_MMAP_TYPE_INVALID;
-             i++, e++, p++
-        ) {
-            kprint("bios-e820: %08llX-%08llX ", e->base, e->base + e->length-1);
-            switch (e->type) {
-                case ACPI_MMAP_TYPE_USABLE: kprint("free"); break;
-                case ACPI_MMAP_TYPE_RESERVED: kprint("reserved"); break;
-                case ACPI_MMAP_TYPE_ACPI: kprint("reserved (ACPI)"); break;
-                case ACPI_MMAP_TYPE_NVS: kprint("reserved (ACPI, non-volatile)"); break;
-                case ACPI_MMAP_TYPE_BAD: kprint("bad"); break;
-                default: kprint("unknown (%d)", e->type); break;
-            }
-            if (e->attributes) {
-                kprint(" (attributes = 0x%X)", e->attributes);
-            }
-            kprint("\n");
-
-            __mkentry(p, e->base, e->length, ZONE_STATIC);
-            p->acpi_entry = *e;
-
-            p->bad = (e->type == ACPI_MMAP_TYPE_BAD);
-            p->reserved = (e->type != ACPI_MMAP_TYPE_USABLE);
-
-            if (e->type == ACPI_MMAP_TYPE_ACPI || e->type == ACPI_MMAP_TYPE_NVS) {
-                p->zone = ZONE_ACPI;
-                p->reserved = (e->type == ACPI_MMAP_TYPE_NVS);
-            }
-            else if (p->base < boot->ebda_base) {
-                p->zone = ZONE_DMA;
-            }
-            else if (p->base >= KernelEndPhys && !p->reserved) {
-                // TODO: need to account for paging structures
-                // ... or just put them before the kernel
-                p->zone = ZONE_DYNAMIC;
-            }
-
-            // TODO: always create 15M-16M hole??
-            //   sometimes it doesn't show up in ACPI table despite
-            //   e801 reporting a gap
-        }
-
-        if (i >= countof(phys_mmap)) {
-            warn("physical memory map limit reached!\n");
-        }
-    }
-
-#undef __mkentry
-
-    total_kb = 0;
-    total_kb_free = 0;
-    free_pages = 0;
-
-    p = phys_mmap;
-    while (p->zone != ZONE_INVALID) {
+    // tally up the amount of usable RAM
+    for (e = phys_mmap; mmap_valid(e); e++) {
+        size_t size_kb = (e->length) >> KB_SHIFT;
         char size_char = 'k';
-        size_t size_kb = (p->limit - p->base + 1) >> 10;
         size_t disp_size = size_kb;
         if (disp_size >= 1024) {
             size_char = 'M';
-            disp_size >>= 10;
+            disp_size = div_ceil(disp_size, 1024);
         }
-        kprint("phys-mem: %08llX-%08llX % 4lu%c %c%c %-12s\n",
-            p->base, p->limit, disp_size, size_char,
-            (p->reserved) ? 'r' : ' ',
-            (p->bad)      ? 'b' : ' ',
-            (p->zone == ZONE_STATIC)  ? STRINGIFY(ZONE_STATIC)  :
-            (p->zone == ZONE_DYNAMIC) ? STRINGIFY(ZONE_DYNAMIC) :
-            (p->zone == ZONE_DMA)     ? STRINGIFY(ZONE_DMA)     :
-            (p->zone == ZONE_ACPI)    ? STRINGIFY(ZONE_ACPI)    :
-                                        STRINGIFY(ZONE_INVALID));
-        if (!p->reserved && !p->bad) {
-            total_kb_free += size_kb;
+        kprint("phys-mem: %08llX-%08llX % 4lu%c %s",
+            e->base, e->base+e->length-1,
+            disp_size, size_char,
+            mmap_bad(e)     ? "*** BAD ***" :
+            mmap_acpi(e)    ? "ACPI" :
+            mmap_usable(e)  ? "" : "reserved");
+        if (e->attr) {
+            kprint(" (attr = 0x%X)", e->attr);
         }
+        kprint("\n");
+
         total_kb += size_kb;
-        p++;
+        if (mmap_bad(e)) {
+            bad_kb += size_kb;
+        }
+        if (mmap_usable(e)) {
+            free_kb += size_kb;
+        }
     }
 
-    free_pages = (total_kb_free >> 2);
-    kprint("phys-mem: %dk total, %dk usable\n", total_kb, total_kb_free);
+    free_pages = (free_kb >> (PAGE_SHIFT - KB_SHIFT));
+    kprint("phys-mem: %dk total, %dk usable\n", total_kb, free_kb);
     kprint("phys-mem: %d usable pages\n", free_pages);
+    if (bad_kb > 0) {
+        warn("phys-mem: found %dk of bad memory!\n", bad_kb);
+    }
 
-    if (total_kb_free < (MEMORY_REQUIRED >> 10)) {
+    if (free_kb < (MEMORY_REQUIRED >> KB_SHIFT)) {
         panic("not enough memory! " OS_NAME " needs least %dk to operate!",
-            (MEMORY_REQUIRED >> 10));
+            (MEMORY_REQUIRED >> KB_SHIFT));
     }
 
     print_kernel_sections();
@@ -243,9 +131,10 @@ do { \
     size_t bitmap_size_pages;
 
     // find size of first contiguous free region above 1M
-    for (p = phys_mmap; p->zone != ZONE_INVALID; p++) {
-        if (p->base >= (1 * MB)) {
-            mem_end = (char *) PHYSICAL_ADDR(p->limit);
+    // TODO: expand this... or define a max-sized region
+    for (e = phys_mmap; mmap_valid(e); e++) {
+        if (e->base >= (1 * MB)) {
+            mem_end = (char *) PHYSICAL_ADDR(e->base + e->length - 1);
             break;
         }
     }
@@ -267,8 +156,8 @@ do { \
     g_default_zone->bitmap_size_pages = bitmap_size_pages;
     g_default_zone->bitmap = bitmap;
 
-    kprint("mem: initializing bitmap at %08X size_pages=%d...\n", bitmap, bitmap_size_pages);
     memset(bitmap, 0xFF, bitmap_size_pages << PAGE_SHIFT);
+    kprint("mem: initialized bitmap at %08X size_pages=%d\n", bitmap, bitmap_size_pages);
 
     kprint("mem: mem_start=%08X, mem_end=%08X, mem_size_pages=%d\n", mem_start, mem_end, mem_size_pages);
 
@@ -282,6 +171,67 @@ do { \
     // "Normal" memory, then stuff them before the bitmap too...
 
     // TODO: slab allocator
+}
+
+static void init_mmap_legacy(struct acpi_mmap_entry *map, struct boot_info *boot)
+{
+    int kb_free_low;    //   0 - 640K
+    int kb_free_1M;     //  1M - 16M
+    int kb_free_16M;    // 16M - 4G
+
+    kb_free_low = boot->kb_low;
+    if (boot->kb_high_e801h != 0) {
+        kb_free_1M = boot->kb_high_e801h;
+        kb_free_16M = (boot->kb_extended << 6);
+    }
+    else {
+        kprint("bios-e801: memory map not available\n");
+        kb_free_1M = boot->kb_high;
+        kb_free_16M = 0;
+    }
+
+    if (kb_free_low) {
+        map->base = 0;
+        map->length = (kb_free_low << 10);
+        map->type = ACPI_MMAP_TYPE_USABLE;
+        map->attr = 0;
+        map++;
+    }
+    if (kb_free_1M) {
+        map->base = (1 * MB);
+        map->length = (kb_free_1M << 10);
+        map->type = ACPI_MMAP_TYPE_USABLE;
+        map->attr = 0;
+        map++;
+    }
+    if (kb_free_16M) {
+        map->base = (16 * MB);
+        map->length = (kb_free_16M << 10);
+        map->type = ACPI_MMAP_TYPE_USABLE;
+        map->attr = 0;
+        map++;
+    }
+}
+
+static void init_mmap(struct acpi_mmap_entry *map, struct boot_info *boot)
+{
+    if (!boot->mem_map) {
+        kprint("bios-e820: memory map not available\n");
+        init_mmap_legacy(map, boot);
+        return;
+    }
+
+    const struct acpi_mmap_entry *e;
+    e = (const struct acpi_mmap_entry *) KERNEL_ADDR(boot->mem_map);
+
+    int i;
+    for (i = 0; i < countof(phys_mmap) && mmap_valid(e); i++, e++) {
+        map[i] = *e;
+    }
+
+    if (i >= countof(phys_mmap)) {
+        panic("too many entries for physical memory map table!\n");
+    }
 }
 
 void * alloc_pages(int flags, size_t count)
@@ -375,6 +325,7 @@ void free_pages(void *addr, size_t count)
     }
 
     for (int i = 0; i < count; i++) {
+        // TODO: optimize by setting whole DWORDs or larger
         set_bit(zone->bitmap, index + i);
     }
     zone->free_pages += count;

@@ -120,9 +120,14 @@ struct acpi_mmap_entry {
     uint64_t base;
     uint64_t length;
     uint32_t type;
-    uint32_t attributes;
+    uint32_t attr;
 };
 static_assert(sizeof(struct acpi_mmap_entry) == 24, "sizeof(struct acpi_mmap_entry) == 24");
+
+#define mmap_valid(e)     ((e)->type != ACPI_MMAP_TYPE_INVALID)
+#define mmap_bad(e)       ((e)->type == ACPI_MMAP_TYPE_BAD)
+#define mmap_acpi(e)      ((e)->type == ACPI_MMAP_TYPE_ACPI)
+#define mmap_usable(e)    ((e)->type == ACPI_MMAP_TYPE_USABLE || (e)->type == ACPI_MMAP_TYPE_ACPI)
 
 /*----------------------------------------------------------------------------*
  * System Boot Info
