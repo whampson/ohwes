@@ -57,6 +57,7 @@ ksetup:
 
         # set up the inititial stack
         leal            __kstack_base, %ebp
+        addl            $__kstack_size, %ebp
         movl            %ebp, %esp
 
 #if SERIAL_DEBUGGING

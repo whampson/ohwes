@@ -110,7 +110,7 @@ void setup_cpu(void)
 
     // TSS for kernel calls from user mode
     make_tss_desc(x86_get_desc(get_gdt(), KERNEL_TSS), KERNEL_PL, tss_kernl);
-    tss_kernl->esp0 = (uint32_t) __kstack;
+    tss_kernl->esp0 = (uint32_t) __kstack_end;
     tss_kernl->ss0 = KERNEL_DS;
     __ltr(KERNEL_TSS);
 
