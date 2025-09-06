@@ -24,6 +24,16 @@
 
 #include <stdint.h>
 
+#define MAX_ORDER           8   // max alloc: 1M (w/ 4k pages)
+#define MAX_ORDER_SIZE      (1 << (MAX_ORDER+PAGE_SHIFT))
+
+enum zone_type {
+    ZONE_DMA,           // 4k - 640k
+    ZONE_NORMAL,        // 1M - 4M
+    ZONE_HIGHMEM,       // 4M - 4G
+    NR_ZONES
+};
+
 // check whether reading or writing a virtual address would cause a page fault
 bool virt_addr_valid(void *va);
 
@@ -34,8 +44,11 @@ bool walk_page_table(uint32_t va, pte_t **pte);
 //   flags set to 0 will clear the mapping
 void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flags);
 
-void * alloc_pages(int flags, size_t count);    // TODO: count => order
+void * alloc_pages(int flags, size_t count);
 void free_pages(void *addr, size_t count);
+
+void * alloc_pages_buddy(int flags, int order);
+void free_pages_buddy(void *addr, int order);
 
 //
 // linker script symbols

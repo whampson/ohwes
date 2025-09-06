@@ -34,28 +34,32 @@
 #include <kernel/ohwes.h>
 #include <kernel/pool.h>
 
-#define MAX_ORDER   11
-
 // struct free_page {
 //     struct free_page *next;
 //     uint16_t pfn;
 // } __pack;
 
 struct zone {
-    // enum zone_type type;    // TODO
-
     uint32_t base_pfn;
 
     size_t size_pages;
     size_t free_pages;
+    // TODO: maintain a free list of pages?
+    //       could have an O(1) page frame allocator!!
+
+    // struct range phys_mem;          // allocable physical memory address range
+    // struct range buddy_mem;         // address range visible to buddy allocator
 
     size_t bitmap_size_pages;       // TODO: can probably calculate this
-    char *bitmap;
+    char *bitmap[MAX_ORDER+1];      // per-order bitmap, DWORD-aligned
+    int bitmap_size[MAX_ORDER+1];   // num bits per order
 };
 
+static struct zone _zones[NR_ZONES];
 static struct acpi_mmap_entry phys_mmap[64];
-static struct zone _default_zone = {};
-static struct zone *g_default_zone = &_default_zone;
+
+static char *mem_start;
+static char *mem_end;
 
 extern void init_pool(void);
 static void print_kernel_sections(void);
@@ -124,14 +128,16 @@ void init_mm(struct boot_info *boot)
 
     // ------------------------------------------------------------------------
 
-    char *mem_start;
-    char *mem_end = NULL;
     char *bitmap;
     size_t mem_size_pages;
     size_t bitmap_size_pages;
+    struct zone *zone;
+
+    zone = &_zones[ZONE_NORMAL];
 
     // find size of first contiguous free region above 1M
     // TODO: expand this... or define a max-sized region
+    mem_end = NULL;
     for (e = phys_mmap; mmap_valid(e); e++) {
         if (e->base >= (1 * MB)) {
             mem_end = (char *) PHYSICAL_ADDR(e->base + e->length - 1);
@@ -144,20 +150,56 @@ void init_mm(struct boot_info *boot)
     (void) mem_end;
     mem_size_pages = PAGE_ALIGN(mem_end - mem_start + 1) >> PAGE_SHIFT;
 
-    // bitmap for keeping track of physical page alloc status
-    bitmap_size_pages = PAGE_ALIGN(div_ceil(mem_size_pages, 8)) >> PAGE_SHIFT;
+    // set up a bitmap for keeping track of physical page alloc status
     bitmap = (char *) KERNEL_ADDR(mem_start);
+
+    // determine the range of addresses covered by highest order allocations
+    const uint32_t max_order_lo = ((uint32_t) mem_start) & ~(MAX_ORDER_SIZE - 1);
+    const uint32_t max_order_hi = align(mem_end, MAX_ORDER_SIZE);
+    const uint32_t max_order_range_pages = (max_order_hi - max_order_lo) >> PAGE_SHIFT;
+
+    // figure out bitmap layout for each order
+    size_t total_num_bits = 0;
+    for (int i = MAX_ORDER; i >= 0; i--) {
+        size_t num_bits = div_ceil(max_order_range_pages, (1 << i));
+        size_t num_bits_aligned = align(num_bits, 32);
+        zone->bitmap_size[i] = num_bits;
+        zone->bitmap[i] = bitmap + (total_num_bits >> 3);
+        total_num_bits += num_bits_aligned;
+    }
+    assert(aligned(total_num_bits, 32));
+
+    // now we know the size of the bitmap, initialize it!
+    bitmap_size_pages = PAGE_ALIGN(div_ceil(total_num_bits, 8)) >> PAGE_SHIFT;
+    memset(bitmap, 0xFF, bitmap_size_pages << PAGE_SHIFT);
+
+    // adjust allocable memory range to account for bitmap
     mem_start += bitmap_size_pages << PAGE_SHIFT;
     mem_size_pages -= bitmap_size_pages;
 
-    g_default_zone->base_pfn = __pfn(mem_start);
-    g_default_zone->size_pages = mem_size_pages;
-    g_default_zone->free_pages = mem_size_pages;
-    g_default_zone->bitmap_size_pages = bitmap_size_pages;
-    g_default_zone->bitmap = bitmap;
+    // now, clear out the bits that represent unreachable regions;
+    for (int i = MAX_ORDER; i >= 0; i--) {
+        const uint32_t order_size = (1 << (i+PAGE_SHIFT));
 
-    memset(bitmap, 0xFF, bitmap_size_pages << PAGE_SHIFT);
+        for (uint32_t lo = max_order_lo, bit = 0;
+                lo < (uint32_t) mem_start;
+                lo += order_size, bit++) {
+            clear_bit(zone->bitmap[i], bit);
+        }
+
+        for (uint32_t hi = max_order_hi, bit = zone->bitmap_size[i] - 1;
+                hi > (uint32_t) (mem_end+1);
+                hi -= order_size, bit--) {
+            clear_bit(zone->bitmap[i], bit);
+        }
+    }
+
     kprint("mem: initialized bitmap at %08X size_pages=%d\n", bitmap, bitmap_size_pages);
+
+    zone->base_pfn = __pfn(mem_start);
+    zone->size_pages = mem_size_pages;
+    zone->free_pages = mem_size_pages;
+    zone->bitmap_size_pages = bitmap_size_pages;
 
     kprint("mem: mem_start=%08X, mem_end=%08X, mem_size_pages=%d\n", mem_start, mem_end, mem_size_pages);
 
@@ -169,8 +211,6 @@ void init_mm(struct boot_info *boot)
 
     // TODO: could calculate how many page tables are needed to alloc all of
     // "Normal" memory, then stuff them before the bitmap too...
-
-    // TODO: slab allocator
 }
 
 static void init_mmap_legacy(struct acpi_mmap_entry *map, struct boot_info *boot)
@@ -234,11 +274,63 @@ static void init_mmap(struct acpi_mmap_entry *map, struct boot_info *boot)
     }
 }
 
+void * alloc_pages_buddy(int flags, int order)
+{
+    (void) flags;
+
+    if (order < 0 || order > MAX_ORDER) {
+        return NULL;
+    }
+
+    // locate next free region at current order
+    struct zone *zone = &_zones[ZONE_NORMAL];
+    size_t bitmap_size = zone->bitmap_size[order];
+    size_t bitmap_size_bytes = div_ceil(bitmap_size, 32) << 2;  // DWORD-aligned size
+    int index = bit_scan_forward(zone->bitmap[order], bitmap_size_bytes);
+    if (index < 0 || index >= bitmap_size) {
+        return NULL;
+    }
+
+    // mark the lower-order chunks in-use
+    for (int o = order, i = index, c = 1; o >= 0; o--, i <<= 1, c <<= 1) {
+        for (int n = 0; n < c; n++) {
+            clear_bit(zone->bitmap[o], i + n);  // TODO: need a fast way to clear a range of bits...
+        }
+    }
+
+    // mark the higher-order chunks in-use
+    for (int o = order + 1, i = index >> 1; o <= MAX_ORDER; o++, i >>= 1) {
+        clear_bit(zone->bitmap[o], i);
+    }
+
+    // calculate alloc address
+    const uint32_t max_order_lo = ((uint32_t) mem_start) & ~(MAX_ORDER_SIZE - 1);
+    const uint32_t order_size = (1 << (order+PAGE_SHIFT));
+    uint32_t addr = max_order_lo + (index * order_size);
+
+    // range check!
+    if (addr < (uint32_t) mem_start || addr + order_size > (uint32_t) mem_end + 1) {
+        panic("phys-mem: alloc: order=%d addr=%08X size=%d index=%d; out of bounds!!",
+            order, addr, order_size, index);
+    }
+
+    zone->free_pages -= (order_size >> PAGE_SHIFT);
+    kprint("phys-mem: alloc: order=%d addr=%08X size=%d index=%d; %d pages left\n",
+        order, addr, order_size, index, zone->free_pages);
+
+    return (void *) addr;
+}
+
+void free_pages_buddy(void *addr, int order)
+{
+
+}
+
 void * alloc_pages(int flags, size_t count)
 {
     (void) flags;
 
-    struct zone *zone = g_default_zone;
+    struct zone *zone = &_zones[ZONE_NORMAL];   // TODO: zone selecton flag
     size_t bitmap_size_bytes = (zone->bitmap_size_pages << PAGE_SHIFT);
     int start_index = 0;
     bool found = false;
@@ -278,7 +370,7 @@ void * alloc_pages(int flags, size_t count)
         if (!found_start) {
             assert(aligned(start_index, 32));
             assert(aligned(bitmap_ptr, 4));
-            int bitmap_offset = (bitmap_ptr - zone->bitmap);
+            int bitmap_offset = (bitmap_ptr - zone->bitmap[0]);
             start_index = bit_scan_forward(bitmap_ptr, bitmap_size_bytes - bitmap_offset);
             start_index += (bitmap_offset << 3);
         }
@@ -316,7 +408,7 @@ void * alloc_pages(int flags, size_t count)
 
 void free_pages(void *addr, size_t count)
 {
-    struct zone *zone = g_default_zone;
+    struct zone *zone = &_zones[ZONE_NORMAL];
     uint32_t index = __pfn(PHYSICAL_ADDR(addr)) - zone->base_pfn;
 
     if (index >= zone->size_pages ||
