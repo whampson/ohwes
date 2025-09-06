@@ -86,20 +86,6 @@ __fastcall void kmain(struct boot_info **info)
     print_page_mappings();
 #endif
 
-    void *alloc0 = alloc_pages(0, 1);
-    void *alloc1 = alloc_pages(0, 100);
-    void *alloc2 = alloc_pages(0, 12);
-
-    (void) alloc0;
-    free_pages(alloc1, 100);
-    (void) alloc2;
-
-    void *alloc3 = alloc_pages(0, 25);
-
-    free_pages(alloc0, 1);
-    free_pages(alloc2, 12);
-    free_pages(alloc3, 25);
-
     init_io();
     init_fs();
     init_tty();

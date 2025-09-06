@@ -59,7 +59,7 @@ void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flag
     pde_t *pgdir;
     pde_t *pde;
     pte_t *pte;
-    bool map;
+    bool unmap;
 
     // TODO: these "page mappings" should probably be managed somewhere in a
     // structure if we're going to be "updating" them. So we can disallow
@@ -70,23 +70,24 @@ void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flag
     //       or warn about double-mapping?
 
     pgdir = (pde_t *) get_pgdir();
-    map = (flags != 0 && pa >= PAGE_SIZE);
+    unmap = (flags == 0);
     // TODO: check/validate/filter flags
 
-    if (map) kprint("mem: mapping %d pages at PA:%08X VA:%08X flags %02Xh...\n", count, pa, va, flags);
-    else     kprint("mem: unmapping %d pages at VA:%08X...\n", count, va);
+    if (count > 4096) {
+        assert(count <= 4096);
+        return;
+    }
 
     for (int i = 0; i < count; i++) {
         pde = (pde_t *) KERNEL_ADDR(pde_offset(pgdir, va));
         if (!pde_present(*pde)) {
             // TODO: map a new PDE and associated page table...
-            panic("mem: mappings that require a new PDE and page table not yet implemented! pa(%08X) va(%08X)\n", pa, va);
+            panic("phys-mem: mappings that require a new PDE and page table not yet implemented! pa(%08X) va(%08X)\n", pa, va);
         }
-
         pte = (pte_t *) KERNEL_ADDR(pte_offset(pde, va));
-        pte_clear(pte);
 
-        if (map) {
+        pte_clear(pte);
+        if (!unmap) {   // map
             *pte = __mkpte(pa, flags);
         }
 
@@ -96,4 +97,14 @@ void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flag
 
     // TODO: be able to control this w/ flag
     flush_tlb();
+
+    size_t size_bytes = (count << PAGE_SHIFT);
+    if (unmap) {
+        kprint("phys-mem: unmap: p:%08X-%08X v:%08X-%08X size_pages=%d flags=%02Xh\n",
+            pa, pa+size_bytes-1, va, va+size_bytes-1, count, flags);
+    }
+    else {
+        kprint("phys-mem: map: p:%08X-%08X v:%08X-%08X size_pages=%d flags=%02Xh\n",
+            pa, pa+size_bytes-1, va, va+size_bytes-1, count, flags);
+    }
 }

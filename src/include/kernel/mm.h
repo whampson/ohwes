@@ -44,11 +44,13 @@ bool walk_page_table(uint32_t va, pte_t **pte);
 //   flags set to 0 will clear the mapping
 void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flags);
 
-void * alloc_pages(int flags, size_t count);
-void free_pages(void *addr, size_t count);
+// allocate physical page frames;
+//  uses a buddy allocator
+void * alloc_pages(int flags, int order);
 
-void * alloc_pages_buddy(int flags, int order);
-void free_pages_buddy(void *addr, int order);
+// free pages given out by alloc_pages;
+//  order must match or you will cause havoc!
+void free_pages(void *addr, int order);
 
 //
 // linker script symbols
