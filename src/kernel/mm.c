@@ -158,6 +158,9 @@ void init_mm(struct boot_info *boot)
     const uint32_t max_order_hi = align(mem_end, MAX_ORDER_SIZE);
     const uint32_t max_order_range_pages = (max_order_hi - max_order_lo) >> PAGE_SHIFT;
 
+    assert(max_order_lo <= (uint32_t) mem_start);
+    assert(max_order_hi >= (uint32_t) mem_end+1);
+
     // figure out bitmap layout for each order
     size_t total_num_bits = 0;
     for (int i = MAX_ORDER; i >= 0; i--) {
@@ -291,14 +294,14 @@ void * alloc_pages_buddy(int flags, int order)
         return NULL;
     }
 
-    // mark the lower-order chunks in-use
+    // mark the current- and lower-order chunks used
     for (int o = order, i = index, c = 1; o >= 0; o--, i <<= 1, c <<= 1) {
         for (int n = 0; n < c; n++) {
             clear_bit(zone->bitmap[o], i + n);  // TODO: need a fast way to clear a range of bits...
         }
     }
 
-    // mark the higher-order chunks in-use
+    // mark the higher-order chunks used
     for (int o = order + 1, i = index >> 1; o <= MAX_ORDER; o++, i >>= 1) {
         clear_bit(zone->bitmap[o], i);
     }
@@ -323,7 +326,40 @@ void * alloc_pages_buddy(int flags, int order)
 
 void free_pages_buddy(void *addr, int order)
 {
+    if (order < 0 || order > MAX_ORDER) {
+        return;
+    }
 
+    const uint32_t order_size = (1 << (order+PAGE_SHIFT));
+    if ((uint32_t) addr < (uint32_t) mem_start || (uint32_t) addr + order_size > (uint32_t) mem_end + 1) {
+        return;
+    }
+    if (!aligned(addr, order_size)) {
+        return;
+    }
+
+    const uint32_t max_order_lo = ((uint32_t) mem_start) & ~(MAX_ORDER_SIZE - 1);
+    int index = ((uint32_t) addr - max_order_lo) >> (order+PAGE_SHIFT);
+
+    // free the current- and lower-order chunks
+    struct zone *zone = &_zones[ZONE_NORMAL];
+    for (int o = order, i = index, c = 1; o >= 0; o--, i <<= 1, c <<= 1) {
+        for (int n = 0; n < c; n++) {
+            set_bit(zone->bitmap[o], i + n);
+        }
+    }
+
+    for (int o = order, i = index; o < MAX_ORDER; o++, i >>= 1) {
+        int neighbor = (i % 2) ? i-1 : i+1;
+        if (0 == test_bit(zone->bitmap[o], neighbor)) {
+            break;
+        }
+        set_bit(zone->bitmap[o + 1], i >> 1);
+    }
+
+    zone->free_pages += (order_size >> PAGE_SHIFT);
+    kprint("phys-mem: free: order=%d addr=%08X size=%d index=%d; %d pages left\n",
+        order, addr, order_size, index, zone->free_pages);
 }
 
 void * alloc_pages(int flags, size_t count)
