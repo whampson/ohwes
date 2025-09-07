@@ -19,6 +19,7 @@
  * =============================================================================
  */
 
+#include <ctype.h>
 #include <kernel/kernel.h>
 #include <kernel/mm.h>
 #include <kernel/ohwes.h>
@@ -75,12 +76,6 @@ void destroy_pools()
 
 pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
 {
-    struct pool *p;
-    size_t size_bytes;
-
-    // TODO: ensure name is unique
-    // TODO: refcount?
-
     // TODO: flags for alignment, zeroing, etc.
     (void) flags;
 
@@ -88,19 +83,46 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
         return INVALID_POOL;
     }
 
+    // validate name
+    int len = 0;
+    for (int i = 0; i < POOL_MAX_NAME+1; i++) {
+        if (name[i] == '\0') {
+            len = i;
+            break;
+        }
+        if (!isalnum(name[i]) && name[i] != '_') {
+            return INVALID_POOL;
+        }
+    }
+    if (len < 1 || len > POOL_MAX_NAME) {
+        return INVALID_POOL;
+    }
+
+    // lazy alloc master pool data
     if (g_pools->pools == NULL) {
         lazy_init_pools();
     }
+    assert(g_pools->pools != NULL);
 
+    // ensure name is unique
+    for (list_iterator(n, &g_pools->list)) {
+        struct pool *other = list_item(n, struct pool, list);
+        if (strncmp(other->name, name, POOL_MAX_NAME) == 0) {
+            return INVALID_POOL;
+        }
+    }
+
+    // ensure we have space for a new pool
     if (list_empty(&g_pools->free_list)) {
         panic("max number of pools allocated!!");
         return INVALID_POOL;
     }
 
-    p = list_item(g_pools->free_list.next, struct pool, list);
+    // initialize pool
+    struct pool *p = list_item(g_pools->free_list.next, struct pool, list);
     assert(p->alloc == NULL);
 
-    size_bytes = capacity * (size + sizeof(struct chunk));
+    size_t size_bytes = capacity * (size + sizeof(struct chunk));
     p->order = get_order(size_bytes);
     p->alloc = alloc_pages(ALLOC_ZERO, p->order);
     if (p->alloc == NULL) {

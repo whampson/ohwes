@@ -13,8 +13,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/include/kernel/pool.h
- *      Created: November 18, 2024
+ *         File: include/kernel/pool.h
+ *      Created: September 6, 2025
  *       Author: Wes Hampson
  * =============================================================================
  */
@@ -28,7 +28,7 @@
 
 #define POOL_MAGIC      'lwep'
 #define INVALID_POOL    ((pool_t *) NULL)
-
+#define POOL_MAX_NAME   16
 /**
  * Memory pool for allocating items of a fixed size.
  */
