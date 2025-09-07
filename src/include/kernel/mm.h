@@ -68,10 +68,8 @@ size_t get_order_size(int order);
 //
 extern char __page_dir[];
 extern char __page_tbl[];
-extern char __page_map[];
 extern char __pgdir_start[], __pgdir_end[], __pgdir_size[];
 extern char __pgtbl_start[], __pgtbl_end[], __pgtbl_size[];
-extern char __pgmap_start[], __pgmap_end[], __pgmap_size[];
 
 extern char __gdt[], __gdt_start[], __gdt_end[], __gdt_size[];
 extern char __idt[], __idt_start[], __idt_end[], __idt_size[];

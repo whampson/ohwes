@@ -172,15 +172,6 @@ SECTIONS
     } > RAM_PHYSICAL
     SECTION_EPILOGUE(pgtbl);
 
-    SECTION_PROLOGUE(pgmap);
-    DEFINE_SECTION_PHYSICAL(pgmap)
-    {
-        /* page frame bitmap */
-        __page_map = .;
-        . += PAGE_MAP_SIZE;
-    } > RAM_PHYSICAL
-    SECTION_EPILOGUE(pgmap);
-
     SECTION_PROLOGUE(klog);
     DEFINE_SECTION(klog)
     {
@@ -189,7 +180,6 @@ SECTIONS
         . += KERNEL_LOG_SIZE;
     } > RAM_VIRTUAL
     SECTION_EPILOGUE(klog);
-
 
     SECTION_PROLOGUE(kstack);
     DEFINE_SECTION(kstack)

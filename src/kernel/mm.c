@@ -417,7 +417,6 @@ static void print_kernel_sections(void)
         { ".idt",           __idt_start,        __idt_end },
         { ".pgdir",         __pgdir_start,      __pgdir_end },
         { ".pgtbl",         __pgtbl_start,      __pgtbl_end },
-        { ".pgmap",         __pgmap_start,      __pgmap_end },
         { ".klog",          __klog_start,       __klog_end },
         { ".kstack",        __kstack_start,     __kstack_end },
         { ".ustack",        __ustack_start,     __ustack_end },
