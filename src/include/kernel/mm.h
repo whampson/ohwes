@@ -34,6 +34,11 @@ enum zone_type {
     NR_ZONES
 };
 
+// TODO: alloc_slab / free_slab instead of alloc_pages / free_pageS?
+
+// allocation flags
+#define ALLOC_ZERO          1
+
 // check whether reading or writing a virtual address would cause a page fault
 bool virt_addr_valid(void *va);
 
@@ -51,6 +56,12 @@ void * alloc_pages(int flags, int order);
 // free pages given out by alloc_pages;
 //  order must match or you will cause havoc!
 void free_pages(void *addr, int order);
+
+// calculate the order required to allocate a number of pages
+int get_order(size_t size);
+
+// get the number of bytes represented by an order
+size_t get_order_size(int order);
 
 //
 // linker script symbols

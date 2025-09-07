@@ -91,8 +91,6 @@ static void init_phys_mmap(struct boot_info *boot)
         return;
     }
 
-    zeromem(_phys_mmap, sizeof(_phys_mmap));
-
     e = (const struct acpi_mmap_entry *) KERNEL_ADDR(boot->mem_map);
     for (i = 0; i < countof(_phys_mmap) && mmap_valid(e); i++, e++) {
         _phys_mmap[i] = *e;
@@ -110,7 +108,6 @@ static void init_phys_mmap_legacy(struct boot_info *boot)
     int kb_free_16M;    // 16M - 4G
     struct acpi_mmap_entry *map;
 
-    zeromem(_phys_mmap, sizeof(_phys_mmap));
     map = _phys_mmap;
 
     kb_free_low = boot->kb_low;
@@ -202,7 +199,6 @@ static void init_zones(void)
     // TODO: DMA, HIGHMEM...
 
     struct zone *zone = &_zones[ZONE_NORMAL];
-    zeromem(zone, sizeof(struct zone));
     zone->name = STRINGIFY(ZONE_NORMAL);
 
     // determine the end of the first contiguous physical memory region above 1M
@@ -290,11 +286,11 @@ static void init_zones(void)
 
 void * alloc_pages(int flags, int order)
 {
-    (void) flags;
-
     if (order < 0 || order > MAX_ORDER) {
         return NULL;
     }
+
+    // TODO: validate flags
 
     // locate next free region at current order
     struct zone *zone = &_zones[ZONE_NORMAL];
@@ -323,17 +319,21 @@ void * alloc_pages(int flags, int order)
 
     // range check!
     if (addr < zone->mem_start || addr + order_size > zone->mem_end + 1) {
-        panic("mem: %s: alloc out of bounds!!", zone->name);
+        panic("mem: alloc %s: out of bounds!!", zone->name);
     }
 
-    uintptr_t kern_addr = KERNEL_ADDR(addr);
+    void *kern_addr = (void *) KERNEL_ADDR(addr);
 
     zone->free_pages -= (order_size >> PAGE_SHIFT);
-    kprint("mem: %s: p:%08X-%08X v:%08X-%08X order=%d alloc\n",
+    kprint("mem: alloc %s: p:%08X-%08X v:%08X-%08X order=%d\n",
         zone->name, addr, addr+order_size-1,
         kern_addr, kern_addr+order_size-1, order);
 
-    return (void *) KERNEL_ADDR(addr);
+    if (flags & ALLOC_ZERO) {
+        zeromem(kern_addr, order_size);
+    }
+
+    return kern_addr;
 }
 
 void free_pages(void *addr, int order)
@@ -372,9 +372,32 @@ void free_pages(void *addr, int order)
     }
 
     zone->free_pages += (order_size >> PAGE_SHIFT);
-    kprint("mem: %s: p:%08X-%08X v:%08X-%08X order=%d free\n",
+    kprint("mem: free %s: p:%08X-%08X v:%08X-%08X order=%d\n",
         zone->name, phys_addr, phys_addr+order_size-1,
         addr, addr+order_size-1, order);
+}
+
+int get_order(size_t size)
+{
+    // TODO: do this without loop?
+
+    size_t pages = PAGE_ALIGN(size) >> PAGE_SHIFT;
+    for (int o = 0; o <= MAX_ORDER; o++) {
+        if ((1 << o) >= pages) {
+            return o;
+        }
+    }
+
+    return -1;
+}
+
+size_t get_order_size(int order)
+{
+    if (order < 0 || order > MAX_ORDER) {
+        return 0;
+    }
+
+    return (1 << (order+PAGE_SHIFT));
 }
 
 static void print_kernel_sections(void)
