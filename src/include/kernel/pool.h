@@ -23,34 +23,37 @@
 #define __POOL_H
 
 #include <stddef.h>
+#include <stdint.h>
+#include <kernel/list.h>
 
-typedef void * pool_t;
-
-#define INVALID_POOL ((pool_t) NULL)
+#define POOL_MAGIC      'lwep'
+#define INVALID_POOL    ((pool_t *) NULL)
 
 /**
- * Create a new pool.
+ * Memory pool for allocating items of a fixed size.
  */
-pool_t pool_create(void *addr, const char *name, size_t item_size, size_t capacity);
+struct pool {
+    uint32_t magic;     // identifier for pool type
+    const char *name;   // pool name
+    size_t size;        // item size bytes
+    size_t capacity;    // max number of item slots
+    size_t count;       // number of slots allocated
+    list_t list;        // list of pools on system
+    list_t free_list;   // free slots
+    int order;          // allocation order
+    void *alloc;        // item allocation
+};
+typedef struct pool pool_t;
 
-/**
- * Destroy an existing pool.
- */
-void pool_destroy(pool_t pool);
+// pool_t *find_pool(const char *name);
 
-/**
- * Get an existing pool by name.
- */
-pool_t find_pool(const char *name);
+// TODO: remove max capacity
+pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags);
 
-/**
- * Allocate an item within a given pool.
-*/
-void * pool_alloc(pool_t pool);
+void pool_destroy(pool_t *pool);
 
-/**
- * Free an item from a given pool.
- */
-int pool_free(pool_t pool, void *item);
+void * pool_alloc(pool_t *pool, int flags);
+
+void pool_free(pool_t *pool, const void *item);
 
 #endif // __POOL_H

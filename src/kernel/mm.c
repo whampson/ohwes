@@ -62,8 +62,6 @@ struct zone {
 static struct zone _zones[NR_ZONES];
 static struct acpi_mmap_entry _phys_mmap[64];
 
-extern void init_pool(void);
-
 static void check_memory(void);
 static void print_kernel_sections(void);
 
@@ -77,7 +75,6 @@ void init_mm(struct boot_info *boot)
     check_memory();     // make sure we have enough!
     print_kernel_sections();
     init_zones();
-    init_pool();
 }
 
 static void init_phys_mmap(struct boot_info *boot)

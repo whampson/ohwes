@@ -36,16 +36,15 @@ struct io_range {
 
 list_t io_ranges_list = LIST_INITIALIZER(io_ranges_list);
 struct io_range _io_ranges_pool[MAX_NR_IO_RANGES];
-pool_t io_ranges_pool = NULL;
+pool_t *io_ranges_pool;
 
 void init_io(void)
 {
     io_ranges_pool = pool_create(
-        _io_ranges_pool,
         "io_ranges",
         MAX_NR_IO_RANGES,
-        sizeof(struct io_range));
-    if (!io_ranges_pool) {
+        sizeof(struct io_range), 0);
+    if (io_ranges_pool == INVALID_POOL) {
         panic("failed to create io_ranges_pool!");
     }
 
@@ -71,7 +70,7 @@ int reserve_io_range(uint16_t base, uint8_t count, const char *name)
         panic("I/O ranges not initialized!");
     }
 
-    new_range = pool_alloc(io_ranges_pool);
+    new_range = pool_alloc(io_ranges_pool, 0);
     if (!new_range) {
         kprint("warning: I/O range reservation list is full!\n");
         return -ENOMEM;

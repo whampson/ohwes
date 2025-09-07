@@ -28,35 +28,32 @@
 #include <kernel/pool.h>
 
 
-static struct list_node inodes;
-static struct inode _inode_pool[MAX_NR_INODES];
-static pool_t inode_pool;
+static list_t inodes;
+static pool_t *inode_pool;
 
-static struct list_node dentries;
-static struct dentry _dentry_pool[MAX_NR_DENTRIES];
-static pool_t dentry_pool;
+static list_t dentries;
+static pool_t *dentry_pool;
 
-static struct file _file_pool[MAX_NR_TOTAL_OPEN];
-static pool_t file_pool;
+static pool_t *file_pool;
 
 extern struct file_ops chdev_ops;
 
 void init_fs(void)
 {
     list_init(&inodes);
-    inode_pool = pool_create(_inode_pool, "inodes", MAX_NR_INODES, sizeof(struct inode));
-    if (!inode_pool) {
+    inode_pool = pool_create("inodes", MAX_NR_INODES, sizeof(struct inode), 0);
+    if (inode_pool == INVALID_POOL) {
         panic("failed to create inode pool!");
     }
 
     list_init(&dentries);
-    dentry_pool = pool_create(_dentry_pool, "dentries", MAX_NR_DENTRIES, sizeof(struct dentry));
-    if (!inode_pool) {
+    dentry_pool = pool_create("dentries", MAX_NR_DENTRIES, sizeof(struct dentry), 0);
+    if (dentry_pool == INVALID_POOL) {
         panic("failed to create dentry pool!");
     }
 
-    file_pool = pool_create(_file_pool, "files", MAX_NR_TOTAL_OPEN, sizeof(struct file));
-    if (!inode_pool) {
+    file_pool = pool_create("files", MAX_NR_TOTAL_OPEN, sizeof(struct file), 0);
+    if (file_pool == INVALID_POOL) {
         panic("failed to create file pool!");
     }
 
@@ -73,7 +70,7 @@ void init_fs(void)
         struct dentry *dentry = NULL;
         struct inode *inode = NULL;
 
-        dentry = pool_alloc(dentry_pool);
+        dentry = pool_alloc(dentry_pool, 0);
         dentry->inode = NULL;
         strncpy(dentry->name, name, DENTRY_NAME_LENGTH);
         list_add_tail(&dentries, &dentry->dentry_list);
@@ -83,7 +80,7 @@ void init_fs(void)
             continue;
         }
 
-        inode = pool_alloc(inode_pool);
+        inode = pool_alloc(inode_pool, 0);
         inode->mode = MODE_CHRDEV;
         inode->device = __mkdev(TTY_MAJOR, i);
         inode->fops = &chdev_ops;
@@ -125,7 +122,7 @@ int alloc_fd(struct file **file)
         return -EINVAL;
     }
 
-    struct file *f = pool_alloc(file_pool);
+    struct file *f = pool_alloc(file_pool, 0);
     if (!f) {
         return -ENOMEM;
     }
