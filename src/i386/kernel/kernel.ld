@@ -53,7 +53,8 @@ ENTRY(ENTRY_POINT)
 
 MEMORY
 {
-    RAM_PHYSICAL("WX")  : ORIGIN = 0, LENGTH = 4M
+    RAM_PHYSICAL("RW")  : ORIGIN = 0, LENGTH = 4M
+    ROM_PHYSICAL("RX")  : ORIGIN = 0, LENGTH = 4M
     RAM_VIRTUAL("RW")   : ORIGIN = KERNEL_VA, LENGTH = 4M
     ROM_VIRTUAL("RX")   : ORIGIN = KERNEL_VA, LENGTH = 4M
     /* Yeah yeah yeah, virtual RAM and ROM regions overlap, but that's OK.
@@ -80,9 +81,16 @@ SECTIONS
         /* initial bootstrap code */
         /* NOTE: this section does NOT execute in high memory */
         LONG(ENTRY_POINT);  /* TODO: ELF header, preferably condensed */
-        *(.setup*)
-    } > RAM_PHYSICAL
+        *(.setup.text)
+    } > ROM_PHYSICAL
     SECTION_EPILOGUE(setup);
+
+    SECTION_PROLOGUE(setup_data);
+    DEFINE_SECTION_PHYSICAL(setup_data)
+    {
+        *(.setup.data)
+    } > RAM_PHYSICAL
+    SECTION_EPILOGUE(setup_data);
 
     SECTION_PROLOGUE(text);
     DEFINE_SECTION(text)
