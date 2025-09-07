@@ -70,7 +70,7 @@ do { \
 
 #define warn(...) \
 do { \
-    kprint("\n\e[1;33mwarning: " __VA_ARGS__); kprint("\e[0m"); \
+    kprint("\e[1;33mwarning: " __VA_ARGS__); kprint("\e[0m"); \
 } while (0)
 
 // zero memory

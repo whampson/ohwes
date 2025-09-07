@@ -274,8 +274,9 @@ static void init_zones(void)
     // ensure pages are mapped to speed up allocation time
     uintptr_t top = min((4*MB), zone->mem_end+1); // TODO: temp workaround for update_page_mappings 4M limit...
     size_t size_pages = (top - zone->mem_start) >> PAGE_SHIFT;
+    warn("mem: mapping only up to 4M until multiple PDEs are supported!\n");
     pgflags_t flags = _PAGE_RW | _PAGE_PRESENT;
-    update_page_mappings(KERNEL_ADDR(zone->mem_start), (uint32_t) zone->mem_start, size_pages, flags);
+    update_page_mappings(KERNEL_ADDR(zone->mem_start), zone->mem_start, size_pages, flags);
 
     // TODO: could calculate how many page tables are needed to alloc all of
     // "Normal" memory, then stuff them before the bitmap too...

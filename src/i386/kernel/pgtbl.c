@@ -78,6 +78,9 @@ void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flag
         return;
     }
 
+    uintptr_t base_pa = pa;
+    uintptr_t base_va = va;
+
     for (int i = 0; i < count; i++) {
         pde = (pde_t *) KERNEL_ADDR(pde_offset(pgdir, va));
         if (!pde_present(*pde)) {
@@ -101,10 +104,10 @@ void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flag
     size_t size_bytes = (count << PAGE_SHIFT);
     if (unmap) {
         kprint("mem: unmap p:%08X-%08X v:%08X-%08X size_pages=%d flags=%02Xh\n",
-            pa, pa+size_bytes-1, va, va+size_bytes-1, count, flags);
+            base_pa, base_pa+size_bytes-1, base_va, base_va+size_bytes-1, count, flags);
     }
     else {
         kprint("mem: map p:%08X-%08X v:%08X-%08X size_pages=%d flags=%02Xh\n",
-            pa, pa+size_bytes-1, va, va+size_bytes-1, count, flags);
+            base_pa, base_pa+size_bytes-1, base_va, base_va+size_bytes-1, count, flags);
     }
 }

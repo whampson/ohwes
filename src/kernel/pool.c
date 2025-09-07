@@ -84,13 +84,17 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
     // TODO: flags for alignment, zeroing, etc.
     (void) flags;
 
+    if (name == NULL || capacity <= 0 || size <= 0) {
+        return INVALID_POOL;
+    }
+
     if (g_pools->pools == NULL) {
         lazy_init_pools();
     }
 
     if (list_empty(&g_pools->free_list)) {
         panic("max number of pools allocated!!");
-        return NULL;
+        return INVALID_POOL;
     }
 
     p = list_item(g_pools->free_list.next, struct pool, list);
