@@ -100,11 +100,11 @@ void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flag
 
     size_t size_bytes = (count << PAGE_SHIFT);
     if (unmap) {
-        kprint("phys-mem: unmap: p:%08X-%08X v:%08X-%08X size_pages=%d flags=%02Xh\n",
+        kprint("phys-mem: unmap p:%08X-%08X v:%08X-%08X size_pages=%d flags=%02Xh\n",
             pa, pa+size_bytes-1, va, va+size_bytes-1, count, flags);
     }
     else {
-        kprint("phys-mem: map: p:%08X-%08X v:%08X-%08X size_pages=%d flags=%02Xh\n",
+        kprint("phys-mem: map p:%08X-%08X v:%08X-%08X size_pages=%d flags=%02Xh\n",
             pa, pa+size_bytes-1, va, va+size_bytes-1, count, flags);
     }
 }
