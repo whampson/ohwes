@@ -13,6 +13,7 @@ SOURCES := \
     mm.c \
     open.c \
     pool.c \
+    pool2.c \
     ring.c \
     sys.c \
     task.c \
