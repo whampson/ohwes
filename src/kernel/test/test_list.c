@@ -36,8 +36,7 @@ static struct thing _thing_buf[8];
 static int count_items(list_t *list)
 {
     int count = 0;
-    struct list_node *e;
-    for (list_iterator(list, e)) {
+    for (list_iterator(e, list)) {
         count++;
     }
 
@@ -49,7 +48,6 @@ void test_list(void)
     DECLARE_TEST("linked list");
 
     int i;
-    struct list_node *e;
 
     zeromem(_thing_buf, sizeof(_thing_buf));
     for (int i = 0; i < countof(_thing_buf); i++) {
@@ -79,7 +77,7 @@ void test_list(void)
 
     // ensure items are in correct order for tail insertion
     i = 0;
-    for (list_iterator(&thing_list, e)) {
+    for (list_iterator(e, &thing_list)) {
         struct thing *item = list_item(e, struct thing, node);
         switch (i) {
             case 0: VERIFY_ARE_EQUAL(0, item->value); break;
@@ -94,7 +92,7 @@ void test_list(void)
     list_remove(&_thing_buf[1].node);
     VERIFY_IS_FALSE(list_empty(&thing_list));
     VERIFY_ARE_EQUAL(2, count_items(&thing_list));
-    for (list_iterator(&thing_list, e)) {
+    for (list_iterator(e, &thing_list)) {
         struct thing *item = list_item(e, struct thing, node);
         switch (i) {
             case 0: VERIFY_ARE_EQUAL(0, item->value); break;
@@ -116,7 +114,7 @@ void test_list(void)
 
     // ensure items are in correct order for head insertion
     i = 0;
-    for (list_iterator(&thing_list, e)) {
+    for (list_iterator(e, &thing_list)) {
         struct thing *item = list_item(e, struct thing, node);
         switch (i) {
             case 0: VERIFY_ARE_EQUAL(2, item->value); break;
@@ -137,7 +135,7 @@ void test_list(void)
 
     // list order should now be: 7 2 1 0 3 4 5 6
     i = 0;
-    for (list_iterator(&thing_list, e)) {
+    for (list_iterator(e, &thing_list)) {
         struct thing *item = list_item(e, struct thing, node);
         switch (i) {
             case 0: VERIFY_ARE_EQUAL(7, item->value); break;

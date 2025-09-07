@@ -94,10 +94,9 @@ struct inode * find_inode(struct file *file, const char *name)
 {
     struct dentry *dentry;
     struct inode *inode;
-    struct list_node *n;
 
     dentry = NULL;
-    for (list_iterator(&dentries, n)) {
+    for (list_iterator(n, &dentries)) {
         struct dentry *d = list_item(n, struct dentry, dentry_list);
         if (strncmp(name, d->name, DENTRY_NAME_LENGTH) == 0) {
             dentry = d;

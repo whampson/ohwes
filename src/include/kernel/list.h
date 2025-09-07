@@ -41,20 +41,42 @@ typedef struct list_node list_t;
 
 /**
  * Empty list initializer.
+ *
+ * Usage:
+ *  list_t *list = LIST_INITIALIZER(list);
  */
-#define LIST_INITIALIZER(name)  { &(name), &(name) }
+#define LIST_INITIALIZER(list)  { &(list), &(list) }
 
 /**
  * List node traversal for-loop iterator.
+ *
+ * @param it iterator name
+ * @param list list to iterate
+ *
+ * Usage:
+ *  list_t *list;
+ *  for (list_iterator(it, list)) { ... }
  */
-#define list_iterator(head, pos)        \
-    (pos) = (head)->next; (pos) != (head); (pos) = (pos)->next
+#define list_iterator(it, list) \
+    struct list_node *it = (list)->next; (it) != (list); (it) = (it)->next
 
 /**
- * Cast the list pointer to its enclosing structure.
+ * Get a pointer to the structure containing the list node.
+ *
+ * @param node list node
+ * @param type struct type
+ * @param member list member name
+ *
+ * Usage:
+ *  struct obj {
+ *      list_t list;
+ *      ...
+ *  };
+ *  struct list_node *n;    // e.g. from list_iterator
+ *  struct obj *item = list_item(n, struct obj, list);
  */
-#define list_item(ptr, type, member) \
-    ((type *) (((char *) (ptr)) - offsetof(type, member)))
+#define list_item(node, type, member) \
+    ((type *) (((char *) (node)) - offsetof(type, member)))
 
 /**
  * Initializes a list head by setting it's previous and next pointers to

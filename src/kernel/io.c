@@ -64,7 +64,6 @@ int reserve_io_range(uint16_t base, uint8_t count, const char *name)
 {
     struct io_range *new_range;
     struct io_range *curr;
-    struct list_node *e;
 
     if (!io_ranges_pool) {
         panic("I/O ranges not initialized!");
@@ -85,7 +84,7 @@ int reserve_io_range(uint16_t base, uint8_t count, const char *name)
         return 0;
     }
 
-    for (list_iterator(&io_ranges_list, e)) {
+    for (list_iterator(e, &io_ranges_list)) {
         curr = list_item(e, struct io_range, chain);
 
         // list is ordered; if the new range is below the current range,
@@ -121,9 +120,8 @@ void print_io_range_list(void)  // TODO: adapt for procfs
 void release_io_range(uint16_t base, uint8_t count)
 {
     struct io_range *curr;
-    struct list_node *e;
 
-    for (list_iterator(&io_ranges_list, e)) {
+    for (list_iterator(e, &io_ranges_list)) {
         curr = list_item(e, struct io_range, chain);
         if (curr->base == base && curr->count == count) {
             list_remove(&curr->chain);

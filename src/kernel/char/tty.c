@@ -139,7 +139,6 @@ int tty_open_internal(struct tty *tty)
 {
     int ret;
     struct tty_driver *driver;
-    struct list_node *n;
 
     if (!tty) {
         return -EINVAL;
@@ -165,7 +164,7 @@ int tty_open_internal(struct tty *tty)
 
     // locate driver for device
     driver = NULL;
-    for (list_iterator(&tty_drivers, n)) {
+    for (list_iterator(n, &tty_drivers)) {
         struct tty_driver *d = list_item(n, struct tty_driver, driver_list);
         if (_DEV_MAJ(tty->device) != d->major) {
             continue;

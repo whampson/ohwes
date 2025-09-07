@@ -135,7 +135,6 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
 
 void pool_destroy(pool_t *pool)
 {
-    struct list_node *n;
     struct pool *p;
     const char *name;
     void *alloc;
@@ -148,7 +147,7 @@ void pool_destroy(pool_t *pool)
     // ensure pool is real
     // TODO: could check if pool is in addr range instead of using a loop...
     p = NULL;
-    for (list_iterator(&g_pools->list, n)) {    // TODO: consider list_iterator(n, &g_pools->list), implicitly declare n type
+    for (list_iterator(n, &g_pools->list)) {
         p = list_item(n, struct pool, list);
         if (p == pool) {
             break;
@@ -215,7 +214,6 @@ void * pool_alloc(pool_t *pool, int flags)
 void pool_free(pool_t *pool, const void *item)
 {
     struct chunk *chunk;
-    struct list_node *n;
 
     if (!pool_valid(pool) || item == NULL) {
         return;
@@ -230,7 +228,7 @@ void pool_free(pool_t *pool, const void *item)
     }
 
     chunk = NULL;
-    for (list_iterator(&pool->list, n)) {
+    for (list_iterator(n, &pool->list)) {
         struct chunk *c = list_item(n, struct chunk, list);
         if (c->data == item) {
             chunk = c;
