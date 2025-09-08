@@ -34,11 +34,10 @@ static void insert_into_list(
 static void remove_from_list(
     struct list_node *prev, struct list_node *next,
     struct list_node *item)
-{
-    next->prev = prev;  // Breakin' the chains around me...
-    prev->next = next;  // Nobody else can bind me...
-    item->prev = item;  // Take a good look around me..
-    item->next = item;  // Now I'm breakin' the chains!
+{                       // Breakin' the chains around me...
+    next->prev = prev;  // Nobody else can bind me...
+    prev->next = next;  // Take a good look around me..
+    list_init(item);    // Now I'm breakin' the chains!
 }
 
 void list_init(struct list_node *head)

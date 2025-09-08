@@ -63,9 +63,9 @@ typedef struct list_node list_t;
 /**
  * Get a pointer to the structure containing the list node.
  *
- * @param node list node
+ * @param node list node pointer
  * @param type struct type
- * @param member list member name
+ * @param member list member name in struct
  *
  * Usage:
  *  struct obj {
