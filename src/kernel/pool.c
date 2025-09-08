@@ -39,40 +39,50 @@ struct chunk {
 
 // global pool info
 struct pool_info {
-    int order;          // order of master pool allocation
-    pool_t *pools;      // pool of pools
+    int order;          // order of master allocation
+    pool_t *alloc;      // pool of pools allocation
     list_t list;        // list of active pools
     list_t free_list;   // list of free pools
+    int count;          // number of active pools
 };
 static struct pool_info _pools;
-struct pool_info *g_pools = &_pools;
+struct pool_info *g_poolinfo = &_pools;
 
 void lazy_init_pools(void)
 {
     size_t num_pools = MAX_NR_POOLS;
     size_t master_pool_size = align(num_pools * sizeof(struct pool), 4);
-    g_pools->order = get_order(master_pool_size);
+    g_poolinfo->order = get_order(master_pool_size);
 
-    g_pools->pools = (struct pool *) alloc_pages(ALLOC_ZERO, g_pools->order);
-    if (g_pools->pools == NULL) {
+    g_poolinfo->alloc = (struct pool *) alloc_pages(ALLOC_ZERO, g_poolinfo->order);
+    if (g_poolinfo->alloc == NULL) {
         panic("not enough memory for pools!\n");
     }
 
-    list_init(&g_pools->list);
-    list_init(&g_pools->free_list);
+    list_init(&g_poolinfo->list);
+    list_init(&g_poolinfo->free_list);
 
     for (int i = 0; i < num_pools; i++) {
-        list_add(&g_pools->free_list, &g_pools->pools[i].list);
+        struct pool *p = &g_poolinfo->alloc[i];
+        p->magic = POOL_MAGIC;
+        list_add(&g_poolinfo->free_list, &p->list);
     }
+
+    kprint("pool: %d pages used to manage a max of %d pools\n",
+        get_order_size(g_poolinfo->order) >> PAGE_SHIFT, MAX_NR_POOLS);
 }
 
+#if 0
 void destroy_pools()
 {
-    if (g_pools->pools) {
-        free_pages(g_pools->pools, g_pools->order);
-        g_pools->pools = NULL;
+    if (g_poolinfo->pools) {
+        free_pages(g_poolinfo->alloc, g_poolinfo->order);
+        g_poolinfo->alloc = NULL;
+
+        kprint("pool: destroyed master pool\n");
     }
 }
+#endif
 
 pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
 {
@@ -99,13 +109,13 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
     }
 
     // lazy alloc master pool data
-    if (g_pools->pools == NULL) {
+    if (g_poolinfo->alloc == NULL) {
         lazy_init_pools();
     }
-    assert(g_pools->pools != NULL);
+    assert(g_poolinfo->alloc != NULL);
 
     // ensure name is unique
-    for (list_iterator(n, &g_pools->list)) {
+    for (list_iterator(n, &g_poolinfo->list)) {
         struct pool *other = list_item(n, struct pool, list);
         if (strncmp(other->name, name, POOL_MAX_NAME) == 0) {
             return INVALID_POOL;
@@ -113,45 +123,56 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
     }
 
     // ensure we have space for a new pool
-    if (list_empty(&g_pools->free_list)) {
-        panic("max number of pools allocated!!");
+    if (list_empty(&g_poolinfo->free_list)) {
+        panic("pool: create: max number of pools allocated!!");
         return INVALID_POOL;
     }
 
     // initialize pool
-    struct pool *p = list_item(g_pools->free_list.next, struct pool, list);
-    assert(p->alloc == NULL);
-
     size_t size_bytes = capacity * (size + sizeof(struct chunk));
-    p->order = get_order(size_bytes);
-    p->alloc = alloc_pages(ALLOC_ZERO, p->order);
-    if (p->alloc == NULL) {
-        warn("pool: not enough memory for pool size=%d capacity=%d!\n", size, capacity);
-        return NULL;
+    int order = get_order(size_bytes);
+    if (order < 0) {
+        return INVALID_POOL;
+    }
+    void *alloc = alloc_pages(ALLOC_ZERO, order);
+    if (alloc == NULL) {
+        warn("pool: create: not enough memory for pool size=%d capacity=%d!\n", size, capacity);
+        return INVALID_POOL;
     }
 
-    p->magic = POOL_MAGIC;
+    struct pool *p = list_item(g_poolinfo->free_list.next, struct pool, list);
+    if (p->magic != POOL_MAGIC || p->alloc != NULL) {
+        panic("pool: create: got corrupted pool data from master pool!");
+        return INVALID_POOL;
+    }
+
+    list_remove(&p->list);                 // remove pool from global free list
+    list_add(&g_poolinfo->list, &p->list); // add to used list
+
+    g_poolinfo->count++;
+    assert(g_poolinfo->count <= MAX_NR_POOLS);
+
+    p->order = order;
+    p->alloc = alloc;
     p->name = name;
     p->size = size;
     p->capacity = capacity;
-    p->count = 0;
-
-    list_remove(&p->list);                      // remove from free list
-    list_add_tail(&g_pools->list, &p->list);    // add to used list
-    list_init(&p->free_list);                   // init chunk free list
 
     // now, we could put the chunk metadata before the allocation slot, or we
     // could stuff it all somewhere else. one is more prone to corruption, while
     // the other uses more data... hmmm, decisions decisions...
 
     // let's put it at the start of the allocation, before the data
+    list_init(&p->free_list);
     for (int i = 0; i < p->capacity; i++) {
         struct chunk *chunk = ((struct chunk *) p->alloc) + i;
+        chunk->magic = CHUNK_MAGIC;
+        chunk->pool = INVALID_POOL;
         list_add(&p->free_list, &chunk->list);
     }
 
-    kprint("pool: create %08X-%08X capacity=%d item_size=%d flags=%d %s\n",
-        p->alloc, p->alloc+get_order_size(p->order)-1, capacity, size, flags, name);
+    kprint("pool: created '%s' size_pages=%d capacity=%d item_size=%d flags=%Xh\n",
+        name, get_order_size(p->order) >> PAGE_SHIFT, capacity, size, flags);
     return p;
 }
 
@@ -159,8 +180,6 @@ void pool_destroy(pool_t *pool)
 {
     struct pool *p;
     const char *name;
-    void *alloc;
-    int order;
 
     if (!pool_valid(pool)) {
         return;
@@ -169,7 +188,7 @@ void pool_destroy(pool_t *pool)
     // ensure pool is real
     // TODO: could check if pool is in addr range instead of using a loop...
     p = NULL;
-    for (list_iterator(n, &g_pools->list)) {
+    for (list_iterator(n, &g_poolinfo->list)) {
         p = list_item(n, struct pool, list);
         if (p == pool) {
             break;
@@ -182,19 +201,16 @@ void pool_destroy(pool_t *pool)
     name = p->name;
     p->name = NULL;
 
-    alloc = p->alloc;
-    order = p->order;
     free_pages(p->alloc, p->order);
     p->alloc = NULL;
 
     list_remove(&p->list);                      // remove from used list
-    list_add(&g_pools->free_list, &p->list);    // add to free list
+    list_add(&g_poolinfo->free_list, &p->list); // add to free list
 
-    if (list_empty(&g_pools->list)) {
-        destroy_pools();
-    }
+    g_poolinfo->count--;
+    assert(g_poolinfo->count >= 0);
 
-    kprint("pool: destroy %08X-%08X %s\n", alloc, alloc+get_order_size(order)-1, name);
+    kprint("pool: destroyed '%s'\n", name);
 }
 
 void * pool_alloc(pool_t *pool, int flags)
@@ -209,61 +225,62 @@ void * pool_alloc(pool_t *pool, int flags)
     }
 
     if (list_empty(&pool->free_list)) {
-        warn("pool: alloc failed: pool '%s' is full!\n", pool->name);
+        warn("pool: %s: alloc failed: pool is full!\n", pool->name);
         return NULL;
     }
 
     chunk = list_item(pool->free_list.next, struct chunk, list);
-    assert(chunk->pool == INVALID_POOL);
+    if (chunk->magic != CHUNK_MAGIC || chunk->pool != INVALID_POOL) {
+        panic("pool: %s: alloc failed: got corrupted chunk data", pool->name);
+        return NULL;
+    }
+    list_remove(&chunk->list);  // remove from free list
+
+    pool->count++;
+    assert(pool->count <= pool->capacity);
 
     index = (chunk - (struct chunk *) pool->alloc);
     assert(index >= 0);
     assert(index < pool->capacity);
 
-    chunk->magic = CHUNK_MAGIC;
     chunk->pool = pool;
     chunk->data = pool->alloc + (pool->capacity * sizeof(struct chunk)) + (index * pool->size);
-    // TODO: consider alignment for chunk data
+    assert(chunk->data >= pool->alloc);
+    assert(chunk->data < pool->alloc + pool->capacity * (sizeof(struct chunk) + pool->size));
+    // TODO: consider flags for alignment and zeroing for chunk data
 
-    list_remove(&chunk->list);                  // remove from free list
-    list_add_tail(&pool->list, &chunk->list);   // add to used list
-    pool->count++;
-
-    assert(pool->count <= pool->capacity);
     return chunk->data;
 }
 
 void pool_free(pool_t *pool, const void *item)
 {
     struct chunk *chunk;
+    int index;
 
     if (!pool_valid(pool) || item == NULL) {
         return;
     }
 
-    const size_t pool_size = pool->size * pool->capacity;
-    const uintptr_t pool_data = (uintptr_t) pool->alloc + (pool->capacity * sizeof(struct chunk));
+    const size_t chunk_area_size = pool->size * pool->capacity;
+    const uintptr_t chunk_base = (uintptr_t) pool->alloc + (pool->capacity * sizeof(struct chunk));
     const uintptr_t item_addr = (uintptr_t) item;
 
-    if (item_addr < pool_data || item_addr > pool_data + (pool_size)) {
+    if (item_addr < chunk_base || item_addr > chunk_base + chunk_area_size) {
+        warn("pool: %s: free failed: address invalid\n", pool->name);
         return;
     }
 
-    chunk = NULL;
-    for (list_iterator(n, &pool->list)) {
-        struct chunk *c = list_item(n, struct chunk, list);
-        if (c->data == item) {
-            chunk = c;
-            break;
-        }
+    index = ((int) item - chunk_base) / pool->size;
+    chunk = (struct chunk *) pool->alloc + index;
+    assert(chunk->data == item);
+    if (chunk->data != item) {
+        panic("pool: %s: free failed: got corrupted chunk data", pool->name);
+        return;
     }
 
-    if (chunk != NULL) {
-        chunk->pool = INVALID_POOL;
-        list_remove(&chunk->list);
-        list_add(&pool->free_list, &chunk->list);
-        pool->count--;
-    }
+    chunk->pool = INVALID_POOL;
+    list_add(&pool->free_list, &chunk->list);
 
+    pool->count--;
     assert(pool->count >= 0);
 }
