@@ -32,6 +32,8 @@
 #include <kernel/rtc.h>
 #include <kernel/fs.h>
 
+// TODO: virtualize RTC so rates and interrupt types can be controlled per-process
+
 #define CHATTY_RTC              1
 
 //

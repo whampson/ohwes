@@ -91,15 +91,15 @@ __fastcall void kmain(struct boot_info **info)
     init_tty();
 
 // #if TEST_BUILD
-//     run_tests();
+//     run_tests(); // TODO lol
 // #endif
 
-#if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+FN to crash kernel
+#if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+F# to test crash kernel
     irq_register(IRQ_TIMER, crash_key_irq);
 #endif
 
     kprint("entering user mode...\n");
-    go_to_ring3(init, __ustack_end);
+    go_to_ring3(init, __ustack_end);    // TODO: declare user stack in high memory
 
     // for future reference...
     // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
