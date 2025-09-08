@@ -317,15 +317,14 @@ void * alloc_pages(int flags, int order)
 
     // range check!
     if (addr < zone->mem_start || addr + order_size > zone->mem_end + 1) {
-        panic("mem: alloc %s: out of bounds!!", zone->name);
+        panic("mem: %s: alloc out of bounds!!", zone->name);
     }
 
     void *kern_addr = (void *) KERNEL_ADDR(addr);
 
     zone->free_pages -= (order_size >> PAGE_SHIFT);
-    kprint("mem: alloc %s: p:%08X-%08X v:%08X-%08X order=%d\n",
-        zone->name, addr, addr+order_size-1,
-        kern_addr, kern_addr+order_size-1, order);
+    kprint("mem: %s: alloc %08X-%08X order %d; %d pages left\n",
+        zone->name, kern_addr, kern_addr+order_size-1, order, zone->free_pages);
 
     if (flags & ALLOC_ZERO) {
         zeromem(kern_addr, order_size);
@@ -370,9 +369,8 @@ void free_pages(void *addr, int order)
     }
 
     zone->free_pages += (order_size >> PAGE_SHIFT);
-    kprint("mem: free %s: p:%08X-%08X v:%08X-%08X order=%d\n",
-        zone->name, phys_addr, phys_addr+order_size-1,
-        addr, addr+order_size-1, order);
+    kprint("mem: %s: free %08X-%08X order %d; %d pages left\n",
+        zone->name, addr, addr+order_size-1, order, zone->free_pages);
 }
 
 int get_order(size_t size)
