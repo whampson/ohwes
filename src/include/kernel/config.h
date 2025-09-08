@@ -41,8 +41,8 @@
 #define VT_CONSOLE_NUM          0   // (0) print kernel messages to active virtual terminal
 
 // serial console
-#define SERIAL_CONSOLE          0   // use a serial port as a console interface
-#define SERIAL_CONSOLE_COM      2   // serial console COM port number
+#define SERIAL_CONSOLE          1   // use a serial port as a console interface
+#define SERIAL_CONSOLE_COM      1   // serial console COM port number
 #define SERIAL_CONSOLE_BAUD     BAUD_9600
 
 // printing
@@ -77,7 +77,6 @@
 
 // memory
 #define MAX_NR_POOLS            32    // max num concurrent pools
-#define MAX_NR_POOL_ITEMS       256   // max pool memory capacity across all pools
 
 // filesystem
 #define MAX_NR_INODES           64    // max num inodes
