@@ -73,7 +73,7 @@ void init_fs(void)
         dentry = pool_alloc(dentry_pool, 0);
         dentry->inode = NULL;
         strncpy(dentry->name, name, DENTRY_NAME_LENGTH);
-        list_add_tail(&dentries, &dentry->dentry_list);
+        list_add_tail(&dentries, &dentry->dentries);
 
         if (i == 0) {
             // no inode for tty0, yet...
@@ -81,10 +81,9 @@ void init_fs(void)
         }
 
         inode = pool_alloc(inode_pool, 0);
-        inode->mode = MODE_CHRDEV;
         inode->device = __mkdev(TTY_MAJOR, i);
         inode->fops = &chdev_ops;
-        list_add_tail(&inodes, &inode->inode_list);
+        list_add_tail(&inodes, &inode->inodes);
 
         dentry->inode = inode;
     }
@@ -97,7 +96,7 @@ struct inode * find_inode(struct file *file, const char *name)
 
     dentry = NULL;
     for (list_iterator(n, &dentries)) {
-        struct dentry *d = list_item(n, struct dentry, dentry_list);
+        struct dentry *d = list_item(n, struct dentry, dentries);
         if (strncmp(name, d->name, DENTRY_NAME_LENGTH) == 0) {
             dentry = d;
             break;

@@ -30,24 +30,9 @@
 
 #define DENTRY_NAME_LENGTH  32
 
-#define MODE_CHRDEV     (1 << 0)
-typedef uint32_t mode_t;
-
-struct inode {
-    mode_t mode;
-    dev_t device;
-
-    struct list_node inode_list;
-    struct file_ops *fops;
-};
-
-struct dentry {
-    char name[DENTRY_NAME_LENGTH];
-    struct list_node dentry_list;
-    struct inode *inode;
-};
-
 struct file;
+struct inode;
+
 struct file_ops {
     int     (*open)(struct inode *, struct file *);
     int     (*close)(struct file *);
@@ -56,11 +41,54 @@ struct file_ops {
     int     (*ioctl)(struct file *, int, void *);
 };
 
+// represents an open file descriptor
 struct file {
     uint32_t f_oflag;
     struct file_ops *fops;
     struct inode *inode;
     void *private_data;     // TODO: needed?
+};
+
+
+// represents a node to a file
+struct inode {
+    list_t inodes;
+    dev_t device;
+    struct file_ops *fops;
+    // TODO: functions...
+};
+
+// represents an item in a file system directory
+struct dentry {
+    list_t dentries;
+    char name[DENTRY_NAME_LENGTH];
+    struct inode *inode;
+};
+
+// represents a mounted fle system
+struct super_block {
+    list_t list;
+    dev_t  device;
+    struct file_system *fs_type;
+    struct dentry *root;
+
+    struct inode * (*create_inode)(struct super_block *);
+    void (*destroy_inode)(struct super_block *, struct inode *);
+    int (*write_inode)(struct super_block *, struct inode *);
+
+    void (*flush)(struct super_block *);
+    void (*unmount)(struct super_block *);
+    // TODO: stat
+};
+
+// represents a file system implementation (FAT, ext2, etc.)
+struct file_system {
+    const char *name;
+    int flags;
+
+    struct dentry * (*mount)(struct file_system *, int, const char *, void *);
+
+    list_t fs_list;
 };
 
 int alloc_fd(struct file **file);
