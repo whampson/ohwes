@@ -65,8 +65,9 @@ extern void print_page_mappings(void);
 
 static void go_to_ring3(void *entry, void *stack);
 
-void init(void);    // user mode portion of setup
-int main(void);     // user mode program entry point
+void init(void);
+int main(void);
+extern int shell(void);
 
 static struct boot_info *boot_info;
 
@@ -155,7 +156,10 @@ void init(void)
     RIF(dup(0));                      // stderr
 
     // TODO: exec("/bin/sh")
-    _exit(main());
+    // _exit(main());
+
+    int ret = shell();
+    _exit(ret);
 }
 
 int main(void)

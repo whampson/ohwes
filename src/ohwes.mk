@@ -13,6 +13,7 @@ MODULES := \
     ${ARCH}/kernel \
     kernel \
     libc \
+    usr \
 
 SUBMAKEFILES := $(addsuffix /Module.mk,${MODULES})
 

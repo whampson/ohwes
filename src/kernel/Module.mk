@@ -32,14 +32,14 @@ endif
 TARGET_DEFINES := __KERNEL__
 TARGET_CFLAGS  := -Wno-unused-function -Wno-multichar
 TARGET_LDSCRIPT:= ../${ARCH}/kernel/kernel.ld
-# TARGET_LDSCRIPT:= kernel.ld
 
 SUBMAKEFILES := $(addsuffix /Module.mk,${MODULES})
 
 TARGET_LDLIBS := \
     lib/libc.a \
     lib/kernel/${ARCH}.a \
-    $(addsuffix .a,$(addprefix lib/kernel/,${MODULES}))
+    $(addsuffix .a,$(addprefix lib/kernel/,${MODULES})) \
+    usr/shell.a	 # TODO: temp until we can load programs :D
 
 # allow the above libraries to be searched multiple times for symbols
 TARGET_LDFLAGS      := -Wl,--start-group
