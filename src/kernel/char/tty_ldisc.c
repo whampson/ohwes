@@ -133,14 +133,18 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
                 }
                 break;
             }
+            if ((ptr - buf) > 0) {
+                break;  // got at least one char
+            }
             continue;   // spin until a char appears, TODO: timeout?
         }
 
-        // grab the character
-        cli_save(flags);
-        *ptr = ring_get(&ldisc_data->rx_ring);
-        ptr++; count--;
-        restore_flags(flags);
+        // grab the characters
+        do {
+            cli_save(flags);
+            *ptr++ = ring_get(&ldisc_data->rx_ring);
+            restore_flags(flags);
+        } while (--nremain > 0 && --count > 0);
 
         // check if we can unthrottle
         if (n_tty_recv_room(tty) >= TTY_THROTTLE_THRESH) {
