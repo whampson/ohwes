@@ -60,6 +60,9 @@ int strncmp(const char *lhs, const char *rhs, size_t count);
 
 // char * strchr(const char *str, const char *substr);
 
+char * strtok(char *restrict str, const char *restrict delim);
+char * strtok_r(char *restrict str, const char *restrict delim, char **restrict saveptr);
+
 char * strerror(int errnum);
 
 #endif // __STRING_H

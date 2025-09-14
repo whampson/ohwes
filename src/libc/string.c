@@ -377,3 +377,48 @@ unsigned long long strtoull(const char *restrict str, char **restrict str_end, i
 {
     return (unsigned long long) _strtoull(str, str_end, base);
 }
+
+char * strtok_r(char *restrict str, const char *restrict delim, char **restrict saveptr)
+{
+    if (delim == NULL || saveptr == NULL) {
+        return NULL;
+    }
+    if (str != NULL) {
+        *saveptr = str;
+    }
+
+    for (; **saveptr != '\0'; (*saveptr)++) {
+        bool got_delim = false;
+        for (int i = 0; delim[i] != '\0'; i++) {
+            if (**saveptr == delim[i]) {
+                got_delim = true;
+                break;
+            }
+        }
+        if (!got_delim) {
+            break;
+        }
+    }
+
+    if (**saveptr == '\0') {
+        return NULL;
+    }
+
+    char *tok = *saveptr;
+    for (; **saveptr != '\0'; (*saveptr)++) {
+        for (int i = 0; delim[i] != '\0'; i++) {
+            if (**saveptr == delim[i]) {
+                *(*saveptr)++ = '\0';
+                return tok;
+            }
+        }
+    }
+
+    return tok;
+}
+
+char * strtok(char *restrict str, const char *restrict delim)
+{
+    static char *_str = NULL;
+    return strtok_r(str, delim, &_str);
+}
