@@ -39,10 +39,11 @@
 DEFINE_SYSCALL(_exit, int status)
 {
     assert(getpl() == KERNEL_PL);
+    status &= 0xFF;
 
-    kprint("\nuser mode returned %d: %s\n", status, strerror(status));
+    kprint("user mode returned %d: %s\n", status, strerror(status));
     kprint("\e[1;5;31msystem halted\e[0m");
-    for (;;);
+    for (;;);   // TODO: return to parent
 }
 
 DEFINE_SYSCALL(read, int fd, void *buf, size_t count)

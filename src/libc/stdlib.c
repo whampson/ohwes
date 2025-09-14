@@ -13,35 +13,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: include/stdlib.h
- *      Created: April 11, 2025
+ *         File: libc/stdlib.c
+ *      Created: September 8, 2025
  *       Author: Wes Hampson
- *
- * https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/stdlib.h.html
  * =============================================================================
  */
 
-#ifndef __STDLIB_H
-#define __STDLIB_H
+#include <stdlib.h>
+#include <unistd.h>
 
-#define EXIT_SUCCESS    0
-#define EXIT_FAILURE    1
-
-#ifndef __NULL_DEFINED
-#define __NULL_DEFINED
-#define NULL ((void *)0)
-#endif
-
-#ifndef __SIZE_T_DEFINED
-#define __SIZE_T_DEFINED
-typedef __SIZE_TYPE__ size_t;
-#endif
-
-__noreturn void exit(int status);
-
-long strtol(const char *restrict str, char **restrict str_end, int base);
-long long strtoll(const char *restrict str, char **restrict str_end, int base);
-unsigned long strtoul(const char *restrict str, char **restrict str_end, int base);
-unsigned long long strtoull(const char *restrict str, char **restrict str_end, int base);
-
-#endif // __STDLIB_H
+__noreturn void exit(int status)
+{
+    // TODO: run atexit routines, etc.
+    _exit(status & 0xFF);
+    for (;;);
+}
