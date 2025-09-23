@@ -39,6 +39,7 @@ static struct termios default_termios = {
     .c_iflag = ICRNL | IXON,
     .c_oflag = OPOST | ONLCR,
     .c_lflag = ECHO | ECHOCTL,
+    .c_cflag = HUPCL,
 };
 
 static void default_write_char(struct tty *tty, char c);
@@ -58,6 +59,16 @@ static struct file_ops tty_fops = {
     .read = tty_read,
     .write = tty_write,
     .ioctl = tty_ioctl,
+};
+
+static ssize_t hung_up_tty_read(struct file *, char *buf, size_t count);
+static ssize_t hung_up_tty_write(struct file *, const char *buf, size_t count);
+static int hung_up_tty_ioctl(struct file *, int op, void *arg);
+
+static struct file_ops hung_up_tty_fops = {
+    .read = hung_up_tty_read,
+    .write = hung_up_tty_write,
+    .ioctl = hung_up_tty_ioctl,
 };
 
 //
@@ -220,12 +231,41 @@ int tty_putchar(struct tty *tty, char c)
 
 void tty_flush(struct tty *tty)
 {
-    if (tty->ldisc->flush) {
-        tty->ldisc->flush(tty);
+    if (!tty) {
+        return;
     }
+
     if (tty->driver.flush) {
         tty->driver.flush(tty);
     }
+}
+
+void tty_hangup(struct tty *tty)
+{
+    if (!tty) {
+        return;
+    }
+
+    // TODO: send SIGHUP and SIGCONT
+
+    if (tty->file) {
+        if (tty->file->fops == &tty_fops) {
+            tty->file->fops = &hung_up_tty_fops;
+        }
+    }
+
+    if (tty->driver.hangup) {
+        tty->driver.hangup(tty);
+    }
+}
+
+int tty_hung_up(struct tty *tty)
+{
+    if (!tty || !tty->file) {
+        return -ENXIO;
+    }
+
+    return tty->file->fops == &hung_up_tty_fops;
 }
 
 static int tty_open(struct inode *inode, struct file *file)
@@ -396,4 +436,19 @@ static int tiocsti(struct tty *tty, const char *user_char)
 
     tty->ldisc->recv(tty, &c, 1);
     return 0;
+}
+
+static ssize_t hung_up_tty_read(struct file *file, char *buf, size_t count)
+{
+    return 0;
+}
+
+static ssize_t hung_up_tty_write(struct file *file, const char *buf, size_t count)
+{
+    return -EIO;
+}
+
+static int hung_up_tty_ioctl(struct file *file , int op, void *arg)
+{
+    return -ENOTTY;
 }

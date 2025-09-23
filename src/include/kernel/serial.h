@@ -215,8 +215,8 @@ enum parity {
 //
 #define UART_MCR_DTR        0x01    // Data Terminal Ready
 #define UART_MCR_RTS        0x02    // Request to Send
-#define UART_MCR_OUT1       0x04    // Aux Output #1 (Ring Indicator)
-#define UART_MCR_OUT2       0x08    // Aux Output #2 (Data Carrier Detect)
+#define UART_MCR_OUT1       0x04    // Aux Output #1
+#define UART_MCR_OUT2       0x08    // Aux Output #2 (IRQ enable)
 #define UART_MCR_LOOP       0x10    // Loopback Test
 
 //
@@ -412,7 +412,7 @@ struct com {
 
     // buffers
     struct ring tx_ring;        // output queue
-    char _txbuf[TTY_BUFFER_SIZE];
+    char _txbuf[TTY_BUFFER_SIZE];       // TODO: dynamically allocate
     char xchar;                 // high-priority control character
 
     // register shadows

@@ -72,13 +72,15 @@ struct com g_com[NR_SERIAL];
 static int serial_open(struct tty *);
 static int serial_close(struct tty *);
 static int serial_ioctl(struct tty *tty, int op, void *arg);
-static void serial_flush(struct tty *);
 static int serial_write(struct tty *tty, const char *buf, size_t count);
 static size_t serial_write_room(struct tty *);
+static void serial_flush(struct tty *);
+static void serial_clear(struct tty *);
 static void serial_unthrottle(struct tty *);
 static void serial_throttle(struct tty *);
 static void serial_start(struct tty *);
 static void serial_stop(struct tty *);
+static void serial_hangup(struct tty *);
 
 struct tty_driver serial_driver = {
     .name = "ttyS",
@@ -88,13 +90,15 @@ struct tty_driver serial_driver = {
     .open = serial_open,
     .close = serial_close,
     .ioctl = serial_ioctl,
-    .flush = serial_flush,
     .write = serial_write,
     .write_room = serial_write_room,
+    .flush = serial_flush,
+    .clear = serial_clear,
     .throttle = serial_throttle,
     .unthrottle = serial_unthrottle,
     .start = serial_start,
-    .stop = serial_stop
+    .stop = serial_stop,
+    .hangup = serial_hangup,
 };
 
 static void com1_irq(int irq, struct iregs *regs);
@@ -106,6 +110,8 @@ static bool set_baud(struct com *com, int baud_divisor);
 static bool set_mode(struct com *com,
     enum word_length wls, enum parity parity, enum stop_bits stb);
 static void set_fifo(struct com *com, bool enabled, enum recv_trig depth);
+
+static void shutdown(struct com *com);
 
 static void tx_enable(struct com *com);
 static void tx_disable(struct com *com);
@@ -410,7 +416,7 @@ static int serial_open(struct tty *tty)
     com->mcr._value = 0;
     com->mcr.dtr = 1;   // data terminal ready
     com->mcr.rts = 1;   // request to send
-    com->mcr.out2 = 1;  // like carrier detect, I think...
+    com->mcr.out2 = 1;  // irq enable
     com_out(com, UART_MCR, com->mcr._value);
 
     // ensure no interrupts are pending
@@ -439,7 +445,7 @@ static int serial_open(struct tty *tty)
     com->open = true;
 
 #if CHATTY_COM
-    kprint("com%d: opened, port=%Xh div=%d lcr=%02Xh mcr=%02Xh iir=%02Xh ier=%02Xh\n",
+    COM_WARN("com%d: opened, port=%Xh div=%d lcr=%02Xh mcr=%02Xh iir=%02Xh ier=%02Xh\n",
         com->num, (int) com->io_port,
         (int) com->baud_divisor,
         (int) com->lcr._value, (int) com->mcr._value,
@@ -453,6 +459,7 @@ done:
 
 static int serial_close(struct tty *tty)
 {
+    uint32_t flags;
     struct com *com;
 
     int ret = tty_get_com(tty, &com);
@@ -460,11 +467,31 @@ static int serial_close(struct tty *tty)
         return ret;
     }
 
+    cli_save(flags);
+
+    // flush transmit buffer
     serial_flush(tty);
+    // TODO: wait for flush to complete
+    // TODO: this also relies on interrupts being enabled, meaning this will
+    // currently NOT flush any pending chars because interrupts are disabled...
+
+    // shut down COM port
+    shutdown(com);
+
+    // clear buffers
+    serial_clear(tty);
+    if (tty->ldisc->clear) {
+        tty->ldisc->clear(tty);
+    }
 
     com->tty = NULL;
     com->open = false;
-    // TODO: anything else? hang up??
+
+#if CHATTY_COM
+    COM_WARN("com%d: closed\n", com->num);
+#endif
+
+    restore_flags(flags);
     return 0;
 }
 
@@ -494,24 +521,6 @@ static int serial_ioctl(struct tty *tty, int op, void *arg)
     }
 
     return -ENOTTY;
-}
-
-static void serial_flush(struct tty *tty)
-{
-    uint32_t flags;
-    struct com *com;
-
-    int ret = tty_get_com(tty, &com);
-    if (ret < 0) {
-        return;
-    }
-
-    cli_save(flags);
-    if (!ring_empty(&com->tx_ring) && !tty->stopped && !tty->hw_stopped) {
-        tx_enable(com);
-    }
-    // TODO: block til flushed?
-    restore_flags(flags);
 }
 
 static int serial_write(struct tty *tty, const char *buf, size_t count)
@@ -602,11 +611,43 @@ static void serial_unthrottle(struct tty *tty)
     }
     if (C_CRTSCTS(tty)) {
 #if CHATTY_COM
-        COM_WARN("com%d: rts=1\n", com->num);
+        COM_WARN("com%d: RTSCTS: rts=1, recv start\n", com->num);
 #endif
         com->mcr.rts = 1;
     }
     com_out(com, UART_MCR, com->mcr._value);
+    restore_flags(flags);
+}
+
+static void serial_flush(struct tty *tty)
+{
+    uint32_t flags;
+    struct com *com;
+
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return;
+    }
+
+    cli_save(flags);
+    if (!ring_empty(&com->tx_ring) && !tty->stopped && !tty->hw_stopped) {
+        tx_enable(com);
+    }
+    restore_flags(flags);
+}
+
+static void serial_clear(struct tty *tty)
+{
+    uint32_t flags;
+    struct com *com;
+
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return;
+    }
+
+    cli_save(flags);
+    ring_clear(&com->tx_ring);
     restore_flags(flags);
 }
 
@@ -630,7 +671,7 @@ static void serial_throttle(struct tty *tty)
     }
     if (C_CRTSCTS(tty)) {
 #if CHATTY_COM
-        COM_WARN("com%d: rts=0\n", com->num);
+        COM_WARN("com%d: RTSCTS: rts=0, recv stop\n", com->num);
 #endif
         com->mcr.rts = 0;
     }
@@ -649,7 +690,7 @@ static void serial_start(struct tty *tty)
     }
 
 #if CHATTY_COM
-    COM_WARN("com%d: rx XON, starting...\n", com->num);
+    COM_WARN("com%d: starting...\n", com->num);
 #endif
 
     cli_save(flags);
@@ -670,7 +711,7 @@ static void serial_stop(struct tty *tty)
     }
 
 #if CHATTY_COM
-    COM_WARN("com%d: rx XOFF, stopping...\n", com->num);
+    COM_WARN("com%d: stopping...\n", com->num);
 #endif
 
     cli_save(flags);
@@ -678,8 +719,58 @@ static void serial_stop(struct tty *tty)
     restore_flags(flags);
 }
 
+static void serial_hangup(struct tty *tty)
+{
+    struct com *com;
+
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return;
+    }
+
+    serial_clear(tty);
+    if (tty->ldisc->clear) {
+        tty->ldisc->clear(tty);
+    }
+
+    shutdown(com);
+
+    com->tty = NULL;
+    com->open = false;
+
+#if CHATTY_COM
+    COM_WARN("com%d: hangup, closed\n", com->num);
+#endif
+}
+
 // ----------------------------------------------------------------------------
 //                          COM Port Interface
+
+static void shutdown(struct com *com)
+{
+    // disable interrupts
+    com->ier._value = 0;
+    com_out(com, UART_IER, com->ier._value);
+
+    // disable IRQ
+    com->mcr.out2 = 0;
+
+    // hang up
+    if (!com->tty || (com->tty->termios.c_cflag & HUPCL)) {
+        com->mcr.dtr = 0;
+        com->mcr.rts = 0;
+    }
+    com_out(com, UART_MCR, com->mcr._value);
+
+    // disable fifos
+    set_fifo(com, false, 0);
+
+    // read regs to clear/reset things
+    (void) com_in(com, UART_RX);
+    (void) com_in(com, UART_LSR);
+    (void) com_in(com, UART_MSR);
+    (void) com_in(com, UART_IIR);
+}
 
 static void shadow_regs(struct com *com)
 {
@@ -878,24 +969,37 @@ static void check_modem_status(struct com *com)
         }
     }
 
+    // handle carrier detect
+    if (com->msr.ddcd) {
+        if (com->msr.dcd) {
+            // TODO: babe, wake up
+        }
+        else {
+#if CHATTY_COM
+            COM_WARN("com%d: hanging up...\n", com->num);
+#endif
+            tty_hangup(com->tty);
+        }
+    }
+
     // handle CTS/RTS flow control
-    if (C_CRTSCTS(com->tty)) {
+    if (com->tty && C_CRTSCTS(com->tty) && com->msr.dcts) {
         if (com->tty->hw_stopped) {
             if (com->msr.cts) {
 #if CHATTY_COM
-                COM_WARN("com%d: CTS tx start\n", com->num);
+                COM_WARN("com%d: RTSCTS: cts=1, xmit start\n", com->num);
 #endif
                 com->tty->hw_stopped = false;
-                tx_disable(com);
+                tx_enable(com);
             }
         }
         else {
             if (!com->msr.cts) {
 #if CHATTY_COM
-                COM_WARN("com%d: CTS tx stop\n", com->num);
+                COM_WARN("com%d: RTSCTS: cts=0, xmit stop\n", com->num);
 #endif
                 com->tty->hw_stopped = true;
-                tx_enable(com);
+                tx_disable(com);
             }
         }
     }

@@ -47,16 +47,15 @@ static struct tty_ldisc n_tty = {
     .close = n_tty_close,
     .read = n_tty_read,
     .write = n_tty_write,
-    .clear = n_tty_clear,
-    .flush = NULL,  // TODO:
     .ioctl = n_tty_ioctl,
+    .clear = n_tty_clear,
     .recv = n_tty_recv,
     .recv_room = n_tty_recv_room,
 };
 
 struct n_tty_ldisc_data {
     struct ring rx_ring;
-    char _rxbuf[TTY_BUFFER_SIZE];
+    char _rxbuf[TTY_BUFFER_SIZE];   // TODO: dynamically allocate
 };
 static struct n_tty_ldisc_data ldisc_data[NR_TTY];
 
@@ -89,6 +88,7 @@ static int n_tty_open(struct tty *tty)
 
 static int n_tty_close(struct tty *tty)
 {
+    n_tty_clear(tty);
     return 0;
 }
 
@@ -126,6 +126,9 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
     while (count > 0) {
         nremain = ring_count(&ldisc_data->rx_ring);
         if (!nremain) {
+            if (tty_hung_up(tty)) {
+                break;  // that was rude! nothing left to receive
+            }
             if (tty->file->f_oflag & O_NONBLOCK) {
                 if ((ptr - buf) == 0) {
                     ret = -EAGAIN;  // operation would block
@@ -167,11 +170,17 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t count)
         return -EIO;    // TODO: correct return value?
     }
 
+    // TODO: handle O_NONBLOCK
+
     ptr = buf; ret = 0;
     while (count > 0) {
+        if (tty_hung_up(tty)) {
+            ret = -EIO;
+            goto skip_flush;
+        }
         if (O_OPOST(tty)) {
             ret = opost(tty, *ptr);
-            if (ret < 0) {  // returns -1 if no chars in buffer
+            if (ret < 0) {      // returns -1 if no chars in buffer
                 ret = 0;
                 break;
             }
@@ -187,10 +196,12 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t count)
         }
     }
 
+    // TODO: do we always want to flush? some kind of autoflush setting?
     if (tty->driver.flush) {
         tty->driver.flush(tty);
     }
 
+skip_flush:
     return (ret >= 0) ? ptr - buf : ret;
 }
 

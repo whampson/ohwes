@@ -99,10 +99,12 @@ struct tty_driver {
     int     (*write)(struct tty *, const char *buf, size_t count);
     size_t  (*write_room)(struct tty *);    // query space in write buffer
     void    (*flush)(struct tty *);         // flush write buffer
+    void    (*clear)(struct tty *);         // clear write buffer
     void    (*throttle)(struct tty *);      // stop receiving chars (tell transmitter to stop)
     void    (*unthrottle)(struct tty *);    // start receiving chars (tell transmitter to start)
     void    (*stop)(struct tty *);          // stop transmitting chars
     void    (*start)(struct tty *);         // start transmitting chars
+    void    (*hangup)(struct tty *);        // hang up (terminate connection)
 };
 
 //
@@ -121,7 +123,7 @@ struct tty {
 
     struct file *file;              // connected file description
 
-    struct tty_ldisc *ldisc;        // line discipline
+    struct tty_ldisc *ldisc;        // line discipline       TODO: make this not a pointer
     struct tty_driver driver;       // low-level device driver
     struct termios termios;         // input/output behavior
 
@@ -144,9 +146,9 @@ struct tty_ldisc {
     int     (*close)(struct tty *);
     ssize_t (*read)(struct tty *, char *buf, size_t count);
     ssize_t (*write)(struct tty *, const char *buf, size_t count);
-    void    (*flush)(struct tty *);
-    void    (*clear)(struct tty *);
     int     (*ioctl)(struct tty *, int op, void *arg);
+    void    (*clear)(struct tty *);     // clear buffers
+    void    (*hangup)(struct tty *);
 
     // called from below (interrupt)
     void    (*recv)(struct tty *, char *buf, size_t count);
@@ -161,5 +163,8 @@ int get_tty(dev_t device, struct tty **tty);
 int tty_putchar(struct tty *tty, char c);
 
 void tty_flush(struct tty *tty);
+
+void tty_hangup(struct tty *tty);
+int tty_hung_up(struct tty *tty);
 
 #endif // __TTY_H

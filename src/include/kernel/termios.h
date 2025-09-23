@@ -53,20 +53,21 @@ struct termios {
 
 // c_cflag: control modes
 #define CRTSCTS         (1 << 0)    // enable RTS/CTS flow control
+#define HUPCL           (1 << 2)    // hang up on close
 
 // c_lflag: local modes
 #define ECHO            (1 << 0)    // echo input characters
 #define ECHOCTL         (1 << 1)    // if ECHO set, echo control characters as ^C
 
 // serial modem control/status
-#define TIOCM_DTR       (1 << 0)    // ctl: DTR (data terminal ready)
-#define TIOCM_RTS       (1 << 1)    // ctl: RTS (request to send)
-#define TIOCM_OUT1      (1 << 2)    // ctl: Aux Out #1 (terminal ring)
-#define TIOCM_OUT2      (1 << 3)    // ctl: Aux Out #2 (terminal carrier detect)
-#define TIOCM_CTS       (1 << 4)    // sts: CTS (clear to send)
-#define TIOCM_CAR       (1 << 5)    // sts: DCD (data carrier detect)
-#define TIOCM_RNG       (1 << 6)    // sts: RNG (ring)
-#define TIOCM_DSR       (1 << 7)    // sts: DSR (data set ready)
+#define TIOCM_DTR       (1 << 0)    // control: DTR (data terminal ready)
+#define TIOCM_RTS       (1 << 1)    // control: RTS (request to send)
+#define TIOCM_OUT1      (1 << 2)    // control: Aux Out #1
+#define TIOCM_OUT2      (1 << 3)    // control: Aux Out #2 (IRQ enable)
+#define TIOCM_CTS       (1 << 4)    //  status: CTS (clear to send)
+#define TIOCM_CAR       (1 << 5)    //  status: DCD (data carrier detect)
+#define TIOCM_RNG       (1 << 6)    //  status: RNG (ring)
+#define TIOCM_DSR       (1 << 7)    //  status: DSR (data set ready)
 #define TIOCM_CD        TIOCM_CAR
 #define TIOCM_RI        TIOCM_RNG
 
