@@ -218,14 +218,14 @@ int kb_getc(void)
 static void kb_putq(char c)
 {
     struct tty *tty = get_terminal(0)->tty;
-    if (!tty || !tty->ldisc) {
+    if (!tty) {
         panic("no TTY attached to keyboard!");
     }
-    if (!tty->ldisc->recv) {
+    if (!tty->ldisc.recv) {
         panic("keyboard has no input receiver!");
     }
 
-    tty->ldisc->recv(tty, &c, 1);
+    tty->ldisc.recv(tty, &c, 1);
     g_kb->pollchar = c;
 }
 

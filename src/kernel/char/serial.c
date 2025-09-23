@@ -480,8 +480,8 @@ static int serial_close(struct tty *tty)
 
     // clear buffers
     serial_clear(tty);
-    if (tty->ldisc->clear) {
-        tty->ldisc->clear(tty);
+    if (tty->ldisc.clear) {
+        tty->ldisc.clear(tty);
     }
 
     com->tty = NULL;
@@ -729,8 +729,8 @@ static void serial_hangup(struct tty *tty)
     }
 
     serial_clear(tty);
-    if (tty->ldisc->clear) {
-        tty->ldisc->clear(tty);
+    if (tty->ldisc.clear) {
+        tty->ldisc.clear(tty);
     }
 
     shutdown(com);
@@ -1072,7 +1072,6 @@ static void recv_chars(struct com *com)
 {
     char c;
     struct tty *tty = com->tty;
-    struct tty_ldisc *ldisc = tty->ldisc;
     int count;
 
     // was there a timeout?
@@ -1088,7 +1087,7 @@ static void recv_chars(struct com *com)
     do {
         // accept char and put it in the ldisc
         c = com_in(com, UART_RX);
-        ldisc->recv(tty, &c, 1);
+       tty->ldisc.recv(tty, &c, 1);
 
         // read new line status, continue receiving while data is available
         check_line_status(com);

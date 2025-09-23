@@ -153,7 +153,7 @@ write() pipeline:
       * ensure file is a TTY device and is open
           - use file->private_data to retrieve TTY-specfic state data
       * write buffer to TTY line discipline:
-        tty->ldisc->write(file, buf, count) -> tty_ldisc_write(file, buf, count)
+        tty->ldisc.write(file, buf, count) -> tty_ldisc_write(file, buf, count)
     tty_ldisc_write(file, buf, count):
       * applies OPOST character processing (if enabled) then sends chars to
         driver write routine (serial_write or terminal_tty_write)

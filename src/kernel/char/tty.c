@@ -163,12 +163,12 @@ int tty_open_internal(struct tty *tty)
     tty->termios = default_termios;
 
     // associate and open line discipline
-    tty->ldisc = &ldiscs[N_TTY];
-    if (!tty->ldisc->open) {
-        assert(!"where's tty->ldisc->open()??");
+    tty->ldisc = ldiscs[N_TTY];
+    if (!tty->ldisc.open) {
+        assert(!"where's tty->ldisc.open()??");
         return -ENOSYS; // no open fn registered on line discipline! (panic?)
     }
-    ret = tty->ldisc->open(tty);
+    ret = tty->ldisc.open(tty);
     if (ret) {
         return ret;
     }
@@ -218,15 +218,15 @@ int tty_open_internal(struct tty *tty)
 
 int tty_putchar(struct tty *tty, char c)
 {
-    if (!tty || !tty->ldisc) {
+    if (!tty) {
         return -ENXIO;
     }
-    if (!tty->ldisc->write) {
+    if (!tty->ldisc.write) {
         assert(!"where's tty->ldisc.write()??");
         return -ENOSYS;
     }
 
-    return tty->ldisc->write(tty, &c, 1);
+    return tty->ldisc.write(tty, &c, 1);
 }
 
 void tty_flush(struct tty *tty)
@@ -333,15 +333,15 @@ static ssize_t tty_read(struct file *file, char *buf, size_t count)
     // TODO: verify type with magic number check or something
     tty = (struct tty *) file->private_data;
 
-    if (!tty || !tty->ldisc) {
+    if (!tty) {
         return -ENXIO;
     }
-    if (!tty->ldisc->read) {
-        assert(!"where's tty->ldisc->read()??");
+    if (!tty->ldisc.read) {
+        assert(!"where's tty->ldisc.read()??");
         return -ENOSYS;
     }
 
-    return tty->ldisc->read(tty, buf, count);
+    return tty->ldisc.read(tty, buf, count);
 }
 
 static ssize_t tty_write(struct file *file, const char *buf, size_t count)
@@ -356,15 +356,15 @@ static ssize_t tty_write(struct file *file, const char *buf, size_t count)
     // TODO: verify type with magic number check or something
     tty = (struct tty *) file->private_data;
 
-    if (!tty || !tty->ldisc) {
+    if (!tty) {
         return -ENXIO;
     }
-    if (!tty->ldisc->write) {
-        assert(!"where's tty->ldisc->write()??");
+    if (!tty->ldisc.write) {
+        assert(!"where's tty->ldisc.write()??");
         return -ENOSYS;
     }
 
-    return tty->ldisc->write(tty, buf, count);
+    return tty->ldisc.write(tty, buf, count);
 }
 
 static int tty_ioctl(struct file *file, int op, void *arg)
@@ -400,8 +400,8 @@ static int tty_ioctl(struct file *file, int op, void *arg)
             return ret;
         }
     }
-    if (tty->ldisc->ioctl) {
-        ret = tty->ldisc->ioctl(tty, op, arg);
+    if (tty->ldisc.ioctl) {
+        ret = tty->ldisc.ioctl(tty, op, arg);
         if (ret != -ENOTTY) {
             return ret;
         }
@@ -434,7 +434,7 @@ static int tiocsti(struct tty *tty, const char *user_char)
         return -EFAULT;
     }
 
-    tty->ldisc->recv(tty, &c, 1);
+    tty->ldisc.recv(tty, &c, 1);
     return 0;
 }
 

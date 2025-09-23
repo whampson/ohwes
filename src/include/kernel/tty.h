@@ -76,9 +76,31 @@
 #define STOP_CHAR(tty)          0x13    // TODO: tty->termios.c_cc[VSTOP]
 #define START_CHAR(tty)         0x11    // TODO: tty->termios.c_cc[VSTART]
 
-// type shit
 struct tty;
-struct tty_ldisc;
+
+//
+// TTY Line Discipline
+//
+// The line discipline controls how data is written to and read from the
+// character device.
+//
+struct tty_ldisc {
+    int disc;           // line discipline number (N_TTY, etc.)
+    const char *name;   // line discipline name
+
+    // called from above (system)
+    int     (*open)(struct tty *);
+    int     (*close)(struct tty *);
+    ssize_t (*read)(struct tty *, char *buf, size_t count);
+    ssize_t (*write)(struct tty *, const char *buf, size_t count);
+    int     (*ioctl)(struct tty *, int op, void *arg);
+    void    (*clear)(struct tty *);     // clear buffers
+    void    (*hangup)(struct tty *);
+
+    // called from below (interrupt)
+    void    (*recv)(struct tty *, char *buf, size_t count);
+    size_t  (*recv_room)(struct tty *);
+};
 
 //
 // TTY Driver
@@ -123,36 +145,12 @@ struct tty {
 
     struct file *file;              // connected file description
 
-    struct tty_ldisc *ldisc;        // line discipline       TODO: make this not a pointer
+    struct tty_ldisc ldisc;         // line discipline
     struct tty_driver driver;       // low-level device driver
     struct termios termios;         // input/output behavior
 
     // private per-instance data
     void *ldisc_data;
-};
-
-//
-// TTY Line Discipline
-//
-// The line discipline controls how data is written to and read from the
-// character device.
-//
-struct tty_ldisc {
-    int disc;           // line discipline number (N_TTY, etc.)
-    const char *name;   // line discipline name
-
-    // called from above (system)
-    int     (*open)(struct tty *);
-    int     (*close)(struct tty *);
-    ssize_t (*read)(struct tty *, char *buf, size_t count);
-    ssize_t (*write)(struct tty *, const char *buf, size_t count);
-    int     (*ioctl)(struct tty *, int op, void *arg);
-    void    (*clear)(struct tty *);     // clear buffers
-    void    (*hangup)(struct tty *);
-
-    // called from below (interrupt)
-    void    (*recv)(struct tty *, char *buf, size_t count);
-    size_t  (*recv_room)(struct tty *);
 };
 
 int tty_register_driver(struct tty_driver *driver);

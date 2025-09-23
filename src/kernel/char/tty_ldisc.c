@@ -76,7 +76,7 @@ void init_n_tty(void)
 
 static int n_tty_open(struct tty *tty)
 {
-    if (!tty || !tty->ldisc) {
+    if (!tty) {
         return -EINVAL;
     }
 
