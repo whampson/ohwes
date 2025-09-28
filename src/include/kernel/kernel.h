@@ -64,7 +64,7 @@ extern void beep(int hz, int ms, bool block);
 //  interrupts must be ON or this will beep forever!
 #define alert(...) \
 do { \
-    kprint("\n\e[1;33malert: " __VA_ARGS__); kprint("\e[0m"); \
+    kprint("\e[1;33malert: " __VA_ARGS__); kprint("\e[0m"); \
     beep(ALERT_FREQ, ALERT_TIME, false); \
 } while (0)
 
