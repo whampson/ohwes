@@ -77,10 +77,11 @@ int readme_open(struct inode *inode, struct file *file)
     return 0;
 }
 
-void readme_close(struct file *file)
+int readme_close(struct file *file)
 {
     (void) file;
     readme_fptr = 0;
+    return 0;
 }
 ssize_t readme_read(struct file *file, char *buf, size_t count)
 {
