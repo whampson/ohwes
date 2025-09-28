@@ -68,13 +68,14 @@
 
 // termios control flag macros
 #define C_CRTSCTS(tty)          _C_FLAG(tty, CRTSCTS)
+#define C_HUPCL(tty)            _C_FLAG(tty, CRTSCTS)
 
 // termios local flag macros
 #define L_ECHO(tty)             _L_FLAG(tty, ECHO)
 #define L_ECHOCTL(tty)          _L_FLAG(tty, ECHOCTL)
 
-#define STOP_CHAR(tty)          0x13    // TODO: tty->termios.c_cc[VSTOP]
-#define START_CHAR(tty)         0x11    // TODO: tty->termios.c_cc[VSTART]
+#define CC_STOP(tty)            ((tty)->termios.c_cc[VSTOP])
+#define CC_START(tty)           ((tty)->termios.c_cc[VSTART])
 
 struct tty;
 
@@ -89,17 +90,20 @@ struct tty_ldisc {
     const char *name;   // line discipline name
 
     // called from above (system)
-    int     (*open)(struct tty *);
-    int     (*close)(struct tty *);
-    ssize_t (*read)(struct tty *, char *buf, size_t count);
-    ssize_t (*write)(struct tty *, const char *buf, size_t count);
-    int     (*ioctl)(struct tty *, int op, void *arg);
-    void    (*clear)(struct tty *);     // clear buffers
-    void    (*hangup)(struct tty *);
+    int     (*open)(struct tty *);      // open line disc.
+    void    (*close)(struct tty *);     // close line disc.
+    ssize_t (*read)(struct tty *,       // read buffered chars from line disc.
+                /*struct file *,*/ char *buf, size_t count);
+    ssize_t (*write)(struct tty *,      // write chars to line disc.
+                /*struct file *,*/ const char *buf, size_t count);
+    int     (*ioctl)(struct tty *,      // device I/O control functions
+                /*struct file *,*/ int op, void *arg);
+    void    (*clear)(struct tty *);     // clear line disc. input buffer
 
     // called from below (interrupt)
-    void    (*recv)(struct tty *, char *buf, size_t count);
-    size_t  (*recv_room)(struct tty *);
+    void    (*recv)(struct tty *,       // put received chars in input buffer
+                char *buf, size_t count);
+    size_t  (*recv_room)(struct tty *); // get input buffer available size
 };
 
 //
@@ -108,25 +112,27 @@ struct tty_ldisc {
 // This is the low level character device driver.
 //
 struct tty_driver {
-    struct list_node driver_list;   // linked list node data
-    const char *name;               // device name
-    uint16_t major;                 // major device number
-    uint16_t minor_start;           // initial minor device number
-    int count;                      // max num devices
+    uint16_t major;                     // major device number
+    uint16_t minor_start;               // initial minor device number
+    int count;                          // max num devices
+    const char *name;                   // device name
+    struct list_node driver_list;       // linked list node data
 
     // interface functions
-    int     (*open)(struct tty *);
-    int     (*close)(struct tty *);
-    int     (*ioctl)(struct tty *, int op, void *arg);
-    int     (*write)(struct tty *, const char *buf, size_t count);
-    size_t  (*write_room)(struct tty *);    // query space in write buffer
-    void    (*flush)(struct tty *);         // flush write buffer
-    void    (*clear)(struct tty *);         // clear write buffer
-    void    (*throttle)(struct tty *);      // stop receiving chars (tell transmitter to stop)
-    void    (*unthrottle)(struct tty *);    // start receiving chars (tell transmitter to start)
-    void    (*stop)(struct tty *);          // stop transmitting chars
-    void    (*start)(struct tty *);         // start transmitting chars
-    void    (*hangup)(struct tty *);        // hang up (terminate connection)
+    int     (*open)(struct tty *);      // open TTY device
+    void    (*close)(struct tty *);     // close TTY device
+    int     (*ioctl)(struct tty *,      // device I/O control functions
+                int op, void *arg);
+    int     (*write)(struct tty *,      // send characters over TTY device
+                const char *buf, size_t count);
+    size_t  (*write_room)(struct tty *);// query space in write buffer
+    void    (*flush)(struct tty *);     // flush write buffer
+    void    (*clear)(struct tty *);     // clear write buffer
+    void    (*unthrottle)(struct tty *);// tell far end to start sending
+    void    (*throttle)(struct tty *);  // tell far end to stop sending
+    void    (*stop)(struct tty *);      // stop sending chars
+    void    (*start)(struct tty *);     // start sending chars
+    void    (*hangup)(struct tty *);    // hang up TTY (terminate connection)
 };
 
 //

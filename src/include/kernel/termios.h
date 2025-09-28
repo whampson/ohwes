@@ -28,7 +28,9 @@ typedef unsigned char   cc_t;
 #define N_TTY           0           // TTY line discipline
 #define NR_LDISC        1           // num ldiscs
 
-#define NCCS            0           // num control characters (TODO)
+#define VSTOP           0           // STOP character
+#define VSTART          1           // START character
+#define NCCS            2           // num control characters
 
 struct termios {
     tcflag_t c_line;                // ldisc number

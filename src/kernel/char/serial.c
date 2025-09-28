@@ -70,7 +70,7 @@ struct com g_com[NR_SERIAL];
 // "com" prefix refers to UART functions
 
 static int serial_open(struct tty *);
-static int serial_close(struct tty *);
+static void serial_close(struct tty *);
 static int serial_ioctl(struct tty *tty, int op, void *arg);
 static int serial_write(struct tty *tty, const char *buf, size_t count);
 static size_t serial_write_room(struct tty *);
@@ -94,8 +94,8 @@ struct tty_driver serial_driver = {
     .write_room = serial_write_room,
     .flush = serial_flush,
     .clear = serial_clear,
-    .throttle = serial_throttle,
     .unthrottle = serial_unthrottle,
+    .throttle = serial_throttle,
     .start = serial_start,
     .stop = serial_stop,
     .hangup = serial_hangup,
@@ -380,14 +380,12 @@ static int serial_open(struct tty *tty)
     if (com->reserved) {
         return -EBUSY;  // port reserved by another driver (e.g. serial debug interface)
     }
-
-    if (com->open) {
-        assert(com->tty);
-        return -EBUSY;  // COM already open
-    }
-
     if (!com->valid) {
         return -EIO;    // port does not exist
+    }
+    if (com->open) {
+        assert(com->tty);
+        return -EBUSY;  // COM already open      TODO: is this correct behavior?
     }
 
     cli_save(flags);
@@ -401,12 +399,14 @@ static int serial_open(struct tty *tty)
 
     // set default baud rate 9600
     if (!set_baud(com, BAUD_9600)) {
-        ret = -EIO; goto done;
+        ret = -EIO;
+        goto done;
     }
 
     // set default mode (8N1; 8 bits, no parity, 1 stop bit)
     if (!set_mode(com, WLS_8, PARITY_NONE, STB_1)) {
-        ret = -EIO; goto done;
+        ret = -EIO;
+        goto done;
     }
 
     // enable FIFOs and set default trigger level (14 bytes)
@@ -438,7 +438,8 @@ static int serial_open(struct tty *tty)
     // collect final register state
     shadow_regs(com);
     if (ERR_CHK(com->ier._value) || ERR_CHK(com->mcr._value)) {
-        ret = -EIO; goto done;
+        ret = -EIO;
+        goto done;
     }
 
     com->tty = tty;
@@ -457,16 +458,12 @@ done:
     return ret;
 }
 
-static int serial_close(struct tty *tty)
+static void serial_close(struct tty *tty)
 {
     uint32_t flags;
     struct com *com;
 
-    int ret = tty_get_com(tty, &com);
-    if (ret < 0) {
-        return ret;
-    }
-
+    (void) tty_get_com(tty, &com);
     cli_save(flags);
 
     // flush transmit buffer
@@ -479,7 +476,9 @@ static int serial_close(struct tty *tty)
     shutdown(com);
 
     // clear buffers
-    serial_clear(tty);
+    if (tty->driver.clear) {
+        tty->driver.clear(tty);
+    }
     if (tty->ldisc.clear) {
         tty->ldisc.clear(tty);
     }
@@ -492,17 +491,12 @@ static int serial_close(struct tty *tty)
 #endif
 
     restore_flags(flags);
-    return 0;
 }
 
 static int serial_ioctl(struct tty *tty, int op, void *arg)
 {
     int ret;
     struct com *com;
-
-    if (!tty) {
-        return -EINVAL;
-    }
 
     ret = tty_get_com(tty, &com);
     if (ret < 0) {
@@ -591,34 +585,6 @@ static size_t serial_write_room(struct tty *tty)
     return room;
 }
 
-static void serial_unthrottle(struct tty *tty)
-{
-    uint32_t flags;
-    struct com *com;
-
-    int ret = tty_get_com(tty, &com);
-    if (ret < 0) {
-        return;
-    }
-
-    cli_save(flags);
-    if (I_IXOFF(tty)) {
-#if CHATTY_COM
-        COM_WARN("com%d: IXOFF: tx START_CHAR\n", com->num);
-#endif
-        com->xchar = START_CHAR(tty);
-        tx_enable(com);
-    }
-    if (C_CRTSCTS(tty)) {
-#if CHATTY_COM
-        COM_WARN("com%d: RTSCTS: rts=1, recv start\n", com->num);
-#endif
-        com->mcr.rts = 1;
-    }
-    com_out(com, UART_MCR, com->mcr._value);
-    restore_flags(flags);
-}
-
 static void serial_flush(struct tty *tty)
 {
     uint32_t flags;
@@ -651,6 +617,34 @@ static void serial_clear(struct tty *tty)
     restore_flags(flags);
 }
 
+static void serial_unthrottle(struct tty *tty)
+{
+    uint32_t flags;
+    struct com *com;
+
+    int ret = tty_get_com(tty, &com);
+    if (ret < 0) {
+        return;
+    }
+
+    cli_save(flags);
+    if (I_IXOFF(tty)) {
+#if CHATTY_COM
+        COM_WARN("com%d: IXOFF: tx ^%c\n", com->num, CC_START(tty) ^ 0x40);
+#endif
+        com->xchar = CC_START(tty);
+        tx_enable(com);
+    }
+    if (C_CRTSCTS(tty)) {
+#if CHATTY_COM
+        COM_WARN("com%d: RTSCTS: rts=1, recv start\n", com->num);
+#endif
+        com->mcr.rts = 1;
+    }
+    com_out(com, UART_MCR, com->mcr._value);
+    restore_flags(flags);
+}
+
 static void serial_throttle(struct tty *tty)
 {
     uint32_t flags;
@@ -664,9 +658,9 @@ static void serial_throttle(struct tty *tty)
     cli_save(flags);
     if (I_IXOFF(tty)) {
 #if CHATTY_COM
-        COM_WARN("com%d: IXOFF: tx STOP_CHAR\n", com->num);
+        COM_WARN("com%d: IXOFF: tx ^%c\n", com->num, CC_STOP(tty) ^ 0x40);
 #endif
-        com->xchar = STOP_CHAR(tty);
+        com->xchar = CC_STOP(tty);
         tx_enable(com);
     }
     if (C_CRTSCTS(tty)) {
@@ -756,7 +750,7 @@ static void shutdown(struct com *com)
     com->mcr.out2 = 0;
 
     // hang up
-    if (!com->tty || (com->tty->termios.c_cflag & HUPCL)) {
+    if (!com->tty || C_HUPCL(com->tty)) {
         com->mcr.dtr = 0;
         com->mcr.rts = 0;
     }

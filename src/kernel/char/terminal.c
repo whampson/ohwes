@@ -52,7 +52,7 @@ static void pos2xy(struct terminal *term, uint16_t pos);
 // TTY device implementation
 
 static int terminal_tty_open(struct tty *);
-static int terminal_tty_close(struct tty *);
+static void terminal_tty_close(struct tty *);
 static int terminal_tty_ioctl(struct tty *, int op, void *arg);
 static int terminal_tty_write(struct tty *, const char *buf, size_t count);
 static void terminal_tty_write_char(struct tty *, char c);
@@ -107,17 +107,12 @@ static int terminal_tty_open(struct tty *tty)
     return 0;
 }
 
-static int terminal_tty_close(struct tty *tty)
+static void terminal_tty_close(struct tty *tty)
 {
     struct terminal *term;
 
-    int ret = tty_get_terminal(tty, &term);
-    if (ret < 0) {
-        return ret;
-    }
-
+    (void) tty_get_terminal(tty, &term);
     term->tty = NULL;
-    return 0;
 }
 
 static int terminal_tty_write(struct tty *tty, const char *buf, size_t count)

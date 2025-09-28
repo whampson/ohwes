@@ -108,7 +108,6 @@ done:
 DEFINE_SYSCALL(close, int fd)
 {
     struct file *file;
-    int ret;
 
     assert(getpl() == KERNEL_PL);
 
@@ -120,19 +119,18 @@ DEFINE_SYSCALL(close, int fd)
     if (!file) {
         return -EBADF;
     }
-
-    if (!file->fops || !file->fops->close) {
+    if (!file->fops) {
+        return -ENXIO;
+    }
+    if (!file->fops->close) {
         return -ENOSYS;
     }
 
-    ret = file->fops->close(file);
-    if (ret < 0) {
-        return ret;
-    }
+    file->fops->close(file);
 
     free_fd(file);
     current_task()->files[fd] = NULL;
-    return ret;
+    return 0;
 }
 
 static int dupfd(int fd, int newfd)

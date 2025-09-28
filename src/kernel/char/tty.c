@@ -40,6 +40,10 @@ static struct termios default_termios = {
     .c_oflag = OPOST | ONLCR,
     .c_lflag = ECHO | ECHOCTL,
     .c_cflag = HUPCL,
+    .c_cc = {
+        0x13,   // VSTOP  = ^X (XOFF)
+        0x11    // VSTART = ^S (XON)
+    }
 };
 
 static void default_write_char(struct tty *tty, char c);
@@ -48,7 +52,7 @@ static void default_write_char(struct tty *tty, char c);
 // tty file operations
 //
 static int tty_open(struct inode *, struct file *);
-static int tty_close(struct file *);
+static void tty_close(struct file *);
 static ssize_t tty_read(struct file *, char *buf, size_t count);
 static ssize_t tty_write(struct file *, const char *buf, size_t count);
 static int tty_ioctl(struct file *, int op, void *arg);
@@ -298,27 +302,31 @@ static int tty_open(struct inode *inode, struct file *file)
     return 0;
 }
 
-static int tty_close(struct file *file)
+static void tty_close(struct file *file)
 {
     // TODO: flush buffers, close ldisc, close/detach, driver
 
-    int ret;
     struct tty *tty;
 
     if (!file || !file->inode) {
-        return -EINVAL;
+        return;
     }
 
-    ret = get_tty(file->inode->device, &tty);
-    if (ret < 0) {
-        return -ENODEV; // not a TTY device
+    // TODO: handle this differently
+    (void) get_tty(file->inode->device, &tty);
+    if (!tty) {
+        return;
     }
 
-    if (!tty->driver.close) {
-        assert(!"where's tty->driver.close()??");
-        return -ENOSYS;
+    if (tty->driver.close) {
+        tty->driver.close(tty);
     }
-    return tty->driver.close(tty);  // driver should flush before close
+
+    // TODO: close ldisc only when refcount==0
+
+    if (tty->ldisc.close) {
+        tty->ldisc.close(tty);
+    }
 }
 
 static ssize_t tty_read(struct file *file, char *buf, size_t count)

@@ -32,7 +32,7 @@
 // line discipline tty operations
 //
 static int n_tty_open(struct tty *);
-static int n_tty_close(struct tty *);
+static void n_tty_close(struct tty *);
 static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count);
 static ssize_t n_tty_write(struct tty *, const char *buf, size_t count);
 static int n_tty_ioctl(struct tty *, int op, void *arg);
@@ -86,10 +86,9 @@ static int n_tty_open(struct tty *tty)
     return 0;
 }
 
-static int n_tty_close(struct tty *tty)
+static void n_tty_close(struct tty *tty)
 {
     n_tty_clear(tty);
-    return 0;
 }
 
 void n_tty_clear(struct tty *tty)
@@ -233,11 +232,11 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
 
         // handle software flow control
         if (I_IXON(tty)) {
-            if (c == START_CHAR(tty)) {
+            if (c == CC_START(tty)) {
                 start_tty(tty);
                 return;
             }
-            if (c == STOP_CHAR(tty)) {
+            if (c == CC_STOP(tty)) {
                 stop_tty(tty);
                 return;
             }
