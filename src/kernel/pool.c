@@ -54,7 +54,7 @@ void lazy_init_pools(void)
     size_t master_pool_size = align(num_pools * sizeof(struct pool), 4);
     g_poolinfo->order = get_order(master_pool_size);
 
-    g_poolinfo->alloc = (struct pool *) alloc_pages(ALLOC_ZERO, g_poolinfo->order);
+    g_poolinfo->alloc = (struct pool *) alloc_pages(MEM_ZERO, g_poolinfo->order);
     if (g_poolinfo->alloc == NULL) {
         panic("not enough memory for pools!\n");
     }
@@ -134,7 +134,7 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
     if (order < 0) {
         return INVALID_POOL;
     }
-    void *alloc = alloc_pages(ALLOC_ZERO, order);
+    void *alloc = alloc_pages(MEM_ZERO, order);
     if (alloc == NULL) {
         warn("pool: create: not enough memory for pool size=%d capacity=%d!\n", size, capacity);
         return INVALID_POOL;
@@ -218,8 +218,6 @@ void * pool_alloc(pool_t *pool, int flags)
     struct chunk *chunk;
     int index;
 
-    (void) flags;   // TODO: flags
-
     if (!pool_valid(pool)) {
         return NULL;
     }
@@ -248,6 +246,10 @@ void * pool_alloc(pool_t *pool, int flags)
     assert(chunk->data >= pool->alloc);
     assert(chunk->data < pool->alloc + pool->capacity * (sizeof(struct chunk) + pool->size));
     // TODO: consider flags for alignment and zeroing for chunk data
+
+    if (flags & MEM_ZERO) {
+        zeromem(chunk->data, pool->size);
+    }
 
     return chunk->data;
 }

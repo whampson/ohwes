@@ -326,7 +326,7 @@ void * alloc_pages(int flags, int order)
     kprint("mem: %s: alloc %08X-%08X order %d; %d pages left\n",
         zone->name, kern_addr, kern_addr+order_size-1, order, zone->free_pages);
 
-    if (flags & ALLOC_ZERO) {
+    if (flags & MEM_ZERO) {
         zeromem(kern_addr, order_size);
     }
 
