@@ -159,6 +159,9 @@ void init(void)
     // _exit(main());
 
     int ret = shell();
+    (void) close(STDERR_FILENO);
+    (void) close(STDOUT_FILENO);
+    (void) close(STDIN_FILENO);
     _exit(ret);
 }
 
