@@ -118,39 +118,6 @@ void capture_cpu_state(struct cpu_state *state, struct iregs *iregs)
     __str(state->tr);
 }
 
-static void wait_for_keypress(void)
-{
-    struct terminal *term;
-    struct termios orig_termios;
-    uint16_t mask;
-
-    term = get_terminal(0);
-    if (term->tty) {
-        orig_termios = term->tty->termios;
-        term->tty->termios.c_lflag &= ~(ECHO);
-    }
-
-    mask = irq_getmask();
-    irq_setmask(IRQ_MASKALL);
-    if (_IRQ_ENABLED(mask, IRQ_TIMER)) {
-        irq_unmask(IRQ_TIMER);
-    }
-    if (_IRQ_ENABLED(mask, IRQ_TIMER)) {
-        irq_unmask(IRQ_KEYBOARD);
-    }
-
-    irq_enable();
-
-    kb_getc();   // blocks until a char is sent
-
-    irq_disable();
-    irq_setmask(mask);
-
-    if (term->tty) {
-        term->tty->termios = orig_termios;
-    }
-}
-
 static void show_crash_screen(
     int vector,
     int color, int margin,
@@ -209,15 +176,13 @@ __noreturn void handle_soft_double_fault(
 
     show_crash_screen(-1, ANSI_RED, 5, "Double Fault", msgbuf, MSG_PROMPT);
 
-    while (true) {
-        wait_for_keypress();
-    }
+    for (;;);
 }
 
 //
 // Generic x86 exception handler.
 //
-__fastcall void handle_exception(struct iregs *iregs)
+__fastcall __noreturn void handle_exception(struct iregs *iregs)
 {
     // static vars for soft double-fault detection
     static bool crashing = false;
@@ -289,11 +254,7 @@ __fastcall void handle_exception(struct iregs *iregs)
     show_crash_screen(iregs->vec, CRASH_COLOR, CRASH_MARGIN, OS_NAME, msgbuf, MSG_PROMPT);
     // dump_cpu(&cpu, fbprint);
 
-    while (true) {
-        wait_for_keypress();
-    }
-
-    clear_bit(&crashing, 0);
+    for (;;);
 }
 
 static void dump_cpu(struct cpu_state *cpu, dumpfn dump)
