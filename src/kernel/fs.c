@@ -105,7 +105,7 @@ The lone and level sands stretch far away.\n";
 
     size_t ozy_len = strlen(ozy);
     if (readme_fptr >= ozy_len) {
-        return EOF;
+        return 0;
     }
 
     int nread = min(count, ozy_len - readme_fptr);
