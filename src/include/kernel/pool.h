@@ -42,6 +42,7 @@ struct pool {
     list_t free_list;   // free slots
     int order;          // allocation order
     void *alloc;        // item allocation
+    int flags;          // pool flags
 };
 typedef struct pool pool_t;
 

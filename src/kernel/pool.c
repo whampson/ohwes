@@ -86,12 +86,11 @@ void destroy_pools()
 
 pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
 {
-    // TODO: flags for alignment, zeroing, etc.
-    (void) flags;
-
     if (name == NULL || capacity <= 0 || size <= 0) {
         return INVALID_POOL;
     }
+
+    // TODO: sanitize/validate flags
 
     // validate name
     int len = 0;
@@ -157,6 +156,7 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
     p->name = name;
     p->size = size;
     p->capacity = capacity;
+    p->flags = flags;
 
     // now, we could put the chunk metadata before the allocation slot, or we
     // could stuff it all somewhere else. one is more prone to corruption, while
@@ -247,7 +247,7 @@ void * pool_alloc(pool_t *pool, int flags)
     assert(chunk->data < pool->alloc + pool->capacity * (sizeof(struct chunk) + pool->size));
     // TODO: consider flags for alignment and zeroing for chunk data
 
-    if (flags & MEM_ZERO) {
+    if ((pool->flags & MEM_ZERO) || (flags & MEM_ZERO)) {
         zeromem(chunk->data, pool->size);
     }
 
