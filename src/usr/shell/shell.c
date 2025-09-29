@@ -21,6 +21,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -31,12 +32,14 @@
 #include <kernel/termios.h>     // TODO: just <termios.h>?
 #include <kernel/ioctls.h>      // TODO: some user-mode location for this
 
+#define NR_ARGV         64
 #define LINE_LENGTH     64
+#define ARG_LENGTH      1024
 #define PROMPT_CHAR     '#'
+#define BUFSIZ          512
 
-static int cat(int argc, char *argv[]);
-
-#define SYS_RIF(x) \
+// syscall return if failed
+#define SYS_CHECK(x) \
 do { \
     int __ret; \
     if ((__ret = (x)) < 0) { \
@@ -48,35 +51,44 @@ do { \
 // basic shell for testing kernel interfaces
 // TODO: make this a real user-mode program on disk!
 
-static int parse_command(char *line, size_t len);
+// this is kind of like a process context...
+struct shell_context {
+    int argc;
+    char *argv[NR_ARGV];
+    char *stdout_path;
+};
+
+static int cat(int argc, char *argv[]);
+static int echo(struct shell_context *ctx);
+
+static int parse_command(struct shell_context *ctx, char *line, size_t len);
 
 int shell(void)
 {
     struct termios termios, orig_termios;
 
-    SYS_RIF(ioctl(STDIN_FILENO, TCGETS, &termios));
+    SYS_CHECK(ioctl(STDIN_FILENO, TCGETS, &termios));
     orig_termios = termios;
     termios.c_iflag = (ICRNL);              // in  CR->NL
     termios.c_oflag = (OPOST | ONLCR);      // out NL->CRNL
     termios.c_lflag = ~(ECHO | ECHOCTL);    // disable echo
-    SYS_RIF(ioctl(STDIN_FILENO, TCSETS, &termios));
+    SYS_CHECK(ioctl(STDIN_FILENO, TCSETS, &termios));
 
     size_t len = 0;
     char line[LINE_LENGTH];
     char c;
     int ret;
 
+    struct shell_context _ctx = { };
+    struct shell_context *ctx = &_ctx;
+
     do {
         putchar(PROMPT_CHAR);
-
         do {
-            ret = read(STDIN_FILENO, &c, 1);
-            if (ret < 0) {
-                break;
-            }
+            SYS_CHECK(read(STDIN_FILENO, &c, 1) < 0);
             switch (c) {
-            case '\b': case 0x7F:               // TODO: ^H vs ^? distinction
-                if (len > 0) {                  // I'm surprised there isn't a termios flag for this...
+            case '\b': case 0x7F:   // TODO: ^H vs ^? distinction
+                if (len > 0) {      // I'm surprised there isn't a standard termios flag for this...
                     if (iscntrl(line[len-1])) {
                         printf("\b\b  \b\b");
                     }
@@ -109,7 +121,7 @@ int shell(void)
 
         line[--len] = '\0'; // chop off that newline
         if (len > 0) {
-            ret = parse_command(line, len);
+            ret = parse_command(ctx, line, len);
             if (ret < 0) {
                 goto quit;
             }
@@ -119,70 +131,160 @@ int shell(void)
 
 quit:
     putchar('\n');
-    SYS_RIF(ioctl(STDIN_FILENO, TCSETS, &orig_termios));    // TODO: atexit
+    SYS_CHECK(ioctl(STDIN_FILENO, TCSETS, &orig_termios));    // TODO: atexit
     return 0;
 }
 
-static int parse_command(char *line, size_t len)
+static int parse_command(struct shell_context *ctx, char *line, size_t len)
 {
-    int argc = 0;
-    char *argv[64];
+    ctx->argc = 0;
+    ctx->stdout_path = NULL;
+    bool redir_stdout = false;
 
-    for (char *c = line; argc < sizeof(argv); c = NULL, argc++) {
-        argv[argc] = strtok(c, " ");
-        if (argv[argc] == NULL) {
+    for (char *c = line; ctx->argc < sizeof(ctx->argv); c = NULL) {
+        char *tok = strtok(c, " ");
+        if (tok == NULL) {
+            ctx->argv[ctx->argc] = NULL;
             break;
         }
+        if (strcmp(tok, ">") == 0) {
+            redir_stdout = true;
+            continue;
+        }
+        if (redir_stdout) {
+            ctx->stdout_path = tok;
+            break;
+        }
+        ctx->argv[ctx->argc] = tok;
+        ctx->argc++;
+    }
+
+    char *cmd = ctx->argv[0];
+    if (strcmp("exit", cmd) == 0) {
+        return -1;
     }
 
     int ret = 0;
-    if (strcmp("exit", argv[0]) == 0) {
-        ret = -1;
+    // TODO: spawn program using exec()
+    //   pass stdout_path to new process if set
+    if (strcmp("echo", cmd) == 0) {
+        ret = echo(ctx);
     }
-    else if (strcmp("cat", argv[0]) == 0) {
-        ret = cat(argc, argv);
+    else if (strcmp("cat", cmd) == 0) {
+        ret = cat(ctx->argc, ctx->argv);
     }
     else {
-        printf("error: unknown command '%.*s'\n", len, argv[0]);
-        ret = 1;
+        printf("error: unknown command '%.*s'\n", len, cmd);
     }
 
-    return ret;
+    // TODO: set return value to some equivalent of ERRORLEVEL/$?
+    (void) ret;
+    // if (ret) {
+    //     printf("%s: returned %d\n", cmd, ret);
+    // }
+
+    return 0;   // "don't exit shell"
 }
 
-#define ERR(...) \
-    printf("%s: error: ", __FUNCTION__); \
+//
+// -------------------------------------------------------------------------
+//
+
+// print message with function prefix
+#define CMD_PRINT(...) \
+    printf("%s: ", __FUNCTION__); \
     printf(__VA_ARGS__)
 
-#define BUFSIZ 512
+#define ERROR_ARG   1
+#define ERROR_IO    2
 
-static int cat(int argc, char *argv[])
+static int cat(int argc, char *argv[])  // TODO: make this a standalone executable
 {
     int fd;
     ssize_t count;
     char buf[BUFSIZ];
+    int ret;
 
     assert(strcmp("cat", argv[0]) == 0);
 
     if (argc < 2) {
-        ERR("missing argument\n");
-        return 1;
+        CMD_PRINT("missing argument\n");
+        return ERROR_ARG;
     }
     argv++;
 
+    ret = 0;
     count = 0;
     do {
         fd = open(*argv, O_RDWR);
         if (fd < 0) {
-            ERR("could not open file '%s'\n", **argv);
-            return 2;
+            CMD_PRINT("%s: %s\n", *argv, strerror(errno));
+            return ERROR_IO;
         }
         while ((count = read(fd, buf, BUFSIZ)) > 0) {
-            write(STDOUT_FILENO, buf, count);
+            if (count == 1 && *buf == 3) {
+                break;  // Ctrl+C terminate...
+            }
+            if (write(STDOUT_FILENO, buf, count) < 0) {
+                CMD_PRINT("%s\n", strerror(errno));
+                ret = ERROR_IO;
+                break;
+            }
         }
-        close(fd);
+        if (count < 0) {
+            CMD_PRINT("%s\n", strerror(errno));
+            ret = ERROR_IO;
+        }
+        (void) close(fd);
         argc--; argv++;
-    } while (argc > 1);
+    } while (argc > 1 && !ret);
 
-    return 0;
+    return ret;
+}
+
+static int echo(struct shell_context *ctx)
+{
+    int ret;
+    int fd;
+
+    fd = STDOUT_FILENO;
+    if (ctx->stdout_path) {
+        fd = open(ctx->stdout_path, O_WRONLY);
+        if (fd < 0) {
+            CMD_PRINT("%s: %s\n", ctx->stdout_path, strerror(errno));
+            return ERROR_IO;
+        }
+    }
+
+    ret = 0;
+    for (int i = 1; i < ctx->argc; i++) {
+        size_t count = strnlen(ctx->argv[i], ARG_LENGTH);
+        if (write(fd, ctx->argv[i], count) < 0) {
+            CMD_PRINT("%s\n", strerror(errno));
+            ret = ERROR_IO;
+            break;
+        }
+        if (i < ctx->argc - 1) {
+            if (write(fd, " ", 1) < 0) {
+                CMD_PRINT("%s\n", strerror(errno));
+                ret = ERROR_IO;
+                break;
+            }
+        }
+    }
+    if (!ret) {
+        if (write(fd, "\n", 1) < 0) {
+            CMD_PRINT("%s\n", strerror(errno));
+            ret = ERROR_IO;
+        }
+    }
+
+    if (ctx->stdout_path) {
+        if (close(fd) < 0) {
+            CMD_PRINT("%s: %s\n", ctx->stdout_path, strerror(errno));
+            ret = ERROR_IO;
+        }
+    }
+
+    return ret;
 }
