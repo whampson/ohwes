@@ -98,7 +98,7 @@ DEFINE_SYSCALL(open, const char *name, int oflag)
     }
 
     ret = fd;
-    task->files[fd] = file;
+    task->files[fd] = file; // TODO: need system global list of in-use file descriptors
 
 done:
     restore_flags(cli_flags);

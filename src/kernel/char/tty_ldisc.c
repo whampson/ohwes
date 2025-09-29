@@ -33,15 +33,15 @@
 //
 static int n_tty_open(struct tty *);
 static void n_tty_close(struct tty *);
-static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count);
-static ssize_t n_tty_write(struct tty *, const char *buf, size_t count);
-static int n_tty_ioctl(struct tty *, int op, void *arg);
+static ssize_t n_tty_read(struct tty *tty, struct file *, char *buf, size_t count);
+static ssize_t n_tty_write(struct tty *, struct file *, const char *buf, size_t count);
+static int n_tty_ioctl(struct tty *, struct file *, int op, void *arg);
 static void n_tty_recv(struct tty *, char *buf, size_t count);
 static size_t n_tty_recv_room(struct tty *);
 static void n_tty_clear(struct tty *tty);
 
 static struct tty_ldisc n_tty = {
-    .disc = N_TTY,
+    .ldisc_num = N_TTY,
     .name = "n_tty",
     .open = n_tty_open,
     .close = n_tty_close,
@@ -102,7 +102,7 @@ void n_tty_clear(struct tty *tty)
     ring_clear(&ldisc_data->rx_ring);
 }
 
-static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
+static ssize_t n_tty_read(struct tty *tty, struct file *file, char *buf, size_t count)
 {
     struct n_tty_ldisc_data *ldisc_data;
     uint32_t flags;
@@ -110,7 +110,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
     char *ptr;
     int ret;
 
-    if (!tty || !buf) {
+    if (!tty || !file || !buf) {
         return -EINVAL;
     }
     if (!tty->ldisc_data) {
@@ -125,10 +125,10 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
     while (count > 0) {
         nremain = ring_count(&ldisc_data->rx_ring);
         if (!nremain) {
-            if (tty_hung_up(tty)) {
+            if (tty_hung_up(file)) {
                 break;  // that was rude! nothing left to receive
             }
-            if (tty->file->f_oflag & O_NONBLOCK) {
+            if (file->f_oflag & O_NONBLOCK) {
                 if ((ptr - buf) == 0) {
                     ret = -EAGAIN;  // operation would block
                     break;
@@ -157,12 +157,12 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t count)
     return (ret < 0) ? ret : ptr - buf;
 }
 
-static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t count)
+static ssize_t n_tty_write(struct tty *tty, struct file *file, const char *buf, size_t count)
 {
     ssize_t ret;
     const char *ptr;
 
-    if (!tty || !buf) {
+    if (!tty || !file || !buf) {
         return -EINVAL;
     }
     if (!tty->driver.write) {
@@ -173,7 +173,7 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t count)
 
     ptr = buf; ret = 0;
     while (count > 0) {
-        if (tty_hung_up(tty)) {
+        if (tty_hung_up(file)) {
             ret = -EIO;
             goto skip_flush;
         }
@@ -204,7 +204,7 @@ skip_flush:
     return (ret >= 0) ? ptr - buf : ret;
 }
 
-static int n_tty_ioctl(struct tty *tty, int op, void *arg)
+static int n_tty_ioctl(struct tty *tty, struct file *file, int op, void *arg)
 {
     // TODO
     return -ENOTTY;

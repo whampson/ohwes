@@ -51,6 +51,10 @@ static void pos2xy(struct terminal *term, uint16_t pos);
 // ----------------------------------------------------------------------------
 // TTY device implementation
 
+static int terminal_driver_refcount;
+static struct tty *terminal_ttys[NR_TERMINAL];
+static struct termios *terminal_termios[NR_TERMINAL];
+
 static int terminal_tty_open(struct tty *);
 static void terminal_tty_close(struct tty *);
 static int terminal_tty_ioctl(struct tty *, int op, void *arg);
@@ -59,16 +63,26 @@ static void terminal_tty_write_char(struct tty *, char c);
 static size_t terminal_tty_write_room(struct tty *);
 
 static struct tty_driver terminal_driver = {
-    .name = "tty",
     .major = TTY_MAJOR,
     .minor_start = TTY_MIN,
-    .count = NR_TERMINAL,
+    .device_count = NR_TERMINAL,
+    .name = "tty",
+    .refcount = &terminal_driver_refcount,
+    .tty_table = terminal_ttys,
+    .termios = terminal_termios,
+    .default_termios = TTY_STD_TERMIOS,
     .open = terminal_tty_open,
     .close = terminal_tty_close,
     .ioctl = terminal_tty_ioctl,
     .write = terminal_tty_write,
     ./* in the */write_room/* with black curtains*/ = terminal_tty_write_room,
     .flush = NULL,
+    .clear = NULL,
+    .unthrottle = NULL,
+    .throttle = NULL,
+    .stop= NULL,
+    .start = NULL,
+    .hangup = NULL,
 };
 
 static int tty_get_terminal(struct tty *tty, struct terminal **term)
@@ -100,10 +114,14 @@ static int terminal_tty_open(struct tty *tty)
     }
 
     if (term->tty) {
-        return -EBUSY;  // TODO: return 0?
+        goto open_done;
     }
 
     term->tty = tty;
+    // TODO: other open operations
+
+open_done:
+    term->refcount++;
     return 0;
 }
 
@@ -111,8 +129,23 @@ static void terminal_tty_close(struct tty *tty)
 {
     struct terminal *term;
 
-    (void) tty_get_terminal(tty, &term);
+    int ret = tty_get_terminal(tty, &term);
+    if (ret < 0) {
+        return;
+    }
+
+    if (--term->refcount < 0) {
+        term->refcount = 0;
+    }
+    if (term->refcount) {
+        goto close_done;
+    }
+
     term->tty = NULL;
+    // TODO: other shutdown operations
+
+close_done:
+    return;
 }
 
 static int terminal_tty_write(struct tty *tty, const char *buf, size_t count)
@@ -394,7 +427,7 @@ void terminal_defaults(struct terminal *term)
     save_terminal(term);
 }
 
-extern int tty_open_internal(struct tty *tty);
+extern int tty_startup(dev_t device, struct tty **out_tty);
 
 int switch_terminal(int num)
 {
@@ -402,20 +435,16 @@ int switch_terminal(int num)
         return -EINVAL;
     }
 
-    pde_t *pgdir;
-
     uint32_t flags;
     cli_save(flags);
 
+    pde_t *pgdir;
     struct vga_fb_info fb_info;
     struct terminal *curr = get_terminal(0);
     struct terminal *next = get_terminal(num);
     struct tty *tty = NULL;
 
-    if (get_tty(__mkdev(TTY_MAJOR, num), &tty)) {
-        panic("tty%d not found", num);
-    }
-    if (tty_open_internal(tty)) {
+    if (tty_startup(__mkttydev(num), &tty)) {
         panic("could not switch terminals -- unable to open tty%d", num);
     }
 

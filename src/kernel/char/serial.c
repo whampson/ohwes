@@ -69,6 +69,10 @@ struct com g_com[NR_SERIAL];
 // "serial" prefix refers to TTY functions
 // "com" prefix refers to UART functions
 
+static int serial_driver_refcount;
+static struct tty *serial_ttys[NR_SERIAL];
+static struct termios *serial_termios[NR_SERIAL];
+
 static int serial_open(struct tty *);
 static void serial_close(struct tty *);
 static int serial_ioctl(struct tty *tty, int op, void *arg);
@@ -82,11 +86,15 @@ static void serial_start(struct tty *);
 static void serial_stop(struct tty *);
 static void serial_hangup(struct tty *);
 
-struct tty_driver serial_driver = {
-    .name = "ttyS",
+static struct tty_driver serial_driver = {
     .major = TTY_MAJOR,
     .minor_start = TTYS_MIN,
-    .count = NR_SERIAL,
+    .device_count = NR_SERIAL,
+    .name = "ttyS",
+    .refcount = &serial_driver_refcount,
+    .tty_table = serial_ttys,
+    .termios = serial_termios,
+    .default_termios = TTY_STD_TERMIOS,
     .open = serial_open,
     .close = serial_close,
     .ioctl = serial_ioctl,
@@ -372,20 +380,20 @@ static int serial_open(struct tty *tty)
     struct com *com;
     int ret;
 
-    ret = tty_get_com(tty, &com);
+    ret = tty_get_com(tty, &com);   // TODO: sanity check
     if (ret < 0) {
         return ret;
     }
 
-    if (com->reserved) {
-        return -EBUSY;  // port reserved by another driver (e.g. serial debug interface)
-    }
     if (!com->valid) {
         return -EIO;    // port does not exist
     }
-    if (com->open) {
+    if (com->open) {    // TODO: refcount instead of 'busy'
         assert(com->tty);
         return -EBUSY;  // COM already open      TODO: is this correct behavior?
+    }
+    if (com->reserved) {
+        return -EBUSY;  // port reserved by another driver (e.g. serial debug interface)
     }
 
     cli_save(flags);
@@ -462,8 +470,15 @@ static void serial_close(struct tty *tty)
 {
     uint32_t flags;
     struct com *com;
+    int ret;
 
-    (void) tty_get_com(tty, &com);
+    // TODO: need a refcount
+
+    ret = tty_get_com(tty, &com);
+    if (ret < 0 || !com->open) {
+        return;
+    }
+
     cli_save(flags);
 
     // flush transmit buffer
@@ -760,10 +775,10 @@ static void shutdown(struct com *com)
     set_fifo(com, false, 0);
 
     // read regs to clear/reset things
-    (void) com_in(com, UART_RX);
-    (void) com_in(com, UART_LSR);
-    (void) com_in(com, UART_MSR);
     (void) com_in(com, UART_IIR);
+    (void) com_in(com, UART_MSR);
+    (void) com_in(com, UART_LSR);
+    (void) com_in(com, UART_RX);
 }
 
 static void shadow_regs(struct com *com)
@@ -870,7 +885,10 @@ static int get_modem_info(struct com *com, int *user_info)
            |  ((sts & UART_MSR_RI)   ? TIOCM_RI   : 0)
            |  ((sts & UART_MSR_DSR)  ? TIOCM_DSR  : 0);
 
-    return copy_to_user(user_info, &result, sizeof(int));
+    if (!copy_to_user(user_info, &result, sizeof(int))) {
+        return -EFAULT;
+    }
+    return 0;
 }
 
 static int set_modem_info(struct com *com, const int *user_info)
@@ -904,7 +922,10 @@ static int get_modem_stats(struct com *com, struct serial_stats *user_stats)
     stats = com->stats;
     restore_flags(flags);
 
-    return copy_to_user(user_stats, &stats, sizeof(struct serial_stats));
+    if (!copy_to_user(user_stats, &stats, sizeof(struct serial_stats))) {
+        return -EFAULT;
+    }
+    return 0;
 }
 
 static void tx_enable(struct com *com)

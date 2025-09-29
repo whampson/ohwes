@@ -67,6 +67,7 @@ struct terminal {
     bool printing;                      // terminal is currently printing
 
     struct tty *tty;
+    int refcount;
 
     uint16_t cols, rows;                // screen dimensions
     void *framebuf;                     // frame buffer

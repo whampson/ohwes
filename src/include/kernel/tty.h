@@ -39,43 +39,49 @@
 #define TTY_BUFFER_SIZE         1024
 #define TTY_THROTTLE_THRESH     128
 
-// TTY device minor numbers
-#define TTY_MIN                 1
-#define TTY_MAX                 NR_TERMINAL
-#define TTYS_MIN                (TTY_MAX+1)
-#define TTYS_MAX                (TTYS_MIN+NR_SERIAL)
+#define TTY_MIN                 1                   // TTY min minor ID
+#define TTY_MAX                 NR_TERMINAL         // TTY max minor ID
+#define TTYS_MIN                (TTY_MAX+1)         // serial TTY min minor ID
+#define TTYS_MAX                (TTYS_MIN+NR_SERIAL)// serial TTY max minor ID
+
+#define TTY_STD_TERMIOS {       \
+    .c_line = N_TTY,            \
+    .c_iflag = ICRNL | IXON,    \
+    .c_oflag = OPOST | ONLCR,   \
+    .c_lflag = ECHO | ECHOCTL,  \
+    .c_cflag = HUPCL,           \
+    .c_cc = {                   \
+        0x13, /* VSTOP  = ^X */ \
+        0x11  /* VSTART = ^S */ \
+    }                           \
+}
 
 #define __mkttydev(num)         __mkdev(TTY_MAJOR, TTY_MIN+(num)-1)
 #define __mkserdev(num)         __mkdev(TTY_MAJOR, TTYS_MIN+(num)-1)
 
-// handy macros for working with termios flags
-#define _I_FLAG(tty,f)          ((tty)->termios.c_iflag & (f))
-#define _O_FLAG(tty,f)          ((tty)->termios.c_oflag & (f))
-#define _C_FLAG(tty,f)          ((tty)->termios.c_cflag & (f))
-#define _L_FLAG(tty,f)          ((tty)->termios.c_lflag & (f))
+#define _I_FLAG(tty,f)          ((tty)->termios->c_iflag & (f))
+#define _O_FLAG(tty,f)          ((tty)->termios->c_oflag & (f))
+#define _C_FLAG(tty,f)          ((tty)->termios->c_cflag & (f))
+#define _L_FLAG(tty,f)          ((tty)->termios->c_lflag & (f))
 
-// termios input flag macros
+#define CC_STOP(tty)            ((tty)->termios->c_cc[VSTOP])
+#define CC_START(tty)           ((tty)->termios->c_cc[VSTART])
+
 #define I_ICRNL(tty)            _I_FLAG(tty, ICRNL)
 #define I_INLCR(tty)            _I_FLAG(tty, INLCR)
 #define I_IGNCR(tty)            _I_FLAG(tty, IGNCR)
 #define I_IXON(tty)             _I_FLAG(tty, IXON)
 #define I_IXOFF(tty)            _I_FLAG(tty, IXOFF)
 
-// termios output flag macros
 #define O_OPOST(tty)            _O_FLAG(tty, OPOST)
 #define O_ONLCR(tty)            _O_FLAG(tty, ONLCR)
 #define O_OCRNL(tty)            _O_FLAG(tty, OCRNL)
 
-// termios control flag macros
 #define C_CRTSCTS(tty)          _C_FLAG(tty, CRTSCTS)
 #define C_HUPCL(tty)            _C_FLAG(tty, CRTSCTS)
 
-// termios local flag macros
 #define L_ECHO(tty)             _L_FLAG(tty, ECHO)
 #define L_ECHOCTL(tty)          _L_FLAG(tty, ECHOCTL)
-
-#define CC_STOP(tty)            ((tty)->termios.c_cc[VSTOP])
-#define CC_START(tty)           ((tty)->termios.c_cc[VSTART])
 
 struct tty;
 
@@ -86,18 +92,19 @@ struct tty;
 // character device.
 //
 struct tty_ldisc {
-    int disc;           // line discipline number (N_TTY, etc.)
-    const char *name;   // line discipline name
+    const char *name;                   // line disc. name
+    int ldisc_num;                      // line disc. identifier (N_TTY, etc.)
 
     // called from above (system)
     int     (*open)(struct tty *);      // open line disc.
     void    (*close)(struct tty *);     // close line disc.
     ssize_t (*read)(struct tty *,       // read buffered chars from line disc.
-                /*struct file *,*/ char *buf, size_t count);
+                struct file *, char *buf, size_t count);
     ssize_t (*write)(struct tty *,      // write chars to line disc.
-                /*struct file *,*/ const char *buf, size_t count);
+                struct file *, const char *buf, size_t count);
     int     (*ioctl)(struct tty *,      // device I/O control functions
-                /*struct file *,*/ int op, void *arg);
+                struct file *, int op, void *arg);
+    // ssize_t (*count)(struct tty *);     // get number of avail. chars in buffer
     void    (*clear)(struct tty *);     // clear line disc. input buffer
 
     // called from below (interrupt)
@@ -106,17 +113,28 @@ struct tty_ldisc {
     size_t  (*recv_room)(struct tty *); // get input buffer available size
 };
 
+// system line discipline table
+extern struct tty_ldisc ldiscs[NR_LDISC];
+
 //
 // TTY Driver
 //
 // This is the low level character device driver.
 //
 struct tty_driver {
+    uint32_t magic;                     // tty_driver magic number
     uint16_t major;                     // major device number
     uint16_t minor_start;               // initial minor device number
-    int count;                          // max num devices
+    int device_count;                   // max num instances
     const char *name;                   // device name
-    struct list_node driver_list;       // linked list node data
+    struct list_node list;              // node in system driver list
+
+    int flags;                          // driver flags
+    int *refcount;                      // driver instance count
+
+    struct tty **tty_table;             // per-instance TTY pointers
+    struct termios **termios;           // per-instance termios
+    struct termios default_termios;     // default termios
 
     // interface functions
     int     (*open)(struct tty *);      // open TTY device
@@ -142,33 +160,29 @@ struct tty_driver {
 // job or session).
 //
 struct tty {
-    dev_t device;                   // device major/minor numbers
-    bool open;                      // is the TTY device currently open?
+    uint32_t magic;                 // tty magic number
+    dev_t device;                   // device ID
+    int refcount;                   // reference count
+
     bool throttled;                 // is the receiver channel throttled?
     bool stopped;                   // is transmitter channel stopped? (XON/XOFF)
     bool hw_stopped;                // is transmitter stopped? (CTS/RTS)
-    int line;                       // device line number
 
-    struct file *file;              // connected file description
-
-    struct tty_ldisc ldisc;         // line discipline
+    struct termios *termios;        // input/output behavior
     struct tty_driver driver;       // low-level device driver
-    struct termios termios;         // input/output behavior
+    struct tty_ldisc ldisc;         // line discipline
 
-    // private per-instance data
-    void *ldisc_data;
+    void *ldisc_data;               // N_TTY data
 };
 
 int tty_register_driver(struct tty_driver *driver);
 int tty_register_ldisc(int ldsic_num, struct tty_ldisc *ldisc);
 
-int get_tty(dev_t device, struct tty **tty);
-
-int tty_putchar(struct tty *tty, char c);
+// int tty_putchar(struct tty *tty, char c);
 
 void tty_flush(struct tty *tty);
 
 void tty_hangup(struct tty *tty);
-int tty_hung_up(struct tty *tty);
+int tty_hung_up(struct file *file);
 
 #endif // __TTY_H
