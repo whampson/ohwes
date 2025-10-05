@@ -60,6 +60,7 @@ struct shell_context {
 
 static int cat(int argc, char *argv[]);
 static int echo(struct shell_context *ctx);
+static int cereal(int argc, char *argv[]);
 
 static int parse_command(struct shell_context *ctx, char *line, size_t len);
 
@@ -172,6 +173,9 @@ static int parse_command(struct shell_context *ctx, char *line, size_t len)
     }
     else if (strcmp("cat", cmd) == 0) {
         ret = cat(ctx->argc, ctx->argv);
+    }
+    else if (strcmp("cereal", cmd) == 0) {
+        ret = cereal(ctx->argc, ctx->argv);
     }
     else {
         printf("error: unknown command '%.*s'\n", len, cmd);
@@ -286,5 +290,67 @@ static int echo(struct shell_context *ctx)
         }
     }
 
+    return ret;
+}
+
+static int cereal(int argc, char *argv[])
+{
+    int ret;
+    int fd;
+    int status;
+    char buf[BUFSIZ];
+
+    assert(strcmp("cereal", argv[0]) == 0);
+
+    if (argc < 2) {
+        CMD_PRINT("missing argument\n");
+        return ERROR_ARG;
+    }
+    argv++;
+
+    fd = open(*argv, O_RDWR | O_NONBLOCK);
+    if (fd < 0) {
+        CMD_PRINT("%s: %s\n", *argv, strerror(errno));
+        return ERROR_IO;
+    }
+
+    ret = ioctl(fd, TIOCMGET, &status);
+    if (ret || !(status & TIOCM_CAR)) {
+        CMD_PRINT("%s: No device attached\n", *argv);
+        ret = ERROR_IO;
+        goto close_out;
+    }
+
+    ret = 0;
+    do {
+        // read serial TTY, nonblocking
+        ret = read(fd, buf, sizeof(buf));
+        if (ret < 0 && errno != EAGAIN) {
+            CMD_PRINT("%s: read(TTY): %s\n", *argv, strerror(errno));
+            ret = ERROR_IO;
+            break;
+        }
+
+        // write received chars from serial TTY to stdout
+        if (ret > 0) {
+            write(STDOUT_FILENO, buf, ret);
+        }
+
+        // read stdin, nonblocking
+        ret = read(STDIN_FILENO, buf, sizeof(buf));
+        if (ret < 0 && errno != EAGAIN) {
+            CMD_PRINT("%s: read(0): %s\n", *argv, strerror(errno));
+            ret = ERROR_IO;
+            break;
+        }
+
+        // write received chars from stdin to serial TTY
+        if (ret > 0) {
+            write(fd, buf, ret);
+        }
+    } while (*buf != 3);   // quit if CTRL+C pressed        TODO: handle SIGINT/SIGHUP
+
+close_out:
+    close(fd);
     return ret;
 }
