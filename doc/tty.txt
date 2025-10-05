@@ -76,10 +76,10 @@ referring to how input buffering and control characters are handled. Other line
 disciplines exist for SLIP and PPP protocols, which have different buffering
 schemes.
 
-b) Interface
----------------
+b) Line Discipline Interface
+----------------------------
 
-int  (*open)(struct tty *);
+int (*open)(struct tty *);
 
     Called when the line discipline is associated with a TTY. May be used to
     initialize any line discipline state. Returns 0 upon success, or a negative
@@ -95,12 +95,7 @@ void (*clear)(struct tty *);
     Called when the user requests to clear the input buffer. All characters in
     the buffer will be erased.
 
-int  (*count)(struct tty *);
-
-    Called when the user requests to know the number of characters currently in
-    the input buffer.
-
-int  (*read)(struct tty *, char *buf, size_t count);
+ssize_t (*read)(struct tty *, char *buf, size_t count);
 
     Called when the user requests to read characters from the TTY. Will copy
     whatever characters are present in the line discipline's input buffer to the
@@ -108,7 +103,7 @@ int  (*read)(struct tty *, char *buf, size_t count);
     of all characters copied. Returns the number of characters read, or a
     negative value if an error occurred.
 
-int  (*write)(struct tty *, const char *buf, size_t count);
+ssize_t (*write)(struct tty *, const char *buf, size_t count);
 
     Called when the user requests to write characters to the TTY. Will transmit
     characters in the user-supplied buffer, bounded by the count parameter, to
@@ -117,9 +112,19 @@ int  (*write)(struct tty *, const char *buf, size_t count);
     output buffering. Returns the number of characters sent to the device, or a
     negative value if an error occurred.
 
+ssize_t (*count)(struct tty *);
+
+    Called when the user requests to know the number of characters currently in
+    the input buffer.
+
+void (*clear)(struct tty *);
+
+    Called when the user requests to reset the contents of the input buffer.
+
 int  (*ioctl)(struct tty *, int op, void *arg);
 
-    Called when the user requests an ioctl on the line discipline.
+    Called when the user requests a device-specific operation on the line
+    discipline.
 
 void (*recv)(struct tty *, char *buf, size_t count);
 
@@ -159,3 +164,26 @@ write() pipeline:
         driver write routine (serial_write or terminal_tty_write)
     terminal_tty_write(tty, buf, count):
       * writes characters from the TTY to the terminal
+
+
+--------------------------------------------------------------------------------
+3) TTY Driver Interface
+--------------------------------------------------------------------------------
+DRAFT                                                                  (9/27/25)
+
+    Device driver is registered via tty_register_driver (register_tty_driver?)
+and added to a system-wide table of drivers, indexed by device major ID (one
+driver per device). Driver 'registrar' is to provide memory for tracking per-
+instance driver data. There may be as many driver instances as there are valid
+device minor IDs; each driver instance shall be indexed by its device minor ID.
+    When a TTY device driver is instantiated (opened) by a requesting TTY, the
+driver object and line discipline are copied from their respective system tables
+into the TTY structure. The number of instantiations shall be tracked by a
+reference counter (provided by the registrar). The TTY then calls open() on both
+the line discipline and the driver.
+    TTYs may open a device multiple times, so we must maintain a singleton
+pointer to the driver instance. A table shall be provided by the registrar to
+maintain these pointers, indexed by the driver minor ID. A parallel scheme shall
+be used to keep track of termios.
+    TTYs shall maintain a pointer to the current termios, as termios controls
+line discipline behavior; termios shall persist between calls to open/close.
