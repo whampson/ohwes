@@ -197,7 +197,13 @@ int _vkprint(const char *fmt, va_list args)
     size_t count;
     char buf[KPRINT_MAX+1] = { };
 
+    uint64_t us = get_uptime();
+    uint64_t sec = us / 1000000;
+    uint64_t micros = us % 1000000;
+
     count = vsnprintf(buf, KPRINT_MAX, fmt, args);
+    count = snprintf(buf, KPRINT_MAX, "[%4llu.%06llu] ", sec, micros);
+    count += vsnprintf(buf+count-1, KPRINT_MAX-count, fmt, args);
     return console_write(buf, count);
 }
 

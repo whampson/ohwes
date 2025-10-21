@@ -60,6 +60,9 @@ extern __noreturn void panic(const char *fmt, ...);
 //  interrupts must be ON or it will beep/block forever!
 extern void beep(int hz, int ms, bool block);
 
+// get the amount of time the system has been up and running, in microseconds
+extern uint64_t get_uptime(void);
+
 // print alert message and beep, then continue;
 //  interrupts must be ON or this will beep forever!
 #define alert(...) \

@@ -75,6 +75,13 @@ __fastcall void kmain(struct boot_info **info)
 {
     boot_info = *info;  // copy boot info into kernel memory
 
+    // __sti();    // TODO: this might cause problems... but we should make sure it doesn't
+
+    // TODO: initial \n print...
+    //  maybe impl this via a constructor on the console object, when registered?
+
+    // TODO: kernel stack overflow crashes without indication!?
+
     kprint("\n\e[0;1m%s %s\n", OS_NAME, OS_VERSION);
     kprint("%s\n", OS_COPYRIGHT);
     kprint("Compiled on %s at %s using GCC %s\e[0m\n\n",
