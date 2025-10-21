@@ -27,6 +27,7 @@
 #ifndef __ASSEMBLER__
 
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stddef.h>
 #include <string.h>
@@ -65,26 +66,6 @@
 //
 // Math
 //
-
-#define swap(a,b)                       \
-do {                                    \
-    (a) ^= (b);                         \
-    (b) ^= (a);                         \
-    (a) ^= (b);                         \
-} while(0)
-
-#define div_round(n,d)                  (((n)<0)==((d)<0)?(((n)+(d)/2)/(d)):(((n)-(d)/2)/(d)))
-#define div_ceil(n,d)                   (((n)+(d)-1)/(d))
-
-#define min(a,b) ({ \
-    __typeof__(a) __a = (a); \
-    __typeof__(a) __b = (b); \
-    __a < __b ? __a : __b; })
-
-#define max(a,b) ({ \
-    __typeof__(a) __a = (a); \
-    __typeof__(a) __b = (b); \
-    __a > __b ? __a : __b; })
 
 #endif // __ASSEMBLER__
 
