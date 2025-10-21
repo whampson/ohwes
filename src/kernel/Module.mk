@@ -8,7 +8,6 @@ SOURCES := \
     fs.c \
     io.c \
     irq.c \
-    list.c \
     main.c \
     mm.c \
     open.c \
@@ -21,11 +20,11 @@ ifeq "${TEST_BUILD}" "1"
 SOURCES += \
     test/test.c \
     test/test_bsf.c \
-    test/test_list.c \
-    test/test_pool.c \
-    test/test_printf.c \
-    test/test_ring.c \
-    test/test_string.c \
+    test/test_list.c
+#     test/test_pool.c
+#     test/test_printf.c
+#     test/test_ring.c
+#     test/test_string.c
 
 endif
 

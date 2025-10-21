@@ -13,8 +13,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/include/kernel/list.h
- *      Created: November 20, 2024
+ *         File: include/list.h
+ *      Created: October 20, 2025
  *       Author: Wes Hampson
  *
  * Doubly-linked circular list implementation. Very similar to Linux's
@@ -26,7 +26,6 @@
 #ifndef __LIST_H
 #define __LIST_H
 
-#include <stddef.h>
 #include <stdbool.h>
 
 /**
@@ -40,12 +39,22 @@ struct list_node {
 typedef struct list_node list_t;
 
 /**
+ * Empty list initializer. Initializes a list head by setting it's previous and
+ * next pointers to itself, creating an empty list.
+ *
+ * Usage:
+ *  list_t list = LIST_INITIALIZER(list);
+ */
+#define LIST_INITIALIZER(list)  { &(list), &(list) }
+
+/**
  * Empty list initializer.
  *
  * Usage:
- *  list_t *list = LIST_INITIALIZER(list);
+ *  list_t list_head;
+ *  list_init(&list_head);
  */
-#define LIST_INITIALIZER(list)  { &(list), &(list) }
+#define list_init(head) { (head)->prev = (head); (head)->next = (head); }
 
 /**
  * List node traversal for-loop iterator.
@@ -79,29 +88,54 @@ typedef struct list_node list_t;
     ((type *) (((char *) (node)) - offsetof(type, member)))
 
 /**
- * Initializes a list head by setting it's previous and next pointers to
- * itself, creating an empty list.
+ * Push an item into the front of the list.
  */
-void list_init(struct list_node *head);
+static inline void list_add(struct list_node *head, struct list_node *item)
+{
+    struct list_node *prev = head;
+    struct list_node *next = head->next;
+
+    item->prev = prev;
+    prev->next = item;
+    item->next = next;
+    next->prev = item;
+}
 
 /**
- * Returns 'true' if the specified list is empty.
+ * Push an item into the end of the list.
  */
-bool list_empty(struct list_node *head);
+static inline void list_add_tail(struct list_node *head, struct list_node *item)
+{
+    // the end of the list points to the head,
+    // so confusingly we insert before the list head
+    struct list_node *prev = head->prev;
+    struct list_node *next = head;
 
-/**
- * Add an item to the list before the specified list head.
- */
-void list_add(struct list_node *head, struct list_node *item);
-
-/**
- * Add an item to the list after the specified list head.
- */
-void list_add_tail(struct list_node *head, struct list_node *item);
+    item->prev = prev;
+    prev->next = item;
+    item->next = next;
+    next->prev = item;
+}
 
 /**
  * Remove an item from its own list.
  */
-void list_remove(struct list_node *item);
+static inline void list_remove(struct list_node *item)
+{
+    struct list_node *prev = item->prev;
+    struct list_node *next = item->next;
+
+    next->prev = prev;  // Breakin' the chains around me
+    prev->next = next;  // Nobody else can bind me
+    list_init(item);    // Take a good look around me
+}                       // Now I'm breakin' the chains!
+
+/**
+ * Check whether a list has neighbors.
+ */
+static inline bool list_empty(struct list_node *head)
+{
+    return head->next == head;
+}
 
 #endif // __LIST_H

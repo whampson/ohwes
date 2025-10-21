@@ -24,7 +24,7 @@
 #include <kernel/config.h>
 #include <kernel/kernel.h>
 #include <kernel/fs.h>
-#include <kernel/list.h>
+#include <list.h>
 #include <kernel/pool.h>
 #include <kernel/ohwes.h>
 

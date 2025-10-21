@@ -29,7 +29,7 @@
 #include <i386/cpu.h>
 #include <i386/paging.h>
 #include <kernel/config.h>
-#include <kernel/list.h>
+#include <list.h>
 #include <kernel/mm.h>
 #include <kernel/ohwes.h>
 #include <kernel/pool.h>

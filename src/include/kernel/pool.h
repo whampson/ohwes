@@ -24,7 +24,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <kernel/list.h>
+#include <list.h>
 
 #define POOL_MAGIC      'lwep'
 #define INVALID_POOL    ((pool_t *) NULL)

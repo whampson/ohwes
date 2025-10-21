@@ -22,7 +22,7 @@
 #include <errno.h>
 #include <kernel/char.h>
 #include <kernel/kernel.h>
-#include <kernel/list.h>
+#include <list.h>
 #include <kernel/ohwes.h>
 #include <kernel/pool.h>
 

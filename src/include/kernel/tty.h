@@ -31,7 +31,7 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <kernel/device.h>
-#include <kernel/list.h>
+#include <list.h>
 #include <kernel/termios.h>
 
 #define NR_TTY                  (1+NR_TERMINAL+NR_SERIAL)    // +1 for tty0
