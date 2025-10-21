@@ -34,7 +34,8 @@
 
 #define NR_ARGV         64
 #define LINE_LENGTH     64
-#define ARG_LENGTH      1024
+#define ARG_LENGTH      LINE_LENGTH
+#define HISTORY_SIZE    32
 #define PROMPT_CHAR     '#'
 #define BUFSIZ          512
 
@@ -56,6 +57,9 @@ struct shell_context {
     int argc;
     char *argv[NR_ARGV];
     char *stdout_path;
+    char history[LINE_LENGTH][HISTORY_SIZE];
+    int history_index;
+    int history_ptr;
 };
 
 static int cat(int argc, char *argv[]);
@@ -79,15 +83,21 @@ int shell(void)
     char line[LINE_LENGTH];
     char c;
     int ret;
+    bool esc, csi;
 
     struct shell_context _ctx = { };
     struct shell_context *ctx = &_ctx;
+    esc = false; csi = false;
 
     do {
         putchar(PROMPT_CHAR);
         do {
+        next_char:
             SYS_CHECK(read(STDIN_FILENO, &c, 1) < 0);
             switch (c) {
+            case '\e':
+                esc = true;
+                goto next_char;
             case '\b': case 0x7F:   // TODO: ^H vs ^? distinction
                 if (len > 0) {      // I'm surprised there isn't a standard termios flag for this...
                     if (iscntrl(line[len-1])) {
@@ -103,6 +113,37 @@ int shell(void)
                 continue;
             default:
                 break;
+            }
+
+            if (esc) {
+                if (!csi && c == '[') {
+                    csi = true;
+                    goto next_char;
+                }
+                if (csi && (c == 'A' || c == 'B')) {
+                    if (c == 'A') {
+                        ctx->history_ptr -= 1;
+                        if (ctx->history_ptr < 0) {
+                            ctx->history_ptr = HISTORY_SIZE - 1;
+                        }
+                    }
+                    else {
+                        ctx->history_ptr += 1;
+                        if (ctx->history_ptr >= HISTORY_SIZE) {
+                            ctx->history_ptr = 0;
+                        }
+                    }
+                    strncpy(line, ctx->history[ctx->history_ptr], LINE_LENGTH);
+                    len = strnlen(line, LINE_LENGTH);
+                    printf("\r\e[2K%c%.*s", PROMPT_CHAR, len, line);
+                }
+                else {
+                    printf("^[");
+                }
+            // esc_done:
+                esc = false;
+                csi = false;
+                continue;
             }
 
             if (c == '\n' || len <= LINE_LENGTH - 2) {
@@ -142,6 +183,11 @@ static int parse_command(struct shell_context *ctx, char *line, size_t len)
     ctx->stdout_path = NULL;
     bool redir_stdout = false;
 
+    strncpy(ctx->history[ctx->history_index++], line, len);
+    if (ctx->history_index >= HISTORY_SIZE) {
+        ctx->history_index = 0;
+    }
+
     for (char *c = line; ctx->argc < sizeof(ctx->argv); c = NULL) {
         char *tok = strtok(c, " ");
         if (tok == NULL) {
@@ -169,23 +215,26 @@ static int parse_command(struct shell_context *ctx, char *line, size_t len)
     // TODO: spawn program using exec()
     //   pass stdout_path to new process if set
     if (strcmp("echo", cmd) == 0) {
-        ret = echo(ctx);
+        echo(ctx);
     }
     else if (strcmp("cat", cmd) == 0) {
-        ret = cat(ctx->argc, ctx->argv);
+        cat(ctx->argc, ctx->argv);
     }
     else if (strcmp("cereal", cmd) == 0) {
-        ret = cereal(ctx->argc, ctx->argv);
+        cereal(ctx->argc, ctx->argv);
     }
     else {
         printf("error: unknown command '%.*s'\n", len, cmd);
+        ret = -1;
     }
 
-    // TODO: set return value to some equivalent of ERRORLEVEL/$?
-    (void) ret;
-    // if (ret) {
-    //     printf("%s: returned %d\n", cmd, ret);
-    // }
+    if (ret) {
+        ctx->history_index--;
+        if (ctx->history_index < 0) {
+            ctx->history_index = 0;
+        }
+    }
+    ctx->history_ptr = ctx->history_index;
 
     return 0;   // "don't exit shell"
 }
