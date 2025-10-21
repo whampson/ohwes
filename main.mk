@@ -1,7 +1,7 @@
 # debug build toggle and params
 DEBUG           := 1
 DEBUGOPT        := 1
-TEST_BUILD      := 0
+TEST_BUILD      := 1
 OPT_LEVEL       := 2
 
 # default flags

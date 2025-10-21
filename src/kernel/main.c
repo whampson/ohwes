@@ -91,9 +91,10 @@ __fastcall void kmain(struct boot_info **info)
     init_fs();
     init_tty();
 
-// #if TEST_BUILD
-//     run_tests(); // TODO lol
-// #endif
+#if TEST_BUILD
+extern void run_tests(void);
+    run_tests(); // TODO lol
+#endif
 
 #if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+F# to test crash kernel
     irq_register(IRQ_TIMER, crash_key_irq);

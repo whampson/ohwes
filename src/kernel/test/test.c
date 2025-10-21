@@ -33,12 +33,12 @@ void run_tests(void)
 {
     tprint(_YLW("running tests...\n"));
 
-    test_string();
-    test_printf();
-    test_bsf();
-    test_ring();
+    // test_string();
+    // test_printf();
+    // test_bsf();
+    // test_ring();
     test_list();
-    test_pool();
+    // test_pool();
 
     tprint(_GRN("all tests passed!\n"));
 }

@@ -24,7 +24,7 @@
 #include <stdint.h>
 #include <test.h>
 #include <kernel/ohwes.h>
-#include <kernel/list.h>
+#include <list.h>
 
 struct thing {
     struct list_node node;

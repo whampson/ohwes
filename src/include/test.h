@@ -27,7 +27,7 @@
 
 #if __KERNEL__
 #include <kernel/kernel.h>
-#define tprint(...) kprint("test: " __VA_ARGS__)
+#define tprint(...) kprint("\e[0mtest: " __VA_ARGS__)
 #else
 #error "Please define test macros for user mode!"
 #endif
@@ -43,11 +43,10 @@ do {                                                                            
 
 #define _FAIL_TEST(fn,msg,...)                                                  \
 do {                                                                            \
-    tprint("\n\e[1;30m" __FILE__ ":" STRINGIFY_LITERAL(__LINE__) ":");          \
-    tprint("\n\e[1;31m*** TEST FAILED ***");                                    \
-    tprint("\n\e[1;33m" fn "(" #__VA_ARGS__ ")");                               \
-    tprint("\n\e[22;37m" msg, __VA_ARGS__);                                     \
-    tprint("\e[0m");                                                            \
+    tprint("\e[1;30m" __FILE__ ":" STRINGIFY_LITERAL(__LINE__) ":\n");          \
+    tprint("\e[1;31m*** TEST FAILED ***\n");                                    \
+    tprint("\e[1;33m" fn "(" #__VA_ARGS__ ")\n");                               \
+    tprint("\e[22;37m" msg "\e[0m\n", __VA_ARGS__);                             \
     for (;;);                                                                   \
 } while (0)
 
