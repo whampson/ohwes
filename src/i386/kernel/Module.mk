@@ -7,6 +7,6 @@ SOURCES := \
     gdbstub.c \
     pgtbl.c \
     pic.c \
+    pit.c \
     setup.S \
-    timer.c \
     x86.c \
