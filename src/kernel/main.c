@@ -75,8 +75,6 @@ __fastcall void kmain(struct boot_info **info)
 {
     boot_info = *info;  // copy boot info into kernel memory
 
-    // __sti();    // TODO: this might cause problems... but we should make sure it doesn't
-
     // TODO: initial \n print...
     //  maybe impl this via a constructor on the console object, when registered?
 

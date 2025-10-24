@@ -133,6 +133,7 @@ _ksetup_continue:
         # pass control off to the kernel
         movl            %cr3, %eax
         movl            %eax, %cr3              # flush TLB
+        sti                                     # enable interrupts (!!)
         leal            boot_info_ptr, %ecx     # get ptr to boot params ptr
         addl            $KERNEL_VA, %ecx        # adjust addr for kernel space
         lcall           $KERNEL_CS, $kmain      # far call into the kernel
