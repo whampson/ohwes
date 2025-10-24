@@ -822,7 +822,8 @@ uint8_t kb_rdport(void)
 #endif
 
     if (count >= PS2_IO_TIMEOUT) {
-        return 0;
+        data = 0;
+        goto done;
     }
 
     data = inb_delay(0x60);
@@ -839,6 +840,7 @@ uint8_t kb_rdport(void)
             break;
     }
 
+done:
     restore_flags(flags);
     return data;
 }
