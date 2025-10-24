@@ -47,7 +47,6 @@ DEFINE_SYSCALL(open, const char *name, int oflag)
 {
     int fd;
     int ret;
-    uint32_t cli_flags;
     struct task *task;
     struct file *file;
     struct inode *inode;
@@ -58,8 +57,6 @@ DEFINE_SYSCALL(open, const char *name, int oflag)
     }
 
     assert(getpl() == KERNEL_PL);
-    cli_save(cli_flags); // prevent task switch
-
     task = current_task();
 
     // find next available file descriptor slot in current task struct
@@ -101,7 +98,6 @@ DEFINE_SYSCALL(open, const char *name, int oflag)
     task->files[fd] = file; // TODO: need system global list of in-use file descriptors
 
 done:
-    restore_flags(cli_flags);
     return ret;
 }
 
