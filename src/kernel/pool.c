@@ -22,8 +22,8 @@
 #include <ctype.h>
 #include <kernel/kernel.h>
 #include <kernel/mm.h>
-#include <kernel/ohwes.h>
 #include <kernel/pool.h>
+#include <sys/ohwes.h>
 
 #define CHUNK_MAGIC     'nuhc'
 

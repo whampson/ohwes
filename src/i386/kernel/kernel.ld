@@ -19,8 +19,7 @@
 * =============================================================================
 */
 
-#include <i386/paging.h>
-#include <kernel/config.h>
+#include <_config.h>
 
 /* TERMINOLOGY:
     _base   == base physical address

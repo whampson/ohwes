@@ -25,16 +25,16 @@
 #include <i386/cpu.h>
 #include <i386/io.h>
 #include <i386/paging.h>
-#include <kernel/console.h>
 #include <kernel/kernel.h>
+#include <kernel/console.h>
 #include <kernel/fs.h>
 #include <kernel/irq.h>
 #include <kernel/mm.h>
-#include <kernel/ohwes.h>
 #include <kernel/vga.h>
 #include <kernel/serial.h>
 #include <kernel/terminal.h>
 #include <kernel/queue.h>
+#include <sys/ohwes.h>
 
 #define KPRINT_MAX          1024
 
@@ -287,15 +287,15 @@ void print_boot_info(struct boot_info *boot)
     uint32_t ebda_size = 0xA0000 - boot->ebda_base;
 
     kprint("bios-boot: %d %s, %d serial %s, %d parallel %s\n",
-        nfloppies, PLURAL2(nfloppies, "floppy", "floppies"),
-        nserial, PLURAL(nserial, "port"),
-        nparallel, PLURAL(nparallel, "port"));
+        nfloppies, PLURALIZE2(nfloppies, "floppy", "floppies"),
+        nserial, PLURALIZE(nserial, "port"),
+        nparallel, PLURALIZE(nparallel, "port"));
     kprint("bios-boot: A20 mode is %s\n",
         (boot->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
         (boot->a20_method == A20_PORT92) ? "A20_PORT92" :
         (boot->a20_method == A20_BIOS) ? "A20_BIOS" :
         "A20_NONE");
-    kprint("bios-boot: %s PS/2 mouse, %s game port\n", HASNO(mouse), HASNO(gameport));
+    kprint("bios-boot: %s PS/2 mouse, %s game port\n", A_OR_B(mouse, "has", "no"), A_OR_B(gameport, "has", "no"));
     kprint("bios-boot: video mode is %02Xh\n", boot->vga_mode & 0x7F);
     if (boot->ebda_base) kprint("bios-boot: EBDA=%08X,%Xh\n", boot->ebda_base, ebda_size);
     kprint("bios-boot: kernel uses %u bytes (%d sectors) on disk\n",

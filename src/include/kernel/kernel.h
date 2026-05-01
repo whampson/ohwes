@@ -22,7 +22,9 @@
 #ifndef __KERNEL_H
 #define __KERNEL_H
 
-#include <kernel/config.h>
+#ifndef __KERNEL__
+#error "Can't include this header outside of kernel mode!"
+#endif
 
 // x86 segment selectors (TODO: move to some x86 header)
 #define KERNEL_LDT                      0x08
@@ -33,16 +35,10 @@
 #define KERNEL_TSS                      0x30
 #define EMERG_TSS                       0x38
 
-#ifndef __KERNEL__
-#error "Kernel-only defines live here!"
-#endif
-
-#if !defined(__ASSEMBLER__) && defined(__KERNEL__)
+#ifndef __ASSEMBLER__
 
 #include <assert.h>
-#include <i386/interrupt.h>
-#include <kernel/console.h>
-#include <kernel/task.h>
+#include <sys/ohwes.h>
 
 #define ALERT_FREQ  1725
 #define ALERT_TIME   100
@@ -76,12 +72,10 @@ do { \
     kprint("\e[1;33mwarning: " __VA_ARGS__); kprint("\e[0m"); \
 } while (0)
 
-// zero memory
-#define zeromem(p,n)    memset(p, 0, n)
-
 // TODO: verify/test these!!
 #define PHYSICAL_ADDR(v)    (((uintptr_t) (v) >= KERNEL_VA) ? ((uintptr_t) (v) - KERNEL_VA) : (uintptr_t) (v))
 #define KERNEL_ADDR(p)      (((uintptr_t) (p) >= -KERNEL_VA)  ? (uintptr_t) (p) : ((uintptr_t) (p) + KERNEL_VA))
 
-#endif  // !defined(__ASSEMBLER__) && defined(__KERNEL__)
+#endif  // ndef __ASSEMBLER__
+
 #endif  // __KERNEL_H

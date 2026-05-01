@@ -32,7 +32,7 @@
 #include <i386/pic.h>
 #include <i386/x86.h>
 #include <kernel/irq.h>
-#include <kernel/ohwes.h>
+#include <sys/ohwes.h>
 
 //
 // reference intervals

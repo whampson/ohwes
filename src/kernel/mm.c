@@ -24,15 +24,16 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <stdio.h>
 #include <i386/bitops.h>
 #include <i386/boot.h>
 #include <i386/cpu.h>
 #include <i386/paging.h>
-#include <kernel/config.h>
+#include <kernel/kernel.h>
 #include <kernel/list.h>
 #include <kernel/mm.h>
-#include <kernel/ohwes.h>
 #include <kernel/pool.h>
+#include <sys/ohwes.h>
 
 // struct free_page {
 //     struct free_page *next;
@@ -237,7 +238,7 @@ static void init_zones(void)
             zone->bitmap_size = num_bits;
         }
     }
-    assert(aligned(total_num_bits, 32));
+    assert(isaligned(total_num_bits, 32));
 
     // now we know the size of the bitmap, initialize it!
     size_t bitmap_size_pages = PAGE_ALIGN(div_ceil(total_num_bits, 8)) >> PAGE_SHIFT;
@@ -346,7 +347,7 @@ void free_pages(void *addr, int order)
     if (phys_addr < zone->mem_start || phys_addr + order_size > zone->mem_end + 1) {
         return;
     }
-    if (!aligned(phys_addr, order_size)) {
+    if (!isaligned(phys_addr, order_size)) {
         return;
     }
 

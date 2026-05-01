@@ -28,7 +28,6 @@
 #include <kernel/kernel.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
-#include <kernel/ohwes.h>
 #include <kernel/rtc.h>
 #include <kernel/fs.h>
 
@@ -290,6 +289,9 @@ static void get_time(struct rtc_time *time, bool alarm)
 
     // zero time struct
     zeromem(time, sizeof(struct rtc_time));
+
+// spin while cond == true, !!!!! TODO: KERNEL TIMER
+#define spin(cond)  while (cond) { }
 
     // spin until update-in-progress bit goes low
     spin(rd_a() & REG_A_UIP);       // TODO: TIMEOUT!!!! don't deadlock the kernel ;)

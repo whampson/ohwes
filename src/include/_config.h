@@ -13,7 +13,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/include/kernel/config.h
+ *         File: src/include/_config.h
  *      Created: July 24, 2024
  *       Author: Wes Hampson
  * =============================================================================

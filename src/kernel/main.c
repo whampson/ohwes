@@ -34,13 +34,11 @@
 #include <i386/ps2.h>
 #include <i386/syscall.h>
 #include <i386/x86.h>
-#include <kernel/config.h>
+#include <kernel/kernel.h>
 #include <kernel/io.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
-#include <kernel/kernel.h>
 #include <kernel/mm.h>
-#include <kernel/ohwes.h>
 #include <kernel/pool.h>
 #include <kernel/serial.h>
 #include <kernel/terminal.h>

@@ -27,7 +27,8 @@ OBJCOPY    := ${PREFIX}objcopy
 
 # default flags
 ARFLAGS    := -rcsv
-CFLAGS     += -include ${ARCH}/compiler.h
+ASFLAGS    += -include _config.h
+CFLAGS     += -include ${ARCH}/compiler.h -include _config.h
 CFLAGS     += -std=c11 -march=${MARCH} -nostdinc -ffreestanding
 CFLAGS     += -fno-unwind-tables -fno-asynchronous-unwind-tables
 CFLAGS     += -fno-exceptions

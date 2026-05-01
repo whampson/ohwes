@@ -31,6 +31,7 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <kernel/device.h>
+#include <kernel/fs.h>
 #include <kernel/list.h>
 #include <kernel/termios.h>
 

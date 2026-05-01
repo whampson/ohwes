@@ -24,9 +24,7 @@
 #include <string.h>
 #include <i386/cpu.h>
 #include <i386/syscall.h>
-#include <kernel/config.h>
 #include <kernel/char.h>
-#include <kernel/ohwes.h>
 #include <kernel/pool.h>
 #include <kernel/task.h>
 

@@ -24,10 +24,9 @@
 #include <i386/cpu.h>
 #include <i386/syscall.h>
 #include <i386/paging.h>
+#include <kernel/kernel.h>
 #include <kernel/fs.h>
 #include <kernel/ioctl.h>
-#include <kernel/kernel.h>
-#include <kernel/ohwes.h>
 #include <kernel/task.h>
 #include <kernel/terminal.h>
 

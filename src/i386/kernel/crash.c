@@ -28,11 +28,12 @@
 #include <i386/interrupt.h>
 #include <i386/x86.h>
 #include <kernel/kernel.h>
-#include <kernel/ohwes.h>
+#include <kernel/console.h>
 #include <kernel/irq.h>
 #include <kernel/terminal.h>
 #include <kernel/serial.h>
 #include <kernel/vga.h>
+#include <sys/ohwes.h>
 
 #define CRASH_BUFSIZ        1024
 #define CRASH_COLOR         ANSI_BLUE

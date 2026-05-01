@@ -43,7 +43,7 @@ do {                                                                            
 
 #define _FAIL_TEST(fn,msg,...)                                                  \
 do {                                                                            \
-    tprint("\n\e[1;30m" __FILE__ ":" STRINGIFY_LITERAL(__LINE__) ":");          \
+    tprint("\n\e[1;30m" __FILE__ ":" STRINGIFY_MACRO(__LINE__) ":");            \
     tprint("\n\e[1;31m*** TEST FAILED ***");                                    \
     tprint("\n\e[1;33m" fn "(" #__VA_ARGS__ ")");                               \
     tprint("\n\e[22;37m" msg, __VA_ARGS__);                                     \

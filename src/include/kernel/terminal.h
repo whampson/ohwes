@@ -25,7 +25,6 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <kernel/config.h>
 #include <kernel/queue.h>
 #include <kernel/tty.h>
 #include <kernel/vga.h>

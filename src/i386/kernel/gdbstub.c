@@ -37,6 +37,7 @@
 #include <kernel/irq.h>
 #include <kernel/mm.h>
 #include <kernel/serial.h>
+#include <sys/ohwes.h>
 
 #define ENABLE_GDB_PRINT        0
 #define ENABLE_GDB_ERROR        0

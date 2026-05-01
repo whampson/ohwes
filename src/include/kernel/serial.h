@@ -90,9 +90,9 @@
 #ifndef __ASSEMBLER__
 #include <assert.h>
 #include <stdint.h>
-#include <kernel/config.h>
-#include <kernel/queue.h>
 #include <i386/io.h>
+#include <kernel/queue.h>
+#include <kernel/tty.h>
 
 //
 // Interrupt Enable Register

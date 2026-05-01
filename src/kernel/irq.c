@@ -25,8 +25,8 @@
 #include <i386/pic.h>
 #include <i386/interrupt.h>
 #include <i386/x86.h>
-#include <kernel/irq.h>
 #include <kernel/kernel.h>
+#include <kernel/irq.h>
 
 #define MAX_ISR             8   // max ISR handlers per IRQ line
 #define SPURIOUS_THRESH     10

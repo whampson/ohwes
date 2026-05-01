@@ -28,7 +28,6 @@
 #include <i386/boot.h>
 #include <i386/io.h>
 #include <i386/ps2.h>
-#include <kernel/ohwes.h>
 #include <kernel/kernel.h>
 
 static void wait_for_read(void);
@@ -52,7 +51,7 @@ void init_ps2(void)
     ps2_cmd(PS2_CMD_P2ON);
     ps2_cmd(PS2_CMD_RDCFG);
     cfg = ps2_read();
-    port2 = !has_flag(cfg, PS2_CFG_P2CLKOFF);
+    port2 = !(cfg & PS2_CFG_P2CLKOFF);
     if (port2) {
         kprint("ps2: PS/2 mouse detected\n");
     }
@@ -104,13 +103,13 @@ void init_ps2(void)
 bool ps2_canread(void)
 {
     // device output buffer must be full
-    return has_flag(ps2_status(), PS2_STATUS_OPF);
+    return ps2_status() & PS2_STATUS_OPF;
 }
 
 bool ps2_canwrite(void)
 {
     // device input buffer must be empty
-    return !has_flag(ps2_status(), PS2_STATUS_IPF);
+    return !(ps2_status() & PS2_STATUS_IPF);
 }
 
 uint8_t ps2_read(void)

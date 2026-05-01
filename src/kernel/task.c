@@ -19,8 +19,8 @@
  * =============================================================================
  */
 
-#include <kernel/ohwes.h>
 #include <kernel/task.h>
+#include <sys/ohwes.h>
 
 int g_curr_pid = 0;
 struct task g_tasks[MAX_TASK];

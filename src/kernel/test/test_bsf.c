@@ -22,7 +22,6 @@
 #include <test.h>
 #include <i386/bitops.h>
 #include <kernel/kernel.h>
-#include <kernel/ohwes.h>
 
 void test_bsf(void)
 {

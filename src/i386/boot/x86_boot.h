@@ -24,7 +24,6 @@
 #ifndef __X86_BOOT
 #define __X86_BOOT
 
-#include <kernel/config.h>
 #include <i386/boot.h>
 #include <i386/paging.h>
 #include <i386/x86.h>

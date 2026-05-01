@@ -20,10 +20,9 @@
  */
 
 #include <errno.h>
-#include <kernel/config.h>
+#include <kernel/kernel.h>
 #include <kernel/io.h>
 #include <kernel/list.h>
-#include <kernel/kernel.h>
 #include <kernel/pool.h>
 #include <kernel/serial.h>
 

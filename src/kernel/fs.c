@@ -21,13 +21,12 @@
 
 #include <errno.h>
 #include <string.h>
-#include <kernel/config.h>
 #include <kernel/kernel.h>
 #include <kernel/fs.h>
 #include <kernel/list.h>
 #include <kernel/pool.h>
-#include <kernel/ohwes.h>
-
+#include <kernel/tty.h>
+#include <sys/ohwes.h>
 
 static list_t inodes;
 static pool_t *inode_pool;

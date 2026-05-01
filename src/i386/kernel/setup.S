@@ -23,7 +23,6 @@
 #include <i386/interrupt.h>
 #include <i386/paging.h>
 #include <i386/x86.h>
-#include <kernel/config.h>
 #include <kernel/kernel.h>
 #include <kernel/irq.h>         // TODO: should be i386/irq.h
 #include <kernel/serial.h>

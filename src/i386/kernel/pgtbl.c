@@ -19,11 +19,11 @@
  * =============================================================================
  */
 
-#include <kernel/kernel.h>
-#include <kernel/mm.h>
 #include <i386/cpu.h>
 #include <i386/paging.h>
 #include <i386/x86.h>
+#include <kernel/kernel.h>
+#include <kernel/mm.h>
 
 bool virt_addr_valid(void *va)
 {

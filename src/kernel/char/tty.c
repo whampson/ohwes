@@ -21,14 +21,14 @@
 
 #include <errno.h>
 #include <i386/boot.h>
+#include <kernel/kernel.h>
 #include <kernel/char.h>
-#include <kernel/config.h>
 #include <kernel/fs.h>
 #include <kernel/ioctls.h>
 #include <kernel/mm.h>
-#include <kernel/ohwes.h>
 #include <kernel/pool.h>
 #include <kernel/queue.h>
+#include <kernel/task.h>
 #include <kernel/tty.h>
 
 #define TTY_MAGIC           (uint32_t) ' ytt'

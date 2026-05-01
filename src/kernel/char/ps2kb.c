@@ -35,9 +35,9 @@
 #include <i386/io.h>
 #include <i386/ps2.h>
 #include <i386/x86.h>
+#include <kernel/kernel.h>
 #include <kernel/input.h>
 #include <kernel/irq.h>
-#include <kernel/ohwes.h>
 #include <kernel/terminal.h>
 
 #define CHATTY_KB       1       // print extra debug messages
@@ -182,6 +182,8 @@ void init_kb(void)
     irq_unmask(IRQ_KEYBOARD);
 
 #if CHATTY_KB
+    #define YN(cond)    A_OR_B(cond, "yes","no")
+    #define ONOFF(cond) A_OR_B(cond, "on", "off")
     kprint("ps2kb: ident=%02Xh,%02Xh translation=%s\n",
         g_kb->ident[0], g_kb->ident[1], ONOFF(ps2cfg & PS2_CFG_TRANSLATE));
     kprint("ps2kb: leds=%02Xh typematic=%02Xh\n",

@@ -23,7 +23,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <i386/interrupt.h>
-#include <kernel/config.h>
 #include <kernel/kernel.h>
 #include <kernel/queue.h>
 #include <kernel/tty.h>

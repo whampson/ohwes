@@ -36,10 +36,10 @@
 #include <i386/gdbstub.h>
 #include <i386/interrupt.h>
 #include <i386/io.h>
+#include <kernel/kernel.h>
 #include <kernel/io.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
-#include <kernel/ohwes.h>
 #include <kernel/queue.h>
 #include <kernel/serial.h>
 #include <kernel/tty.h>

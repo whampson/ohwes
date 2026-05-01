@@ -23,7 +23,6 @@
 #include <string.h>
 #include <stdint.h>
 #include <test.h>
-#include <kernel/ohwes.h>
 #include <kernel/list.h>
 
 struct thing {
