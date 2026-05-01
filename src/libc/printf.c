@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/ohwes.h>
 
 // inspired by XNU's printf impl:
 // https://opensource.apple.com/source/xnu/xnu-201/osfmk/kern/printf.c.auto.html
@@ -35,71 +36,58 @@
 // printf family spec:
 // https://en.cppreference.com/w/c/io/fprintf
 
-#define PRINTF_BUFSIZ   1024
-#define NUM2STR_BUFSIZ  64
+#define PRINTF_BUFFER_SIZE  BUFSIZ
 
-// lengths
-enum {
-    L_DEFAULT,  // no length specified
-    L_HH,       // 'hh',byte
-    L_H,        // 'h', short
-    L_L,        // 'l', long
-    L_LL,       // 'll',long long
-    L_J,        // 'j', intmax_t
-    L_Z,        // 'z', size_t
-    L_T         // 't', ptrdiff_t
-};
+struct printf_state;
+typedef int (*putc_fn)(struct printf_state *, char);
 
 struct printf_state
 {
-    va_list args;               // format arguments
-    char *buffer;               // sprintf/snprintf buffer
-    size_t buffer_avail;        // snprintf num chars available in buffer
+    char *buf;          // printf buffer
+    char *ptr;          // buffer pointer
+    size_t bufsz;       // num chars in buffer
+    putc_fn putc;       // write character function
 };
 
-typedef int (*printf_fn)(struct printf_state *, char);
+static struct printf_state make_printf_state(char *buf, size_t bufsz, putc_fn putc)
+{
+    struct printf_state state = { };
+    state.buf = buf;
+    state.bufsz = bufsz;
+    state.ptr = buf;
+    state.putc = putc;
 
-static int _printf_putc(struct printf_state *state, char c);
-static int _sprintf_putc(struct printf_state *state, char c);
-static int _snprintf_putc(struct printf_state *state, char c);
+    return state;
+}
 
-static int _doprintf(
-    const char *format,
-    struct printf_state *state,
-    printf_fn putc);
+static int _putc_stdout(struct printf_state *state, char c)
+{
+    (void) state;
+    return write(STDOUT_FILENO, &c, 1);     // TODO: INCREDIBLY INEFFICIENT if OS is not buffering
+}
+
+static int _putc_buffer(struct printf_state *state, char c)
+{
+    if (c == '\0') {
+        return 0;
+    }
+
+    if (state->ptr - state->buf < state->bufsz - 1) {
+        *state->ptr++ = c;
+        *state->ptr = '\0';
+    }
+
+    return 1;   // return indicates that char would've been written
+}
+
+static int _doprintf(const char *fmt, va_list args, struct printf_state *state);
 
 /**
  * "Writes the results to the output stream stdout."
 */
-int printf(const char *format, ...)
+int printf(const char *fmt, ...)
 {
-    int nwritten;
-    va_list args;
-
-    va_start(args, format);
-    nwritten = vprintf(format, args);
-    va_end(args);
-
-    return nwritten;
-}
-
-int vprintf(const char *format, va_list args)
-{
-    int nwritten;
-    struct printf_state state = { };
-    char buffer[PRINTF_BUFSIZ];
-
-    if (format == NULL) {
-        return -EINVAL;
-    }
-
-    state.args = args;
-    state.buffer = buffer;
-    state.buffer_avail = sizeof(buffer);
-    nwritten = _doprintf(format, &state, _printf_putc);
-    write(STDOUT_FILENO, buffer, nwritten); // flush!
-
-    return nwritten;
+    return VPRINT_CALL(fmt, vprintf);
 }
 
 /**
@@ -107,26 +95,9 @@ int vprintf(const char *format, va_list args)
  * the string to be written (plus the terminating null character) exceeds the
  * size of the array pointed to by buffer."
 */
-int sprintf(char *buffer, const char *format, ...)
+int sprintf(char *buf, const char *fmt, ...)
 {
-    int nwritten;
-    va_list args;
-
-    va_start(args, format);
-    nwritten = vsprintf(buffer, format, args);
-    va_end(args);
-
-    return nwritten;
-}
-
-int vsprintf(char *buffer, const char *format, va_list args)
-{
-    struct printf_state state = { };
-
-    state.args = args;
-    state.buffer = buffer;  // better be large enough! TODO: should alloc local
-                            // buffer here and page fault if exceeded
-    return _doprintf(format, &state, _sprintf_putc);
+    return VPRINT_CALL_V(fmt, vsprintf, buf);
 }
 
 /**
@@ -137,93 +108,91 @@ int vsprintf(char *buffer, const char *format, va_list args)
  * bytes that would be written not including the null terminator) is still
  * calculated and returned."
 */
-int snprintf(char *buffer, size_t bufsz, const char *format, ...)
+int snprintf(char *buffer, size_t bufsz, const char *fmt, ...)
 {
-    int nwritten;
-    va_list args;
+    return VPRINT_CALL_V(fmt, vsnprintf, buffer, bufsz);
+}
 
-    va_start(args, format);
-    nwritten = vsnprintf(buffer, bufsz, format ,args);
-    va_end(args);
+int vprintf(const char *fmt, va_list args)
+{
+    if (fmt == NULL) {
+        return -EINVAL;
+    }
+
+    struct printf_state state;
+    int nwritten;
+
+    state = make_printf_state(NULL, 0, _putc_stdout);   // no buffering... here at least. system might...
+    nwritten = _doprintf(fmt, args, &state);
 
     return nwritten;
 }
 
-int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args)
+int vsprintf(char *buf, const char *fmt, va_list args)
 {
-    struct printf_state state = { };
+#if KERNEL_BUILD
+    kprint(KLOG_WARN "%s(%d): sprintf used\n", __func__, __LINE__);
+#endif
 
-    state.args = args;
-    state.buffer = buffer;
-    state.buffer_avail = bufsz;
-    return _doprintf(format, &state, _snprintf_putc);
-}
-
-static int _printf_putc(struct printf_state *state, char c)
-{
-    (void) state;
-
-    if (!state->buffer_avail) {
-        // write the current buffer to stdout
-        write(STDERR_FILENO, state->buffer, PRINTF_BUFSIZ);
-
-        // and reuse it for the next chunk
-        state->buffer_avail = PRINTF_BUFSIZ;
-        state->buffer -= state->buffer_avail;
-        c = '*';
-        write(STDOUT_FILENO, &c, 1);
-        for(;;);
+    if (fmt == NULL || buf == NULL) {
+        return -EINVAL;
     }
 
-    // fill up the buffer; caller, don't forget to flush!
-    state->buffer_avail--;
-    return _sprintf_putc(state, c);
+    int nwritten;
+    struct printf_state state;
+    char internal_buf[PRINTF_BUFFER_SIZE];
+
+    state = make_printf_state(internal_buf, sizeof(internal_buf), _putc_buffer);
+    nwritten = _doprintf(fmt, args, &state);
+
+    // yeah yeah... I know this is lossy and slow, but it's safe dammit!!
+    // besides, people shouldn't even be using these functions really...
+    memcpy(buf, internal_buf, nwritten);
+
+    // TODO: buffer internally so we don't lose data
+    // but also deprecate...
+    return nwritten;
 }
 
-static int _sprintf_putc(struct printf_state *state, char c)
+int vsnprintf(char *buf, size_t bufsz, const char *fmt, va_list args)
 {
-    *state->buffer++ = c;
-    *state->buffer = '\0';
-
-    return 1;
-}
-
-static int _snprintf_putc(struct printf_state *state, char c)
-{
-    if (state->buffer_avail > 0) {
-        // add char if there's space
-        state->buffer_avail--;
-        _sprintf_putc(state, c);
+    if (fmt == NULL || (buf == NULL && bufsz != 0)) {
+        return -EINVAL;
     }
 
-    // always return 1 to keep track of chars that would've been written if
-    // buffer was large enough
-    return 1;
+    int nwritten;
+    struct printf_state state;
+
+    state = make_printf_state(buf, bufsz, _putc_buffer);
+    nwritten = _doprintf(fmt, args, &state);
+
+    return nwritten;
 }
 
-static int _doprintf(
-    const char *format,
-    struct printf_state *state,
-    printf_fn putc)
+static int _doprintf(const char *fmt, va_list args, struct printf_state *state)
 {
     int nwritten = 0;
-    int retval = 0;
 
     // where the magic happens
 
 #define _putchar(c) \
 do { \
-    retval = (*putc)(state, c); \
-    if (retval < 0) { \
+    int __ret = (*state->putc)(state, c); \
+    if (__ret < 0) { \
         goto done; \
     } \
-    nwritten += retval; \
+    nwritten += __ret; \
 } while(0)
 
-    const char *format_start = format;
-
-    while (format != NULL && *format != '\0')
+    while (fmt != NULL && *fmt != '\0')
     {
+        char c = *fmt++;
+        if (c != '%') {
+            _putchar(c);
+            continue;
+        }
+
+        const char *fmt_start = fmt;
         bool ljustify = false;
         bool signflag = false;
         bool signpad = false;
@@ -234,35 +203,20 @@ do { \
         bool signd = false;
         bool zero = false;
         bool default_prec = true;
-        register int prec = 1;
-        register int width = 0;
-        register int radix = 10;
-        register int len = 0;
-        register char c = 0;
-        register char *p = NULL;
+        int prec = 1;
+        int width = 0;
+        int radix = 10;
+        int len = 0;
+        char *p = NULL;
         char sign_char = 0;
-
-        char num2str[NUM2STR_BUFSIZ ];
-
         uintmax_t num = 0;
-
-        //
-        // next char
-        //
-        c = *format++;
-        if (c != '%') {
-            _putchar(c);
-            continue;
-        }
-
-        format_start = format;
 
         //
         // flags
         //
         bool parse = true;
-        while (parse && *format != '\0') {
-            c = *format++;
+        while (parse && *fmt != '\0') {
+            c = *fmt++;
             switch (c) {
                 case '-': ljustify = true; break;
                 case '+': signflag = true; break;
@@ -287,15 +241,15 @@ do { \
         while (isdigit(c)) {
             width *= 10;
             width += (c - '0');
-            c = *format++;
+            c = *fmt++;
         }
         if (c == '*') {
-            width = va_arg(state->args, int);
+            width = va_arg(args, int);
             if (width < 0) {    // negative width enables left justify
                 width = -width;
                 ljustify = true;
             }
-            c = *format++;
+            c = *fmt++;
         }
 
         //
@@ -304,21 +258,32 @@ do { \
         if (c == '.') {
             default_prec = false;
             prec = 0;
-            c = *format++;
+            c = *fmt++;
             while (isdigit(c)) {
                 prec *= 10;
                 prec += (c - '0');
-                c = *format++;
+                c = *fmt++;
             }
             if (c == '*') {
-                prec = va_arg(state->args, int);
+                prec = va_arg(args, int);
                 if (prec < 0) { // precision ignored if negative
                     default_prec = true;
                     prec = 1;
                 }
-                c = *format++;
+                c = *fmt++;
             }
         }
+
+        enum {  // length specifiers
+            L_DEFAULT,  // no length specified
+            L_HH,       // 'hh',byte
+            L_H,        // 'h', short
+            L_L,        // 'l', long
+            L_LL,       // 'll',long long
+            L_J,        // 'j', intmax_t
+            L_Z,        // 'z', size_t
+            L_T         // 't', ptrdiff_t
+        };
 
         //
         // length modifier
@@ -371,7 +336,7 @@ do { \
             }
 
             if (match) {
-                c = *format++;
+                c = *fmt++;
             }
         }
 
@@ -384,9 +349,9 @@ do { \
             // strings: write then continue to top of loop
             //
             default: {  // invalid conversion char:
-                _putchar('%');  // abort! just write the format string
-                while (format_start < format) {
-                    _putchar(*format_start++);
+                _putchar('%');  // abort! just write the fmt string
+                while (fmt_start < fmt) {
+                    _putchar(*fmt_start++);
                 }
                 continue;
             }
@@ -395,12 +360,12 @@ do { \
                 continue;
             }
             case 'c': {
-                _putchar((char) va_arg(state->args, int));
+                _putchar((char) va_arg(args, int));
                 continue;
             }
             case 's': {
                 if (length == L_DEFAULT) {
-                    const char *str = va_arg(state->args, const char*);
+                    const char *str = va_arg(args, const char*);
                     if (str == NULL) {
                         str = "(null)";
                     }
@@ -455,14 +420,14 @@ do { \
                 signd = true;
                 intmax_t n = 0;
                 switch (length) {
-                    default:    n = va_arg(state->args, int); break;
-                    case L_HH:  n = (signed char)  va_arg(state->args, int); break;
-                    case L_H:   n = (signed short) va_arg(state->args, int); break;
-                    case L_L:   n = va_arg(state->args, long); break;
-                    case L_LL:  n = va_arg(state->args, long long); break;
-                    case L_J:   n = va_arg(state->args, intmax_t); break;
-                    case L_Z:   n = va_arg(state->args, size_t); break;
-                    case L_T:   n = va_arg(state->args, ptrdiff_t); break;
+                    default:    n = va_arg(args, int); break;
+                    case L_HH:  n = (signed char)  va_arg(args, int); break;
+                    case L_H:   n = (signed short) va_arg(args, int); break;
+                    case L_L:   n = va_arg(args, long); break;
+                    case L_LL:  n = va_arg(args, long long); break;
+                    case L_J:   n = va_arg(args, intmax_t); break;
+                    case L_Z:   n = va_arg(args, size_t); break;
+                    case L_T:   n = va_arg(args, ptrdiff_t); break;
                 }
                 if (n < 0) {
                     negative = true;
@@ -474,14 +439,14 @@ do { \
             case 'u': {
             get_unsigned:
                 switch (length) {
-                    default:    num = va_arg(state->args, unsigned int); break;
-                    case L_HH:  num = (unsigned char)  va_arg(state->args, unsigned int); break;
-                    case L_H:   num = (unsigned short) va_arg(state->args, unsigned int); break;
-                    case L_L:   num = va_arg(state->args, unsigned long); break;
-                    case L_LL:  num = va_arg(state->args, unsigned long long); break;
-                    case L_J:   num = va_arg(state->args, uintmax_t); break;
-                    case L_Z:   num = va_arg(state->args, size_t); break;
-                    case L_T:   num = va_arg(state->args, ptrdiff_t); break;
+                    default:    num = va_arg(args, unsigned int); break;
+                    case L_HH:  num = (unsigned char)  va_arg(args, unsigned int); break;
+                    case L_H:   num = (unsigned short) va_arg(args, unsigned int); break;
+                    case L_L:   num = va_arg(args, unsigned long); break;
+                    case L_LL:  num = va_arg(args, unsigned long long); break;
+                    case L_J:   num = va_arg(args, uintmax_t); break;
+                    case L_Z:   num = va_arg(args, size_t); break;
+                    case L_T:   num = va_arg(args, ptrdiff_t); break;
                 }
                 break;
             }
@@ -494,8 +459,9 @@ do { \
         static char digits[]     = "0123456789abcdefghijklmnopqrstuvwxyz";
         static char digits_cap[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+        char num2str[64];
 
-        p = &num2str[NUM2STR_BUFSIZ-1];
+        p = &num2str[sizeof(num2str)-1];
         while (num) {
             if (capital) {
                 *p-- = digits_cap[num % radix];
@@ -506,7 +472,7 @@ do { \
             num /= radix;
         }
 
-        len = &num2str[NUM2STR_BUFSIZ] - (p+1);
+        len = &num2str[sizeof(num2str)] - (p+1);
 
 
         // count the number of zeros needed for precision
@@ -579,7 +545,7 @@ do { \
         }
 
         // write stringifed number
-        while (++p != &num2str[NUM2STR_BUFSIZ]) {
+        while (++p != &num2str[sizeof(num2str)]) {
             _putchar(*p);                     // next, the number itself...
         }
 
@@ -591,12 +557,10 @@ do { \
             }
         }
     }
-
     _putchar('\0');
-    retval = nwritten;
 
 #undef _putchar
 
 done:
-    return retval;
+    return nwritten;
 }

@@ -40,6 +40,7 @@ typedef __builtin_va_list va_list;
 typedef __SIZE_TYPE__ size_t;
 #endif
 
+#define BUFSIZ 512
 #define EOF (-1)
 
 int putchar(int c);

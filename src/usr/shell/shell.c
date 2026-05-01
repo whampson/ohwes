@@ -36,7 +36,6 @@
 #define LINE_LENGTH     64
 #define ARG_LENGTH      1024
 #define PROMPT_CHAR     '#'
-#define BUFSIZ          512
 
 // syscall return if failed
 #define SYS_CHECK(x) \
