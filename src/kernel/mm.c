@@ -149,6 +149,7 @@ static void check_memory(void)
     int bad_kb = 0;
     int free_pages = 0;
     struct acpi_mmap_entry *e;
+    char buf[80], *p;
 
     // tally up the amount of usable RAM
     for (e = _phys_mmap; mmap_valid(e); e++) {
@@ -159,16 +160,17 @@ static void check_memory(void)
             size_char = 'M';
             disp_size = div_ceil(disp_size, 1024);
         }
-        kprint("phys-mem: %08llX-%08llX % 5lu%c %s",
+        p = buf;
+        p += snprintf(buf, sizeof(buf), "phys-mem: %08llX-%08llX % 5lu%c %s",
             e->base, e->base+e->length-1,
             disp_size, size_char,
             mmap_bad(e)     ? "*** BAD ***" :
             mmap_acpi(e)    ? "ACPI" :
             mmap_usable(e)  ? "" : "reserved");
         if (e->attr) {
-            kprint(" (attr = 0x%X)", e->attr);
+            p += snprintf(p, sizeof(buf-p), " (attr = 0x%X)", e->attr);
         }
-        kprint("\n");
+        p += snprintf(p, sizeof(buf-p), "\n");
 
         total_kb += size_kb;
         if (mmap_bad(e)) {
@@ -177,6 +179,8 @@ static void check_memory(void)
         if (mmap_usable(e)) {
             free_kb += size_kb;
         }
+
+        kprint(buf);
     }
 
     free_pages = (free_kb >> (PAGE_SHIFT - KB_SHIFT));

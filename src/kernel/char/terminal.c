@@ -204,6 +204,7 @@ static void vt_console_setup(struct console *cons)
         if (num == 1) {
             term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
             pos2xy(term, vga_get_cursor_pos());
+            terminal_print(term, "\r\n");
         }
     }
 }

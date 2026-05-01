@@ -36,7 +36,7 @@
 #include <kernel/queue.h>
 #include <sys/ohwes.h>
 
-#define KPRINT_MAX          1024
+#define KPRINT_MAX  BUFSIZ
 
 static int _log_start = 0;
 static int _log_size = 0;
@@ -203,7 +203,7 @@ int _vkprint(const char *fmt, va_list args)
 
     count = vsnprintf(buf, KPRINT_MAX, fmt, args);
     count = snprintf(buf, KPRINT_MAX, "[%4lu.%06lu] ", sec, micros);
-    count += vsnprintf(buf+count-1, KPRINT_MAX-count, fmt, args);
+    count += vsnprintf(buf+count, KPRINT_MAX-count, fmt, args);
     return console_write(buf, count);
 }
 
