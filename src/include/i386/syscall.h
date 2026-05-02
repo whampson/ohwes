@@ -26,18 +26,28 @@
 
 #include <stddef.h>
 #include <i386/interrupt.h>
+#include <i386/syscall_table.h>
+
+#ifdef __KERNEL__
 
 //
-// Calling convention for System Calls.
+// Calling convention for System Call entry points.
 //
 #define __syscall __attribute__((regparm(0)))
 
+//
+// Declare a System Call entry point.
+//
+#define SYSCALL_ENTRY(name, ...) \
+    __syscall int sys_##name(__VA_ARGS__)
+
+#endif
 
 //
-// System Call invocation methods.
+// Generate System Call interrupt.
 //
 
-#define syscall0(nr)                                                            \
+#define _syscall0_asm(nr)                                                       \
 ({                                                                              \
     int __sysret;                                                               \
     __asm__ volatile (                                                          \
@@ -48,7 +58,7 @@
     __sysret;                                                                   \
 })
 
-#define syscall1(nr,arg0)                                                       \
+#define _syscall1_asm(nr,arg0)                                                  \
 ({                                                                              \
     int __sysret;                                                               \
     __asm__ volatile (                                                          \
@@ -59,7 +69,7 @@
     __sysret;                                                                   \
 })
 
-#define syscall2(nr,arg0,arg1)                                                  \
+#define _syscall2_asm(nr,arg0,arg1)                                             \
 ({                                                                              \
     int __sysret;                                                               \
     __asm__ volatile (                                                          \
@@ -70,7 +80,7 @@
     __sysret;                                                                   \
 })
 
-#define syscall3(nr,arg0,arg1,arg2)                                             \
+#define _syscall3_asm(nr,arg0,arg1,arg2)                                        \
 ({                                                                              \
     int __sysret;                                                               \
     __asm__ volatile (                                                          \
@@ -81,7 +91,7 @@
     __sysret;                                                                   \
 })
 
-#define syscall4(nr,arg0,arg1,arg2,arg3)                                        \
+#define _syscall4_asm(nr,arg0,arg1,arg2,arg3)                                   \
 ({                                                                              \
     int __sysret;                                                               \
     __asm__ volatile (                                                          \
@@ -92,7 +102,7 @@
     __sysret;                                                                   \
 })
 
-#define syscall5(nr,arg0,arg1,arg2,arg3,arg4)                                   \
+#define _syscall5_asm(nr,arg0,arg1,arg2,arg3,arg4)                              \
 ({                                                                              \
     int __sysret;                                                               \
     __asm__ volatile (                                                          \
@@ -103,28 +113,17 @@
     __sysret;                                                                   \
 })
 
+// TODO: figure out how to get a 6th param via EBP in there...
+
 
 //
-// System Call number declarations.
-//
-#include <i386/syscall_table.h>
-
-//
-// Define the kernel side of a System Call function.
-//
-#define DEFINE_SYSCALL(name, ...) \
-    __syscall int sys_##name(__VA_ARGS__)
-
-// #ifndef __KERNEL__
-
-//
-// System Call user mode function wrappers.
+// System Call link function wrapper.
 //
 
 #define __SYSCALL_PROLOGUE      \
     int __ret
-#define __SYSCALL_INVOKE(x)     \
-    __ret = x
+#define __SYSCALL_INVOKE(fn)    \
+    __ret = fn
 #define __SYSCALL_EPILOGUE_VOID \
 do {                            \
     if (__ret < 0) {            \
@@ -132,16 +131,20 @@ do {                            \
         __ret = -1;             \
     }                           \
 } while (0)
-
 #define __SYSCALL_EPILOGUE      \
     __SYSCALL_EPILOGUE_VOID;    \
     return __ret
+
+
+//
+// Define a C function that invokes a System Call interrupt.
+//
 
 #define LINK_SYSCALL0(type,name)                                                \
 type name(void)                                                                 \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
-    __SYSCALL_INVOKE(syscall0(_SYS_##name));                                    \
+    __SYSCALL_INVOKE(_syscall0_asm(_SYS_##name));                               \
     __SYSCALL_EPILOGUE;                                                         \
 }
 
@@ -149,24 +152,15 @@ type name(void)                                                                 
 type name(arg0_t arg0)                                                          \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
-    __SYSCALL_INVOKE(syscall1(_SYS_##name,arg0));                               \
+    __SYSCALL_INVOKE(_syscall1_asm(_SYS_##name,arg0));                          \
     __SYSCALL_EPILOGUE;                                                         \
 }
-
-#define LINK_SYSCALL1_VOID(name,arg0_t,arg0)                                    \
-void name(arg0_t arg0)                                                          \
-{                                                                               \
-    __SYSCALL_PROLOGUE;                                                         \
-    __SYSCALL_INVOKE(syscall1(_SYS_##name,arg0));                               \
-    __SYSCALL_EPILOGUE_VOID;                                                    \
-}
-
 
 #define LINK_SYSCALL2(type,name,arg0_t,arg0,arg1_t,arg1)                        \
 type name(arg0_t arg0, arg1_t arg1)                                             \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
-    __SYSCALL_INVOKE(syscall2(_SYS_##name,arg0,arg1));                          \
+    __SYSCALL_INVOKE(_syscall2_asm(_SYS_##name,arg0,arg1));                     \
     __SYSCALL_EPILOGUE;                                                         \
 }
 
@@ -174,7 +168,7 @@ type name(arg0_t arg0, arg1_t arg1)                                             
 type name(arg0_t arg0, arg1_t arg1, arg2_t arg2)                                \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
-    __SYSCALL_INVOKE(syscall3(_SYS_##name,arg0,arg1,arg2));                     \
+    __SYSCALL_INVOKE(_syscall3_asm(_SYS_##name,arg0,arg1,arg2));                \
     __SYSCALL_EPILOGUE;                                                         \
 }
 
@@ -182,7 +176,7 @@ type name(arg0_t arg0, arg1_t arg1, arg2_t arg2)                                
 type name(arg0_t arg0, arg1_t arg1, arg2_t arg2, arg3_t arg3)                   \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
-    __SYSCALL_INVOKE(syscall4(_SYS_##name,arg0,arg1,arg2,arg3));                \
+    __SYSCALL_INVOKE(_syscall4_asm(_SYS_##name,arg0,arg1,arg2,arg3));           \
     __SYSCALL_EPILOGUE;                                                         \
 }
 
@@ -190,11 +184,9 @@ type name(arg0_t arg0, arg1_t arg1, arg2_t arg2, arg3_t arg3)                   
 type name(arg0_t arg0, arg1_t arg1, arg2_t arg2, arg3_t arg3, arg4_t arg4)      \
 {                                                                               \
     __SYSCALL_PROLOGUE;                                                         \
-    __SYSCALL_INVOKE(syscall5(_SYS_##name,arg0,arg1,arg2,arg3,arg4));           \
+    __SYSCALL_INVOKE(_syscall5_asm(_SYS_##name,arg0,arg1,arg2,arg3,arg4));      \
     __SYSCALL_EPILOGUE;                                                         \
 }
-
-// #endif  // __KERNEL__
 
 #endif  // __ASSEMBLER__
 

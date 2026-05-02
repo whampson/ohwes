@@ -21,13 +21,30 @@
 
 #include <errno.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <i386/syscall.h>
 
 //
-// System Call Linkage
+// System Call Client-Side Linkage
 //
 
-LINK_SYSCALL1_VOID(_exit, int,status)
+#ifdef __KERNEL__
+// TODO: might be wise to short-circuit here and call entry points directly...
+#endif
+
+__noreturn void _exit(int status)
+{
+    _syscall1_asm(_SYS__exit, status & 0xFF);
+    for (;;);
+}
+
+__noreturn void exit(int status)
+{
+    // TODO: flush buffers, close files, atexit(), etc.
+    _exit(status);
+    for (;;);
+}
+
 LINK_SYSCALL1(int,close, int,fd)
 LINK_SYSCALL1(int,dup, int,fd)
 LINK_SYSCALL2(int,dup2, int,fd, int,newfd)

@@ -31,17 +31,17 @@
 static int dupfd(int fd, int newfd);
 static int find_next_fd(struct task *task);
 
-DEFINE_SYSCALL(dup, int fd)
+SYSCALL_ENTRY(dup, int fd)
 {
     return dupfd(fd, 0);
 }
 
-DEFINE_SYSCALL(dup2, int fd, int newfd)
+SYSCALL_ENTRY(dup2, int fd, int newfd)
 {
     return dupfd(fd, newfd);
 }
 
-DEFINE_SYSCALL(open, const char *name, int oflag)
+SYSCALL_ENTRY(open, const char *name, int oflag)
 {
     int fd;
     int ret;
@@ -99,7 +99,7 @@ done:
     return ret;
 }
 
-DEFINE_SYSCALL(close, int fd)
+SYSCALL_ENTRY(close, int fd)
 {
     struct file *file;
 

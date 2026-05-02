@@ -103,7 +103,7 @@ struct iregs {
     uint32_t esi;   // syscall param3
     uint32_t edi;   // syscall param4
     uint32_t ebp;   // syscall param5
-    uint32_t eax;   // syscall return value
+    uint32_t eax;   // syscall number / syscall return value
     uint32_t ds;
     uint32_t es;
     uint32_t fs;

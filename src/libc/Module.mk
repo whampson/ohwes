@@ -5,5 +5,4 @@ SOURCES := \
     linkage.c \
     printf.c \
     stdio.c \
-    stdlib.c \
     string.c \

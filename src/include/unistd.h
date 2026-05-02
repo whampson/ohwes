@@ -41,7 +41,7 @@ typedef __SIZE_TYPE__ size_t;
 typedef signed long ssize_t;
 #endif
 
-void _exit(int status);
+__noreturn void _exit(int status);
 int close(int fd);
 int dup(int fd);
 int dup2(int fd, int newfd);
