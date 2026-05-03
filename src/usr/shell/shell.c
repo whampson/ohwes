@@ -167,7 +167,15 @@ static int parse_command(struct shell_context *ctx, char *line, size_t len)
     int ret = 0;
     // TODO: spawn program using exec()
     //   pass stdout_path to new process if set
-    if (strcmp("echo", cmd) == 0) {
+    if (strcmp("help", cmd) == 0) {
+        printf("help\n");
+        printf("cat\n");
+        printf("cereal\n");
+        printf("echo\n");
+        printf("exit\n");
+        ret = 0;
+    }
+    else if (strcmp("echo", cmd) == 0) {
         ret = echo(ctx);
     }
     else if (strcmp("cat", cmd) == 0) {
@@ -186,7 +194,7 @@ static int parse_command(struct shell_context *ctx, char *line, size_t len)
     //     printf("%s: returned %d\n", cmd, ret);
     // }
 
-    return 0;   // "don't exit shell"
+    return 0;   // 0 = "don't exit shell"
 }
 
 //
