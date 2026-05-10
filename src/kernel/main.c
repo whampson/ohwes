@@ -69,6 +69,31 @@ extern int shell(void);
 
 static struct boot_info *boot_info;
 
+//
+// TODO: libc tests, make runnable offline against host OS's libc, for test case sanity checking
+//
+    // int main(int argc, char *argv[])
+    // {
+    //     char buf[80];
+    //     int nwritten;
+
+    //     // mostly testing return value
+    //     TEST_SPRINTF(0, "",    "");
+    //     TEST_SPRINTF(0, "",    "\0");
+    //     TEST_SPRINTF(1, " ",   " ");
+    //     TEST_SPRINTF(1, "\n",  "\n");
+    //     TEST_SPRINTF(3, "abc", "abc");
+    //     TEST_SPRINTF(0, "",    "%s",   "");
+    //     TEST_SPRINTF(0, "",    "%s",   "\0");
+    //     TEST_SPRINTF(1, " ",   "%s",   " ");
+    //     TEST_SPRINTF(1, "\n",  "%s",   "\n");
+    //     TEST_SPRINTF(3, "abc", "%s",   "abc");
+    //     // TODO: test printf format specifier params
+
+    //     puts("PASS");
+    //     return 0;
+    // }
+
 __fastcall void kmain(struct boot_info **info)
 {
     boot_info = *info;  // copy boot info into kernel memory
