@@ -46,6 +46,15 @@
 // TODO: use this on kprint and panic to sanitize format string
 //  __attribute__((format(printf, 1, 2)));
 
+// TODO: kprint(LOG_ERROR "uh oh: %08x\n", errCode);
+// #define LOG_FATAL   "<0>"
+// #define LOG_ERROR   "<1>"
+// #define LOG_ALERT   "<2>"
+// #define LOG_WARN    "<3>"
+// #define LOG_INFO    "<4>"
+// #define LOG_DEBUG   "<5>"
+// #define LOG_CONT    "<c>"
+
 // printf to console
 extern int kprint(const char *fmt, ...);
 

@@ -197,6 +197,10 @@ int _vkprint(const char *fmt, va_list args)
     size_t count;
     char buf[KPRINT_MAX+1] = { };
 
+    // TODO: buffer log messages, store timestamp, log level, and message.
+    // if call to kprint does not contain a newline, buffer line for some time...
+    // after some time, if newline doesn't appear, or KERN_CONT does not appear, flush to log
+
     uint64_t ns = get_uptime();
     uint32_t sec = (uint32_t) (ns / 1000000000);
     uint32_t micros = (uint32_t) ((ns % 1000000000) / 1000);

@@ -73,15 +73,14 @@ __fastcall void kmain(struct boot_info **info)
 {
     boot_info = *info;  // copy boot info into kernel memory
 
-    // TODO: initial \n print...
-    //  maybe impl this via a constructor on the console object, when registered?
+    // TODO: kernel stack overflow crashes without indication!? need to test this
 
-    // TODO: kernel stack overflow crashes without indication!?
+    // TODO: kernel log levels,
+    //  kprint(LOG_FATAL "System Failure: %s\n", reason);
 
-    kprint("\n\e[0;1m%s %s\n", OS_NAME, OS_VERSION);
+    kprint("%s %s (gcc %s) %s %s\n",
+        OS_NAME, OS_VERSION, __VERSION__, __DATE__, __TIME__);
     kprint("%s\n", OS_COPYRIGHT);
-    kprint("Compiled on %s at %s using GCC %s\e[0m\n\n",
-            __DATE__, __TIME__, __VERSION__);
 
     print_boot_info(boot_info);
 
