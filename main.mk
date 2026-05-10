@@ -9,20 +9,6 @@ ASFLAGS         := -Wa,--fatal-warnings
 LDFLAGS         := -Wl,--fatal-warnings
 CFLAGS          := -Wall -Werror -Wno-unused-function
 
-ifeq "${DEBUG}" "1"
-  ASFLAGS += -g
-  CFLAGS += -g
-  DEFINES += DEBUG
-else
-  CFLAGS += -O${OPT_LEVEL} -fomit-frame-pointer
-endif
-ifeq "${DEBUGOPT}" "1"
-  CFLAGS += -Og
-endif
-ifeq "${TEST_BUILD}" "1"
-  DEFINES += TEST_BUILD
-endif
-
 # important dirs
 TARGET_DIR := bin
 BUILD_DIR  := obj
@@ -48,6 +34,23 @@ DISK_DEVICE := /dev/fd0
 DISK_FILES  := \
     ${TARGET_DIR}/boot/boot.sys \
     ${TARGET_DIR}/ohwes.sys
+
+# -----------------------------------------------------------------------------
+
+ifeq "${DEBUG}" "1"
+  DEFINES += DEBUG
+  ASFLAGS += -g
+  CFLAGS += -g
+  ifeq "${DEBUGOPT}" "1"
+    CFLAGS += -Og
+  endif
+else
+  CFLAGS += -O${OPT_LEVEL} -fomit-frame-pointer
+endif
+
+ifeq "${TEST_BUILD}" "1"
+  DEFINES += TEST_BUILD
+endif
 
 # -----------------------------------------------------------------------------
 
