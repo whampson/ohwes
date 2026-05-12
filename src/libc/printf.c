@@ -282,7 +282,8 @@ do { \
             L_LL,       // 'll',long long
             L_J,        // 'j', intmax_t
             L_Z,        // 'z', size_t
-            L_T         // 't', ptrdiff_t
+            L_T,        // 't', ptrdiff_t
+            L_P,        // (implied by %p)
         };
 
         //
@@ -409,10 +410,18 @@ do { \
             }
             case 'X': {
                 capital = true;
-                __fallthrough;
+                radix = 16;
+                goto get_unsigned;
             }
             case 'x': {
                 radix = 16;
+                goto get_unsigned;
+            }
+            case 'p': {
+                radix = 16;
+                zeropad = true;
+                length = L_P;
+                prec = sizeof(void*) << 1;
                 goto get_unsigned;
             }
             case 'd': __fallthrough;
@@ -428,6 +437,7 @@ do { \
                     case L_J:   n = va_arg(args, intmax_t); break;
                     case L_Z:   n = va_arg(args, size_t); break;
                     case L_T:   n = va_arg(args, ptrdiff_t); break;
+                    case L_P:   n = va_arg(args, intptr_t); break;
                 }
                 if (n < 0) {
                     negative = true;
@@ -447,6 +457,7 @@ do { \
                     case L_J:   num = va_arg(args, uintmax_t); break;
                     case L_Z:   num = va_arg(args, size_t); break;
                     case L_T:   num = va_arg(args, ptrdiff_t); break;
+                    case L_P:   num = va_arg(args, uintptr_t); break;
                 }
                 break;
             }
