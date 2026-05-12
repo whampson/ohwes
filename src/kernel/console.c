@@ -113,7 +113,7 @@ void unregister_console(struct console *cons)
     }
 }
 
-bool has_console()
+bool has_console(void)
 {
     return g_consoles != NULL;
 }
