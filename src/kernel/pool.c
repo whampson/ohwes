@@ -68,7 +68,7 @@ void lazy_init_pools(void)
         list_add(&g_poolinfo->free_list, &p->list);
     }
 
-    kprint("pool: %d pages used to manage a max of %d pools\n",
+    kprint("pool: %ld pages used to manage a max of %d pools\n",
         get_order_size(g_poolinfo->order) >> PAGE_SHIFT, MAX_NR_POOLS);
 }
 
@@ -135,7 +135,7 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
     }
     void *alloc = alloc_pages(MEM_ZERO, order);
     if (alloc == NULL) {
-        warn("pool: create: not enough memory for pool size=%d capacity=%d!\n", size, capacity);
+        warn("pool: create: not enough memory for pool size=%zd capacity=%zd!\n", size, capacity);
         return INVALID_POOL;
     }
 
@@ -171,7 +171,7 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
         list_add(&p->free_list, &chunk->list);
     }
 
-    kprint("pool: created '%s' size_pages=%d capacity=%d item_size=%d flags=%Xh\n",
+    kprint("pool: created '%s' size_pages=%zd capacity=%zd item_size=%zd flags=%Xh\n",
         name, get_order_size(p->order) >> PAGE_SHIFT, capacity, size, flags);
     return p;
 }

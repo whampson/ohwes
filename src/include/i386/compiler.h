@@ -60,6 +60,11 @@
  */
 #define __noreturn      __attribute__((noreturn))
 
+/**
+ * printf-style format string compile-time sanity checking.
+ */
+#define __format_printf(fpos, apos) __attribute__((format(printf, fpos, apos)))
+
 #endif  // __GNUC__
 
 #endif  // __COMPILER_H

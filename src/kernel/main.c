@@ -280,10 +280,10 @@ int main(void)
     struct serial_stats stats;
     ioctl(fd, TIOCGICOUNT, &stats);
     printf("serial stats:\n");
-    printf("  tx:%d rx:%d xc:%d or:%d pr:%d fr:%d tm:%d bk:%d\n",
+    printf("  tx:%ld rx:%ld xc:%ld or:%ld pr:%ld fr:%ld tm:%ld bk:%ld\n",
         stats.n_tx, stats.n_rx, stats.n_xchar, stats.n_overrun,
         stats.n_parity, stats.n_framing, stats.n_timeout, stats.n_break);
-    printf("  cts:%d dsr:%d ri:%d dcd:%d\n",
+    printf("  cts:%ld dsr:%ld ri:%ld dcd:%ld\n",
         stats.n_cts, stats.n_dsr, stats.n_ring, stats.n_dcd);
 
     // close 'er out -- TODO: need to make this actually work

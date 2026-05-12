@@ -160,15 +160,17 @@ static void check_memory(void)
             size_char = 'M';
             disp_size = div_ceil(disp_size, 1024);
         }
+        uintptr_t base = (uintptr_t) e->base;
+        uintptr_t limit = (uintptr_t) (e->base + e->length - 1);
         p = buf;
-        p += snprintf(buf, sizeof(buf), "phys-mem: %08llX-%08llX % 5lu%c %s",
-            e->base, e->base+e->length-1,
+        p += snprintf(buf, sizeof(buf), "phys-mem: %p-%p %5lu%c %s",
+            _P(base), _P(limit),
             disp_size, size_char,
             mmap_bad(e)     ? "*** BAD ***" :
             mmap_acpi(e)    ? "ACPI" :
             mmap_usable(e)  ? "" : "reserved");
         if (e->attr) {
-            p += snprintf(p, sizeof(buf-p), " (attr = 0x%X)", e->attr);
+            p += snprintf(p, sizeof(buf-p), " (attr = 0x%lX)", e->attr);
         }
         p += snprintf(p, sizeof(buf-p), "\n");
 
@@ -271,9 +273,9 @@ static void init_zones(void)
         }
     }
 
-    kprint("mem: %s: mem_start=%08X mem_end=%08X mem_size_pages=%d\n",
-        zone->name, zone->mem_start, zone->mem_end, zone->mem_size_pages);
-    kprint("mem: %s: bitmap=%08X size_pages=%d\n",
+    kprint("mem: %s: mem_start=%p mem_end=%p mem_size_pages=%zd\n",
+        zone->name, _P(zone->mem_start), _P(zone->mem_end), zone->mem_size_pages);
+    kprint("mem: %s: bitmap=%p size_pages=%ld\n",
         zone->name, bitmap, bitmap_size_pages);
 
     // ensure pages are mapped to speed up allocation time
@@ -328,7 +330,7 @@ void * alloc_pages(int flags, int order)
     void *kern_addr = (void *) KERNEL_ADDR(addr);
 
     zone->free_pages -= (order_size >> PAGE_SHIFT);
-    kprint("mem: %s: alloc %08X-%08X order %d; %d pages left\n",
+    kprint("mem: %s: alloc %p-%p order %d; %zd pages left\n",
         zone->name, kern_addr, kern_addr+order_size-1, order, zone->free_pages);
 
     if (flags & MEM_ZERO) {
@@ -374,7 +376,7 @@ void free_pages(void *addr, int order)
     }
 
     zone->free_pages += (order_size >> PAGE_SHIFT);
-    kprint("mem: %s: free %08X-%08X order %d; %d pages left\n",
+    kprint("mem: %s: free %p-%p order %d; %zd pages left\n",
         zone->name, addr, addr+order_size-1, order, zone->free_pages);
 }
 
@@ -430,12 +432,12 @@ static void print_kernel_sections(void)
     for (int i = 0; i < countof(sections); i++) {
         struct section *sec = &sections[i];
         size_t sec_size = (sec->end - sec->start);
-        kprint("kern-mem: %08X-%08X % 6lu %s\n",
-            KERNEL_ADDR(sec->start), KERNEL_ADDR(sec->end)-1,
+        kprint("kern-mem: %p-%p %6lu %s\n",
+            _P(KERNEL_ADDR(sec->start)), _P(KERNEL_ADDR(sec->end)-1),
             sec_size, sec->name);
     }
 
-    kprint("kern-mem: kernel occupies %dk (%d pages) of static memory\n",
+    kprint("kern-mem: kernel occupies %ldk (%ld pages) of static memory\n",
         align(__kernel_size, KB) >> KB_SHIFT,
         PAGE_ALIGN(__kernel_size) >> PAGE_SHIFT);
 }

@@ -310,8 +310,8 @@ void init_terminal(void)
 
     init_vga(); // ok to call more than once
     vga_get_fb_info(&fb_info);
-    kprint("vga: frame buffer is %d pages at %08X\n",
-        fb_info.size_pages, fb_info.framebuf);
+    kprint("vga: frame buffer is %ld pages at %p\n",
+        fb_info.size_pages, _P(fb_info.framebuf));
 
     // make sure we have enough memory for the configured number of terminals
     if (fb_info.size_pages - FB_SIZE_PAGES < NR_TERMINAL * FB_SIZE_PAGES) {

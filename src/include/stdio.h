@@ -46,12 +46,22 @@ typedef __SIZE_TYPE__ size_t;
 int putchar(int c);
 int puts(const char *str);
 
+__format_printf(1, 2)
 int printf(const char *format, ...);
+
+__format_printf(2, 3)
 int sprintf(char *buffer, const char *format, ...);
+
+__format_printf(3, 4)
 int snprintf(char *buffer, size_t bufsz, const char *format, ...);
 
+__format_printf(1, 0)
 int vprintf(const char *format, va_list args);
+
+__format_printf(2, 0)
 int vsprintf(char *buffer, const char *format, va_list args);
+
+__format_printf(3, 0)
 int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list args);
 
 void perror(const char *s);

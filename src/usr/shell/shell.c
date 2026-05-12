@@ -185,7 +185,7 @@ static int parse_command(struct shell_context *ctx, char *line, size_t len)
         ret = cereal(ctx->argc, ctx->argv);
     }
     else {
-        printf("error: unknown command '%.*s'\n", len, cmd);
+        printf("error: unknown command '%.*s'\n", (int) len, cmd);
     }
 
     // TODO: set return value to some equivalent of ERRORLEVEL/$?

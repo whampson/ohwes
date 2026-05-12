@@ -169,11 +169,10 @@ __noreturn void handle_soft_double_fault(
     dump_cpu(orig_cpu, cprint);
 
     snprintf(msgbuf, sizeof(msgbuf),
-        "An exception %02X (%s) has occurred at %08X while handling a previous "
-        "exception %02X (%s) that occurred at %08X. "
-        MSG_TAIL,
-        cpu->iregs.vec, exception_names[cpu->iregs.vec], cpu->iregs.eip,
-        orig_cpu->iregs.vec, exception_names[orig_cpu->iregs.vec], orig_cpu->iregs.eip);
+        "An exception %02lX (%s) has occurred at %p while handling a previous "
+        "exception %02lX (%s) that occurred at %p. " MSG_TAIL,
+        cpu->iregs.vec, exception_names[cpu->iregs.vec], _P(cpu->iregs.eip),
+        orig_cpu->iregs.vec, exception_names[orig_cpu->iregs.vec], _P(orig_cpu->iregs.eip));
 
     show_crash_screen(-1, ANSI_RED, 5, "Double Fault", msgbuf, MSG_PROMPT);
 
@@ -229,28 +228,28 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
         int wr = iregs->err & PF_WR;
         int p = iregs->err & PF_P;
         int rsvd = iregs->err & PF_RSVD;
-        snprintf(errbuf, CRASH_BUFSIZ, " A %s mode %s %08X caused a %s.",
-            (us) ? "user" : "kernel", (wr) ? "write to" : "read from", cpu.cr2,
+        snprintf(errbuf, CRASH_BUFSIZ, " A %s mode %s %p caused a %s.",
+            (us) ? "user" : "kernel", (wr) ? "write to" : "read from", _P(cpu.cr2),
             (p)
                 ? (rsvd) ? "reserved bit violation" : "access violation"
                 : "non-present page access violation");
     }
     else if (iregs->err) {
-        snprintf(errbuf, sizeof(errbuf), " The issue occurred in %s(%02X)%s.",
+        snprintf(errbuf, sizeof(errbuf), " The issue occurred in %s(%02lX)%s.",
             (iregs->err & ERR_IDT) ? "IDT" :
                 (iregs->err & ERR_TI) ? "LDT" : "GDT",
             (iregs->err & ERR_INDEX) >> 3,
             (iregs->err & ERR_EXT) ? " and originated via an interrupt" : "");
     }
     else {
-        snprintf(errbuf, sizeof(errbuf), "");
+        snprintf(errbuf, sizeof(errbuf), "%s", "");
     }
 
     snprintf(msgbuf, sizeof(msgbuf),
-        "A fatal exception %02X (%s) has occurred at %08X.%s "
+        "A fatal exception %02lX (%s) has occurred at %p.%s "
         MSG_TAIL,
         iregs->vec, exception_names[iregs->vec],
-        iregs->eip, errbuf);
+        _P(iregs->eip), errbuf);
 
     show_crash_screen(iregs->vec, CRASH_COLOR, CRASH_MARGIN, OS_NAME, msgbuf, MSG_PROMPT);
     // dump_cpu(&cpu, fbprint);

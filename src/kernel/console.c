@@ -300,9 +300,9 @@ void print_boot_info(struct boot_info *boot)
         (boot->a20_method == A20_BIOS) ? "A20_BIOS" :
         "A20_NONE");
     kprint("bios-boot: %s PS/2 mouse, %s game port\n", A_OR_B(mouse, "has", "no"), A_OR_B(gameport, "has", "no"));
-    kprint("bios-boot: video mode is %02Xh\n", boot->vga_mode & 0x7F);
-    if (boot->ebda_base) kprint("bios-boot: EBDA=%08X,%Xh\n", boot->ebda_base, ebda_size);
-    kprint("bios-boot: kernel uses %u bytes (%d sectors) on disk\n",
+    kprint("bios-boot: video mode is %02lXh\n", boot->vga_mode & 0x7F);
+    if (boot->ebda_base) kprint("bios-boot: EBDA=%08lX,%lXh\n", boot->ebda_base, ebda_size);
+    kprint("bios-boot: kernel uses %lu bytes (%ld sectors) on disk\n",
         boot->kernel_size, div_ceil(boot->kernel_size, 512));
 }
 
@@ -319,7 +319,7 @@ static void print_page_info(uint32_t va, const struct pginfo *page)
     }
 
     //           va-vlimit -> pa-plimit k/M/T rw u/s a/d g wt nc
-    kprint("  v(%08X-%08X) -> p(%08X-%08X) %c %-2s %c %c %c %s%s\n",
+    kprint("  v(%08lX-%08lX) -> p(%08lX-%08lX) %c %-2s %c %c %c %s%s\n",
         va, vlimit, pa, plimit,
         page->pde ? (page->ps ? 'M' : 'T') : 'k',   // (k) small page, (M) large page, (T) page table
         page->rw ? "rw" : "r",                      // read/write

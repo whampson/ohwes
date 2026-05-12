@@ -85,7 +85,8 @@ void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flag
         pde = (pde_t *) KERNEL_ADDR(pde_offset(pgdir, va));
         if (!pde_present(*pde)) {
             // TODO: map a new PDE and associated page table...
-            panic("phys-mem: mappings that require a new PDE and page table not yet implemented! pa(%08X) va(%08X)\n", pa, va);
+            panic("phys-mem: mappings that require a new PDE and page table not yet implemented! pa(%p) va(%p)\n",
+                _P(pa), _P(va));
         }
         pte = (pte_t *) KERNEL_ADDR(pte_offset(pde, va));
 
@@ -103,11 +104,15 @@ void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flag
 
     size_t size_bytes = (count << PAGE_SHIFT);
     if (unmap) {
-        kprint("mem: unmap p:%08X-%08X v:%08X-%08X size_pages=%d flags=%02Xh\n",
-            base_pa, base_pa+size_bytes-1, base_va, base_va+size_bytes-1, count, flags);
+        kprint("mem: unmap p:%p-%p v:%p-%p size_pages=%zd flags=%02lXh\n",
+            _P(base_pa), _P(base_pa+size_bytes-1),
+            _P(base_va), _P(base_va+size_bytes-1),
+            count, flags);
     }
     else {
-        kprint("mem: map p:%08X-%08X v:%08X-%08X size_pages=%d flags=%02Xh\n",
-            base_pa, base_pa+size_bytes-1, base_va, base_va+size_bytes-1, count, flags);
+        kprint("mem: map p:%p-%p v:%p-%p size_pages=%zd flags=%02lXh\n",
+            _P(base_pa), _P(base_pa+size_bytes-1),
+            _P(base_va), _P(base_va+size_bytes-1),
+            count, flags);
     }
 }

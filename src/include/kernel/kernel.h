@@ -56,9 +56,11 @@
 // #define LOG_CONT    "<c>"
 
 // printf to console
+__format_printf(1, 2)
 extern int kprint(const char *fmt, ...);
 
 // halt and catch fire
+__format_printf(1, 2)
 extern __noreturn void panic(const char *fmt, ...);
 
 // beep at hz for millis;
@@ -84,6 +86,8 @@ do { \
 // TODO: verify/test these!!
 #define PHYSICAL_ADDR(v)    (((uintptr_t) (v) >= KERNEL_VA) ? ((uintptr_t) (v) - KERNEL_VA) : (uintptr_t) (v))
 #define KERNEL_ADDR(p)      (((uintptr_t) (p) >= -KERNEL_VA)  ? (uintptr_t) (p) : ((uintptr_t) (p) + KERNEL_VA))
+
+#define _P(addr) ((void *) (addr))
 
 #endif  // ndef __ASSEMBLER__
 
