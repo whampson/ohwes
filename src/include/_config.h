@@ -30,36 +30,38 @@
 //
 
 // booting
-#define HDD_BOOT                0   // set for USB boot as well
+#define HDD_BOOT                0   // (bool) boot from hard disk; set for USB boot as well
 
 // memory
 #define MEMORY_REQUIRED         (1536 * KB)
-#define HIGHER_GROUND           1   // map kernel in high virtual address space
+#define HIGHER_GROUND           1   // (bool) map kernel in high virtual address space
 
-// terminal
+// virtual terminal (VGA)
 #define DEFAULT_VT              1   // initial virtual terminal activated
-#define VT_CONSOLE_NUM          0   // (0) print kernel messages to active virtual terminal
 
-// serial console
-#define SERIAL_CONSOLE          0   // use a serial port as a console interface
-#define SERIAL_CONSOLE_COM      1   // serial console COM port number
+// console
+#define VT_CONSOLE              1   // (bool) use a virtual terminal as a console device
+#define VT_CONSOLE_NUM          0   //        (0) print console messages to active virtual terminal
+#define SERIAL_CONSOLE          0   // (bool) use a serial port as a console device
+#define SERIAL_CONSOLE_COM      1   //        serial console COM port number
 #define SERIAL_CONSOLE_BAUD     BAUD_9600
+#define E9_HACK                 1   // (bool) tee console output to I/O port 0xE9
+#define EARLY_PRINT             0   // (bool) register console when first char is printed
 
-// printing
-#define PRINT_LOGO              0   // show a special logo at boot
-#define PRINT_PAGE_MAP          0   // show initial page table mappings
-#define PRINT_IOCTL             1   // show ioctl calls
-#define E9_HACK                 1   // tee console output to I/O port 0xE9
-#define EARLY_PRINT             1   // register default console when first char is printed
+// general printing
+#define PRINT_LOGO              0   // (bool) show a special logo at boot
+#define PRINT_PAGE_MAP          0   // (bool) show initial page table mappings
+#define PRINT_IOCTL             1   // (bool) show ioctl calls
 
 // kernel log
 #define KERNEL_LOG_SIZE         (2*PAGE_SIZE)
+#define KPRINT_TIME             1   // (bool) show timestamp in kernel log messages
 
 // debugging
-#define SERIAL_DEBUGGING        0   // enable debugging over COM port
+#define SERIAL_DEBUGGING        0   // (bool) enable debugging over COM port
 #define SERIAL_DEBUG_PORT       COM1_PORT
 #define SERIAL_DEBUG_BAUD       BAUD_115200
-#define ENABLE_CRASH_KEY        1   // test various crash scenarios w/ keystroke
+#define ENABLE_CRASH_KEY        1   // (bool) test various crash scenarios w/ keystroke
 
 // OS version info strings
 #define OS_NAME                 "OH-WES"

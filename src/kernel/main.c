@@ -157,6 +157,92 @@ static void go_to_ring3(void *entry, void *stack)
     switch_context(&regs);
 }
 
+void print_boot_info(struct boot_info *boot)
+{
+    int nfloppies = boot->hwflags.has_diskette_drive;
+    if (nfloppies) {
+        nfloppies += boot->hwflags.num_other_diskette_drives;
+    }
+
+    int nserial = boot->hwflags.num_serial_ports;
+    int nparallel = boot->hwflags.num_parallel_ports;
+    bool gameport = boot->hwflags.has_gameport;
+    bool mouse = boot->hwflags.has_ps2mouse;
+    uint32_t ebda_size = 0xA0000 - boot->ebda_base;
+
+    kprint("bios-boot: %d %s, %d serial %s, %d parallel %s\n",
+        nfloppies, PLURALIZE2(nfloppies, "floppy", "floppies"),
+        nserial, PLURALIZE(nserial, "port"),
+        nparallel, PLURALIZE(nparallel, "port"));
+    kprint("bios-boot: A20 mode is %s\n",
+        (boot->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
+        (boot->a20_method == A20_PORT92) ? "A20_PORT92" :
+        (boot->a20_method == A20_BIOS) ? "A20_BIOS" :
+        "A20_NONE");
+    kprint("bios-boot: %s PS/2 mouse, %s game port\n", A_OR_B(mouse, "has", "no"), A_OR_B(gameport, "has", "no"));
+    kprint("bios-boot: video mode is %02lXh\n", boot->vga_mode & 0x7F);
+    if (boot->ebda_base) kprint("bios-boot: EBDA=%08lX,%lXh\n", boot->ebda_base, ebda_size);
+    kprint("bios-boot: kernel uses %lu bytes (%ld sectors) on disk\n",
+        boot->kernel_size, div_ceil(boot->kernel_size, 512));
+}
+
+static void print_page_info(uint32_t va, const struct pginfo *page)
+{
+    uint32_t pa = page->pfn << PAGE_SHIFT;
+    uint32_t plimit = pa + PAGE_SIZE - 1;
+    uint32_t vlimit = va + PAGE_SIZE - 1;
+    if (page->pde) {
+        if (page->ps) {
+            plimit = pa + PGDIR_SIZE - 1;
+        }
+        vlimit = va + PGDIR_SIZE - 1;
+    }
+
+    //           va-vlimit -> pa-plimit k/M/T rw u/s a/d g wt nc
+    kprint("  v(%08lX-%08lX) -> p(%08lX-%08lX) %c %-2s %c %c %c %s%s\n",
+        va, vlimit, pa, plimit,
+        page->pde ? (page->ps ? 'M' : 'T') : 'k',   // (k) small page, (M) large page, (T) page table
+        page->rw ? "rw" : "r",                      // read/write
+        page->us ? 'u' : 's',                       // user/supervisor
+        page->a ? (page->d ? 'd' : 'a') : ' ',      // accessed/dirty
+        page->g ? 'g' : ' ',                        // global
+        page->pwt ? "wt " : "  ",                   // write-through
+        page->pcd ? "nc " : "  ");                  // no-cache
+}
+
+void print_page_mappings(void)
+{
+    struct pginfo *pgdir = (struct pginfo *) get_pgdir();
+    struct pginfo *pgtbl;
+    struct pginfo *page;
+    uint32_t va;
+
+    for (int i = 0; i < PDE_COUNT; i++) {
+        page = &pgdir[i];
+        if (!page->p) {
+            continue;
+        }
+
+        va = i << PGDIR_SHIFT;
+        print_page_info(va, page);
+
+        if (page->pde && page->ps) {
+            continue;   // large
+        }
+
+        pgtbl = (struct pginfo *) KERNEL_ADDR(page->pfn << PAGE_SHIFT);
+        for (int j = 0; j < PTE_COUNT; j++) {
+            page = &pgtbl[j];
+            if (!page->p) {
+                continue;
+            }
+            va = (i << PGDIR_SHIFT) | (j << PAGE_SHIFT);
+            print_page_info(va, page);
+        }
+    }
+}
+
+
 // ----------------------------------------------------------------------------
 // ----------------------------- Ring 3 ---------------------------------------
 // ----------------------------------------------------------------------------

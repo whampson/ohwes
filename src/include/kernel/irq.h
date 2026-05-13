@@ -48,6 +48,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <i386/interrupt.h>
 
 #define IRQ_MASKALL             ((1<<NR_IRQS)-1)
 #define _IRQ_ENABLED(mask,n)    ((mask) & ~(1 << (n)))

@@ -36,6 +36,7 @@
 #include <i386/gdbstub.h>
 #include <i386/interrupt.h>
 #include <i386/io.h>
+#include <kernel/console.h>
 #include <kernel/kernel.h>
 #include <kernel/io.h>
 #include <kernel/ioctls.h>
@@ -191,30 +192,32 @@ static inline void wait_and_send(struct com *com, char c)
 
 static dev_t serial_console_device(struct console *cons)
 {
-    return __mkserdev(cons->index);
+    return __mkserdev(cons->number);
 }
 
-static void serial_console_setup(struct console *cons)
+static bool serial_console_setup(struct console *cons)
 {
     struct com *com;
     uint8_t data;
 
-    com = get_com(cons->index);
+    com = get_com(cons->number);
 
 #if EARLY_PRINT
     // COM struct might not have been initialized yet...
     // do some partial initialization here
     if (!com->num) {
-        com->num = cons->index;
+        com->num = cons->number;
         if (com->num < COM1 || com->num > NR_SERIAL) {
-            panic("invalid serial console number '%d", com->num);
+            panic("invalid serial console number '%d", com->num);   // TODO: probably don't panic here
+            return false;
         }
     }
-    assert(com->num == cons->index);
+    assert(com->num == cons->number);
     if (!com->io_port) {
         com->io_port = get_com_port(com->num);
         if (!com->io_port) {
-            panic("invalid serial console number '%d'", com->num);
+            panic("invalid serial console number '%d'", com->num);  // TODO: probably don't panic here
+            return false;
         }
     }
 #endif
@@ -222,6 +225,7 @@ static void serial_console_setup(struct console *cons)
 #if SERIAL_DEBUGGING
     if (com->io_port == SERIAL_DEBUG_PORT) {
         panic("serial console cannot share COM port with serial debugger!");
+        return false;
     }
 #endif
 
@@ -230,8 +234,9 @@ static void serial_console_setup(struct console *cons)
     com_out(com, UART_SCR, 0x55);
     data = com_in(com, UART_SCR);
     if (data != 0x55) {
-        panic("unable to open serial console on IO port %Xh, "
+        panic("unable to open serial console on IO port %Xh, "  // TODO: probably don't panic here
             "UART does not exist!", com->io_port);
+        return false;
     }
 
     // set baud rate
@@ -249,17 +254,19 @@ static void serial_console_setup(struct console *cons)
     (void) com_in(com, UART_LSR);
     (void) com_in(com, UART_MSR);
     (void) com_in(com, UART_IIR);
+
+    return true;
 }
 
-static int serial_console_write(struct console *cons, const char *buf, size_t count)
+static ssize_t serial_console_write(struct console *cons, const char *buf, size_t count)
 {
     struct com *com;
     const char *p;
     uint8_t ier;
 
     // get port info
-    com = get_com(cons->index);
-    assert(com->num == cons->index);
+    com = get_com(cons->number);
+    assert(com->num == cons->number);
 
     // disable interrupts
     ier = com_in(com, UART_IER);
@@ -287,8 +294,8 @@ static int serial_console_getc(struct console *cons)
     char c;
 
     // get port info
-    com = get_com(cons->index);
-    assert(com->num == cons->index);
+    com = get_com(cons->number);
+    assert(com->num == cons->number);
 
     // disable interrupts
     ier = com_in(com, UART_IER);
@@ -305,12 +312,12 @@ static int serial_console_getc(struct console *cons)
 struct console serial_console =
 {
     .name = "ttyS",
-    .index = SERIAL_CONSOLE_COM,
-    .flags = 0,
+    .number = SERIAL_CONSOLE_COM,
+    .flags = _CONSOLE_FLAG_PRINTBUF,
     .device = serial_console_device,
-    .setup = serial_console_setup,
+    .init = serial_console_setup,
     .write = serial_console_write,
-    .getc = serial_console_getc
+    .read_char = serial_console_getc
 };
 
 #endif

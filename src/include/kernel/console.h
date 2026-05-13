@@ -14,7 +14,7 @@
  * SOFTWARE.
  * -----------------------------------------------------------------------------
  *         File: include/kernel/console.h
- *      Created: May 3, 2025
+ *      Created: May 12, 2026
  *       Author: Wes Hampson
  * =============================================================================
  */
@@ -24,29 +24,77 @@
 
 #include <kernel/device.h>
 
-// similar to linux console
+/**
+ * Dump the klog buffer to this console when registered.
+ */
+#define _CONSOLE_FLAG_PRINTBUF  (1 << 0)
+
+/**
+ * Represents a console device.
+ * Similar to Linux console.
+ */
 struct console {
+    /**
+     * Friendly name for this console.
+     */
     char *name;
-    int index;
+
+    /**
+     * Console number. Can be used by driver to identify TTY associated with console.
+     */
+    int number;
+
+    /**
+     * Console flags. See `_CONSOLE_FLAG_*`.
+     */
     int flags;
 
+    /**
+     * Gets the console device ID.
+     */
     dev_t (*device)(struct console *);
-    void (*setup)(struct console *);
-    int (*write)(struct console *, const char *, size_t);
-    int (*getc)(struct console *);
 
-    struct console *next;
+    /**
+     * Initializes the console device.
+     * @return `false` if initialization unsuccessful
+     */
+    bool (*init)(struct console *);
+
+    /**
+     * Writes a character buffer to the console's output stream.
+     * @return the number of characters written
+     */
+    ssize_t (*write)(struct console *, const char *buf, size_t count);
+
+    /**
+     * Reads a character from the console's input stream.
+     * @return the character read
+     */
+    int (*read_char)(struct console *);
+
+    // -- Not required to be populated by registrant --
+    struct console *next;   // next console in list
 };
 
-void register_console(struct console *cons);
-void unregister_console(struct console *cons);
+/**
+ * Linked-list of registered consoles.
+ */
+extern struct console *g_console_list;
 
-bool has_console(void);
+/**
+ * Registers a console device, then calls `init` on the console.
+ * If the console is already registered, no operation is performed.
+ *
+ * @param cons console struct to register
+ * @param flags console flags
+ * @return `false` if the console structure is malformed or failed initialization
+ */
+bool register_console(struct console *cons);
 
-// write a message to all consoles
-int console_write(const char *buf, size_t count);
-
-// wait for a character to be received by the default console
-int console_getc(void);
+/**
+ * Removes a console from the registered console list.
+ * @return `false` if the specified console was never registered
+ */
+bool unregister_console(struct console *cons);     // TODO: cons->destroy()? flush buffers, etc.
 
 #endif // __CONSOLE_H

@@ -185,19 +185,21 @@ static size_t terminal_tty_write_room(struct tty *tty)
 // ----------------------------------------------------------------------------
 // console implementation
 
+#if VT_CONSOLE
+
 static dev_t vt_console_device(struct console *cons)
 {
-    return __mkttydev((cons->index) ? cons->index : current_terminal());
+    return __mkttydev((cons->number) ? cons->number : current_terminal());
 }
 
-static void vt_console_setup(struct console *cons)
+static bool vt_console_setup(struct console *cons)
 {
     struct vga_fb_info fb_info;
 
     init_vga(); // ok to call more than once
     vga_get_fb_info(&fb_info);
 
-    struct terminal *term = get_terminal(cons->index);
+    struct terminal *term = get_terminal(cons->number);
     if (!term->initialized) {
         int num = _DEV_MIN(cons->device(cons));
         initialize_terminal(num, term);
@@ -207,14 +209,16 @@ static void vt_console_setup(struct console *cons)
             terminal_print(term, "\r\n");
         }
     }
+
+    return true;
 }
 
-static int vt_console_write(struct console *cons, const char *buf, size_t count)
+static ssize_t vt_console_write(struct console *cons, const char *buf, size_t count)
 {
     struct terminal *term;
     const char *p;
 
-    term = get_terminal(cons->index);
+    term = get_terminal(cons->number);
 
     p = buf;
     while (*p != '\0' && (p - buf) < count) {
@@ -236,13 +240,15 @@ static int vt_console_getc(struct console *cons)
 struct console vt_console =
 {
     .name = "tty",
-    .index = VT_CONSOLE_NUM,
-    .flags = 0,
+    .number = VT_CONSOLE_NUM,
+    .flags = _CONSOLE_FLAG_PRINTBUF,
     .device = vt_console_device,
-    .setup = vt_console_setup,
+    .init = vt_console_setup,
     .write = vt_console_write,
-    .getc = vt_console_getc
+    .read_char = vt_console_getc
 };
+
+#endif
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -352,8 +358,10 @@ void init_terminal(void)
     // enable blink, show cursor
     terminal_print(get_terminal(DEFAULT_VT), "\e4\e6");
 
+#if VT_CONSOLE
     // register the virtual terminal console
     register_console(&vt_console);
+#endif
 
 #if PRINT_LOGO
     kprint( // let's print a bird with a blinking eye lol

@@ -36,224 +36,92 @@
 #include <kernel/queue.h>
 #include <sys/ohwes.h>
 
-#define KPRINT_MAX  BUFSIZ
+struct console *g_console_list = NULL;  // linked list
+static int num_consoles = 0;
 
-static int _log_start = 0;
-static int _log_size = 0;
-static char *_kernel_log = (char *) __klog;
+extern void klog_flush_to_console(struct console *cons);    // kprint.c
 
-struct console *g_consoles = NULL;
-extern bool g_kb_initialized;
-
-void register_console(struct console *cons)
+bool register_console(struct console *cons)
 {
-    const char *log_ptr;
-    struct console *currcons;
+    struct console *curr_cons;
+    struct console *prev_cons;
+    bool success = true;
 
-    assert(cons);
+    // sanity check
+    if (!cons || !cons->name || !cons->device || !cons->init ||
+        !cons->write || !cons->read_char) {
+        return false;
+    }
 
-    if (!has_console()) {
-        g_consoles = cons;
-        cons->next = NULL;
+    // add console to tail
+    if (num_consoles == 0) {
+        assert(g_console_list == NULL);
+        g_console_list = cons;
     }
     else {
-        currcons = g_consoles;
-        if (cons == currcons) {
-            return; // already registered
-        }
-
-        while (currcons->next) {
-            currcons = currcons->next;
-            if (currcons == cons) {
-                return; // already registered
+        assert(g_console_list != NULL);
+        curr_cons = &g_console_list[0];
+        do {
+            if (curr_cons == cons) {
+                goto registered;
             }
-        }
-
-        currcons->next = cons;
-        cons->next = NULL;
+            prev_cons = curr_cons;
+            curr_cons = curr_cons->next;
+        } while (curr_cons != NULL);
+        prev_cons->next = cons;
     }
 
-    if (cons->setup) {
-        cons->setup(cons);
+    // initialize
+    success = cons->init(cons);
+    cons->next = NULL;
+
+    if (cons->flags & _CONSOLE_FLAG_PRINTBUF) {
+        klog_flush_to_console(cons);
     }
-    if (cons->write) {
-        log_ptr = &_kernel_log[_log_start];
-        if (_log_size < KERNEL_LOG_SIZE) {
-            cons->write(cons, log_ptr, _log_size);
-        }
-        else {
-            cons->write(cons, log_ptr, KERNEL_LOG_SIZE - _log_start);
-            cons->write(cons, _kernel_log, _log_start);
-        }
-    }
+
+    num_consoles++;
+
+registered:
+    return success;
 }
 
-void unregister_console(struct console *cons)
+bool unregister_console(struct console *cons)
 {
-    struct console *currcons;
-    struct console *prevcons;
+    struct console *curr_cons = &g_console_list[0];
+    struct console *prev_cons = NULL;
 
-    assert(cons);
-
-    if (g_consoles == cons) {
-        g_consoles = g_consoles->next;
-        cons->next = NULL;
-        return;
-    }
-
-    currcons = g_consoles;
-    while (currcons->next) {
-        prevcons = currcons;
-        currcons = currcons->next;
-        if (currcons == cons) {
-            prevcons->next = currcons->next;
-            currcons = NULL;
+    do {
+        if (curr_cons == cons) {
             break;
         }
+        prev_cons = curr_cons;
+        curr_cons = curr_cons->next;
+    } while (curr_cons != NULL);
+
+    if (curr_cons == NULL) {
+        return false;   // not found
     }
+
+    assert(num_consoles > 0);
+
+    if (curr_cons == g_console_list) {
+        assert(prev_cons == NULL);
+        g_console_list = curr_cons->next;
+    }
+    else {
+        assert(prev_cons != NULL);
+        prev_cons->next = curr_cons->next;
+    }
+
+    curr_cons->next = NULL;
+    num_consoles--;
+
+    return true;
 }
 
 bool has_console(void)
 {
-    return g_consoles != NULL;
-}
-
-static void register_default_console(void)
-{
-    extern struct console vt_console;
-    register_console(&vt_console);
-}
-
-// print a message to the console(s) and kernel log
-int console_write(const char *buf, size_t count)
-{
-    const char *p;
-    const char *line;
-    int linefeed;
-    struct console *cons;
-
-#if EARLY_PRINT
-    // ensure a console is registered
-    if (!has_console()) {
-        register_default_console();
-    }
-#endif
-
-    if (count > KPRINT_MAX) {
-        count = KPRINT_MAX;
-    }
-
-    p = buf;
-    linefeed = 0;
-    while ((p - buf) < count && *p != '\0') {
-        // add to the log 'til we see a linefeed or hit the end
-        for (line = p; (p - buf) < count && *p != '\0'; p++) {
-#if E9_HACK
-            outb(0xE9, *p);
-#endif
-            _kernel_log[(_log_start + _log_size) % KERNEL_LOG_SIZE] = *p;
-            if (_log_size < KERNEL_LOG_SIZE) {
-                _log_size++;
-            }
-            else {
-                _log_start += 1;
-                _log_start %= KERNEL_LOG_SIZE;
-            }
-            linefeed = (*p == '\n');
-            if (linefeed) {
-                break;
-            }
-        }
-
-        // write line to console
-        cons = g_consoles;
-        while (cons) {
-            if (cons->write) {
-                cons->write(cons, line, (p - line) + linefeed);
-            }
-            cons = cons->next;
-        }
-
-        if (linefeed) {
-            linefeed = 0;
-            p++;
-        }
-    }
-
-    return (p - buf);
-}
-
-int console_getc(void)
-{
-    if (!has_console() && !g_consoles->getc) {
-        return '\0';
-    }
-
-    return g_consoles->getc(g_consoles);
-}
-
-int _vkprint(const char *fmt, va_list args)
-{
-    size_t count;
-    char buf[KPRINT_MAX+1] = { };
-
-    // TODO: buffer log messages, store timestamp, log level, and message.
-    // if call to kprint does not contain a newline, buffer line for some time...
-    // after some time, if newline doesn't appear, or KERN_CONT does not appear, flush to log
-
-    uint64_t ns = get_uptime();
-    uint32_t sec = (uint32_t) (ns / 1000000000);
-    uint32_t micros = (uint32_t) ((ns % 1000000000) / 1000);
-
-    count = vsnprintf(buf, KPRINT_MAX, fmt, args);
-    count = snprintf(buf, KPRINT_MAX, "[%4lu.%06lu] ", sec, micros);
-    count += vsnprintf(buf+count, KPRINT_MAX-count, fmt, args);
-    return console_write(buf, count);
-}
-
-int kprint(const char *fmt, ...)
-{
-    va_list args;
-    size_t count;
-
-    va_start(args, fmt);
-    count =_vkprint(fmt, args);
-    va_end(args);
-
-    return count;
-}
-
-void __noreturn panic(const char *fmt, ...)
-{
-    va_list args;
-
-    va_start(args, fmt);
-    kprint("\n\e[1;31mpanic: "); _vkprint(fmt, args); kprint("\e[0m");
-    va_end(args);
-
-    irq_disable();
-    irq_setmask(IRQ_MASKALL);
-
-#if SERIAL_DEBUGGING
-    if (SERIAL_DEBUG_PORT == COM1_PORT || SERIAL_DEBUG_PORT == COM3_PORT) {
-        irq_unmask(IRQ_COM1);
-    }
-    else {
-        irq_unmask(IRQ_COM2);
-    }
-#endif
-
-    irq_unmask(IRQ_TIMER);
-    if (g_kb_initialized) {
-        irq_unmask(IRQ_KEYBOARD);
-    }
-    irq_enable();
-
-#if SERIAL_DEBUGGING
-    __int3();
-#endif
-
-    for (;;);
+    return num_consoles > 0;
 }
 
 #if 0
@@ -268,7 +136,7 @@ static void print_consoles(void)   // TODO: procfs for this
 {
     struct console *cons;
 
-    cons = g_consoles;
+    cons = g_console_list;
     while (cons) {
         // printf("%s ", cons->name);
         cons = cons->next;
@@ -276,88 +144,3 @@ static void print_consoles(void)   // TODO: procfs for this
     // printf("\n");
 }
 #endif
-
-void print_boot_info(struct boot_info *boot)
-{
-    int nfloppies = boot->hwflags.has_diskette_drive;
-    if (nfloppies) {
-        nfloppies += boot->hwflags.num_other_diskette_drives;
-    }
-
-    int nserial = boot->hwflags.num_serial_ports;
-    int nparallel = boot->hwflags.num_parallel_ports;
-    bool gameport = boot->hwflags.has_gameport;
-    bool mouse = boot->hwflags.has_ps2mouse;
-    uint32_t ebda_size = 0xA0000 - boot->ebda_base;
-
-    kprint("bios-boot: %d %s, %d serial %s, %d parallel %s\n",
-        nfloppies, PLURALIZE2(nfloppies, "floppy", "floppies"),
-        nserial, PLURALIZE(nserial, "port"),
-        nparallel, PLURALIZE(nparallel, "port"));
-    kprint("bios-boot: A20 mode is %s\n",
-        (boot->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
-        (boot->a20_method == A20_PORT92) ? "A20_PORT92" :
-        (boot->a20_method == A20_BIOS) ? "A20_BIOS" :
-        "A20_NONE");
-    kprint("bios-boot: %s PS/2 mouse, %s game port\n", A_OR_B(mouse, "has", "no"), A_OR_B(gameport, "has", "no"));
-    kprint("bios-boot: video mode is %02lXh\n", boot->vga_mode & 0x7F);
-    if (boot->ebda_base) kprint("bios-boot: EBDA=%08lX,%lXh\n", boot->ebda_base, ebda_size);
-    kprint("bios-boot: kernel uses %lu bytes (%ld sectors) on disk\n",
-        boot->kernel_size, div_ceil(boot->kernel_size, 512));
-}
-
-static void print_page_info(uint32_t va, const struct pginfo *page)
-{
-    uint32_t pa = page->pfn << PAGE_SHIFT;
-    uint32_t plimit = pa + PAGE_SIZE - 1;
-    uint32_t vlimit = va + PAGE_SIZE - 1;
-    if (page->pde) {
-        if (page->ps) {
-            plimit = pa + PGDIR_SIZE - 1;
-        }
-        vlimit = va + PGDIR_SIZE - 1;
-    }
-
-    //           va-vlimit -> pa-plimit k/M/T rw u/s a/d g wt nc
-    kprint("  v(%08lX-%08lX) -> p(%08lX-%08lX) %c %-2s %c %c %c %s%s\n",
-        va, vlimit, pa, plimit,
-        page->pde ? (page->ps ? 'M' : 'T') : 'k',   // (k) small page, (M) large page, (T) page table
-        page->rw ? "rw" : "r",                      // read/write
-        page->us ? 'u' : 's',                       // user/supervisor
-        page->a ? (page->d ? 'd' : 'a') : ' ',      // accessed/dirty
-        page->g ? 'g' : ' ',                        // global
-        page->pwt ? "wt " : "  ",                   // write-through
-        page->pcd ? "nc " : "  ");                  // no-cache
-}
-
-void print_page_mappings(void)
-{
-    struct pginfo *pgdir = (struct pginfo *) get_pgdir();
-    struct pginfo *pgtbl;
-    struct pginfo *page;
-    uint32_t va;
-
-    for (int i = 0; i < PDE_COUNT; i++) {
-        page = &pgdir[i];
-        if (!page->p) {
-            continue;
-        }
-
-        va = i << PGDIR_SHIFT;
-        print_page_info(va, page);
-
-        if (page->pde && page->ps) {
-            continue;   // large
-        }
-
-        pgtbl = (struct pginfo *) KERNEL_ADDR(page->pfn << PAGE_SHIFT);
-        for (int j = 0; j < PTE_COUNT; j++) {
-            page = &pgtbl[j];
-            if (!page->p) {
-                continue;
-            }
-            va = (i << PGDIR_SHIFT) | (j << PAGE_SHIFT);
-            print_page_info(va, page);
-        }
-    }
-}

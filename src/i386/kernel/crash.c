@@ -393,10 +393,11 @@ static int cprint(const char *fmt, ...)
     count = vsnprintf(buf, CRASH_BUFSIZ, fmt, args);
     va_end(args);
 
-    if (has_console()) {
-        return console_write(buf, count);
+    struct console *cons = g_console_list;
+    if (!cons) {
+        return fbwrite(buf, count);
     }
-    return fbwrite(buf, count);
+    return cons->write(cons, buf, count);
 }
 
 // print directly to active the terminal's VGA frame buffer

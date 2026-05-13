@@ -22,6 +22,7 @@ SOURCES := \
     fs.c \
     io.c \
     irq.c \
+    kprint.c \
     list.c \
     main.c \
     mm.c \
