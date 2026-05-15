@@ -121,9 +121,9 @@ __fastcall void handle_irq(struct iregs *regs)
             ? (++g_irqstats->spur_pic0)
             : (++g_irqstats->spur_pic1);
 
-        alert("spurious IRQ%d\n", irq);
+        pr_alert("spurious IRQ%d\n", irq);
         if (count > 1 && ((count-1) % SPURIOUS_THRESH) == 0) {
-            alert("more than %d spurious IRQs! what's going on??\n", count - 1);
+            pr_alert("more than %d spurious IRQs! what's going on??\n", count - 1);
         }
         return;     // no EOI for spurious IRQs
     }
@@ -141,6 +141,6 @@ __fastcall void handle_irq(struct iregs *regs)
     }
 
     if (!handled) {
-        alert("unhandled irq%d\n", irq);
+        pr_alert("unhandled irq%d\n", irq);
     }
 }

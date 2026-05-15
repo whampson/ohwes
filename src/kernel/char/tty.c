@@ -249,7 +249,7 @@ static void tty_free_mem(struct tty *tty, int index)
     if (--(*tty->driver.refcount) < 0) {
         *tty->driver.refcount = 0;
 #if TTY_PARANOID
-        alert("dev%d,%d: close: tty->driver.refcount < 0!\n",
+        pr_alert("dev%d,%d: close: tty->driver.refcount < 0!\n",
             _DEV_MAJ(tty->device), _DEV_MIN(tty->device));
 #endif
     }
@@ -265,7 +265,7 @@ static void tty_shutdown(struct tty *tty)
     if (--tty->refcount < 0) {
         tty->refcount = 0;
 #if TTY_PARANOID
-        alert("dev%d,%d: close: tty->refcount < 0!\n",
+        pr_alert("dev%d,%d: close: tty->refcount < 0!\n",
             _DEV_MAJ(tty->device), _DEV_MIN(tty->device));
 #endif
     }

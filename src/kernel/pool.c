@@ -68,8 +68,9 @@ void lazy_init_pools(void)
         list_add(&g_poolinfo->free_list, &p->list);
     }
 
-    kprint("pool: %ld pages used to manage a max of %d pools\n",
-        get_order_size(g_poolinfo->order) >> PAGE_SHIFT, MAX_NR_POOLS);
+    size_t size = get_order_size(g_poolinfo->order) >> PAGE_SHIFT;
+    kprint("pool: %ld %s used to manage up to %d pools\n",
+        size, PLURALIZE(size, "page"), MAX_NR_POOLS);
 }
 
 #if 0
@@ -135,7 +136,7 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
     }
     void *alloc = alloc_pages(MEM_ZERO, order);
     if (alloc == NULL) {
-        warn("pool: create: not enough memory for pool size=%zd capacity=%zd!\n", size, capacity);
+        pr_warn("pool: create: not enough memory for pool size=%zd capacity=%zd!\n", size, capacity);
         return INVALID_POOL;
     }
 
@@ -223,7 +224,7 @@ void * pool_alloc(pool_t *pool, int flags)
     }
 
     if (list_empty(&pool->free_list)) {
-        warn("pool: %s: alloc failed: pool is full!\n", pool->name);
+        pr_warn("pool: %s: alloc failed: pool is full!\n", pool->name);
         return NULL;
     }
 
@@ -268,7 +269,7 @@ void pool_free(pool_t *pool, const void *item)
     const uintptr_t item_addr = (uintptr_t) item;
 
     if (item_addr < chunk_base || item_addr > chunk_base + chunk_area_size) {
-        warn("pool: %s: free failed: address invalid\n", pool->name);
+        pr_warn("pool: %s: free failed: address invalid\n", pool->name);
         return;
     }
 

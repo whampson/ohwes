@@ -100,8 +100,6 @@ __fastcall void kmain(struct boot_info **info)
 
     // TODO: kernel stack overflow crashes without indication!? need to test this
 
-    // TODO: kernel log levels,
-    //  kprint(LOG_FATAL "System Failure: %s\n", reason);
 
     kprint("%s %s (gcc %s) %s %s\n",
         OS_NAME, OS_VERSION, __VERSION__, __DATE__, __TIME__);

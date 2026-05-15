@@ -149,7 +149,6 @@ static void check_memory(void)
     int bad_kb = 0;
     int free_pages = 0;
     struct acpi_mmap_entry *e;
-    char buf[80], *p;
 
     // tally up the amount of usable RAM
     for (e = _phys_mmap; mmap_valid(e); e++) {
@@ -162,17 +161,16 @@ static void check_memory(void)
         }
         uintptr_t base = (uintptr_t) e->base;
         uintptr_t limit = (uintptr_t) (e->base + e->length - 1);
-        p = buf;
-        p += snprintf(buf, sizeof(buf), "phys-mem: %p-%p %5lu%c %s",
+        pr_cont("phys-mem: [%p-%p] %5lu%c %s",
             _P(base), _P(limit),
             disp_size, size_char,
             mmap_bad(e)     ? "*** BAD ***" :
             mmap_acpi(e)    ? "ACPI" :
-            mmap_usable(e)  ? "" : "reserved");
+            mmap_usable(e)  ? "free" : "reserved");
         if (e->attr) {
-            p += snprintf(p, sizeof(buf-p), " (attr = 0x%lX)", e->attr);
+            pr_cont(" (attr = 0x%lX)", e->attr);
         }
-        p += snprintf(p, sizeof(buf-p), "\n");
+        pr_cont("\n");
 
         total_kb += size_kb;
         if (mmap_bad(e)) {
@@ -181,15 +179,13 @@ static void check_memory(void)
         if (mmap_usable(e)) {
             free_kb += size_kb;
         }
-
-        kprint(buf);
     }
 
     free_pages = (free_kb >> (PAGE_SHIFT - KB_SHIFT));
     kprint("phys-mem: %dk total, %dk usable\n", total_kb, free_kb);
     kprint("phys-mem: %d usable pages\n", free_pages);
     if (bad_kb > 0) {
-        warn("phys-mem: found %dk of bad memory!\n", bad_kb);
+        pr_warn("phys-mem: found %dk of bad memory!\n", bad_kb);
     }
 
     if (free_kb < (MEMORY_REQUIRED >> KB_SHIFT)) {
@@ -273,15 +269,15 @@ static void init_zones(void)
         }
     }
 
-    kprint("mem: %s: mem_start=%p mem_end=%p mem_size_pages=%zd\n",
+    kprint("%s: mem_start=%p mem_end=%p mem_size_pages=%zd\n",
         zone->name, _P(zone->mem_start), _P(zone->mem_end), zone->mem_size_pages);
-    kprint("mem: %s: bitmap=%p size_pages=%ld\n",
+    kprint("%s: bitmap=%p size_pages=%ld\n",
         zone->name, bitmap, bitmap_size_pages);
 
     // ensure pages are mapped to speed up allocation time
     uintptr_t top = min((4*MB), zone->mem_end+1); // TODO: temp workaround for update_page_mappings 4M limit...
     size_t size_pages = (top - zone->mem_start) >> PAGE_SHIFT;
-    warn("mem: mapping only up to 4M until multiple PDEs are supported!\n");
+    pr_warn("mem: mapping only up to 4M until multiple PDEs are supported!\n");
     pgflags_t flags = _PAGE_RW | _PAGE_PRESENT;
     update_page_mappings(KERNEL_ADDR(zone->mem_start), zone->mem_start, size_pages, flags);
 
@@ -324,13 +320,13 @@ void * alloc_pages(int flags, int order)
 
     // range check!
     if (addr < zone->mem_start || addr + order_size > zone->mem_end + 1) {
-        panic("mem: %s: alloc out of bounds!!", zone->name);
+        panic("%s: alloc out of bounds!!", zone->name);
     }
 
     void *kern_addr = (void *) KERNEL_ADDR(addr);
 
     zone->free_pages -= (order_size >> PAGE_SHIFT);
-    kprint("mem: %s: alloc %p-%p order %d; %zd pages left\n",
+    kprint("%s: alloc %p-%p order %d; %zd pages left\n",
         zone->name, kern_addr, kern_addr+order_size-1, order, zone->free_pages);
 
     if (flags & MEM_ZERO) {
@@ -376,7 +372,7 @@ void free_pages(void *addr, int order)
     }
 
     zone->free_pages += (order_size >> PAGE_SHIFT);
-    kprint("mem: %s: free %p-%p order %d; %zd pages left\n",
+    kprint("%s: free %p-%p order %d; %zd pages left\n",
         zone->name, addr, addr+order_size-1, order, zone->free_pages);
 }
 
@@ -414,7 +410,7 @@ static void print_kernel_sections(void)
 
     // TODO: make this into a sorted list; collect regions at boot
     struct section sections[] = {
-        { "kernel image:",  __kernel_start,     __kernel_end },
+        // { "kernel image:",  __kernel_start,     __kernel_end },
         { ".setup",         __setup_start,      __setup_end },
         { ".text",          __text_start,       __text_end },
         { ".rodata",        __rodata_start,     __rodata_end },
@@ -432,7 +428,7 @@ static void print_kernel_sections(void)
     for (int i = 0; i < countof(sections); i++) {
         struct section *sec = &sections[i];
         size_t sec_size = (sec->end - sec->start);
-        kprint("kern-mem: %p-%p %6lu %s\n",
+        kprint("kern-mem: [%p-%p] %6lu %s\n",
             _P(KERNEL_ADDR(sec->start)), _P(KERNEL_ADDR(sec->end)-1),
             sec_size, sec->name);
     }

@@ -38,30 +38,11 @@
 #ifndef __ASSEMBLER__
 
 #include <assert.h>
+#include <kernel/kprint.h>
 #include <sys/ohwes.h>
 
 #define ALERT_FREQ  1725
 #define ALERT_TIME   100
-
-// TODO: use this on kprint and panic to sanitize format string
-//  __attribute__((format(printf, 1, 2)));
-
-// TODO: kprint(LOG_ERROR "uh oh: %08x\n", errCode);
-// #define LOG_FATAL   "<0>"
-// #define LOG_ERROR   "<1>"
-// #define LOG_ALERT   "<2>"
-// #define LOG_WARN    "<3>"
-// #define LOG_INFO    "<4>"
-// #define LOG_DEBUG   "<5>"
-// #define LOG_CONT    "<c>"
-
-// printf to console
-__format_printf(1, 2)
-extern int kprint(const char *fmt, ...);
-
-// halt and catch fire
-__format_printf(1, 2)
-extern __noreturn void panic(const char *fmt, ...);
 
 // beep at hz for millis;
 //  interrupts must be ON or it will beep/block forever!
@@ -70,23 +51,11 @@ extern void beep(int hz, int ms, bool block);
 // get the amount of time the system has been up and running, in microseconds
 extern uint64_t get_uptime(void);
 
-// print alert message and beep, then continue;
-//  interrupts must be ON or this will beep forever!
-#define alert(...) \
-do { \
-    kprint("\e[1;33malert: " __VA_ARGS__); kprint("\e[0m"); \
-    beep(ALERT_FREQ, ALERT_TIME, false); \
-} while (0)
-
-#define warn(...) \
-do { \
-    kprint("\e[1;33mwarning: " __VA_ARGS__); kprint("\e[0m"); \
-} while (0)
-
 // TODO: verify/test these!!
 #define PHYSICAL_ADDR(v)    (((uintptr_t) (v) >= KERNEL_VA) ? ((uintptr_t) (v) - KERNEL_VA) : (uintptr_t) (v))
 #define KERNEL_ADDR(p)      (((uintptr_t) (p) >= -KERNEL_VA)  ? (uintptr_t) (p) : ((uintptr_t) (p) + KERNEL_VA))
 
+// convert integer to pointer type, useful for %p
 #define _P(addr) ((void *) (addr))
 
 #endif  // ndef __ASSEMBLER__

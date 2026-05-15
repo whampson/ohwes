@@ -294,7 +294,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
         case 0xFA:
             g_kb->ack_count++;
             if ((g_kb->ack_count % WARN_INTERVAL) == 0) {
-                alert("ps2kb: seen %d stray acks\n", g_kb->ack_count);
+                pr_alert("ps2kb: seen %d stray acks\n", g_kb->ack_count);
             }
             // TODO: panic after some amount...?
             goto done;
@@ -302,7 +302,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
         case 0xFE:
             g_kb->resend_count++;
             if ((g_kb->resend_count % WARN_INTERVAL) == 0) {
-                alert("ps2kb: seen %d stray resend requests\n", g_kb->resend_count);
+                pr_alert("ps2kb: seen %d stray resend requests\n", g_kb->resend_count);
             }
             goto done;
 
@@ -312,10 +312,10 @@ static void kb_interrupt(int irq, struct iregs *regs)
         case 0x00:                  // error
             g_kb->error_count++;
             if (g_kb->error_count == 1) {
-                alert("ps2kb: got error 0x%X\n", g_kb->error_count);
+                pr_alert("ps2kb: got error 0x%X\n", g_kb->error_count);
             }
             if ((g_kb->error_count % WARN_INTERVAL) == 0) {
-                alert("ps2kb: seen %d errors\n", g_kb->error_count);
+                pr_alert("ps2kb: seen %d errors\n", g_kb->error_count);
             }
             goto done;
     }

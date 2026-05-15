@@ -61,10 +61,6 @@
 // check if a COM register returned a bad value
 #define ERR_CHK(x)          ((x) == 0 || (x) == 0xFF)
 
-// warn print
-#define COM_WARN(...) \
-    alert(__VA_ARGS__)
-
 struct com g_com[NR_SERIAL];
 
 // "serial" prefix refers to TTY functions
@@ -345,7 +341,7 @@ void init_serial(void)
             // serial port is reserved by another driver (e.g. debug interface)
             com->open = true;
             com->reserved = true;
-            kprint("com%d: I/O port %Xh reserved for debugging, not usable as a TTY device\n",
+            pr_warn("com%d: I/O port %Xh reserved for debugging, not usable as a TTY device\n",
                 com->num, com->io_port);
             continue;
         }
@@ -360,12 +356,12 @@ void init_serial(void)
         com_out(com, UART_SCR, 0);
         com_out(com, UART_SCR, 0x55);
         if (com_in(com, UART_SCR) != 0x55) {
-            kprint("com%d: error: probe failed\n", com->num);
+            pr_warn("com%d: probe failed\n", com->num);
             continue;
         }
 
         com->valid = true;
-        kprint("com%d: detected on port %Xh\n", com->num, com->io_port);
+        pr_info("com%d: detected on port %Xh\n", com->num, com->io_port);
     }
 
 #if SERIAL_CONSOLE
@@ -461,7 +457,7 @@ static int serial_open(struct tty *tty)
     com->open = true;
 
 #if CHATTY_COM
-    COM_WARN("com%d: opened, port=%Xh div=%d lcr=%02Xh mcr=%02Xh iir=%02Xh ier=%02Xh\n",
+    pr_debug("com%d: opened, port=%Xh div=%d lcr=%02Xh mcr=%02Xh iir=%02Xh ier=%02Xh\n",
         com->num, (int) com->io_port,
         (int) com->baud_divisor,
         (int) com->lcr._value, (int) com->mcr._value,
@@ -509,7 +505,7 @@ static void serial_close(struct tty *tty)
     com->open = false;
 
 #if CHATTY_COM
-    COM_WARN("com%d: closed\n", com->num);
+    pr_debug("com%d: closed\n", com->num);
 #endif
 
     restore_flags(flags);
@@ -576,7 +572,7 @@ static int serial_write(struct tty *tty, const char *buf, size_t count)
 
 #if CHATTY_COM
     if (ring_full(&com->tx_ring)) {
-        COM_WARN("com%d: write buffer full!\n", com->num);
+        pr_alert("com%d: write buffer full!\n", com->num);
     }
 #endif
 
@@ -652,14 +648,14 @@ static void serial_unthrottle(struct tty *tty)
     cli_save(flags);
     if (I_IXOFF(tty)) {
 #if CHATTY_COM
-        COM_WARN("com%d: IXOFF: tx ^%c\n", com->num, CC_START(tty) ^ 0x40);
+        pr_debug("com%d: IXOFF: tx ^%c\n", com->num, CC_START(tty) ^ 0x40);
 #endif
         com->xchar = CC_START(tty);
         tx_enable(com);
     }
     if (C_CRTSCTS(tty)) {
 #if CHATTY_COM
-        COM_WARN("com%d: RTSCTS: rts=1, recv start\n", com->num);
+        pr_debug("com%d: RTSCTS: rts=1, recv start\n", com->num);
 #endif
         com->mcr.rts = 1;
     }
@@ -680,14 +676,14 @@ static void serial_throttle(struct tty *tty)
     cli_save(flags);
     if (I_IXOFF(tty)) {
 #if CHATTY_COM
-        COM_WARN("com%d: IXOFF: tx ^%c\n", com->num, CC_STOP(tty) ^ 0x40);
+        pr_debug("com%d: IXOFF: tx ^%c\n", com->num, CC_STOP(tty) ^ 0x40);
 #endif
         com->xchar = CC_STOP(tty);
         tx_enable(com);
     }
     if (C_CRTSCTS(tty)) {
 #if CHATTY_COM
-        COM_WARN("com%d: RTSCTS: rts=0, recv stop\n", com->num);
+        pr_debug("com%d: RTSCTS: rts=0, recv stop\n", com->num);
 #endif
         com->mcr.rts = 0;
     }
@@ -706,7 +702,7 @@ static void serial_start(struct tty *tty)
     }
 
 #if CHATTY_COM
-    COM_WARN("com%d: starting...\n", com->num);
+    pr_debug("com%d: starting...\n", com->num);
 #endif
 
     cli_save(flags);
@@ -727,7 +723,7 @@ static void serial_stop(struct tty *tty)
     }
 
 #if CHATTY_COM
-    COM_WARN("com%d: stopping...\n", com->num);
+    pr_debug("com%d: stopping...\n", com->num);
 #endif
 
     cli_save(flags);
@@ -755,7 +751,7 @@ static void serial_hangup(struct tty *tty)
     com->open = false;
 
 #if CHATTY_COM
-    COM_WARN("com%d: hangup, closed\n", com->num);
+    pr_debug("com%d: hangup, closed\n", com->num);
 #endif
 }
 
@@ -820,7 +816,7 @@ static bool set_baud(struct com *com, int baud_divisor)
 
     // if readback failed, we might have a bad COM port
     if (ERR_CHK(com->baud_divisor) ) {
-        kprint("com%d: error: unable to set baud rate (div=%Xh)\n",
+        pr_err("com%d: error: unable to set baud rate (div=%Xh)\n",
                 com->num, baud_divisor);
         return false;
     }
@@ -846,7 +842,7 @@ static bool set_mode(struct com *com,
     // readback for sanity
     lcr_rdbk = com_in(com, UART_LCR);
     if (ERR_CHK(lcr_rdbk) || lcr_rdbk != lcr._value) {
-        kprint("com%d: error: unable to set line control (lcr=%Xh, lcr_rdbk=%Xh)\n",
+        pr_err("com%d: error: unable to set line control (lcr=%Xh, lcr_rdbk=%Xh)\n",
             com->num, lcr._value, lcr_rdbk);
         return false;
     }
@@ -939,7 +935,7 @@ static void tx_enable(struct com *com)
 {
     if (!com->ier.thre) {
 #if CHATTY_COM && PRINT_TX_ENABLE
-        COM_WARN("com%d: tx enable\n", com->num);
+        pr_debug("com%d: tx enable\n", com->num);
 #endif
         com->ier.thre = 1;
         com_out(com, UART_IER, com->ier._value);
@@ -950,7 +946,7 @@ static void tx_disable(struct com *com)
 {
     if (com->ier.thre) {
 #if CHATTY_COM && PRINT_TX_ENABLE
-        COM_WARN("com%d: tx disable\n", com->num);
+        pr_debug("com%d: tx disable\n", com->num);
 #endif
         com->ier.thre = 0;
         com_out(com, UART_IER, com->ier._value);
@@ -963,7 +959,7 @@ static void check_modem_status(struct com *com)
 
 #if CHATTY_COM && PRINT_MODEM_STATUS
     if (com->msr._value & 0x0F) {
-        COM_WARN("com%d: modem status:%s%s%s%s%s%s%s%s\n", com->num,
+        pr_debug("com%d: modem status:%s%s%s%s%s%s%s%s\n", com->num,
             com->msr.dcts ? " dcts" : "",
             com->msr.ddsr ? " ddsr" : "",
             com->msr.teri ? " teri" : "",
@@ -998,7 +994,7 @@ static void check_modem_status(struct com *com)
         }
         else {
 #if CHATTY_COM
-            COM_WARN("com%d: hanging up...\n", com->num);
+            pr_debug("com%d: hanging up...\n", com->num);
 #endif
             tty_hangup(com->tty);
         }
@@ -1009,7 +1005,7 @@ static void check_modem_status(struct com *com)
         if (com->tty->hw_stopped) {
             if (com->msr.cts) {
 #if CHATTY_COM
-                COM_WARN("com%d: RTSCTS: cts=1, xmit start\n", com->num);
+                pr_debug("com%d: RTSCTS: cts=1, xmit start\n", com->num);
 #endif
                 com->tty->hw_stopped = false;
                 tx_enable(com);
@@ -1018,7 +1014,7 @@ static void check_modem_status(struct com *com)
         else {
             if (!com->msr.cts) {
 #if CHATTY_COM
-                COM_WARN("com%d: RTSCTS: cts=0, xmit stop\n", com->num);
+                pr_debug("com%d: RTSCTS: cts=0, xmit stop\n", com->num);
 #endif
                 com->tty->hw_stopped = true;
                 tx_disable(com);
@@ -1033,7 +1029,7 @@ static void check_line_status(struct com *com)
 
 #if CHATTY_COM && PRINT_LINE_STATUS
     if (com->lsr._value & 0x1E) {
-        COM_WARN("com%d: %s%s%s%s\n", com->num,
+        pr_debug("com%d: %s%s%s%s\n", com->num,
             com->lsr.oe  ? " overrun error" : "",
             com->lsr.pe  ? " parity error"  : "",
             com->lsr.fe  ? " framing error" : "",
@@ -1100,7 +1096,7 @@ static void recv_chars(struct com *com)
     if (com->iir.timeout) {
         com->stats.n_timeout++;
 #if CHATTY_COM && PRINT_TIMEOUT
-        COM_WARN("com%d: timeout!\n", com->num);
+        pr_debug("com%d: timeout!\n", com->num);
 #endif
     }
 
@@ -1121,7 +1117,7 @@ static void recv_chars(struct com *com)
 
 #if CHATTY_COM
     if (!count) {
-        COM_WARN("com%d: receive max reached!\n", com->num);
+        pr_alert("com%d: receive max reached!\n", com->num);
     }
 #endif
 }
@@ -1178,7 +1174,7 @@ static void com_interrupt(struct com *com, struct iregs *regs)
 
 #if CHATTY_COM
     if (npass == INTR_MAX) {
-        COM_WARN("com%d: max interrupt passes reached!\n", com->num);
+        pr_alert("com%d: max interrupt passes reached!\n", com->num);
     }
 #endif
 }

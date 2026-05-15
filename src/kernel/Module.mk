@@ -18,7 +18,6 @@ TARGET_LDLIBS  := \
     usr/shell.a	 # TODO: temp until we can load programs :D
 
 SOURCES := \
-    console.c \
     fs.c \
     io.c \
     irq.c \

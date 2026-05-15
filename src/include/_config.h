@@ -46,7 +46,7 @@
 #define SERIAL_CONSOLE_COM      1   //        serial console COM port number
 #define SERIAL_CONSOLE_BAUD     BAUD_9600
 #define E9_HACK                 1   // (bool) tee console output to I/O port 0xE9
-#define EARLY_PRINT             0   // (bool) register console when first char is printed
+#define EARLY_PRINT             1   // (bool) register console when first char is printed
 
 // general printing
 #define PRINT_LOGO              0   // (bool) show a special logo at boot
@@ -56,6 +56,7 @@
 // kernel log
 #define KERNEL_LOG_SIZE         (2*PAGE_SIZE)
 #define KPRINT_TIME             1   // (bool) show timestamp in kernel log messages
+#define DEFAULT_LOG_LEVEL       5   // (0-5)  default console log level
 
 // debugging
 #define SERIAL_DEBUGGING        0   // (bool) enable debugging over COM port

@@ -163,9 +163,9 @@ __noreturn void handle_soft_double_fault(
     char msgbuf[CRASH_BUFSIZ];
 
     cprint("\n\n\e[1m" RED("*** FATAL: exception (1) occurred while handling previous exception (2)"));
-    cprint("\n\n(1) %s at %08X", exception_names[cpu->iregs.vec], cpu->iregs.eip);
+    cprint("\n\n(1) %s at %p", exception_names[cpu->iregs.vec], _P(cpu->iregs.eip));
     dump_cpu(cpu, cprint);
-    cprint("\n\n(2) %s at %08X", exception_names[orig_cpu->iregs.vec], orig_cpu->iregs.eip);
+    cprint("\n\n(2) %s at %p", exception_names[orig_cpu->iregs.vec], _P(orig_cpu->iregs.eip));
     dump_cpu(orig_cpu, cprint);
 
     snprintf(msgbuf, sizeof(msgbuf),
@@ -218,8 +218,8 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
     }
 #endif
 
-    cprint("\n\n\e[1m" RED("*** FATAL: exception %02X occurred at %08X") "\n",
-        iregs->vec, exception_names[iregs->vec]);
+    cprint("\n\n\e[1m" RED("*** FATAL: exception %02X (%s) occurred at %p") "\n",
+        iregs->vec, exception_names[iregs->vec], _P(iregs->eip));
     dump_cpu(&cpu, cprint);
 
     // collect error info
@@ -393,11 +393,15 @@ static int cprint(const char *fmt, ...)
     count = vsnprintf(buf, CRASH_BUFSIZ, fmt, args);
     va_end(args);
 
-    struct console *cons = g_console_list;
+    struct console *cons = g_consoles;
     if (!cons) {
         return fbwrite(buf, count);
     }
-    return cons->write(cons, buf, count);
+
+    for (; cons; cons = cons->next) {
+        cons->write(cons, buf, count);
+    }
+    return count;
 }
 
 // print directly to active the terminal's VGA frame buffer

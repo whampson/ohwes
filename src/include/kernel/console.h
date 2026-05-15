@@ -79,7 +79,7 @@ struct console {
 /**
  * Linked-list of registered consoles.
  */
-extern struct console *g_console_list;
+extern struct console *g_consoles;
 
 /**
  * Registers a console device, then calls `init` on the console.
