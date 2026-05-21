@@ -51,17 +51,17 @@ bool list_empty(struct list_node *head)
     return head->next == head;
 }
 
-void list_add(struct list_node *head, struct list_node *item)
+void list_push(struct list_node *head, struct list_node *item)
 {
     insert_into_list(head->prev, head, item);
 }
 
-void list_add_tail(struct list_node *head, struct list_node *item)
+void list_push_back(struct list_node *head, struct list_node *item)
 {
     insert_into_list(head, head->next, item);
 }
 
-void list_remove(struct list_node *item)
+void list_pop(struct list_node *item)
 {
     remove_from_list(item->prev, item->next, item);
 }

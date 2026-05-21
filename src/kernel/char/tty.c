@@ -113,7 +113,7 @@ int tty_register_driver(struct tty_driver *driver)
     if (ret < 0) {
         return ret;
     }
-    list_add_tail(&tty_drivers, &driver->list);
+    list_push_back(&tty_drivers, &driver->list);
 
     driver->magic = TTY_DRIVER_MAGIC;
     return 0;

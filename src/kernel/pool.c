@@ -65,7 +65,7 @@ void lazy_init_pools(void)
     for (int i = 0; i < num_pools; i++) {
         struct pool *p = &g_poolinfo->alloc[i];
         p->magic = POOL_MAGIC;
-        list_add(&g_poolinfo->free_list, &p->list);
+        list_push(&g_poolinfo->free_list, &p->list);
     }
 
     size_t size = get_order_size(g_poolinfo->order) >> PAGE_SHIFT;
@@ -146,8 +146,8 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
         return INVALID_POOL;
     }
 
-    list_remove(&p->list);                 // remove pool from global free list
-    list_add(&g_poolinfo->list, &p->list); // add to used list
+    list_pop(&p->list);                 // remove pool from global free list
+    list_push(&g_poolinfo->list, &p->list); // add to used list
 
     g_poolinfo->count++;
     assert(g_poolinfo->count <= MAX_NR_POOLS);
@@ -169,7 +169,7 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
         struct chunk *chunk = ((struct chunk *) p->alloc) + i;
         chunk->magic = CHUNK_MAGIC;
         chunk->pool = INVALID_POOL;
-        list_add(&p->free_list, &chunk->list);
+        list_push(&p->free_list, &chunk->list);
     }
 
     kprint("pool: created '%s' size_pages=%zd capacity=%zd item_size=%zd flags=%Xh\n",
@@ -205,8 +205,8 @@ void pool_destroy(pool_t *pool)
     free_pages(p->alloc, p->order);
     p->alloc = NULL;
 
-    list_remove(&p->list);                      // remove from used list
-    list_add(&g_poolinfo->free_list, &p->list); // add to free list
+    list_pop(&p->list);                      // remove from used list
+    list_push(&g_poolinfo->free_list, &p->list); // add to free list
 
     g_poolinfo->count--;
     assert(g_poolinfo->count >= 0);
@@ -233,7 +233,7 @@ void * pool_alloc(pool_t *pool, int flags)
         panic("pool: %s: alloc failed: got corrupted chunk data", pool->name);
         return NULL;
     }
-    list_remove(&chunk->list);  // remove from free list
+    list_pop(&chunk->list);  // remove from free list
 
     pool->count++;
     assert(pool->count <= pool->capacity);
@@ -282,7 +282,7 @@ void pool_free(pool_t *pool, const void *item)
     }
 
     chunk->pool = INVALID_POOL;
-    list_add(&pool->free_list, &chunk->list);
+    list_push(&pool->free_list, &chunk->list);
 
     pool->count--;
     assert(pool->count >= 0);

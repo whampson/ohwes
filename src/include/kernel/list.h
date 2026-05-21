@@ -37,43 +37,54 @@ struct list_node {
     struct list_node *next;
 };
 
+/**
+ * List head.
+ */
 typedef struct list_node list_t;
 
 /**
  * Empty list initializer.
  *
+ * @param list list identifier
+ *
  * Usage:
- *  list_t *list = LIST_INITIALIZER(list);
+ * ```
+ *   list_t *my_list = LIST_INITIALIZER(my_list);
+ * ```
  */
 #define LIST_INITIALIZER(list)  { &(list), &(list) }
 
 /**
  * List node traversal for-loop iterator.
  *
- * @param it iterator name
+ * @param it iterator name; `struct list_node *` type
  * @param list list to iterate
  *
  * Usage:
+ * ```
  *  list_t *list;
  *  for (list_iterator(it, list)) { ... }
+ * ```
  */
 #define list_iterator(it, list) \
     struct list_node *it = (list)->next; (it) != (list); (it) = (it)->next
 
 /**
- * Get a pointer to the structure containing the list node.
+ * Gets a pointer to the structure containing the list node.
  *
  * @param node list node pointer
  * @param type struct type
  * @param member list member name in struct
  *
  * Usage:
+ * ```
  *  struct obj {
  *      list_t list;
  *      ...
  *  };
  *  struct list_node *n;    // e.g. from list_iterator
  *  struct obj *item = list_item(n, struct obj, list);
+ * ```
  */
 #define list_item(node, type, member) \
     ((type *) (((char *) (node)) - offsetof(type, member)))
@@ -92,16 +103,16 @@ bool list_empty(struct list_node *head);
 /**
  * Add an item to the list before the specified list head.
  */
-void list_add(struct list_node *head, struct list_node *item);
+void list_push(struct list_node *head, struct list_node *item);
 
 /**
  * Add an item to the list after the specified list head.
  */
-void list_add_tail(struct list_node *head, struct list_node *item);
+void list_push_back(struct list_node *head, struct list_node *item);
 
 /**
  * Remove an item from its own list.
  */
-void list_remove(struct list_node *item);
+void list_pop(struct list_node *item);
 
 #endif // __LIST_H

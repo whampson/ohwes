@@ -79,7 +79,7 @@ int reserve_io_range(uint16_t base, uint8_t count, const char *name)
     new_range->name = name;
 
     if (list_empty(&io_ranges_list)) {
-        list_add(&io_ranges_list, &new_range->chain);
+        list_push(&io_ranges_list, &new_range->chain);
         return 0;
     }
 
@@ -89,7 +89,7 @@ int reserve_io_range(uint16_t base, uint8_t count, const char *name)
         // list is ordered; if the new range is below the current range,
         // we found a gap and can reserve it
         if (base < curr->base && base + count <= curr->base) {
-            list_add(&curr->chain, &new_range->chain);
+            list_push(&curr->chain, &new_range->chain);
             return 0;
         }
         else if (base >= curr->base && base < curr->base + curr->count) {
@@ -99,7 +99,7 @@ int reserve_io_range(uint16_t base, uint8_t count, const char *name)
 
     // we've wrapped to the beginning of the circular list,
     // so add the new item /before/ the head
-    list_add(&io_ranges_list, &new_range->chain);
+    list_push(&io_ranges_list, &new_range->chain);
     return 0;
 }
 
@@ -123,7 +123,7 @@ void release_io_range(uint16_t base, uint8_t count)
     for (list_iterator(e, &io_ranges_list)) {
         curr = list_item(e, struct io_range, chain);
         if (curr->base == base && curr->count == count) {
-            list_remove(&curr->chain);
+            list_pop(&curr->chain);
             break;
         }
     }

@@ -47,14 +47,14 @@ static struct dentry * create_file(const char *name)
     if (!dentry) {
         return NULL;
     }
-    list_add_tail(&dentries, &dentry->dentries);
+    list_push_back(&dentries, &dentry->dentries);
     strncpy(dentry->name, name, DENTRY_NAME_LENGTH);
 
     inode = pool_alloc(inode_pool, 0);
     if (!inode) {
         return NULL;
     }
-    list_add_tail(&inodes, &inode->inodes);
+    list_push_back(&inodes, &inode->inodes);
 
     dentry->inode = inode;
     return dentry;

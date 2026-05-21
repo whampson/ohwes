@@ -58,19 +58,19 @@ void test_list(void)
     VERIFY_IS_TRUE(list_empty(&thing_list));
 
     // add one item
-    list_add(&thing_list, &_thing_buf[0].node);
+    list_push(&thing_list, &_thing_buf[0].node);
     VERIFY_IS_FALSE(list_empty(&thing_list));
     VERIFY_ARE_EQUAL(1, count_items(&thing_list));
 
     // remove item
-    list_remove(&_thing_buf[0].node);
+    list_pop(&_thing_buf[0].node);
     VERIFY_IS_TRUE(list_empty(&thing_list));
     VERIFY_ARE_EQUAL(0, count_items(&thing_list));
 
     // add items to tail
-    list_add_tail(&thing_list, &_thing_buf[0].node);
-    list_add_tail(&thing_list, &_thing_buf[1].node);
-    list_add_tail(&thing_list, &_thing_buf[2].node);
+    list_push_back(&thing_list, &_thing_buf[0].node);
+    list_push_back(&thing_list, &_thing_buf[1].node);
+    list_push_back(&thing_list, &_thing_buf[2].node);
     VERIFY_IS_FALSE(list_empty(&thing_list));
     VERIFY_ARE_EQUAL(3, count_items(&thing_list));
 
@@ -88,7 +88,7 @@ void test_list(void)
 
     // remove an item and check order
     i = 0;
-    list_remove(&_thing_buf[1].node);
+    list_pop(&_thing_buf[1].node);
     VERIFY_IS_FALSE(list_empty(&thing_list));
     VERIFY_ARE_EQUAL(2, count_items(&thing_list));
     for (list_iterator(e, &thing_list)) {
@@ -101,13 +101,13 @@ void test_list(void)
     }
 
     // clear list
-    list_remove(&thing_list);
+    list_pop(&thing_list);
     VERIFY_IS_TRUE(list_empty(&thing_list));
 
     // insert at head
-    list_add(&thing_list, &_thing_buf[0].node);
-    list_add(&thing_list, &_thing_buf[1].node);
-    list_add(&thing_list, &_thing_buf[2].node);
+    list_push(&thing_list, &_thing_buf[0].node);
+    list_push(&thing_list, &_thing_buf[1].node);
+    list_push(&thing_list, &_thing_buf[2].node);
     VERIFY_IS_FALSE(list_empty(&thing_list));
     VERIFY_ARE_EQUAL(3, count_items(&thing_list));
 
@@ -124,13 +124,13 @@ void test_list(void)
     }
 
     // add more items at tail
-    list_add_tail(&thing_list, &_thing_buf[3].node);
-    list_add_tail(&thing_list, &_thing_buf[4].node);
-    list_add_tail(&thing_list, &_thing_buf[5].node);
-    list_add_tail(&thing_list, &_thing_buf[6].node);
+    list_push_back(&thing_list, &_thing_buf[3].node);
+    list_push_back(&thing_list, &_thing_buf[4].node);
+    list_push_back(&thing_list, &_thing_buf[5].node);
+    list_push_back(&thing_list, &_thing_buf[6].node);
 
     // and one more at head
-    list_add(&thing_list, &_thing_buf[7].node);
+    list_push(&thing_list, &_thing_buf[7].node);
 
     // list order should now be: 7 2 1 0 3 4 5 6
     i = 0;
