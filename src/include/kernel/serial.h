@@ -91,7 +91,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <i386/io.h>
-#include <kernel/queue.h>
+#include <kernel/ring.h>
 #include <kernel/tty.h>
 
 //
@@ -411,7 +411,7 @@ struct com {
     bool reserved   : 1;        // port exists, but is reserved by another driver
 
     // buffers
-    struct ring tx_ring;        // output queue
+    struct ring tx_ring;        // output ring
     char _txbuf[TTY_BUFFER_SIZE];       // TODO: dynamically allocate
     char xchar;                 // high-priority control character
 

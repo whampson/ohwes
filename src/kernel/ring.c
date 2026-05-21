@@ -21,95 +21,97 @@
 
 #include <assert.h>
 #include <string.h>
-#include <kernel/queue.h>
+#include <kernel/ring.h>
 
-void ring_init(struct ring *q, char *buf, size_t length)
+// TODO: support generic type
+
+void ring_init(struct ring *r, char *buf, size_t length)
 {
-    memset(q, 0, sizeof(struct ring));
-    q->ring = buf;
-    q->length = length;
+    memset(r, 0, sizeof(struct ring));
+    r->buf = buf;
+    r->length = length;
 }
 
-bool ring_empty(const struct ring *q)
+bool ring_empty(const struct ring *r)
 {
-    return q->count == 0;
+    return r->count == 0;
 }
 
-bool ring_full(const struct ring *q)
+bool ring_full(const struct ring *r)
 {
-    return q->count == q->length;
+    return r->count == r->length;
 }
 
-char ring_get(struct ring *q)
+char ring_get(struct ring *r)
 {
-    if (ring_empty(q)) {
+    if (ring_empty(r)) {
         return '\0';
     }
 
-    char c = q->ring[q->head++];
-    if (q->head >= q->length) {
-        q->head = 0;
+    char c = r->buf[r->head++];
+    if (r->head >= r->length) {
+        r->head = 0;
     }
 
-    q->count--;
+    r->count--;
     return c;
 }
 
-bool ring_put(struct ring *q, char c)
+bool ring_put(struct ring *r, char c)
 {
-    if (ring_full(q)) {
+    if (ring_full(r)) {
         return false;
     }
 
-    q->ring[q->tail++] = c;
-    if (q->tail >= q->length) {
-        q->tail = 0;
+    r->buf[r->tail++] = c;
+    if (r->tail >= r->length) {
+        r->tail = 0;
     }
 
-    q->count++;
+    r->count++;
     return true;
 }
 
-char ring_erase(struct ring *q)
+char ring_erase(struct ring *r)
 {
-    if (ring_empty(q)) {
+    if (ring_empty(r)) {
         return '\0';
     }
 
-    if (q->tail == 0) {
-        q->tail = q->length;
+    if (r->tail == 0) {
+        r->tail = r->length;
     }
 
-    q->count--;
-    return q->ring[--q->tail];
+    r->count--;
+    return r->buf[--r->tail];
 }
 
-bool ring_insert(struct ring *q, char c)
+bool ring_insert(struct ring *r, char c)
 {
-    if (ring_full(q)) {
+    if (ring_full(r)) {
         return false;
     }
 
-    if (q->head == 0) {
-        q->head = q->length;
+    if (r->head == 0) {
+        r->head = r->length;
     }
-    q->ring[--q->head] = c;
+    r->buf[--r->head] = c;
 
-    q->count++;
+    r->count++;
     return true;
 }
 
-size_t ring_length(struct ring *q)
+size_t ring_length(struct ring *r)
 {
-    return q->length;
+    return r->length;
 }
 
-size_t ring_count(struct ring *q)
+size_t ring_count(struct ring *r)
 {
-    return q->count;
+    return r->count;
 }
 
-void ring_clear(struct ring *q)
+void ring_reset(struct ring *r)
 {
-    q->head = q->tail = q->count = 0;
+    r->head = r->tail = r->count = 0;
 }

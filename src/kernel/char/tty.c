@@ -27,7 +27,7 @@
 #include <kernel/ioctls.h>
 #include <kernel/mm.h>
 #include <kernel/pool.h>
-#include <kernel/queue.h>
+#include <kernel/ring.h>
 #include <kernel/task.h>
 #include <kernel/tty.h>
 

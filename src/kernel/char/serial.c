@@ -41,7 +41,7 @@
 #include <kernel/io.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
-#include <kernel/queue.h>
+#include <kernel/ring.h>
 #include <kernel/serial.h>
 #include <kernel/tty.h>
 
@@ -631,7 +631,7 @@ static void serial_clear(struct tty *tty)
     }
 
     cli_save(flags);
-    ring_clear(&com->tx_ring);
+    ring_reset(&com->tx_ring);
     restore_flags(flags);
 }
 

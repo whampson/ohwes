@@ -24,7 +24,7 @@
 #include <fcntl.h>
 #include <i386/interrupt.h>
 #include <kernel/kernel.h>
-#include <kernel/queue.h>
+#include <kernel/ring.h>
 #include <kernel/tty.h>
 
 //
@@ -98,7 +98,7 @@ void n_tty_clear(struct tty *tty)
 
     struct n_tty_ldisc_data *ldisc_data;
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
-    ring_clear(&ldisc_data->rx_ring);
+    ring_reset(&ldisc_data->rx_ring);
 }
 
 static ssize_t n_tty_read(struct tty *tty, struct file *file, char *buf, size_t count)
