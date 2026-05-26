@@ -40,12 +40,12 @@
 #define DEFAULT_VT              1   // initial virtual terminal activated
 
 // console
-#define VT_CONSOLE              1   // (bool) use a virtual terminal as a console device
+#define ENABLE_VT_CONSOLE       1   // (bool) use a virtual terminal as a console device
 #define VT_CONSOLE_NUM          0   //        (0) print console messages to active virtual terminal
-#define SERIAL_CONSOLE          0   // (bool) use a serial port as a console device
-#define SERIAL_CONSOLE_COM      1   //        serial console COM port number
+#define ENABLE_SERIAL_CONSOLE   1   // (bool) use a serial port as a console device
+#define SERIAL_CONSOLE_NUM      1   //        serial console COM port number
 #define SERIAL_CONSOLE_BAUD     BAUD_9600
-#define E9_HACK                 1   // (bool) tee console output to I/O port 0xE9
+#define ENABLE_E9HACK_CONSOLE   1   // (bool) tee console output to I/O port 0xE9
 #define EARLY_PRINT             1   // (bool) register console when first char is printed
 
 // general printing

@@ -170,7 +170,7 @@ int tty_get_com(struct tty *tty, struct com **com)
 // Unlike the TTY, the serial console does not use interrupts, instead relying
 // on polling to determine when to transmit and receive characters.
 
-#if SERIAL_CONSOLE
+#if ENABLE_SERIAL_CONSOLE
 
 static inline char wait_and_recv(struct com *com)
 {
@@ -308,8 +308,8 @@ static int serial_console_getc(struct console *cons)
 struct console serial_console =
 {
     .name = "ttyS",
-    .number = SERIAL_CONSOLE_COM,
-    .flags = _CONSOLE_FLAG_PRINTBUF,
+    .number = SERIAL_CONSOLE_NUM,
+    .flags = CONSOLE_FLAG_PRINTBUF,
     .device = serial_console_device,
     .init = serial_console_setup,
     .write = serial_console_write,
@@ -320,7 +320,7 @@ struct console serial_console =
 
 // ----------------------------------------------------------------------------
 
-void init_serial(void)
+__init void init_serial(void)
 {
     struct com *com;
 
@@ -364,7 +364,7 @@ void init_serial(void)
         pr_info("com%d: detected on port %Xh\n", com->num, com->io_port);
     }
 
-#if SERIAL_CONSOLE
+#if ENABLE_SERIAL_CONSOLE
     register_console(&serial_console);
 #endif
 

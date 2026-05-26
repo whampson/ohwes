@@ -38,8 +38,9 @@
 #include <kernel/vga.h>
 
 // initialization
-extern void init_vga(void);
-static void initialize_terminal(int num, struct terminal *term);
+extern __init void init_kb(void);
+extern __init void init_vga(void);
+void terminal_initialize(int num, struct terminal *term);
 
 // screen positioning
 static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y);
@@ -185,14 +186,14 @@ static size_t terminal_tty_write_room(struct tty *tty)
 // ----------------------------------------------------------------------------
 // console implementation
 
-#if VT_CONSOLE
+#if ENABLE_VT_CONSOLE
 
 static dev_t vt_console_device(struct console *cons)
 {
     return __mkttydev((cons->number) ? cons->number : current_terminal());
 }
 
-static bool vt_console_setup(struct console *cons)
+static __init bool vt_console_setup(struct console *cons)
 {
     struct vga_fb_info fb_info;
 
@@ -202,7 +203,7 @@ static bool vt_console_setup(struct console *cons)
     struct terminal *term = get_terminal(cons->number);
     if (!term->initialized) {
         int num = _DEV_MIN(cons->device(cons));
-        initialize_terminal(num, term);
+        terminal_initialize(num, term);
         if (num == 1) {
             term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
             pos2xy(term, vga_get_cursor_pos());
@@ -241,7 +242,7 @@ struct console vt_console =
 {
     .name = "tty",
     .number = VT_CONSOLE_NUM,
-    .flags = _CONSOLE_FLAG_PRINTBUF,
+    .flags = CONSOLE_FLAG_PRINTBUF,
     .device = vt_console_device,
     .init = vt_console_setup,
     .write = vt_console_write,
@@ -310,13 +311,15 @@ static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr a
 // ----------------------------------------------------------------------------
 // initialization
 
-void init_terminal(void)
+__init void init_terminal(void)
 {
     struct vga_fb_info fb_info;
 
+    init_kb();
     init_vga(); // ok to call more than once
+
     vga_get_fb_info(&fb_info);
-    kprint("vga: frame buffer is %ld pages at %p\n",
+    pr_info("vga: frame buffer is %ld pages at %p\n",
         fb_info.size_pages, _P(fb_info.framebuf));
 
     // make sure we have enough memory for the configured number of terminals
@@ -338,7 +341,7 @@ void init_terminal(void)
             // terminal already initialized if console was registered early
             continue;
         }
-        initialize_terminal(i, term);
+        terminal_initialize(i, term);
         erase(term, ERASE_ALL);
     }
 
@@ -358,7 +361,7 @@ void init_terminal(void)
     // enable blink, show cursor
     terminal_print(get_terminal(DEFAULT_VT), "\e4\e6");
 
-#if VT_CONSOLE
+#if ENABLE_VT_CONSOLE
     // register the virtual terminal console
     register_console(&vt_console);
 #endif
@@ -391,7 +394,7 @@ void init_terminal(void)
 #endif
 }
 
-static void initialize_terminal(int num, struct terminal *term)
+void terminal_initialize(int num, struct terminal *term)
 {
     if (term->initialized) {
         return;
