@@ -123,8 +123,8 @@ void * memset(void *dst, int c, size_t count)
 
 int memcmp(const void *lhs, const void *rhs, size_t count)
 {
-    const char *l = lhs;
-    const char *r = rhs;
+    const unsigned char *l = lhs;
+    const unsigned char *r = rhs;
 
     if (count == 0) {
         return 0;
@@ -192,7 +192,7 @@ int strcmp(const char *lhs, const char *rhs)
         lhs++; rhs++;
     }
 
-    return *lhs - *rhs;
+    return (unsigned char) *lhs - (unsigned char) *rhs;
 }
 
 int strncmp(const char *lhs, const char *rhs, size_t count)
@@ -203,7 +203,7 @@ int strncmp(const char *lhs, const char *rhs, size_t count)
 
     int diff = 0;
     for (int i = 0; i < count; i++, lhs++, rhs++) {
-        diff = (*lhs - *rhs);
+        diff = (unsigned char) *lhs - (unsigned char) *rhs;
         if (diff != 0 || !(*lhs) || !(*rhs)) {
             break;
         }
@@ -228,24 +228,32 @@ char * strncat(char *restrict dst, const char *restrict src, size_t count)
     return dst;
 }
 
-static unsigned long long _strtoull(
+enum strto_type {
+    STRTO_L,
+    STRTO_LL,
+    STRTO_UL,
+    STRTO_ULL,
+};
+
+static uint64_t _strtol_impl(enum strto_type type,
     const char *restrict str, char **restrict str_end, int base)
 {
     if ((base < 2 || base > 36) && base != 0) {
         errno = EINVAL; // not part of the spec but reasonable
         return 0;
     }
+
     if (str_end) {
         *str_end = (char *) str;
     }
 
     int digit;
-    int sign = 1;
     int length = 0;
-    unsigned long long value = 0;
-    // signed long long signed_value = 0;
-    bool valid = false;
-    // bool overflow = false;
+    uint64_t value = 0;
+    bool sign = false;
+    bool overflow = false;
+    bool range_error = false;
+    bool digits_seen = false;
     bool sign_seen = false;
     bool zero_seen = false;
     const char *p = str;
@@ -269,12 +277,11 @@ static unsigned long long _strtoull(
         if (state == S_SIGN) {
             if (!sign_seen && *p == '+') {
                 sign_seen = true;
-                sign = 1;
                 continue;
             }
             if (!sign_seen && *p == '-') {
                 sign_seen = true;
-                sign = -1;
+                sign = true;
                 continue;
             }
             state = S_PREFIX;
@@ -283,9 +290,9 @@ static unsigned long long _strtoull(
         if (state == S_PREFIX) {
             if (base == 0 || base == 8 || base == 16) {
                 if (!zero_seen && *p == '0') {
+                    digits_seen = true;
                     zero_seen = true;
                     base = 8;
-                    valid = true;
                     continue;
                 }
                 if (zero_seen && tolower(*p) == 'x') {
@@ -313,33 +320,36 @@ static unsigned long long _strtoull(
             }
 
             if (digit >= base) {
+                if (digits_seen) {
+                    range_error = true;
+                }
                 p++;
                 break;
             }
 
+            #define OVERFLOW_CHECK(t) \
+            do { \
+                overflow |= __builtin_mul_overflow_p(value, base,  (t) 0); \
+                overflow |= __builtin_add_overflow_p(value*base, digit, (t) 0); \
+            } while (0)
 
-            // overflow |= __builtin_mul_overflow_p(value, base, (signed long long) 0);
-            // overflow |= __builtin_add_overflow_p(value, digit, (signed long long) 0);
-            // if (overflow) {
-            //     printf("!!! signed overflow\n");
-            //     break;
-            // }
+            switch (type) {
+                case STRTO_L:   OVERFLOW_CHECK(signed long);        break;
+                case STRTO_LL:  OVERFLOW_CHECK(signed long long);   break;
+                case STRTO_UL:  OVERFLOW_CHECK(unsigned long);      break;
+                case STRTO_ULL: OVERFLOW_CHECK(unsigned long long); break;
+            }
 
-            // overflow |= __builtin_mul_overflow_p(value, base, (unsigned long long) 0);
-            // overflow |= __builtin_add_overflow_p(value, digit, (unsigned long long) 0);
-            // if (overflow) {
-            //     printf("!!! unsigned overflow\n");
-            //     overflow = false;
-            // }
-
+            digits_seen = true;
             value *= base;
             value += digit;
-            valid = true;
             length++;
         }
     } while (*p++ != '\0');
 
-    value *= sign;
+    if (sign) {
+        value *= -1;
+    }
 
     if (length == 0 && base == 16 && zero_seen) {
         // edge case: base=0 and input is '0x',
@@ -347,38 +357,39 @@ static unsigned long long _strtoull(
         p--;
     }
 
-    if (str_end) {
-        if (valid) {
-            *str_end = (char *) (p - 1);
-        }
-        else {
-            *str_end = (char *) str;
-        }
+    if (str_end && digits_seen) {
+        *str_end = (char *) (p - 1);
     }
+
+    if (overflow) {
+        range_error |= !(type == STRTO_L  && sign && (value == LONG_MIN)) &&
+                       !(type == STRTO_LL && sign && (value == LLONG_MIN));
+        value = (type == STRTO_L)   ? ((sign) ? LONG_MIN  : LONG_MAX)  :
+                (type == STRTO_LL)  ? ((sign) ? LLONG_MIN : LLONG_MAX) :
+                (type == STRTO_UL)  ? ULONG_MAX  :
+                (type == STRTO_ULL) ? ULLONG_MAX :
+                value;
+    }
+
+    if (range_error) {
+        errno = ERANGE;
+    }
+
     return value;
 }
 
-// TODO: need bounds checking for these!!!
-
-long strtol(const char *restrict str, char **restrict str_end, int base)
-{
-    return (long) _strtoull(str, str_end, base);
+#define DEFINE_STRTO(t_char,t_enum,t) \
+t strto##t_char(const char *restrict str, char **restrict str_end, int base) \
+{ \
+    return (t) _strtol_impl(t_enum, str, str_end, base); \
 }
 
-unsigned long strtoul(const char *restrict str, char **restrict str_end, int base)
-{
-    return (unsigned long) _strtoull(str, str_end, base);
-}
+DEFINE_STRTO(l,   STRTO_L,   long)
+DEFINE_STRTO(ll,  STRTO_LL,  long long)
+DEFINE_STRTO(ul,  STRTO_UL,  unsigned long)
+DEFINE_STRTO(ull, STRTO_ULL, unsigned long long)
 
-long long strtoll(const char *restrict str, char **restrict str_end, int base)
-{
-    return (long long) _strtoull(str, str_end, base);
-}
-
-unsigned long long strtoull(const char *restrict str, char **restrict str_end, int base)
-{
-    return (unsigned long long) _strtoull(str, str_end, base);
-}
+#undef DEFINE_STRTO
 
 char * strtok_r(char *restrict str, const char *restrict delim, char **restrict saveptr)
 {
