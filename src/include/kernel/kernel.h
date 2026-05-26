@@ -38,11 +38,11 @@
 #ifndef __ASSEMBLER__
 
 #include <assert.h>
+#include <kernel/console.h>
 #include <kernel/kprint.h>
 #include <sys/ohwes.h>
 
-#define ALERT_FREQ  1725
-#define ALERT_TIME   100
+#define __init  // TODO: put in special .init section or something
 
 // beep at hz for millis;
 //  interrupts must be ON or it will beep/block forever!

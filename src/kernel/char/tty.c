@@ -184,18 +184,16 @@ int tty_hung_up(struct file *file)
 // ----------------------------------------------------------------------------
 // private functions
 
-extern void init_n_tty(void);
-extern void init_serial(void);
-extern void init_terminal(void);
-extern void init_kb(void);
+extern __init void init_n_tty(void);
+extern __init void init_serial(void);
+extern __init void init_terminal(void);
 
-void init_tty(void)
+__init void init_tty(void)
 {
     list_init(&tty_drivers);
     tty_pool = pool_create("tty", NR_TTY, sizeof(struct tty), 0);
     termios_pool = pool_create("termios", NR_TTY, sizeof(struct termios), 0);
 
-    init_kb();
     init_n_tty();
     init_serial();
     init_terminal();

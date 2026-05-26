@@ -127,7 +127,7 @@ struct file_ops readme_fops = {
 // ----------------------------------------------------------------------------
 //
 
-void init_fs(void)
+__init void init_fs(void)
 {
     list_init(&inodes);
     inode_pool = pool_create("inodes", MAX_NR_INODES, sizeof(struct inode), 0);

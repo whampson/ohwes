@@ -33,7 +33,7 @@
 static void wait_for_read(void);
 static void wait_for_write(void);
 
-void init_ps2(void)
+__init void init_ps2(void)
 {
     uint8_t cfg, resp;
     bool port2;

@@ -66,7 +66,7 @@ static void throttle_tty(struct tty *tty);
 static void start_tty(struct tty *tty);
 static void stop_tty(struct tty *tty);
 
-void init_n_tty(void)
+__init void init_n_tty(void)
 {
     if (tty_register_ldisc(N_TTY, &n_tty)) {
         panic("unable to register N_TTY line discipline!");

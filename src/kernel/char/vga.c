@@ -27,12 +27,13 @@
 #include <i386/io.h>
 #include <i386/paging.h>
 #include <i386/x86.h>
+#include <kernel/kernel.h>
 #include <kernel/terminal.h>
 #include <kernel/vga.h>
 
 // Text mode only for now!
 
-void init_vga(void)
+__init void init_vga(void)
 {
     struct vga_fb_info fb_old, fb_new;
 
