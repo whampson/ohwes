@@ -26,26 +26,32 @@
 #define __LIMITS_H
 
 #define CHAR_BIT        __CHAR_BIT__
-#define CHAR_MAX        __CHAR_MAX__
-#define CHAR_MIN        (-CHAR_MAX-1)
-#define SCHAR_MAX       __SCHAR_MAX__
+#define SCHAR_MAX       ((1<<(CHAR_BIT-1))-1)
 #define SCHAR_MIN       (-SCHAR_MAX-1)
-// #define WCHAR_MAX       __WCHAR_MAX__
-// #define WCHAR_MIN       (-WCHAR_MAX-1)
+#define UCHAR_MAX       ((1<<CHAR_BIT)-1)
+
+#ifndef __CHAR_UNSIGNED__
+#define CHAR_MAX        SCHAR_MAX
+#define CHAR_MIN        SCHAR_MIN
+#else
+#define CHAR_MAX        UCHAR_MAX
+#define CHAR_MIN        0
+#endif
+
 #define SHRT_MAX        __SHRT_MAX__
 #define SHRT_MIN        (-SHRT_MAX-1)
+#define USHRT_MAX       0xffff
+
 #define INT_MAX         __INT_MAX__
 #define INT_MIN         (-INT_MAX-1)
+#define UINT_MAX        0xffffffff
+
 #define LONG_MAX        __LONG_MAX__
 #define LONG_MIN        (-LONG_MAX-1)
+#define ULONG_MAX       0xffffffffUL
+
 #define LLONG_MAX       __LONG_LONG_MAX__
 #define LLONG_MIN       (-LLONG_MAX-1)
-// #define WINT_MAX        __WINT_MAX__
-// #define WINT_MIN        (-WINT_MAX-1)
-#define UCHAR_MAX       (CHAR_MIN+CHAR_MAX)
-#define USHRT_MAX       (SHRT_MIN+SHRT_MAX)
-#define UINT_MAX        (INT_MIN+INT_MAX)
-#define ULONG_MAX       (LONG_MIN+LONG_MAX)
-#define ULLONG_MAX      (LLONG_MIN+LLONG_MAX)
+#define ULLONG_MAX      0xffffffffffffffffULL
 
 #endif // __LIMITS_H
