@@ -112,7 +112,14 @@ void setup_cpu(void)
     make_tss_desc(x86_get_desc(get_gdt(), KERNEL_TSS), KERNEL_PL, tss_kernl);
     tss_kernl->esp0 = (uint32_t) __kstack_end;
     tss_kernl->ss0 = KERNEL_DS;
-    __ltr(KERNEL_TSS);
+    tss_kernl->iobase = sizeof(struct tss);
+    __ltr(KERNEL_TSS);  // load the kernel TSS by default
+
+    // emergency TSS for double faults
+    make_tss_desc(x86_get_desc(get_gdt(), EMERG_TSS), KERNEL_PL, tss_emerg);
+    tss_emerg->esp0 = (uint32_t) __estack_end;
+    tss_emerg->ss0 = KERNEL_DS;
+    tss_emerg->iobase = sizeof(struct tss);
 
     // dummy LDT descriptor so CPU doesn't freak out
     make_ldt_desc(
