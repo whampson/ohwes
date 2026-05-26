@@ -755,6 +755,18 @@ static void test_strtoull_overflow(void)
     PASS();
 }
 
+static void test_strtoull_ullong_max_exact(void)
+{
+    TEST("strtoull: ULLONG_MAX exact value");
+    errno = 0;
+    char *end;
+    long long val = strtoull("18446744073709551615", &end, 10);
+    ASSERT(val == ULLONG_MAX, "exact ULLONG_MAX");
+    ASSERT(*end == '\0', "consumed all");
+    ASSERT(errno != ERANGE, "no ERANGE");
+    PASS();
+}
+
 static void test_strtoull_ullong_max_plus_one(void)
 {
     TEST("strtoull: ULLONG_MAX+1 as string triggers ERANGE");
@@ -1192,6 +1204,7 @@ TEST_SUITE(strtol, "strtol-family tests")
     test_strtoull_basic();
     test_strtoull_errno_preserved();
     test_strtoull_overflow();
+    test_strtoull_ullong_max_exact();
     test_strtoull_ullong_max_plus_one();
     test_strtoull_no_conversion();
     test_strtoull_trailing_garbage();
