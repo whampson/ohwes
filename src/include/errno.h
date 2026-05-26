@@ -42,6 +42,8 @@
 #define EBUSY       15  // Device or resource busy
 #define EBADRQC     16  // Invalid request descriptor
 #define EIO         17  // Input/output error
+#define EDOM        18  // Math argument out of function domain
+#define EILSEQ      19  // Illegal byte sequence
 
 #ifndef __ASSEMBLER__
 extern int _errno;

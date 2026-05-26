@@ -32,24 +32,26 @@ static char _strerr_buf[32];
 char * strerror(int errnum)
 {
     switch (errnum) {
-        case 0:       return "Success";
-        case ENOMEM:  return "Not enough memory";
-        case ENFILE:  return "Too many files open in system";
-        case EBADF:   return "Bad file descriptor";
-        case ENOSYS:  return "Function not implemented";
-        case EMFILE:  return "Too many files open in process";
-        case ERANGE:  return "Result too large";
-        case ENODEV:  return "No such device";
-        case EPERM:   return "Operation not permitted";
-        case EFAULT:  return "Bad address";
-        case EINVAL:  return "Invalid argument";
-        case ENXIO:   return "No such device or address";
-        case ENOTTY:  return "Invalid I/O control operation";
-        case EAGAIN:  return "Resource unavailable, try again";
-        case ENOENT:  return "No such file or directory";
-        case EBUSY:   return "Device or resource busy";
-        case EBADRQC: return "Invalid request descriptor";
-        case EIO:     return "Input/output error";
+        case 0:         return "Success";
+        case ENOMEM:    return "Not enough memory";
+        case ENFILE:    return "Too many files open in system";
+        case EBADF:     return "Bad file descriptor";
+        case ENOSYS:    return "Function not implemented";
+        case EMFILE:    return "Too many files open in process";
+        case ERANGE:    return "Result too large";
+        case ENODEV:    return "No such device";
+        case EPERM:     return "Operation not permitted";
+        case EFAULT:    return "Bad address";
+        case EINVAL:    return "Invalid argument";
+        case ENXIO:     return "No such device or address";
+        case ENOTTY:    return "Invalid I/O control operation";
+        case EAGAIN:    return "Resource unavailable, try again";
+        case ENOENT:    return "No such file or directory";
+        case EBUSY:     return "Device or resource busy";
+        case EBADRQC:   return "Invalid request descriptor";
+        case EIO:       return "Input/output error";
+        case EDOM:      return "Math argument out of function domain";
+        case EILSEQ:    return "Illegal byte sequence";
     }
 
     snprintf(_strerr_buf, sizeof(_strerr_buf), "Unknown error %d\n", errnum);
