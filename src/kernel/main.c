@@ -322,6 +322,9 @@ void _crt0_init(void)
     int main(void);
     extern int shell(void);
 
+    extern int test_libc(void);
+    test_libc();
+
     int ret = shell();
     (void) close(STDERR_FILENO);
     (void) close(STDOUT_FILENO);
