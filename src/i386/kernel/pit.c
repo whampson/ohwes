@@ -31,6 +31,7 @@
 #include <i386/io.h>
 #include <i386/pic.h>
 #include <i386/x86.h>
+#include <kernel/kernel.h>
 #include <kernel/irq.h>
 #include <sys/ohwes.h>
 
@@ -105,30 +106,14 @@ struct timer_state {
     uint64_t timer_irqs;
     uint64_t pcspk_ticks_remaining;
 
-    uint64_t timer_ticks;
     uint16_t timer_reloads[NR_TIMERS];
-
-    uint64_t last_clock_tick;
+    uint16_t timer_last_tick;
 };
 
 static struct timer_state _pit = { };
 struct timer_state *g_pit = &_pit;
 
-//
 // ----------------------------------------------------------------------------
-//
-
-void timer_interrupt(int irq, struct iregs *regs);
-
-static inline void pcspk_on(void)
-{
-    outb(PIT_PORT_PCSPK_EN, inb(PIT_PORT_PCSPK_EN) | 0x03);
-}
-
-static inline void pcspk_off(void)
-{
-    outb(PIT_PORT_PCSPK_EN, inb(PIT_PORT_PCSPK_EN) & ~0x03);
-}
 
 static inline uint64_t ticks_to_ms(uint64_t ticks)
 {
@@ -148,6 +133,21 @@ static inline uint16_t calculate_divisor(int freq)
     return (uint16_t) div;
 }
 
+//
+// ----------------------------------------------------------------------------
+// these functions expect INTERRUPTS OFF
+//
+
+static inline void pcspk_on(void)
+{
+    outb(PIT_PORT_PCSPK_EN, inb(PIT_PORT_PCSPK_EN) | 0x03);
+}
+
+static inline void pcspk_off(void)
+{
+    outb(PIT_PORT_PCSPK_EN, inb(PIT_PORT_PCSPK_EN) & ~0x03);
+}
+
 static inline void reload_timer(enum hw_timer timer, uint16_t value)
 {
     outb(_TIMER_PORT(timer), value & 0xFF);
@@ -161,7 +161,7 @@ static inline uint8_t read_timer_status(enum hw_timer timer)
     return inb(_TIMER_PORT(timer));
 }
 
-static inline int read_timer(enum hw_timer timer)
+static inline uint16_t read_timer(enum hw_timer timer)
 {
     uint16_t count;
 
@@ -172,7 +172,22 @@ static inline int read_timer(enum hw_timer timer)
     return count;
 }
 
-void init_timer(void)
+static void timer_interrupt(int irq, struct iregs *regs)
+{
+    assert(irq == IRQ_TIMER);
+
+    g_pit->timer_irqs++;
+    g_pit->timer_last_tick = read_timer(CLOCK_TIMER);
+
+    if (g_pit->pcspk_ticks_remaining) {
+        g_pit->pcspk_ticks_remaining--;
+        if (!g_pit->pcspk_ticks_remaining) {
+            pcspk_off();
+        }
+    }
+}
+
+__init void init_timer(void)
 {
     uint8_t mode;
 
@@ -195,39 +210,24 @@ void init_timer(void)
     irq_unmask(IRQ_TIMER);
 }
 
-void timer_interrupt(int irq, struct iregs *regs)
+//
+// ----------------------------------------------------------------------------
+// public functions
+//
+
+uint64_t get_uptime(void)
 {
-    assert(irq == IRQ_TIMER);
-
-    g_pit->timer_irqs++;
-    g_pit->last_clock_tick = read_timer(CLOCK_TIMER);
-
-    if (g_pit->pcspk_ticks_remaining) {
-        g_pit->pcspk_ticks_remaining--;
-        if (!g_pit->pcspk_ticks_remaining) {
-            pcspk_off();
-        }
-    }
-}
-
-uint64_t get_uptime(void)   // nanoseconds
-{
-    volatile uint64_t irqs;
-    volatile int64_t clock_ticks;
     uint32_t flags;
-
     cli_save(flags);
-    irqs = g_pit->timer_irqs;
-    clock_ticks = g_pit->last_clock_tick - read_timer(CLOCK_TIMER);
-    restore_flags(flags);
 
-    if (clock_ticks < 0) {
-        clock_ticks += g_pit->timer_reloads[CLOCK_TIMER];
+    int64_t ticks = g_pit->timer_last_tick - read_timer(CLOCK_TIMER);
+    if (ticks < 0) {
+        ticks += g_pit->timer_reloads[CLOCK_TIMER];
     }
-    clock_ticks += (irqs * g_pit->timer_reloads[SCHED_TIMER]);
+    ticks += (g_pit->timer_irqs * g_pit->timer_reloads[SCHED_TIMER]);
 
-    // 1/1193182 = 838.095ns, close enough
-    return 838 * clock_ticks;
+    restore_flags(flags);
+    return 838 * ticks;     // 1/1193182 = 838.095ns, close enough
 }
 
 void beep(int hz, int ms, bool block)
@@ -249,5 +249,11 @@ void beep(int hz, int ms, bool block)
 
     restore_flags(flags);
 
-    while (block && g_pit->pcspk_ticks_remaining > 0);
+    volatile uint64_t ticks;
+    volatile struct timer_state *t = g_pit;
+    do {
+        cli_save(flags);
+        ticks = t->pcspk_ticks_remaining;
+        restore_flags(flags);
+    } while (block && ticks > 0);
 }
