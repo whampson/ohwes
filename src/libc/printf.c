@@ -44,7 +44,7 @@ typedef int (*putc_fn)(struct printf_state *, char);
 struct printf_state
 {
     char *buf;          // printf buffer
-    char *ptr;          // buffer pointer
+    size_t pos;         // current position in buffer
     size_t bufsz;       // num chars in buffer
     putc_fn putc;       // write character function
 };
@@ -54,7 +54,7 @@ static struct printf_state make_printf_state(char *buf, size_t bufsz, putc_fn pu
     struct printf_state state = { };
     state.buf = buf;
     state.bufsz = bufsz;
-    state.ptr = buf;
+    state.pos = 0;
     state.putc = putc;
 
     return state;
@@ -68,16 +68,11 @@ static int _putc_stdout(struct printf_state *state, char c)
 
 static int _putc_buffer(struct printf_state *state, char c)
 {
-    if (c == '\0') {
-        return 0;   // no char written
-    }
-
-    if (state->ptr && state->buf && (
-        state->bufsz == 0 ||    // NOTE: can write arbitrary ptr if bufsz=0 !!
-        state->ptr - state->buf < state->bufsz - 1))
-    {
-        *state->ptr++ = c;
-        *state->ptr = '\0';
+    if (state->buf && state->bufsz > 0) {
+        if (state->bufsz == SIZE_MAX || state->pos < state->bufsz - 1) {
+            *(state->buf + state->pos++) = c;
+        }
+        *(state->buf + state->pos) = '\0';
     }
 
     return 1;   // char was written or would've been written
@@ -123,7 +118,7 @@ int vprintf(const char *fmt, va_list args)
     }
 
     struct printf_state state;
-    state = make_printf_state(NULL, 0, _putc_stdout);
+    state = make_printf_state(NULL, SIZE_MAX, _putc_stdout);
     return _doprintf(fmt, args, &state);
 }
 
@@ -138,7 +133,7 @@ int vsprintf(char *buf, const char *fmt, va_list args)
     }
 
     struct printf_state state;
-    state = make_printf_state(buf, 0, _putc_buffer);
+    state = make_printf_state(buf, SIZE_MAX, _putc_buffer);
     return _doprintf(fmt, args, &state);
 }
 
@@ -557,5 +552,5 @@ do { \
 #undef _putchar
 
 done:
-    return nwritten;
+    return nwritten - 1;
 }
