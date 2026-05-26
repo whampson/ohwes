@@ -22,9 +22,14 @@
 #include <errno.h>
 #include <kernel/kernel.h>
 #include <kernel/io.h>
+#include <kernel/irq.h>
 #include <kernel/list.h>
 #include <kernel/pool.h>
 #include <kernel/serial.h>
+
+#ifdef DEBUG
+extern void crash_key_irq(int irq, struct iregs *regs);
+#endif
 
 struct io_range {
     struct list_node chain;
@@ -37,8 +42,12 @@ list_t io_ranges_list = LIST_INITIALIZER(io_ranges_list);
 struct io_range _io_ranges_pool[MAX_NR_IO_RANGES];
 pool_t *io_ranges_pool;
 
-void init_io(void)
+__init void init_io(void)
 {
+#if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+F# to test crash kernel
+    irq_register(IRQ_TIMER, crash_key_irq);
+#endif
+
     io_ranges_pool = pool_create(
         "io_ranges",
         MAX_NR_IO_RANGES,
@@ -70,7 +79,7 @@ int reserve_io_range(uint16_t base, uint8_t count, const char *name)
 
     new_range = pool_alloc(io_ranges_pool, 0);
     if (!new_range) {
-        kprint("warning: I/O range reservation list is full!\n");
+        pr_error("I/O range reservation list is full!\n");
         return -ENOMEM;
     }
 
