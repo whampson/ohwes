@@ -104,10 +104,10 @@ void ps2_cmd(uint8_t cmd);
 // #define KBD_RESP_ACK             0xFA    // Data Received
 // #define KBD_RESP_RESEND          0xFE    // Data Not Received, Resend
 
-// Keyboard LED Flags
-#define PS2KB_LED_SCRLK         (1<<0)  // Scroll Lock Light
-#define PS2KB_LED_NUMLK         (1<<1)  // Num Lock Light
-#define PS2KB_LED_CAPLK         (1<<2)  // Caps Lock Light
+// // Keyboard LED Flags
+// #define PS2KB_LED_SCRLK         (1<<0)  // Scroll Lock Light
+// #define PS2KB_LED_NUMLK         (1<<1)  // Num Lock Light
+// #define PS2KB_LED_CAPLK         (1<<2)  // Caps Lock Light
 
 // Typematic Byte
 //  [0:4] repeat rate           (00000 = 30Hz, 11111 = 2Hz)

@@ -49,45 +49,62 @@
 #define RETRY_COUNT     3       // command resends before giving up
 #define WARN_INTERVAL   10      // warn every N times a stray packet shows up
 
+#define _DNMASK_RIGHT   (1 << 0)
+#define _DNMASK_LEFT    (1 << 1)
+
+// keyboard configuration
 struct kb {
-    // keyboard configuration
-    unsigned char ident[2];     // identifier word
-    int leds;                   // LED state
-    bool typematic;             // supports auto-repeat
-    int typematic_byte;         // auto-repeat config
-    int scancode_set;           // scancode set in use
-    bool sc2_support;           // can do scancode set 2
-    bool sc3_support;           // can do scancode set 3
+    unsigned char ident[2]; // hardware identifier word
+
+    bool initialized  : 1;
+    bool typematic    : 1;  // supports auto-repeat
+    bool supports_sc2 : 1;  // can do scancode set 2
+    bool supports_sc3 : 1;  // can do scancode set 3
+
+    bool enable_tty   : 1;  // send typed chars to active TTY input buffer
+    bool enable_sysrq : 1;  // allow SysRq functions
+
+    union {
+        struct {
+            bool scrlk : 1; // scroll lock
+            bool numlk : 1; // number lock
+            bool caplk : 1; // caps lock
+        }; // note: do not change order!
+        uint8_t leds;       // LED state
+    };
+    uint8_t _old_leds;      // cache of last LED state written to keyboard
+
+    uint8_t typematic_byte; // auto-repeat config
+    uint8_t scan_mode;      // scancode set in use
 
     // scancode state
-    bool e0     : 1;
-    bool e1     : 1;
+    bool e0     : 1;        // 0xE0 modifier received
+    bool e1     : 1;        // 0xE1 modifier received
 
     // keyboard state
-    int ctrl;
-    int alt;
-    int shift;
-    int meta;
-    int numlk;
-    int capslk;
-    int scrlk;
-    int sysrq;
-    char altchar;
-    char pollchar;
+    int ctrl    : 2;        // [1:0] = { LCTRL,  RCTRL }
+    int alt     : 2;
+    int shift   : 2;
+    int meta    : 2;
+    int sysrq   : 1;
+
+    // input state
+    char altchar;           // ALT+<NUMPAD> state
+    char pollchar;          // last character typed
+
+    // spurious scancode tracking
+    uint64_t ack_count;
+    uint64_t resend_count;
+    uint64_t error_count;
+    uint64_t selftest_errors;
 
     // // key event buffer
     // struct ring eventq;            // TODO: make queue w/ generic type
     // struct key_event ebuf[KB_BUFFER_SIZE];
-
-    // spurious scancode tracking
-    int ack_count;
-    int resend_count;
-    int error_count;
 };
 
 static struct kb _kb = { };
 struct kb *g_kb = &_kb;
-bool g_kb_initialized;
 
 #ifdef DEBUG
 extern int g_test_crashkey;  // crash.c
@@ -105,7 +122,6 @@ static const char * g_keynames[122];
 static void sysrq(char c);
 void hard_reset(void);
 
-static void update_leds(void);
 static void kb_interrupt(int irq, struct iregs *regs);
 static void kb_putq(char c);
 
@@ -115,8 +131,8 @@ static bool kb_selftest(void);
 static bool kb_setleds(uint8_t leds);
 static bool kb_typematic(uint8_t typ);
 
-static void kb_disable(void);
-static void kb_enable(void);
+static void disable_ps2_kb_port(void);
+static void enable_ps2_kb_port(void);
 
 static bool kb_sendcmd(uint8_t cmd);
 static uint8_t kb_rdport(void);
@@ -125,17 +141,52 @@ static void kb_wrport(uint8_t data);
 #define RIF(x)  if (!(x)) { return; }
 #define RIF_FALSE(x)  if (!(x)) { return false; }
 
-extern void init_ps2(void);
+// ----------------------------------------------------------------------------
 
-void init_kb(void)
+bool kb_initialized(void)   { return g_kb->initialized; }
+bool kb_tty_enabled(void)   { return g_kb->enable_tty; }
+bool kb_sysrq_enabled(void) { return g_kb->enable_sysrq; }
+
+void kb_enable_tty(bool enable)   { g_kb->enable_tty = enable; }
+void kb_enable_sysrq(bool enable) { g_kb->enable_sysrq = enable; }
+
+int kb_getc(void)
 {
-    init_ps2();
+    if (!g_kb->initialized) {
+        return -EAGAIN;
+    }
 
-    g_kb->numlk = 1;
+    volatile char c;
+    volatile struct kb *kb_ptr = g_kb;
+
+    uint32_t flags;
+    cli_save(flags);
+    {
+        kb_ptr->pollchar = 0;
+        __sti();
+        while (kb_ptr->pollchar == 0) { }     // TODO: poll timeout, atomic
+        __cli();
+        c = kb_ptr->pollchar;
+    }
+    restore_flags(flags);
+
+    return c;
+}
+
+// ----------------------------------------------------------------------------
+
+extern __init void init_ps2(void);
+
+__init void init_kb(void)
+{
+    if (g_kb->initialized)
+        return;
+
+    init_ps2();
 
     // disable keyboard
     ps2_flush();
-    kb_disable();
+    disable_ps2_kb_port();
     kb_sendcmd(PS2KB_CMD_SCANOFF);
     ps2_flush();
 
@@ -167,15 +218,16 @@ void init_kb(void)
         ps2cfg |= PS2_CFG_TRANSLATE;
         ps2_cmd(PS2_CMD_WRCFG);
         ps2_write(ps2cfg);
-        g_kb->scancode_set = 1;
+        g_kb->scan_mode = 1;
     }
 
     // re-enable keyboard
-    kb_enable();
+    enable_ps2_kb_port();
     kb_sendcmd(PS2KB_CMD_SCANON);
     ps2_flush();
 
-    update_leds();
+    g_kb->numlk = 1;
+    kb_setleds(g_kb->leds);
 
     // register ISR and unmask IRQ1 on the PIC
     irq_register(IRQ_KEYBOARD, kb_interrupt);
@@ -188,33 +240,13 @@ void init_kb(void)
         g_kb->ident[0], g_kb->ident[1], ONOFF(ps2cfg & PS2_CFG_TRANSLATE));
     kprint("ps2kb: leds=%02Xh typematic=%02Xh\n",
         g_kb->leds, g_kb->typematic_byte);
-    kprint("ps2kb: scancode_set=%d sc2_support=%s sc3_support=%s\n",
-        g_kb->scancode_set,  YN(g_kb->sc2_support), YN(g_kb->sc3_support));
+    kprint("ps2kb: scan_mode=%d supports_sc2=%s supports_sc3=%s\n",
+        g_kb->scan_mode,  YN(g_kb->supports_sc2), YN(g_kb->supports_sc3));
 #endif
 
-    g_kb_initialized = true;
-}
-
-int kb_getc(void)
-{
-    uint32_t flags;
-    char c;
-
-    if (!g_kb_initialized) {
-        return -EAGAIN;
-    }
-
-    cli_save(flags);
-
-    g_kb->pollchar = 0;
-    __sti();
-    while (g_kb->pollchar == 0) { }     // TODO: poll timeout
-    __cli();
-    c = g_kb->pollchar;
-
-    restore_flags(flags);
-
-    return c;
+    g_kb->enable_tty = true;
+    g_kb->enable_sysrq = true;
+    g_kb->initialized = true;
 }
 
 static void kb_putq(char c)
@@ -227,25 +259,6 @@ static void kb_putq(char c)
         tty->ldisc.recv(tty, &c, 1);
     }
     g_kb->pollchar = c;
-}
-
-static void update_leds(void)
-{
-    // update toggle key LEDs
-    int leds = 0;
-    if (g_kb->capslk) {
-        leds |= PS2KB_LED_CAPLK;
-    }
-    if (g_kb->numlk) {
-        leds |= PS2KB_LED_NUMLK;
-    }
-    if (g_kb->scrlk) {
-        leds |= PS2KB_LED_SCRLK;
-    }
-
-    if (g_kb->leds != leds) {
-        kb_setleds(leds);
-    }
 }
 
 static void kb_interrupt(int irq, struct iregs *regs)
@@ -272,7 +285,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
 
     // prevent keyboard from sending more interrupts
     cli_save(flags);
-    kb_disable();
+    disable_ps2_kb_port();
 
     // check keyboard status
     status = ps2_status();
@@ -294,7 +307,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
         case 0xFA:
             g_kb->ack_count++;
             if ((g_kb->ack_count % WARN_INTERVAL) == 0) {
-                pr_alert("ps2kb: seen %d stray acks\n", g_kb->ack_count);
+                pr_alert("ps2kb: seen %llu stray acks\n", g_kb->ack_count);
             }
             // TODO: panic after some amount...?
             goto done;
@@ -302,26 +315,30 @@ static void kb_interrupt(int irq, struct iregs *regs)
         case 0xFE:
             g_kb->resend_count++;
             if ((g_kb->resend_count % WARN_INTERVAL) == 0) {
-                pr_alert("ps2kb: seen %d stray resend requests\n", g_kb->resend_count);
+                pr_alert("ps2kb: seen %llu stray resend requests\n", g_kb->resend_count);
             }
             goto done;
 
         case 0xFC: __fallthrough;   // self-test failed
-        case 0xFD: __fallthrough;   // self-test failed
+        case 0xFD:                  // self-test failed
+            g_kb->selftest_errors++;
+            pr_alert("ps2kb: self-test returned 0x%X\n", sc);
+            goto done;
+
         case 0xFF: __fallthrough;   // error
         case 0x00:                  // error
             g_kb->error_count++;
             if (g_kb->error_count == 1) {
-                pr_alert("ps2kb: got error 0x%X\n", g_kb->error_count);
+                pr_alert("ps2kb: got error 0x%X\n", sc);
             }
             if ((g_kb->error_count % WARN_INTERVAL) == 0) {
-                pr_alert("ps2kb: seen %d errors\n", g_kb->error_count);
+                pr_alert("ps2kb: seen %llu errors\n", g_kb->error_count);
             }
             goto done;
     }
 
     // the following translation is for scancode set 1 only
-    assert(g_kb->scancode_set == 1);
+    assert(g_kb->scan_mode == 1);
 
     // did we get an escape code?
     if (sc == 0xE0) {
@@ -382,7 +399,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
 
     // update toggle keys and LEDs
     if (!release && key == KEY_CAPSLK) {
-        g_kb->capslk ^= true;
+        g_kb->caplk ^= true;
     }
     if (!release && key == KEY_NUMLK) {
         g_kb->numlk ^= true;
@@ -390,26 +407,27 @@ static void kb_interrupt(int irq, struct iregs *regs)
     if (!release && key == KEY_SCRLK) {
         g_kb->scrlk ^= true;
     }
-    update_leds();
+    kb_setleds(g_kb->leds);
 
     // update modifier key state
-    #define handle_modifier(key,mod,l,r)        \
-    ({                                          \
-        int _mask = 0;                          \
-        if ((key) == (l)) { _mask |= 1 << 0; }  \
-        if ((key) == (r)) { _mask |= 1 << 1; }  \
-        if (_mask && !release) {                \
-            g_kb->mod |= _mask;                  \
-        }                                       \
-        else if (_mask && release) {            \
-            g_kb->mod &= ~_mask;                 \
-        }                                       \
+    #define HANDLE_MODKEY(key,mod,l,r) \
+    ({ \
+        int _mask = 0; \
+        if ((key) == (r)) { _mask |= _DNMASK_LEFT; } \
+        if ((key) == (l)) { _mask |= _DNMASK_RIGHT; } \
+        if (_mask && !release) { \
+            g_kb->mod |= _mask; \
+        } \
+        else if (_mask && release) { \
+            g_kb->mod &= ~_mask; \
+        } \
     })
-    handle_modifier(key, ctrl, KEY_LCTRL, KEY_RCTRL);
-    handle_modifier(key, shift, KEY_LSHIFT, KEY_RSHIFT);
-    handle_modifier(key, alt, KEY_LALT, KEY_RALT);
-    handle_modifier(key, meta, KEY_LWIN, KEY_RWIN);
-    handle_modifier(key, sysrq, KEY_SYSRQ, 0);
+    HANDLE_MODKEY(key, ctrl, KEY_LCTRL, KEY_RCTRL);
+    HANDLE_MODKEY(key, shift, KEY_LSHIFT, KEY_RSHIFT);
+    HANDLE_MODKEY(key, alt, KEY_LALT, KEY_RALT);
+    HANDLE_MODKEY(key, meta, KEY_LWIN, KEY_RWIN);
+    HANDLE_MODKEY(key, sysrq, KEY_SYSRQ, 0);
+    #undef HANDLE_MODKEY
 
     // submit alt code upon release of ALT key
     if (is_alt(key) && release && g_kb->altchar) {
@@ -430,7 +448,17 @@ static void kb_interrupt(int irq, struct iregs *regs)
     // CTRL+ALT+DEL: system reboot
     if (g_kb->ctrl && g_kb->alt && (key == KEY_DELETE || key == KEY_KPDOT)) {
         hard_reset();
-        panic("unable to shut down -- please hard-reset your computer");
+    }
+
+    // SysRq: special system operations
+    if (g_kb->enable_sysrq && g_kb->sysrq) {
+        sysrq(c);
+        goto done;
+    }
+
+    // we're done if TTY disabled
+    if (!g_kb->enable_tty) {
+        goto done;
     }
 
 #ifdef DEBUG
@@ -532,14 +560,8 @@ static void kb_interrupt(int irq, struct iregs *regs)
         }
     }
 
-    // sysrq handling
-    if (g_kb->sysrq) {
-        sysrq(c);
-        goto done;
-    }
-
     // handle caps lock
-    if (g_kb->capslk && !g_kb->alt) {
+    if (g_kb->caplk && !g_kb->alt) {
         if (isupper(c)) {
             c = tolower(c);
         }
@@ -555,6 +577,10 @@ static void kb_interrupt(int irq, struct iregs *regs)
     kb_putq(c);
 
 record_key_event:
+    if (!g_kb->enable_tty) {
+        goto done;
+    }
+
     evt.keycode = key;
     evt.scancode = sc;
     evt.release = release;
@@ -571,9 +597,8 @@ record_key_event:
     kprint("\n");
 #endif
 
-done:
-    // re-enable keyboard interrupts from controller
-    kb_enable();
+done:   // re-enable keyboard interrupts from controller
+    enable_ps2_kb_port();
     restore_flags(flags);
 }
 
@@ -581,11 +606,10 @@ static void sysrq(char c)
 {
     switch (c) {
         default:
-            beep(ALERT_FREQ, ALERT_TIME, false);
-            kprint("\nsysrq: crash(c) debug-break(g) reboot(r)");
+            kprint("\a\nsysrq: crash(c) debug-break(g) reboot(r)");
             break;
         case 'c':
-            kb_enable();
+            enable_ps2_kb_port();
             irq_enable();
             load_ss(0x00);
             break;
@@ -598,7 +622,7 @@ static void sysrq(char c)
     }
 }
 
-void hard_reset(void)
+__noreturn void hard_reset(void)
 {
     // first, try resetting via the PS/2 controller
     ps2_cmd(PS2_CMD_SYSRESET);
@@ -606,6 +630,10 @@ void hard_reset(void)
     // if that didn't work, triple fault
     struct table_desc idt_desc = { .limit = 0, .base = 0 };
     __lidt(idt_desc);   // yoink away the IDT :D
+
+    // and if by some miracle /that/ didn't work, show a message and spin forever
+    panic("unable to shut down -- please hard-reset your computer");
+    for (;;);
 }
 
 static bool kb_selftest(void)
@@ -671,11 +699,12 @@ static bool kb_ident(void)
 
 static bool kb_setleds(uint8_t leds)
 {
-    RIF_FALSE(kb_sendcmd(PS2KB_CMD_SETLED));
-
-    g_kb->leds = leds;
-    kb_wrport(g_kb->leds);
-    kb_rdport();                    // ack
+    if (leds != g_kb->_old_leds) {
+        RIF_FALSE(kb_sendcmd(PS2KB_CMD_SETLED));
+        kb_wrport(leds);
+        kb_rdport();    // ack
+        g_kb->_old_leds = leds;
+    }
 
     return true;
 }
@@ -702,7 +731,7 @@ static bool kb_scset(uint8_t set)
         kb_sendcmd(PS2KB_CMD_SCANCODE);
         kb_wrport(1);
         kb_rdport();    // ack
-        g_kb->scancode_set = 1;
+        g_kb->scan_mode = 1;
         return (set == 1);
     }
 
@@ -718,14 +747,14 @@ static bool kb_scset(uint8_t set)
     data = kb_rdport();
     if (data == set) {
         supported = true;
-        g_kb->scancode_set = set;
+        g_kb->scan_mode = set;
     }
     else {
         // unsupported, fallback to the old set...
         kb_sendcmd(PS2KB_CMD_SCANCODE);
         kb_wrport(oldset);
         kb_rdport();    // ack
-        g_kb->scancode_set = oldset;
+        g_kb->scan_mode = oldset;
     }
 
     return supported;
@@ -746,12 +775,12 @@ static bool kb_typematic(uint8_t typ)
     return true;
 }
 
-static void kb_disable(void)
+static void disable_ps2_kb_port(void)
 {
     ps2_cmd(PS2_CMD_P1OFF);
 }
 
-static void kb_enable(void)
+static void enable_ps2_kb_port(void)
 {
     ps2_cmd(PS2_CMD_P1ON);
 }

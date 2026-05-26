@@ -132,6 +132,21 @@ void * get_terminal_fb(int num);
 // get real VGA frame buffer
 void * get_vga_fb(void);
 
+// has the keyboard driver been configured?
+bool kb_initialized(void);
+
+// will typed chars be sent to the TTY?
+bool kb_tty_enabled(void);
+
+// will SysRq functions work?
+bool kb_sysrq_enabled(void);
+
+// enable/disable sending typed chars to TTY
+void kb_enable_tty(bool enable);
+
+// enable/disable SysRq key
+void kb_enable_sysrq(bool enable);
+
 // wait for a character keypress (NOTE: BLOCKS!!)
 int kb_getc(void);
 
