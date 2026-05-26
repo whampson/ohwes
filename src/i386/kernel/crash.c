@@ -40,18 +40,16 @@
 #define CRASH_MARGIN        5
 #define CRASH_SCALE         2
 
-#define MSG_TAIL            "The system cannot be recovered and must be restarted."
-#define MSG_PROMPT          "Press CTRL+ALT+DEL to restart your computer "
+#define MSG_FATAL_REBOOT    "The system cannot be recovered and must be restarted."
 
 // convenient ANSI escape sequence wrappers
-#define BOLD(s)             "\e[1m"  s "\e[22m"
-#define ITALIC(s)           "\e[3m"  s "\e[23m"
-#define UNDERLINE(s)        "\e[4m"  s "\e[24m"
-#define RED(s)              "\e[31m" s "\e[39m"
+#define BOLD(s)             CONSOLE_BOLD s CONSOLE_UNBOLD
+#define ITALIC(s)           "\e[3m"      s "\e[23m"
+#define UNDERLINE(s)        "\e[4m"      s "\e[24m"
+#define RED(s)              CONSOLE_RED  s CONSOLE_DEFAULT
 
 // optional visual information
 #define DUMP_SEGMENT_REGS   1
-#define DUMP_MM_REGS        1
 #define DUMP_STACK          1
 
 // stack dump dimensions
@@ -63,13 +61,12 @@ int g_test_crashkey;
 int g_test_soft_double_fault;
 #endif
 
+extern struct kb *g_kb;
 extern struct console *g_consoles;
-
 static const char *exception_names[NR_EXCEPTIONS];
 
 static int cprint(const char *fmt, ...);
-static int fbprint(const char *fmt, ...);
-static int fbwrite(const char *buf, size_t count);
+static int tprint(const char *fmt, ...);
 
 static void center_text(int maxwidth, const char *fmt, ...);
 static void wrap_text(int margin, const char *fmt, ...);
@@ -81,15 +78,18 @@ static void dump_cpu(struct cpu_state *cpu, dumpfn to);
 static void dump_cntlregs(struct cpu_state *cpu, dumpfn to);
 static void dump_regs(struct iregs *regs, dumpfn to);
 static void dump_segregs(struct cpu_state *cpu, dumpfn to);
-static void dump_mmregs(struct cpu_state *cpu, dumpfn to);
 static void dump_stack(struct cpu_state *cpu, dumpfn to);
 static void dump_segsel(struct segsel *segsel, dumpfn to);
+
+extern void terminal_initialize(int num, struct terminal *term);    // terminal.c
+
+// ----------------------------------------------------------------------------
 
 //
 // Capture the extraneous CPU state and combine with interrupt regs into a
 // cpu state object.
 //
-void capture_cpu_state(struct cpu_state *state, struct iregs *iregs)
+static void capture_cpu_state(struct cpu_state *state, struct iregs *iregs)
 {
     state->iregs.ebx = iregs->ebx;
     state->iregs.ecx = iregs->ecx;
@@ -119,8 +119,36 @@ void capture_cpu_state(struct cpu_state *state, struct iregs *iregs)
     __str(state->tr);
 }
 
-static void show_crash_screen(
-    int vector,
+static __noreturn void die(const struct cpu_state *state)
+{
+    irq_setmask(IRQ_MASKALL);
+
+    tprint("\n\n\n");
+    if (kb_initialized() && state->iregs.vec != IRQ_KEYBOARD) {
+        kb_enable_tty(false);
+        kb_enable_sysrq(false);
+        irq_unmask(IRQ_KEYBOARD);
+        center_text(vga_get_cols(), "Press CTRL+ALT+DEL to restart your computer . . . \e6");
+    }
+    else {
+        center_text(vga_get_cols(), "Please restart your computer manually.\e6");
+    }
+    if (state->iregs.vec != IRQ_TIMER) {
+        irq_unmask(IRQ_TIMER);
+        __sti();
+        beep(913, 276, true);   // NOTE: BLOCKS!!!
+        beep(1370, 276, true);  // TODO: rewrite beep()
+        beep(1777, 380, true);
+    }
+    else {
+        __sti();
+    }
+
+    for (;;);   // this is the end... my only friend... the end...
+}
+
+static __noreturn void show_crash_screen(
+    struct cpu_state *cpu,
     int color, int margin,
     const char *banner,
     const char *primary_text,
@@ -129,25 +157,19 @@ static void show_crash_screen(
     const int MaxWidth = vga_get_cols();
     const int MaxHeight = vga_get_rows();
 
-    fbprint("\e[22;4%d;37m\e[2J", color & 7);
-    fbprint("\e[%dH", MaxHeight / 3);
+    tprint("\e5\e[22;4%d;39m\e[2J", color & 7);
+    tprint("\e[%dH", MaxHeight / 3);
     center_text(MaxWidth, "\e[7m %s \e[27m", banner);
-    fbprint("\n\n\e[1m");
-    wrap_text(margin, primary_text);
-    fbprint("\n\n");
-    center_text(MaxWidth, secondary_text);
-
-    if (vector != IRQ_TIMER) {
-        uint16_t oldmask = irq_getmask();
-        irq_setmask(IRQ_MASKALL);
-        irq_unmask(IRQ_TIMER);
-        __sti();
-        beep(913, 276, true);
-        beep(1370, 276, true);
-        beep(1777, 380, true);
-        __cli();
-        irq_setmask(oldmask);
+    if (primary_text) {
+        tprint("\n\n\n");
+        wrap_text(margin, primary_text);
     }
+    if (secondary_text) {
+        tprint("\n\n");
+        wrap_text(margin, secondary_text);
+    }
+
+    die(cpu);
 }
 
 //
@@ -162,21 +184,20 @@ __noreturn void handle_soft_double_fault(
 {
     char msgbuf[CRASH_BUFSIZ];
 
-    cprint("\n\n\e[1m" RED("*** FATAL: exception (1) occurred while handling previous exception (2)"));
+    cprint("\n\n" CONSOLE_BOLD RED("*** FATAL: soft double fault -- %s (1) occurred while handling previous %s (2)."),
+        exception_names[cpu->iregs.vec], exception_names[orig_cpu->iregs.vec]);
     cprint("\n\n(1) %s at %p", exception_names[cpu->iregs.vec], _P(cpu->iregs.eip));
     dump_cpu(cpu, cprint);
     cprint("\n\n(2) %s at %p", exception_names[orig_cpu->iregs.vec], _P(orig_cpu->iregs.eip));
     dump_cpu(orig_cpu, cprint);
 
     snprintf(msgbuf, sizeof(msgbuf),
-        "An exception %02lX (%s) has occurred at %p while handling a previous "
-        "exception %02lX (%s) that occurred at %p. " MSG_TAIL,
+        "An fatal exception %02lX (%s) occurred at %p while handling a previous "
+        "exception %02lX (%s) that occurred at %p. " MSG_FATAL_REBOOT,
         cpu->iregs.vec, exception_names[cpu->iregs.vec], _P(cpu->iregs.eip),
         orig_cpu->iregs.vec, exception_names[orig_cpu->iregs.vec], _P(orig_cpu->iregs.eip));
 
-    show_crash_screen(-1, ANSI_RED, 5, "Double Fault", msgbuf, MSG_PROMPT);
-
-    for (;;);
+    show_crash_screen(cpu, ANSI_RED, 5, "Double Fault", msgbuf, NULL);
 }
 
 //
@@ -191,6 +212,7 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
     char msgbuf[CRASH_BUFSIZ];
     char errbuf[CRASH_BUFSIZ];
     struct cpu_state cpu;
+    size_t errbuf_len;
 
 #if SERIAL_DEBUGGING
     if (iregs->vec == BREAKPOINT || iregs->vec == DEBUG_EXCEPTION) {
@@ -200,6 +222,7 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
         return;
     }
 #endif
+
 
     // get the remaining regs
     capture_cpu_state(&cpu, iregs);
@@ -218,7 +241,7 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
     }
 #endif
 
-    cprint("\n\n\e[1m" RED("*** FATAL: exception %02X (%s) occurred at %p") "\n",
+    cprint("\n\n" CONSOLE_BOLD RED("*** FATAL: exception %02X (%s) occurred at %p.") "\n",
         iregs->vec, exception_names[iregs->vec], _P(iregs->eip));
     dump_cpu(&cpu, cprint);
 
@@ -228,39 +251,37 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
         int wr = iregs->err & PF_WR;
         int p = iregs->err & PF_P;
         int rsvd = iregs->err & PF_RSVD;
-        snprintf(errbuf, CRASH_BUFSIZ, " A %s mode %s %p caused a %s.",
-            (us) ? "user" : "kernel", (wr) ? "write to" : "read from", _P(cpu.cr2),
-            (p)
-                ? (rsvd) ? "reserved bit violation" : "access violation"
-                : "non-present page access violation");
+        errbuf_len = snprintf(errbuf, CRASH_BUFSIZ, "An attempt to perform a %s%s%p resulted in %s. ",
+            (us) ? "user mode " : "kernel mode ",
+            (wr) ? "write to " : "read from ",
+            _P(cpu.cr2),
+            (p) ? ((rsvd) ? "a reserved bit violation" : "an access violation")
+                : "an access violation (page not present)");
     }
     else if (iregs->err) {
-        snprintf(errbuf, sizeof(errbuf), " The issue occurred in %s(%02lX)%s.",
+        errbuf_len = snprintf(errbuf, sizeof(errbuf), "The issue occurred in %s(%02lX)%s. ",
             (iregs->err & ERR_IDT) ? "IDT" :
                 (iregs->err & ERR_TI) ? "LDT" : "GDT",
             (iregs->err & ERR_INDEX) >> 3,
             (iregs->err & ERR_EXT) ? " and originated via an interrupt" : "");
     }
     else {
-        snprintf(errbuf, sizeof(errbuf), "%s", "");
+       errbuf_len = snprintf(errbuf, sizeof(errbuf), "%s", "");
     }
 
+    snprintf(errbuf+errbuf_len, sizeof(errbuf)-errbuf_len, "%s", MSG_FATAL_REBOOT);
+
     snprintf(msgbuf, sizeof(msgbuf),
-        "A fatal exception %02lX (%s) has occurred at %p.%s "
-        MSG_TAIL,
+        "A fatal exception %02lX (%s) occurred at %p.",
         iregs->vec, exception_names[iregs->vec],
-        _P(iregs->eip), errbuf);
+        _P(iregs->eip));
 
-    show_crash_screen(iregs->vec, CRASH_COLOR, CRASH_MARGIN, OS_NAME, msgbuf, MSG_PROMPT);
-    // dump_cpu(&cpu, fbprint);
-
-    for (;;);
+    show_crash_screen(&cpu, CRASH_COLOR, CRASH_MARGIN, OS_NAME, msgbuf, errbuf);
 }
 
 static void dump_cpu(struct cpu_state *cpu, dumpfn dump)
 {
 #if DUMP_STACK
-    // cprint("\n");
     dump_stack(cpu, dump);
 #endif
 
@@ -272,12 +293,7 @@ static void dump_cpu(struct cpu_state *cpu, dumpfn dump)
     dump_regs(&cpu->iregs, dump);
 
 #if DUMP_SEGMENT_REGS
-    // cprint("\n");
     dump_segregs(cpu, dump);
-#endif
-
-#if DUMP_MM_REGS
-    dump_mmregs(cpu, dump);
 #endif
 
 }
@@ -321,23 +337,20 @@ static void dump_regs(struct iregs *regs, dumpfn dump)
 
 static void dump_segregs(struct cpu_state *cpu, dumpfn dump)
 {
+    struct table_desc *gdt_desc = (struct table_desc *) &cpu->gdtr;
+    struct table_desc *idt_desc = (struct table_desc *) &cpu->idtr;
+
+    dump("\nGDTR=%08X,%05X", gdt_desc->base, gdt_desc->limit);
+    dump("\nIDTR=%08X,%05X", idt_desc->base, idt_desc->limit);
+    dump("\nLDTR="); dump_segsel((struct segsel *) &cpu->ldtr, dump);
     dump("\nSS="); dump_segsel((struct segsel *) &cpu->iregs.ss, dump);
     dump("\nCS="); dump_segsel((struct segsel *) &cpu->iregs.cs, dump);
     dump("\nDS="); dump_segsel((struct segsel *) &cpu->iregs.ds, dump);
     dump("\nES="); dump_segsel((struct segsel *) &cpu->iregs.es, dump);
     dump("\nFS="); dump_segsel((struct segsel *) &cpu->iregs.fs, dump);
     dump("\nGS="); dump_segsel((struct segsel *) &cpu->iregs.gs, dump);
-}
-
-static void dump_mmregs(struct cpu_state *cpu, dumpfn dump)
-{
-    struct table_desc *gdt_desc = (struct table_desc *) &cpu->gdtr;
-    struct table_desc *idt_desc = (struct table_desc *) &cpu->idtr;
-
     dump("\nTR="); dump_segsel((struct segsel *) &cpu->tr, dump);
-    dump("\nLDTR="); dump_segsel((struct segsel *) &cpu->ldtr, dump);
-    dump("\nGDTR=%08X,%05X IDTR=%08X,%05X",
-        gdt_desc->base, gdt_desc->limit, idt_desc->base, idt_desc->limit);
+    dump("\n");
 }
 
 static void dump_stack(struct cpu_state *cpu, dumpfn dump)
@@ -381,54 +394,14 @@ static void dump_segsel(struct segsel *segsel, dumpfn dump)
     }
 }
 
-// like kprint but with a smaller stack footprint and will write directly to
-// frame buffer if no console is registered
-static int cprint(const char *fmt, ...)
-{
-    char buf[CRASH_BUFSIZ] = { };
-    va_list args;
-    size_t count;
-
-    va_start(args, fmt);
-    count = vsnprintf(buf, CRASH_BUFSIZ, fmt, args);
-    va_end(args);
-
-    struct console *cons = g_consoles;
-    if (!cons) {
-        return fbwrite(buf, count);
-    }
-
-    for (; cons; cons = cons->next) {
-        cons->write(cons, buf, count);
-    }
-    return count;
-}
-
-// print directly to active the terminal's VGA frame buffer
-static int fbprint(const char *fmt, ...)
-{
-    va_list args;
-    size_t count;
-    char buf[CRASH_BUFSIZ] = { };
-
-    va_start(args, fmt);
-    count = vsnprintf(buf, CRASH_BUFSIZ, fmt, args);
-    va_end(args);
-
-    return fbwrite(buf, count);
-}
-
-static int fbwrite(const char *buf, size_t count)
+static int _tprint(const char *buf, size_t count)
 {
     struct terminal *term;
     const char *p;
 
-    term = get_terminal(0);
+    term = get_terminal(VT_CONSOLE_NUM);
     if (!term->initialized) {
-        terminal_defaults(term);
-        term->number = 1;
-        term->framebuf = get_vga_fb();
-        term->initialized = true;
+        terminal_initialize(VT_CONSOLE_NUM, term);
     }
 
     p = buf;
@@ -440,6 +413,43 @@ static int fbwrite(const char *buf, size_t count)
     }
 
     return (p - buf);
+}
+
+// print directly to active the terminal's frame buffer
+static int tprint(const char *fmt, ...)
+{
+    va_list args;
+    size_t count;
+    char buf[CRASH_BUFSIZ] = { };
+
+    va_start(args, fmt);
+    count = vsnprintf(buf, CRASH_BUFSIZ, fmt, args);
+    va_end(args);
+
+    return _tprint(buf, count);
+}
+
+
+// lik kprint but with no klog features
+// and will write directly to frame buffer if no console is registered
+static int cprint(const char *fmt, ...)
+{
+    char buf[CRASH_BUFSIZ] = { };
+    va_list args;
+    size_t count;
+    struct console *cons;
+
+    va_start(args, fmt);
+    count = vsnprintf(buf, CRASH_BUFSIZ, fmt, args);
+    va_end(args);
+
+    if (!g_consoles) {
+        return _tprint(buf, count);
+    }
+    for (cons = g_consoles; cons; cons = cons->next) {
+        cons->write(cons, buf, count);
+    }
+    return count;
 }
 
 static void center_text(int maxwidth, const char *fmt, ...)
@@ -500,7 +510,7 @@ static void center_text(int maxwidth, const char *fmt, ...)
         col = 0;
     }
 
-    fbprint("\e[%dG%s", col, buf);
+    tprint("\e[%dG%s", col, buf);
 }
 
 static void wrap_text(int margin, const char *fmt, ...)
@@ -543,7 +553,7 @@ static void wrap_text(int margin, const char *fmt, ...)
         esclen = 0;
         for (; (p - buf) < CRASH_BUFSIZ && *p != '\0'; p++) {
             if (linelen > MaxWidth) {
-                fbprint("\r\n");
+                tprint("\n");
                 linelen = (2 * margin) + wordlen;
                 print_margin = true;
             }
@@ -551,7 +561,7 @@ static void wrap_text(int margin, const char *fmt, ...)
             // TODO: handle tabs?
 
             if (*p == '\n') {
-                fbprint("%.*s", wordlen + esclen, word);
+                tprint("%.*s", wordlen + esclen, word);
                 linelen = (2 * margin);
                 print_margin = true;
                 break;
@@ -583,13 +593,13 @@ static void wrap_text(int margin, const char *fmt, ...)
 
             if (print_margin) {
                 for (int i = 0; i < margin; i++) {
-                    fbprint(" ");
+                    tprint(" ");
                 }
                 print_margin = false;
             }
 
             if (isspace(*p)) {
-                fbprint("%.*s", wordlen + esclen, word);
+                tprint("%.*s", wordlen + esclen, word);
                 break;
             }
 
@@ -600,7 +610,7 @@ static void wrap_text(int margin, const char *fmt, ...)
         // eat up trailing spaces
         for (; isspace(*p) && *p != '\0'; p++) {
             if (linelen > MaxWidth) {
-                fbprint("\r\n");
+                tprint("\n");
                 linelen = (2 * margin) + wordlen;
                 print_margin = true;
                 break;
@@ -608,11 +618,11 @@ static void wrap_text(int margin, const char *fmt, ...)
 
             if (linelen > 0) {
                 linelen++;
-                fbprint("%c", *p);
+                tprint("%c", *p);
             }
         }
     }
-    fbprint("%.*s", wordlen + esclen, word);
+    tprint("%.*s", wordlen + esclen, word);
 }
 
 #ifdef DEBUG
@@ -667,13 +677,13 @@ void crash_key_irq(int irq, struct iregs *regs)   // TODO: call this vis sysreq.
             break;
         }
         case 10: {  // F10 - software double fault
-            kprint("\nsoft double fault...");
+            pr_error("soft double fault...\n");
             g_test_soft_double_fault = true;
             __asm__ volatile ("idiv %0" :: "a"(0), "b"(0));
             break;
         }
         case 11: {  // F11 - true double fault
-            kprint("\ndouble fault...");
+            pr_error("double fault...\n");
             volatile struct x86_desc *idt;
             idt = get_idt();
             idt[BREAKPOINT].trap.p = 0;
@@ -682,7 +692,7 @@ void crash_key_irq(int irq, struct iregs *regs)   // TODO: call this vis sysreq.
             break;
         }
         case 12: {  // F12 - triple fault
-            kprint("\ntriple fault...");
+            pr_error("triple fault...\n");
             struct table_desc idt_desc = { .limit = 0, .base = 0 };
             __lidt(idt_desc);   // yoink away the IDT :D
             break;
