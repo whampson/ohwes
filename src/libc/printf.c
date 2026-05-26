@@ -63,21 +63,24 @@ static struct printf_state make_printf_state(char *buf, size_t bufsz, putc_fn pu
 static int _putc_stdout(struct printf_state *state, char c)
 {
     (void) state;
-    return write(STDOUT_FILENO, &c, 1);     // TODO: INCREDIBLY INEFFICIENT if OS is not buffering
+    return write(STDOUT_FILENO, &c, 1);     // TODO: INCREDIBLY INEFFICIENT if write() is not buffering
 }
 
 static int _putc_buffer(struct printf_state *state, char c)
 {
     if (c == '\0') {
-        return 0;
+        return 0;   // no char written
     }
 
-    if (state->ptr - state->buf < state->bufsz - 1) {
+    if (state->ptr && state->buf && (
+        state->bufsz == 0 ||    // NOTE: can write arbitrary ptr if bufsz=0 !!
+        state->ptr - state->buf < state->bufsz - 1))
+    {
         *state->ptr++ = c;
         *state->ptr = '\0';
     }
 
-    return 1;   // return indicates that char would've been written
+    return 1;   // char was written or would've been written
 }
 
 static int _doprintf(const char *fmt, va_list args, struct printf_state *state);
@@ -120,38 +123,23 @@ int vprintf(const char *fmt, va_list args)
     }
 
     struct printf_state state;
-    int nwritten;
-
-    state = make_printf_state(NULL, 0, _putc_stdout);   // no buffering... here at least. system might...
-    nwritten = _doprintf(fmt, args, &state);
-
-    return nwritten;
+    state = make_printf_state(NULL, 0, _putc_stdout);
+    return _doprintf(fmt, args, &state);
 }
 
 int vsprintf(char *buf, const char *fmt, va_list args)
 {
 #if KERNEL_BUILD
-    kprint(KLOG_WARN "%s(%d): sprintf used\n", __func__, __LINE__);
+    pr_warn("%s(%d): sprintf used\n", __func__, __LINE__);
 #endif
 
     if (fmt == NULL || buf == NULL) {
         return -EINVAL;
     }
 
-    int nwritten;
     struct printf_state state;
-    char internal_buf[PRINTF_BUFFER_SIZE];
-
-    state = make_printf_state(internal_buf, sizeof(internal_buf), _putc_buffer);
-    nwritten = _doprintf(fmt, args, &state);
-
-    // yeah yeah... I know this is lossy and slow, but it's safe dammit!!
-    // besides, people shouldn't even be using these functions really...
-    memcpy(buf, internal_buf, nwritten);
-
-    // TODO: buffer internally so we don't lose data
-    // but also deprecate...
-    return nwritten;
+    state = make_printf_state(buf, 0, _putc_buffer);
+    return _doprintf(fmt, args, &state);
 }
 
 int vsnprintf(char *buf, size_t bufsz, const char *fmt, va_list args)
@@ -160,13 +148,9 @@ int vsnprintf(char *buf, size_t bufsz, const char *fmt, va_list args)
         return -EINVAL;
     }
 
-    int nwritten;
     struct printf_state state;
-
     state = make_printf_state(buf, bufsz, _putc_buffer);
-    nwritten = _doprintf(fmt, args, &state);
-
-    return nwritten;
+    return _doprintf(fmt, args, &state);
 }
 
 static int _doprintf(const char *fmt, va_list args, struct printf_state *state)
