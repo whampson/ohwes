@@ -56,6 +56,7 @@ static long sum_longs(int count, ...)
     return total;
 }
 
+#if TEST_PRINTF_FLOAT
 static double sum_doubles(int count, ...)
 {
     va_list ap;
@@ -67,7 +68,6 @@ static double sum_doubles(int count, ...)
     return total;
 }
 
-#if TEST_PRINTF_FLOAT
 /* Extracts mixed types: int, long, double, char* in that order */
 static void extract_mixed(char *out, size_t size, ...)
 {
@@ -211,6 +211,7 @@ static void test_va_long_type(void)
     PASS();
 }
 
+#if TEST_PRINTF_FLOAT
 static void test_va_double_type(void)
 {
     TEST("va_arg: double type (float promotes to double)");
@@ -218,6 +219,7 @@ static void test_va_double_type(void)
     ASSERT(result > 6.99 && result < 7.01, "sum of doubles ~= 7.0");
     PASS();
 }
+#endif
 
 static void test_va_pointer_type(void)
 {
@@ -265,6 +267,7 @@ static void test_va_short_promotes_to_int(void)
     PASS();
 }
 
+#if TEST_PRINTF_FLOAT
 static void test_va_float_promotes_to_double(void)
 {
     TEST("va_arg: float promotes to double");
@@ -274,6 +277,7 @@ static void test_va_float_promotes_to_double(void)
     ASSERT(result > 2.49 && result < 2.51, "float 2.5 as double");
     PASS();
 }
+#endif
 
 static void test_va_negative_char_promotes(void)
 {
@@ -388,6 +392,7 @@ static size_t sum_sizes(int count, ...)
     return total;
 }
 
+#if TEST_PRINTF_FLOAT
 static long double sum_long_doubles(int count, ...)
 {
     va_list ap;
@@ -398,6 +403,7 @@ static long double sum_long_doubles(int count, ...)
     va_end(ap);
     return total;
 }
+#endif
 
 static void test_va_unsigned_int(void)
 {
@@ -432,7 +438,7 @@ static void test_va_size_t(void)
     PASS();
 }
 
-
+#if TEST_PRINTF_FLOAT
 static void test_va_long_double(void)
 {
     TEST("va_arg: long double type");
@@ -440,6 +446,7 @@ static void test_va_long_double(void)
     ASSERT(result > 6.99L && result < 7.01L, "sum of long doubles ~= 7.0");
     PASS();
 }
+#endif
 
 
 /* ========================================================================= */
@@ -457,14 +464,18 @@ TEST_SUITE(stdarg, "stdarg.h tests")
 
     printf(COLOR_YELLOW "[va_arg: type handling]" COLOR_RESET "\n");
     test_va_long_type();
+#if TEST_PRINTF_FLOAT
     test_va_double_type();
+#endif
     test_va_pointer_type();
     test_va_mixed_types();
 
     printf(COLOR_YELLOW "[type promotion rules]" COLOR_RESET "\n");
     test_va_char_promotes_to_int();
     test_va_short_promotes_to_int();
+#if TEST_PRINTF_FLOAT
     test_va_float_promotes_to_double();
+#endif
     test_va_negative_char_promotes();
     test_va_negative_short_promotes();
 
@@ -483,5 +494,7 @@ TEST_SUITE(stdarg, "stdarg.h tests")
     test_va_unsigned_int_max();
     test_va_unsigned_long_long();
     test_va_size_t();
+#if TEST_PRINTF_FLOAT
     test_va_long_double();
+#endif
 }
