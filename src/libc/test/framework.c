@@ -25,16 +25,15 @@ int tests_run    = 0;
 int tests_passed = 0;
 int tests_failed = 0;
 
-test_failure_t failure_log[MAX_FAIL];
+struct failure_record failure_log[MAX_FAIL];
 
 void record_failure(const char *msg, const char *file, int line)
 {
     if (tests_failed < MAX_FAIL) {
-        test_failure_t *entry = &failure_log[tests_failed];
+        struct failure_record *entry = &failure_log[tests_failed];
+        memset(entry, 0, sizeof(struct failure_record));
         strncpy(entry->msg,  msg,  MAX_FAIL_MSG_LEN - 1);
-        entry->msg[MAX_FAIL_MSG_LEN - 1] = '\0';
         strncpy(entry->file, file, MAX_FAIL_FILE_LEN - 1);
-        entry->file[MAX_FAIL_FILE_LEN - 1] = '\0';
         entry->line = line;
     }
     tests_failed++;

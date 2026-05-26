@@ -92,15 +92,15 @@
 #define MAX_FAIL_MSG_LEN    128
 #define MAX_FAIL_FILE_LEN   32
 
-typedef struct {
+struct failure_record {
     char msg[MAX_FAIL_MSG_LEN];
     char file[MAX_FAIL_FILE_LEN];
     int  line;
-} test_failure_t;
+} ;
 
-extern test_failure_t failure_log[MAX_FAIL];
+extern struct failure_record failure_log[MAX_FAIL];
 
-void record_failure(const char *msg, const char *file, int line);
+void record_failure(const char *msg, const char *file,int line);
 void print_failure_summary(void);
 
 /* -- Counters -------------------------------------------------------------- */
