@@ -64,7 +64,7 @@ struct console *g_consoles = NULL;  // linked list
 
 // ----------------------------------------------------------------------------
 
-#if ENABLE_E9HACK_CONSOLE
+#if E9_HACK && ENABLE_E9HACK_CONSOLE
 static ssize_t e9_console_write(struct console *cons, const char *buf, size_t count)
 {
     const char *p = buf;

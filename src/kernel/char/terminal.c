@@ -603,6 +603,11 @@ int terminal_write(struct terminal *term, const char *buf, size_t count)
 
     p = buf;
     while (p < buf + count) {
+#if E9_HACK && ENABLE_E9HACK_PRINTF
+    if (term == get_terminal(0)) {
+        outb(0xE9, *p);
+    }
+#endif
         p += terminal_putchar(term, *p);
     }
 
