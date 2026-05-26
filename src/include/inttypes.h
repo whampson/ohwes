@@ -29,7 +29,7 @@
 
 #define PRId8           "d"
 #define PRId16          "d"
-#define PRId32          "d"
+#define PRId32          "ld"
 #define PRId64          "lld"
 #define PRIdLEAST8      PRId8
 #define PRIdLEAST16     PRId16
@@ -44,7 +44,7 @@
 
 #define PRIi8           "i"
 #define PRIi16          "i"
-#define PRIi32          "i"
+#define PRIi32          "li"
 #define PRIi64          "lli"
 #define PRIiLEAST8      PRIi8
 #define PRIiLEAST16     PRIi16
@@ -59,7 +59,7 @@
 
 #define PRIu8           "u"
 #define PRIu16          "u"
-#define PRIu32          "u"
+#define PRIu32          "lu"
 #define PRIu64          "llu"
 #define PRIuLEAST8      PRIu8
 #define PRIuLEAST16     PRIu16
@@ -74,7 +74,7 @@
 
 #define PRIo8           "o"
 #define PRIo16          "o"
-#define PRIo32          "o"
+#define PRIo32          "lo"
 #define PRIo64          "llo"
 #define PRIoLEAST8      PRIo8
 #define PRIoLEAST16     PRIo16
@@ -89,7 +89,7 @@
 
 #define PRIx8           "x"
 #define PRIx16          "x"
-#define PRIx32          "x"
+#define PRIx32          "lx"
 #define PRIx64          "llx"
 #define PRIxLEAST8      PRIx8
 #define PRIxLEAST16     PRIx16
@@ -104,7 +104,7 @@
 
 #define PRIX8           "X"
 #define PRIX16          "X"
-#define PRIX32          "X"
+#define PRIX32          "lX"
 #define PRIX64          "llX"
 #define PRIXLEAST8      PRIX8
 #define PRIXLEAST16     PRIX16
