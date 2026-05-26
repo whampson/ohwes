@@ -123,15 +123,19 @@ init_vga:
         int             $0x10
         jc              _vga_error_bad_mode
 
+VGA_FONT_8x14 = 1
+VGA_FONT_8x8  = 2
+VGA_FONT_8x16 = 4
+
         # set font size
         movw            $VGA_FONT, %ax
-_font0: cmpw            $_VGA_FONT_8x14, %ax
+_font0: cmpw            $VGA_FONT_8x14, %ax
         jne             _font1
         jmp             _dofont
-_font1: cmpw            $_VGA_FONT_8x8, %ax
+_font1: cmpw            $VGA_FONT_8x8, %ax
         jne             _font2
         jmp             _dofont
-_font2: cmpw            $_VGA_FONT_8x16, %ax
+_font2: cmpw            $VGA_FONT_8x16, %ax
         jne             _vga_error_bad_font
 _dofont:addw            $0x1110, %ax
         xorb            %bl, %bl

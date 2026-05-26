@@ -30,8 +30,9 @@
 #define A20_PORT92          2       // A20 enabled via IO port 92h
 #define A20_BIOS            3       // A20 enabled via BIOS INT=15h,AX=2401h
 
-// ----------------------------------------------------------------------------
-
+/*----------------------------------------------------------------------------*
+ * `struct boot_info` Members
+ *----------------------------------------------------------------------------*/
 // TODO: use these in bootloader asm to ensure proper struct field access
 #define BI_EBDA_BASE        0x00
 #define BI_MEM_MAP          0x04
@@ -43,10 +44,17 @@
 #define BI_HWFKLAGS         0x1C
 #define BI_A20_METHOD       0x20
 #define BI_VGA_MODE         0x24
-#define BI_SIZE             0x28    // boot info size
+#define SIZEOF_BI           0x28    // boot info size
 
-#ifndef __ASSEMBLER__
-// C-only defines from here on out!
+/*----------------------------------------------------------------------------*
+ * Memory Regions
+ *----------------------------------------------------------------------------*/
+#define EBDA_TOP            0xA0000
+
+// ============================================================================
+//                              BEGIN C HEADER
+// ============================================================================
+#ifndef __ASSEMBLER__   // C-only defines from here on out!
 
 #include <assert.h>
 #include <stdbool.h>
@@ -112,7 +120,6 @@ enum acpi_mmap_type {
     // Other values are reserved or OEM-specific, do not use
 };
 
-
 /**
  * ACPI Memory Map entry, as returned by INT 15h,AX=E820h.
  */
@@ -170,7 +177,7 @@ static_assert(offsetof(struct boot_info, kernel_size) == BI_KERNEL_SIZE, "offset
 static_assert(offsetof(struct boot_info, hwflags) == BI_HWFKLAGS, "offsetof(struct boot_info, hwflags)");
 static_assert(offsetof(struct boot_info, a20_method) == BI_A20_METHOD, "offsetof(struct boot_info, a20_method)");
 static_assert(offsetof(struct boot_info, vga_mode) == BI_VGA_MODE, "offsetof(struct boot_info, vga_mode)");
-static_assert(sizeof(struct boot_info) == BI_SIZE, "sizeof(struct boot_info)");
+static_assert(sizeof(struct boot_info) == SIZEOF_BI, "sizeof(struct boot_info)");
 
 #endif  // __ASSEMBLER__
 

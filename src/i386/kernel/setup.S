@@ -50,7 +50,7 @@ ksetup:
         # copy boot params from stage2
         movl            %ecx, %esi
         movl            boot_info_ptr, %edi
-        movl            $BI_SIZE, %ecx
+        movl            $SIZEOF_BI, %ecx
         cld
     rep movsb
 
@@ -304,6 +304,6 @@ idt_ptr:
 # Boot Info
 
 boot_info:
-        .fill           BI_SIZE
+        .fill           SIZEOF_BI
 boot_info_ptr:
         .long           boot_info

@@ -29,6 +29,13 @@
 #include <i386/x86.h>
 
 /*----------------------------------------------------------------------------*
+ * Terminal Output
+ *----------------------------------------------------------------------------*/
+
+// write terminal chars to port 0xE9
+#define E9_HACK             1
+
+/*----------------------------------------------------------------------------*
  * Memory
  *----------------------------------------------------------------------------*/
 
@@ -85,17 +92,13 @@
 //     2: 80x25,B8000h,16gray
 //     3: 80x25,B8000h,16
 //     7: 80x25,B0000h,mono
+#define VGA_MODE            3
+
 // VGA_FONT
 //     1: 8x14,80x28,text
 //     2:  8x8,80x50,text
 //     4: 8x16,80x25,text
-
-#define _VGA_FONT_8x14      1
-#define _VGA_FONT_8x8       2
-#define _VGA_FONT_8x16      4
-
-#define VGA_MODE            3
-#define VGA_FONT            _VGA_FONT_8x14
+#define VGA_FONT            2
 
 /*----------------------------------------------------------------------------*
  * Disk Stuff
@@ -116,9 +119,8 @@
   #define DISK_SPT          18
 #endif
 
-
 /*----------------------------------------------------------------------------*
- * FAT Stuff
+ * FAT Constants
  *----------------------------------------------------------------------------*/
 
 #define FILENAME_LENGTH     11
@@ -132,7 +134,6 @@
 #define LABEL               0       // file name/extension/label
 #define CLUSTER             26      // index of first cluster in chain
 #define FILESIZE            28      // file size in bytes
-
 
 /*----------------------------------------------------------------------------*
  * Assembler Macros
