@@ -24,10 +24,33 @@
 
 #include <kernel/device.h>
 
+#define CONSOLE_RESET       "\e[0m"
+#define CONSOLE_BOLD        "\e[1m"
+#define CONSOLE_UNBOLD      "\e[22m"
+#define CONSOLE_BLACK       "\e[30m"
+#define CONSOLE_RED         "\e[31m"
+#define CONSOLE_GREEN       "\e[32m"
+#define CONSOLE_YELLOW      "\e[33m"
+#define CONSOLE_BLUE        "\e[34m"
+#define CONSOLE_PURPLE      "\e[35m"
+#define CONSOLE_CYAN        "\e[36m"
+#define CONSOLE_WHITE       "\e[37m"
+#define CONSOLE_DEFAULT     "\e[39m"
+#define CONSOLE_BG_BLACK    "\e[40m"
+#define CONSOLE_BG_RED      "\e[41m"
+#define CONSOLE_BG_GREEN    "\e[42m"
+#define CONSOLE_BG_YELLOW   "\e[43m"
+#define CONSOLE_BG_BLUE     "\e[44m"
+#define CONSOLE_BG_PURPLE   "\e[45m"
+#define CONSOLE_BG_CYAN     "\e[46m"
+#define CONSOLE_BG_WHITE    "\e[47m"
+#define CONSOLE_BG_DEFAULT  "\e[49m"
+
+
 /**
  * Dump the klog buffer to this console when registered.
  */
-#define _CONSOLE_FLAG_PRINTBUF  (1 << 0)
+#define CONSOLE_FLAG_PRINTBUF  (1 << 0)
 
 /**
  * Represents a console device.

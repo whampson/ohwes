@@ -69,7 +69,7 @@ void lazy_init_pools(void)
     }
 
     size_t size = get_order_size(g_poolinfo->order) >> PAGE_SHIFT;
-    kprint("pool: %ld %s used to manage up to %d pools\n",
+    kprint("pool-init: %ld %s used to manage up to %d pools\n",
         size, PLURALIZE(size, "page"), MAX_NR_POOLS);
 }
 
@@ -172,7 +172,7 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
         list_push(&p->free_list, &chunk->list);
     }
 
-    kprint("pool: created '%s' size_pages=%zd capacity=%zd item_size=%zd flags=%Xh\n",
+    kprint("pool: created pool '%s' size_pages=%zd capacity=%zd item_size=%zd flags=%Xh\n",
         name, get_order_size(p->order) >> PAGE_SHIFT, capacity, size, flags);
     return p;
 }
@@ -211,7 +211,7 @@ void pool_destroy(pool_t *pool)
     g_poolinfo->count--;
     assert(g_poolinfo->count >= 0);
 
-    kprint("pool: destroyed '%s'\n", name);
+    kprint("pool: destroyed pool '%s'\n", name);
 }
 
 void * pool_alloc(pool_t *pool, int flags)
@@ -220,17 +220,18 @@ void * pool_alloc(pool_t *pool, int flags)
     int index;
 
     if (!pool_valid(pool)) {
+        pr_warn("pool: alloc failed - invalid pool\n");
         return NULL;
     }
 
     if (list_empty(&pool->free_list)) {
-        pr_warn("pool: %s: alloc failed: pool is full!\n", pool->name);
+        pr_error("pool: alloc failed - pool '%s' is full!\n", pool->name);
         return NULL;
     }
 
     chunk = list_item(pool->free_list.next, struct chunk, list);
     if (chunk->magic != CHUNK_MAGIC || chunk->pool != INVALID_POOL) {
-        panic("pool: %s: alloc failed: got corrupted chunk data", pool->name);
+        pr_error("pool: alloc failed - pool '%s' got corrupted chunk data", pool->name);
         return NULL;
     }
     list_pop(&chunk->list);  // remove from free list
@@ -261,6 +262,7 @@ void pool_free(pool_t *pool, const void *item)
     int index;
 
     if (!pool_valid(pool) || item == NULL) {
+        pr_warn("pool: free failed - invalid pool or NULL parameter\n");
         return;
     }
 
@@ -269,7 +271,7 @@ void pool_free(pool_t *pool, const void *item)
     const uintptr_t item_addr = (uintptr_t) item;
 
     if (item_addr < chunk_base || item_addr > chunk_base + chunk_area_size) {
-        pr_warn("pool: %s: free failed: address invalid\n", pool->name);
+        pr_warn("pool: free failed - pool '%s' address invalid\n", pool->name);
         return;
     }
 
@@ -277,7 +279,7 @@ void pool_free(pool_t *pool, const void *item)
     chunk = (struct chunk *) pool->alloc + index;
     assert(chunk->data == item);
     if (chunk->data != item) {
-        panic("pool: %s: free failed: got corrupted chunk data", pool->name);
+        pr_error("pool: free failed - pool '%s' got corrupted chunk data", pool->name);
         return;
     }
 

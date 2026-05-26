@@ -85,7 +85,7 @@ void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flag
         pde = (pde_t *) KERNEL_ADDR(pde_offset(pgdir, va));
         if (!pde_present(*pde)) {
             // TODO: map a new PDE and associated page table...
-            panic("phys-mem: mappings that require a new PDE and page table not yet implemented! pa(%p) va(%p)\n",
+            panic("mem: mappings that require a new PDE and page table not yet implemented! pa(%p) va(%p)\n",
                 _P(pa), _P(va));
         }
         pte = (pte_t *) KERNEL_ADDR(pte_offset(pde, va));
@@ -104,13 +104,13 @@ void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flag
 
     size_t size_bytes = (count << PAGE_SHIFT);
     if (unmap) {
-        kprint("unmap_page: p:%p-%p v:%p-%p size_pages=%zd flags=%02lXh\n",
+        kprint("mem: unmap p:%p-%p " CONSOLE_BOLD CONSOLE_YELLOW "(TODO: ZONE!!)" CONSOLE_DEFAULT " v:%p-%p size_pages=%zd flags=%02lXh\n",
             _P(base_pa), _P(base_pa+size_bytes-1),
             _P(base_va), _P(base_va+size_bytes-1),
             count, flags);
     }
     else {
-        kprint("map_page: p:%p-%p v:%p-%p size_pages=%zd flags=%02lXh\n",
+        kprint("mem: map p:%p-%p " CONSOLE_BOLD CONSOLE_YELLOW "(TODO: ZONE!!)" CONSOLE_DEFAULT " v:%p-%p size_pages=%zd flags=%02lXh\n",
             _P(base_pa), _P(base_pa+size_bytes-1),
             _P(base_va), _P(base_va+size_bytes-1),
             count, flags);

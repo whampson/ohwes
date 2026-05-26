@@ -63,33 +63,32 @@ struct zone {
 static struct zone _zones[NR_ZONES];
 static struct acpi_mmap_entry _phys_mmap[64];
 
-static void check_memory(void);
-static void print_kernel_sections(void);
+static __init void check_memory(void);
+static __init void init_phys_mmap(void);
+static __init void init_phys_mmap_legacy(void);
+static __init void init_zones(void);
 
-static void init_phys_mmap(struct boot_info *boot);
-static void init_phys_mmap_legacy(struct boot_info *boot);
-static void init_zones(void);
+extern __init struct boot_info *g_boot;
 
-void init_mm(struct boot_info *boot)
+__init void init_mm(void)
 {
-    init_phys_mmap(boot);
+    init_phys_mmap();
     check_memory();     // make sure we have enough!
-    print_kernel_sections();
     init_zones();
 }
 
-static void init_phys_mmap(struct boot_info *boot)
+static __init void init_phys_mmap(void)
 {
     int i;
     const struct acpi_mmap_entry *e;
 
-    if (!boot->mem_map) {
-        kprint("bios-e820: memory map not available\n");
-        init_phys_mmap_legacy(boot);
+    if (!g_boot->mem_map) {
+        pr_warn("bios-e820: memory map not available\n");
+        init_phys_mmap_legacy();
         return;
     }
 
-    e = (const struct acpi_mmap_entry *) KERNEL_ADDR(boot->mem_map);
+    e = (const struct acpi_mmap_entry *) KERNEL_ADDR(g_boot->mem_map);
     for (i = 0; i < countof(_phys_mmap) && mmap_valid(e); i++, e++) {
         _phys_mmap[i] = *e;
     }
@@ -99,7 +98,7 @@ static void init_phys_mmap(struct boot_info *boot)
     }
 }
 
-static void init_phys_mmap_legacy(struct boot_info *boot)
+static __init void init_phys_mmap_legacy(void)
 {
     int kb_free_low;    //   0 - 640K
     int kb_free_1M;     //  1M - 16M
@@ -108,14 +107,14 @@ static void init_phys_mmap_legacy(struct boot_info *boot)
 
     map = _phys_mmap;
 
-    kb_free_low = boot->kb_low;
-    if (boot->kb_high_e801h != 0) {
-        kb_free_1M = boot->kb_high_e801h;
-        kb_free_16M = (boot->kb_extended << 6);
+    kb_free_low = g_boot->kb_low;
+    if (g_boot->kb_high_e801h != 0) {
+        kb_free_1M = g_boot->kb_high_e801h;
+        kb_free_16M = (g_boot->kb_extended << 6);
     }
     else {
-        kprint("bios-e801: memory map not available\n");
-        kb_free_1M = boot->kb_high;
+        pr_warn("bios-e801: memory map not available\n");
+        kb_free_1M = g_boot->kb_high;
         kb_free_16M = 0;
     }
 
@@ -142,59 +141,26 @@ static void init_phys_mmap_legacy(struct boot_info *boot)
     }
 }
 
-static void check_memory(void)
+static __init void check_memory(void)
 {
-    int total_kb = 0;
-    int free_kb = 0;
-    int bad_kb = 0;
-    int free_pages = 0;
+    int free_mem_kilobytes = 0;
     struct acpi_mmap_entry *e;
 
     // tally up the amount of usable RAM
     for (e = _phys_mmap; mmap_valid(e); e++) {
         size_t size_kb = (e->length) >> KB_SHIFT;
-        char size_char = 'k';
-        size_t disp_size = size_kb;
-        if (disp_size >= 1024) {
-            size_char = 'M';
-            disp_size = div_ceil(disp_size, 1024);
-        }
-        uintptr_t base = (uintptr_t) e->base;
-        uintptr_t limit = (uintptr_t) (e->base + e->length - 1);
-        pr_cont("phys-mem: [%p-%p] %5lu%c %s",
-            _P(base), _P(limit),
-            disp_size, size_char,
-            mmap_bad(e)     ? "*** BAD ***" :
-            mmap_acpi(e)    ? "ACPI" :
-            mmap_usable(e)  ? "free" : "reserved");
-        if (e->attr) {
-            pr_cont(" (attr = 0x%lX)", e->attr);
-        }
-        pr_cont("\n");
-
-        total_kb += size_kb;
-        if (mmap_bad(e)) {
-            bad_kb += size_kb;
-        }
         if (mmap_usable(e)) {
-            free_kb += size_kb;
+            free_mem_kilobytes += size_kb;
         }
     }
 
-    free_pages = (free_kb >> (PAGE_SHIFT - KB_SHIFT));
-    kprint("phys-mem: %dk total, %dk usable\n", total_kb, free_kb);
-    kprint("phys-mem: %d usable pages\n", free_pages);
-    if (bad_kb > 0) {
-        pr_warn("phys-mem: found %dk of bad memory!\n", bad_kb);
-    }
-
-    if (free_kb < (MEMORY_REQUIRED >> KB_SHIFT)) {
+    if (free_mem_kilobytes < (MEMORY_REQUIRED >> KB_SHIFT)) {
         panic("not enough memory! " OS_NAME " needs least %dk to operate!",
             (MEMORY_REQUIRED >> KB_SHIFT));
     }
 }
 
-static void init_zones(void)
+static __init void init_zones(void)
 {
     // TODO: DMA, HIGHMEM...
 
@@ -269,15 +235,15 @@ static void init_zones(void)
         }
     }
 
-    kprint("%s: mem_start=%p mem_end=%p mem_size_pages=%zd\n",
+    pr_info("mem-init: init zone %s mem_start=%p mem_end=%p mem_size_pages=%zd\n",
         zone->name, _P(zone->mem_start), _P(zone->mem_end), zone->mem_size_pages);
-    kprint("%s: bitmap=%p size_pages=%ld\n",
+    pr_info("mem-init: init zone %s bitmap=%p size_pages=%ld\n",
         zone->name, bitmap, bitmap_size_pages);
 
     // ensure pages are mapped to speed up allocation time
     uintptr_t top = min((4*MB), zone->mem_end+1); // TODO: temp workaround for update_page_mappings 4M limit...
     size_t size_pages = (top - zone->mem_start) >> PAGE_SHIFT;
-    pr_warn("mem: mapping only up to 4M until multiple PDEs are supported!\n");
+    pr_warn("mem-init: only mappings up to 4M supported until multiple PDEs implemented!\n");
     pgflags_t flags = _PAGE_RW | _PAGE_PRESENT;
     update_page_mappings(KERNEL_ADDR(zone->mem_start), zone->mem_start, size_pages, flags);
 
@@ -288,6 +254,7 @@ static void init_zones(void)
 void * alloc_pages(int flags, int order)
 {
     if (order < 0 || order > MAX_ORDER) {
+        pr_warn("mem: alloc_pages failed - invalid order '%d'\n", order);
         return NULL;
     }
 
@@ -299,6 +266,7 @@ void * alloc_pages(int flags, int order)
     size_t bitmap_size_bytes = div_ceil(bitmap_size, 32) << 2;  // DWORD-aligned size
     int index = bit_scan_forward(zone->bitmap[order], bitmap_size_bytes);
     if (index < 0 || index >= bitmap_size) {
+        pr_fatal("mem: alloc_pages order %d failed - out of memory!\n", order);
         return NULL;
     }
 
@@ -326,8 +294,8 @@ void * alloc_pages(int flags, int order)
     void *kern_addr = (void *) KERNEL_ADDR(addr);
 
     zone->free_pages -= (order_size >> PAGE_SHIFT);
-    kprint("%s: alloc %p-%p order %d; %zd pages left\n",
-        zone->name, kern_addr, kern_addr+order_size-1, order, zone->free_pages);
+    pr_info("mem: alloc_pages order %d %p-%p %s; %zd pages left\n",
+        order, kern_addr, kern_addr+order_size-1, zone->name, zone->free_pages);
 
     if (flags & MEM_ZERO) {
         zeromem(kern_addr, order_size);
@@ -372,14 +340,13 @@ void free_pages(void *addr, int order)
     }
 
     zone->free_pages += (order_size >> PAGE_SHIFT);
-    kprint("%s: free %p-%p order %d; %zd pages left\n",
-        zone->name, addr, addr+order_size-1, order, zone->free_pages);
+    pr_info("mem: free_pages order %d %p-%p %s; %zd pages left\n",
+        order, addr, addr+order_size-1, zone->name, zone->free_pages);
 }
 
 int get_order(size_t size)
 {
     // TODO: do this without loop?
-
     size_t pages = PAGE_ALIGN(size) >> PAGE_SHIFT;
     for (int o = 0; o <= MAX_ORDER; o++) {
         if ((1 << o) >= pages) {
@@ -397,43 +364,4 @@ size_t get_order_size(int order)
     }
 
     return (1 << (order+PAGE_SHIFT));
-}
-
-static void print_kernel_sections(void)
-{
-    struct section {
-        const char *name;
-        void *start, *end;
-    };
-
-    // TODO: pack kernel.elf header into image and extract info from there
-
-    // TODO: make this into a sorted list; collect regions at boot
-    struct section sections[] = {
-        // { "kernel image:",  __kernel_start,     __kernel_end },
-        { ".setup",         __setup_start,      __setup_end },
-        { ".text",          __text_start,       __text_end },
-        { ".rodata",        __rodata_start,     __rodata_end },
-        { ".data",          __data_start,       __data_end },
-        { ".bss",           __bss_start,        __bss_end },
-        { ".idt",           __idt_start,        __idt_end },
-        { ".pgdir",         __pgdir_start,      __pgdir_end },
-        { ".pgtbl",         __pgtbl_start,      __pgtbl_end },
-        { ".klog",          __klog_start,       __klog_end },
-        { ".kstack",        __kstack_start,     __kstack_end },
-        { ".ustack",        __ustack_start,     __ustack_end },
-        { ".estack",        __estack_start,     __estack_end },
-    };
-
-    for (int i = 0; i < countof(sections); i++) {
-        struct section *sec = &sections[i];
-        size_t sec_size = (sec->end - sec->start);
-        kprint("kern-mem: [%p-%p] %6lu %s\n",
-            _P(KERNEL_ADDR(sec->start)), _P(KERNEL_ADDR(sec->end)-1),
-            sec_size, sec->name);
-    }
-
-    kprint("kern-mem: kernel occupies %ldk (%ld pages) of static memory\n",
-        align(__kernel_size, KB) >> KB_SHIFT,
-        PAGE_ALIGN(__kernel_size) >> PAGE_SHIFT);
 }

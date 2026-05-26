@@ -45,73 +45,39 @@
 #include <kernel/termios.h>
 #include <sys/ioctl.h>
 
-extern void init_fs(void);
-extern void init_io(void);
-extern void init_mm(struct boot_info *);
-extern void init_tty(void);
+extern __init void init_mm(void);
+extern __init void init_io(void);
+extern __init void init_fs(void);
+extern __init void init_tty(void);
+
+static __init void print_boot_info(void);
+static __init void print_kernel_image_sections(void);
+static __init void print_page_mappings(void);
+
+static __init __noreturn void go_to_ring3(void *entry, void *stack);
 
 #if TEST_BUILD
 extern void run_tests(void);
 #endif
 
-#ifdef DEBUG
-extern void crash_key_irq(int irq, struct iregs *regs);
-#endif
+void _crt0_init(void);
 
-extern void print_boot_info(struct boot_info *);
-extern void print_page_mappings(void);
+// init globals
+__init struct boot_info *g_boot;
 
-static void go_to_ring3(void *entry, void *stack);
-
-void init(void);
-int main(void);
-extern int shell(void);
-
-static struct boot_info *boot_info;
-
-//
-// TODO: libc tests, make runnable offline against host OS's libc, for test case sanity checking
-//
-    // int main(int argc, char *argv[])
-    // {
-    //     char buf[80];
-    //     int nwritten;
-
-    //     // mostly testing return value
-    //     TEST_SPRINTF(0, "",    "");
-    //     TEST_SPRINTF(0, "",    "\0");
-    //     TEST_SPRINTF(1, " ",   " ");
-    //     TEST_SPRINTF(1, "\n",  "\n");
-    //     TEST_SPRINTF(3, "abc", "abc");
-    //     TEST_SPRINTF(0, "",    "%s",   "");
-    //     TEST_SPRINTF(0, "",    "%s",   "\0");
-    //     TEST_SPRINTF(1, " ",   "%s",   " ");
-    //     TEST_SPRINTF(1, "\n",  "%s",   "\n");
-    //     TEST_SPRINTF(3, "abc", "%s",   "abc");
-    //     // TODO: test printf format specifier params
-
-    //     puts("PASS");
-    //     return 0;
-    // }
-
-__fastcall void kmain(struct boot_info **info)
+__fastcall __init __noreturn void kmain(struct boot_info **info)
 {
-    boot_info = *info;  // copy boot info into kernel memory
+    g_boot = *info; // copy boot info pointer kernel memory
+                    // TODO: validate that this ptr isn't bogus
 
-    // TODO: kernel stack overflow crashes without indication!? need to test this
+    pr_info("%s %s (gcc %s) %s %s\n", OS_NAME, OS_VERSION, __VERSION__, __DATE__, __TIME__);
+    pr_info("%s\n", OS_COPYRIGHT);  // printing will lazy-initialize terminal
 
+    print_boot_info();
+    print_kernel_image_sections();
+    // print_page_mappings();
 
-    kprint("%s %s (gcc %s) %s %s\n",
-        OS_NAME, OS_VERSION, __VERSION__, __DATE__, __TIME__);
-    kprint("%s\n", OS_COPYRIGHT);
-
-    print_boot_info(boot_info);
-
-    init_mm(boot_info);
-#if PRINT_PAGE_MAP
-    print_page_mappings();
-#endif
-
+    init_mm();
     init_io();
     init_fs();
     init_tty();
@@ -120,18 +86,15 @@ __fastcall void kmain(struct boot_info **info)
 //     run_tests(); // TODO lol
 // #endif
 
-#if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+F# to test crash kernel
-    irq_register(IRQ_TIMER, crash_key_irq);
-#endif
-
-    kprint("entering user mode...\n");
-    go_to_ring3(init, __ustack_end);    // TODO: declare user stack in high memory
+    pr_info("boot: switching to ring 3...\n");
+    go_to_ring3(_crt0_init, __ustack_end);    // TODO: declare user stack in high memory
+    for (;;);
 
     // for future reference...
     // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
 }
 
-static void go_to_ring3(void *entry, void *stack)
+static __init __noreturn void go_to_ring3(void *entry, void *stack)
 {
     assert(getpl() == KERNEL_PL);
 
@@ -153,38 +116,124 @@ static void go_to_ring3(void *entry, void *stack)
 
     // drop to ring 3
     switch_context(&regs);
+    for (;;);
 }
 
-void print_boot_info(struct boot_info *boot)
+static __init void print_boot_info(void)
 {
-    int nfloppies = boot->hwflags.has_diskette_drive;
-    if (nfloppies) {
-        nfloppies += boot->hwflags.num_other_diskette_drives;
+    #define FMT_PL(x,a)     x, PLURALIZE(x, a)
+    #define FMT_PL2(x,a,b)  x, PLURALIZE2(x, a, b)
+
+    pr_info("bios-boot: %d %s, %d serial %s, %d parallel %s\n",
+        FMT_PL2(g_boot->hwflags.has_diskette_drive + g_boot->hwflags.num_other_diskette_drives, "floppy", "floppies"),
+        FMT_PL(g_boot->hwflags.num_serial_ports, "port"),
+        FMT_PL(g_boot->hwflags.num_parallel_ports, "port"));
+    pr_info("bios-boot: A20 mode is %s\n",
+        (g_boot->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
+        (g_boot->a20_method == A20_PORT92) ? "A20_PORT92" :
+        (g_boot->a20_method == A20_BIOS) ? "A20_BIOS" : "A20_NONE");
+    pr_info("bios-boot: %s PS/2 mouse, %s game port\n",
+        A_OR_B(g_boot->hwflags.has_ps2mouse, "has", "no"),
+        A_OR_B(g_boot->hwflags.has_gameport, "has", "no"));
+    pr_info("bios-boot: video mode is %02lXh\n",
+        g_boot->vga_mode & 0x7F);
+    if (g_boot->ebda_base) {
+        pr_info("bios-boot: EBDA=%08lX,%lXh\n",
+            g_boot->ebda_base, EBDA_TOP - g_boot->ebda_base);
+    }
+    pr_info("bios-boot: kernel uses %lu bytes (%ld sectors) on disk\n",
+        g_boot->kernel_size, div_ceil(g_boot->kernel_size, 512));
+
+    #undef FMT_PL
+    #undef FMT_PL2
+
+    int total_mem_kilobytes = 0;
+    int free_mem_kilobytes = 0;
+    int bad_mem_kilobytes = 0;
+    int free_pages = 0;
+    const struct acpi_mmap_entry *e;
+
+    // tally up the amount of usable RAM
+    pr_info("bios-boot: physical memory map:\n");
+    for (e = (const struct acpi_mmap_entry *) KERNEL_ADDR(g_boot->mem_map); mmap_valid(e); e++) {
+        size_t size_kb = (e->length) >> KB_SHIFT;
+        char size_char = 'k';
+        size_t disp_size = size_kb;
+        if (disp_size >= 1024) {
+            size_char = 'M';
+            disp_size = div_ceil(disp_size, 1024);
+        }
+        uintptr_t base = (uintptr_t) e->base;
+        uintptr_t limit = (uintptr_t) (e->base + e->length - 1);
+        pr_cont("bios-boot:   [%p-%p] %5lu%c %s",
+            _P(base), _P(limit),
+            disp_size, size_char,
+            mmap_bad(e)     ? "*** BAD ***" :
+            mmap_acpi(e)    ? "ACPI" :
+            mmap_usable(e)  ? "free" : "reserved");
+        if (e->attr) {
+            pr_cont(" (attr = 0x%lX)", e->attr);
+        }
+        pr_cont("\n");
+
+        total_mem_kilobytes += size_kb;
+        if (mmap_bad(e)) {
+            bad_mem_kilobytes += size_kb;
+        }
+        if (mmap_usable(e)) {
+            free_mem_kilobytes += size_kb;
+        }
     }
 
-    int nserial = boot->hwflags.num_serial_ports;
-    int nparallel = boot->hwflags.num_parallel_ports;
-    bool gameport = boot->hwflags.has_gameport;
-    bool mouse = boot->hwflags.has_ps2mouse;
-    uint32_t ebda_size = 0xA0000 - boot->ebda_base;
-
-    kprint("bios-boot: %d %s, %d serial %s, %d parallel %s\n",
-        nfloppies, PLURALIZE2(nfloppies, "floppy", "floppies"),
-        nserial, PLURALIZE(nserial, "port"),
-        nparallel, PLURALIZE(nparallel, "port"));
-    kprint("bios-boot: A20 mode is %s\n",
-        (boot->a20_method == A20_KEYBOARD) ? "A20_KEYBOARD" :
-        (boot->a20_method == A20_PORT92) ? "A20_PORT92" :
-        (boot->a20_method == A20_BIOS) ? "A20_BIOS" :
-        "A20_NONE");
-    kprint("bios-boot: %s PS/2 mouse, %s game port\n", A_OR_B(mouse, "has", "no"), A_OR_B(gameport, "has", "no"));
-    kprint("bios-boot: video mode is %02lXh\n", boot->vga_mode & 0x7F);
-    if (boot->ebda_base) kprint("bios-boot: EBDA=%08lX,%lXh\n", boot->ebda_base, ebda_size);
-    kprint("bios-boot: kernel uses %lu bytes (%ld sectors) on disk\n",
-        boot->kernel_size, div_ceil(boot->kernel_size, 512));
+    free_pages = (free_mem_kilobytes >> (PAGE_SHIFT - KB_SHIFT));
+    kprint("bios-boot: %dk total, %dk usable\n", total_mem_kilobytes, free_mem_kilobytes);
+    kprint("bios-boot: %d usable pages\n", free_pages);
+    if (bad_mem_kilobytes > 0) {
+        pr_warn("bios-boot: found %dk of bad memory!\n", bad_mem_kilobytes);
+    }
 }
 
-static void print_page_info(uint32_t va, const struct pginfo *page)
+static __init void print_kernel_image_sections(void)
+{
+    struct section {
+        const char *name;
+        void *start, *end;
+    };
+
+    // TODO: pack kernel.elf header into image and extract info from there
+
+    // TODO: make this into a sorted list; collect regions at boot
+    struct section sections[] = {
+        // { "kernel image:",  __kernel_start,     __kernel_end },
+        { ".setup",         __setup_start,      __setup_end },
+        { ".text",          __text_start,       __text_end },
+        { ".rodata",        __rodata_start,     __rodata_end },
+        { ".data",          __data_start,       __data_end },
+        { ".bss",           __bss_start,        __bss_end },
+        { ".idt",           __idt_start,        __idt_end },
+        { ".pgdir",         __pgdir_start,      __pgdir_end },
+        { ".pgtbl",         __pgtbl_start,      __pgtbl_end },
+        { ".klog",          __klog_start,       __klog_end },
+        { ".kstack",        __kstack_start,     __kstack_end },
+        { ".ustack",        __ustack_start,     __ustack_end },
+        { ".estack",        __estack_start,     __estack_end },
+    };
+
+    pr_info("mem-init: kernel image mappings:\n");
+    for (int i = 0; i < countof(sections); i++) {
+        struct section *sec = &sections[i];
+        size_t sec_size = (sec->end - sec->start);
+        pr_info("mem-init:   [%p-%p] %6lu %s\n",
+            _P(KERNEL_ADDR(sec->start)), _P(KERNEL_ADDR(sec->end)-1),
+            sec_size, sec->name);
+    }
+
+    pr_info("mem-init: kernel occupies %ldk (%ld pages) of static memory\n",
+        align(__kernel_size, KB) >> KB_SHIFT,
+        PAGE_ALIGN(__kernel_size) >> PAGE_SHIFT);
+}
+
+static __init void print_page_info(uint32_t va, const struct pginfo *page)
 {
     uint32_t pa = page->pfn << PAGE_SHIFT;
     uint32_t plimit = pa + PAGE_SIZE - 1;
@@ -196,8 +245,8 @@ static void print_page_info(uint32_t va, const struct pginfo *page)
         vlimit = va + PGDIR_SIZE - 1;
     }
 
-    //           va-vlimit -> pa-plimit k/M/T rw u/s a/d g wt nc
-    kprint("  v(%08lX-%08lX) -> p(%08lX-%08lX) %c %-2s %c %c %c %s%s\n",
+    // v(va-vlimit) -> p(pa-plimit) k/M/T rw u/s a/d g wt nc
+    pr_debug("v(%08lX-%08lX) -> p(%08lX-%08lX) %c %-2s %c %c %c %s%s\n",
         va, vlimit, pa, plimit,
         page->pde ? (page->ps ? 'M' : 'T') : 'k',   // (k) small page, (M) large page, (T) page table
         page->rw ? "rw" : "r",                      // read/write
@@ -208,7 +257,7 @@ static void print_page_info(uint32_t va, const struct pginfo *page)
         page->pcd ? "nc " : "  ");                  // no-cache
 }
 
-void print_page_mappings(void)
+static __init void print_page_mappings(void)
 {
     struct pginfo *pgdir = (struct pginfo *) get_pgdir();
     struct pginfo *pgtbl;
@@ -257,7 +306,7 @@ void print_page_mappings(void)
     __ret;                      \
 })
 
-void init(void)
+void _crt0_init(void)
 {
     // TODO: this should be /bin/init
     assert(getpl() == USER_PL);
@@ -268,6 +317,10 @@ void init(void)
 
     // TODO: exec("/bin/sh")
     // _exit(main());
+
+    // dummy libc fns
+    int main(void);
+    extern int shell(void);
 
     int ret = shell();
     (void) close(STDERR_FILENO);

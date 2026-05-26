@@ -30,6 +30,7 @@
 #include <kernel/kernel.h>
 #include <kernel/irq.h>
 #include <kernel/mm.h>
+#include <kernel/terminal.h>
 
 #define LOG_LEVEL_MAX  5    // <5> = LOG_DEBUG
 
@@ -56,14 +57,14 @@ static bool _kprint_time = false;
 
 static unsigned int _klog_tail = 0;
 static unsigned int _klog_count = 0;
-static const unsigned int _klog_level = DEFAULT_LOG_LEVEL; // TODO: control this somehow
-static unsigned int _klog_curr_level = _klog_level;
+static unsigned int _klog_level = DEFAULT_LOG_LEVEL; // TODO: control this somehow
+static unsigned int _klog_curr_level = DEFAULT_LOG_LEVEL;
 
 struct console *g_consoles = NULL;  // linked list
 
 // ----------------------------------------------------------------------------
 
-#if E9_HACK
+#if ENABLE_E9HACK_CONSOLE
 static ssize_t e9_console_write(struct console *cons, const char *buf, size_t count)
 {
     const char *p = buf;
@@ -95,7 +96,7 @@ struct console e9_console =
 {
     .name = "e9cons",
     .number = 0,
-    .flags = _CONSOLE_FLAG_PRINTBUF,
+    .flags = CONSOLE_FLAG_PRINTBUF,
     .device = e9_console_device,
     .init = e9_console_setup,
     .write = e9_console_write,
@@ -169,9 +170,9 @@ static void klog_write_to_console(struct console *cons, int start, int count)
         p += nprefix;
 
         int n = 0;
-        for (; (nwritten + nprefix + n < count) &&
+        for (char sp; (nwritten + nprefix + n < count) &&
                (p + n < __klog + KERNEL_LOG_SIZE); n++) {
-            if (klog_parse_prefix(p + n, NULL, NULL)) {
+            if (klog_parse_prefix(p + n, NULL, &sp)) {
                 break;
             }
         }
@@ -261,36 +262,14 @@ int vkprint(const char *fmt, va_list args)
     unsigned int log_ptr = (_klog_tail + _klog_count) % KERNEL_LOG_SIZE;
     unsigned int log_level = DEFAULT_LOG_LEVEL;
 
+    bool recursion_bug = false;
     if (in_kprint) {
+        recursion_bug = true;   // TODO: need to test this more
         const char *bug_msg = KLOG_ERROR "BUG: recent kprint recursion!\n";
         strcpy(_kprint_buf, bug_msg);
         nbufwrit += strlen(bug_msg);
     }
     in_kprint = true;
-
-#if E9_HACK
-    static bool e9_console_registered = false;
-    if (!e9_console_registered) {
-        register_console(&e9_console);
-        e9_console_registered = true;
-    }
-#endif
-
-#if EARLY_PRINT
-    static bool early_cons_registered = false;
-    if (!early_cons_registered) {
-  #if VT_CONSOLE
-        extern struct console vt_console;       // see char/terminal.c
-        register_console(&vt_console);
-  #elif SERIAL_CONSOLE
-        extern struct console serial_console;   // see char/serial.c
-        register_console(&serial_console);
-  #else
-    #error "config: no console enabled for early print!"
-  #endif
-        early_cons_registered = true;
-    }
-#endif
 
     nbufwrit += vsnprintf(_kprint_buf + nbufwrit,
         sizeof(_kprint_buf) - nbufwrit, fmt, args);
@@ -347,12 +326,40 @@ int vkprint(const char *fmt, va_list args)
         }
     }
 
+    if (recursion_bug)
+        goto kprint_done;
+
+#if ENABLE_E9HACK_CONSOLE
+    static bool e9_console_registered = false;
+    if (!e9_console_registered) {
+        register_console(&e9_console);
+        e9_console_registered = true;
+    }
+#endif
+
+#if EARLY_PRINT
+    static bool early_cons_registered = false;
+    if (!early_cons_registered) {
+  #if ENABLE_VT_CONSOLE
+        extern struct console vt_console;       // see char/terminal.c
+        register_console(&vt_console);
+  #elif ENABLE_SERIAL_CONSOLE
+        extern struct console serial_console;   // see char/serial.c
+        register_console(&serial_console);
+  #else
+    #error "config: no console enabled for early print!"
+  #endif
+        early_cons_registered = true;
+    }
+#endif
+
     cons = g_consoles;
     while (cons) {
         klog_write_to_console(cons, log_ptr, nprinted);
         cons = cons->next;
     }
 
+kprint_done:
     in_kprint = false;
     return nprinted;
 }
@@ -369,7 +376,7 @@ int kprint(const char *fmt, ...)
     return count;
 }
 
-void __noreturn panic(const char *fmt, ...)
+__noreturn void panic(const char *fmt, ...)
 {
     char buf[BUFSIZ];
     va_list args;
@@ -382,7 +389,6 @@ void __noreturn panic(const char *fmt, ...)
 
     irq_disable();
     irq_setmask(IRQ_MASKALL);
-
 #if SERIAL_DEBUGGING
     if (SERIAL_DEBUG_PORT == COM1_PORT || SERIAL_DEBUG_PORT == COM3_PORT) {
         irq_unmask(IRQ_COM1);
@@ -391,21 +397,17 @@ void __noreturn panic(const char *fmt, ...)
         irq_unmask(IRQ_COM2);
     }
 #endif
-
     irq_unmask(IRQ_TIMER);
-
-    extern bool g_kb_initialized;
-    if (g_kb_initialized) {
+    if (kb_initialized()) {
         irq_unmask(IRQ_KEYBOARD);
     }
-
     irq_enable();
 
 #if SERIAL_DEBUGGING
     __int3();
-#endif
-
+#else
     for (;;);
+#endif
 }
 
 bool register_console(struct console *cons)
@@ -441,7 +443,7 @@ bool register_console(struct console *cons)
     success = cons->init(cons);
     cons->next = NULL;
 
-    if (cons->flags & _CONSOLE_FLAG_PRINTBUF) {
+    if (cons->flags & CONSOLE_FLAG_PRINTBUF) {
         // flush entire log to console
         klog_write_to_console(cons, _klog_tail, _klog_count);
     }

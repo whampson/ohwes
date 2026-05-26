@@ -52,13 +52,13 @@ extern int vkprint(const char *fmt, va_list args);
 #define pr_error(fmt, ...) \
     kprint(KLOG_ERROR pr_fmt(fmt), ##__VA_ARGS__)
 #define pr_warn(fmt, ...) \
-    kprint(KLOG_WARN pr_fmt(fmt), ##__VA_ARGS__)
+    kprint(KLOG_WARN  pr_fmt(fmt), ##__VA_ARGS__)
 #define pr_info(fmt, ...) \
-    kprint(KLOG_INFO pr_fmt(fmt), ##__VA_ARGS__)
+    kprint(KLOG_INFO  pr_fmt(fmt), ##__VA_ARGS__)
 #define pr_debug(fmt, ...) \
     kprint(KLOG_DEBUG pr_fmt(fmt), ##__VA_ARGS__)
 #define pr_cont(fmt, ...) \
-    kprint(KLOG_CONT pr_fmt(fmt), ##__VA_ARGS__)
+    kprint(KLOG_CONT  pr_fmt(fmt), ##__VA_ARGS__)
 
 #define pr_warning  pr_warn
 #define pr_err      pr_error
