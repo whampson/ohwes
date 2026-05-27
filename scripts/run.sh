@@ -36,7 +36,8 @@ if [ "$1" = "qemu" ]; then
     QEMU_FLAGS+=" -boot a"
     QEMU_FLAGS+=" -fda $2"
     # QEMU_FLAGS+=" -hda $2"
-    QEMU_FLAGS+=" -monitor stdio"
+    # QEMU_FLAGS+=" -monitor stdio"
+    QEMU_FLAGS+=" -device isa-debugcon,chardev=mycons -chardev stdio,id=mycons"
     QEMU_FLAGS+=" -d cpu_reset"
     QEMU_FLAGS+=" -serial telnet:127.0.0.1:50001,server=on,nowait" # com1
     QEMU_FLAGS+=" -serial telnet:127.0.0.1:50002,server=on,nowait" # com2
