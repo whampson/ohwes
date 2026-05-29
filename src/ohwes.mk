@@ -26,7 +26,7 @@ LD         := ${PREFIX}gcc
 OBJCOPY    := ${PREFIX}objcopy
 
 # default flags
-ARFLAGS    := -rcsv
+ARFLAGS    := -rcs
 ASFLAGS    += -include _config.h
 CFLAGS     += -include ${ARCH}/compiler.h -include _config.h
 CFLAGS     += -std=c11 -march=${MARCH} -nostdinc -ffreestanding

@@ -19,10 +19,10 @@
 # boilermake:
 # Modifications made by Wes Hampson.
 #
-# 29 Sep 23:
+# 29 Sep 23 [Wes Hampson]:
 #  - Added support for compiling ASM files.
 #
-# 17 Jul 24:
+# 17 Jul 24 [Wes Hampson]:
 #  - Cleaned up variable, macro, and function names.
 #  - Items in TARGET_LDLIBS are now relative to TARGET_DIR.
 #  - Added function `make-rawbin` to create raw executables with no relocation,
@@ -34,18 +34,25 @@
 #    submakefile are modified, the affected objects and targets will be rebuilt
 #    to ensure the Makefile changes are applied properly.
 #
-# 24 Jul 24:
+# 24 Jul 24 [Wes Hampson]:
 #   - Added the ability to "preprocess" linker scripts, allowing developers to
 #     #include headers containing defines shared with C source code.
 #     Preprocessed linker scripts are run through the C preprocessor with
 #     __LDSCRIPT__ defined and are stored with the '-gen' suffix in the target's
 #     intermediate object directory.
 #
-# 19 Dec 24:
+# 19 Dec 24 [Wes Hampson]:
 #   - Added LDFLAGS_POST and TARGET_LDFLAGS_POST to allow linker flags to appear
 #     after the respective list of link libaries.
 #   - Rearranged the ordering of linker flags so TARGET_* flags appear before
 #     global flags.
+#
+# 29 May 26 [Wes Hampson]:
+#   - Simplified default build output. By default, Makefile will emit target
+#     name and the name of the utility used to create it (except for GENLD,
+#     which shows the path of the source linker script being preprocessed).
+#     Verbose output can be enabled by running "make V=1", which will show the
+#     full command lines used to build each target.
 
 # ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
 # Caution: Don't edit this Makefile! Create your own main.mk and other
@@ -60,6 +67,19 @@
 #       be evaluated after expansion. Since they must be used with eval, most
 #       instances of "$" within them need to be escaped with a second "$" to
 #       accomodate the double expansion that occurs when eval is invoked.
+
+# ------------------------------------------------------------------------------
+# Global variables and functions
+
+ifeq "$(V)" "1"
+    Q =
+    MSG= @:
+else
+    Q = @
+    MSG = @printf "  %-8s %s\n"
+endif
+
+# ------------------------------------------------------------------------------
 
 # add-clean - Parameterized "function" that adds a new rule and phony
 #   target for cleaning the specified target (removing its build-generated
@@ -102,7 +122,8 @@ define add-target
         # Add a target for creating a static library.
         $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_MAKEFILES}
 	    @mkdir -p $$(dir $$@)
-	    $$(strip $${AR} $${ARFLAGS} $${${1}_ARFLAGS} $$@ $${${1}_OBJECTS})
+	    ${MSG} "AR" "$$@"
+	    ${Q}$$(strip $${AR} $${ARFLAGS} $${${1}_ARFLAGS} $$@ $${${1}_OBJECTS})
 	    $${${1}_POSTMAKE}
     else
         # Add a target for linking an executable. First, attempt to select the
@@ -121,10 +142,10 @@ define add-target
             endif
         endif
 
-        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS} \
-                $${${1}_GENLDSCRIPT} $${${1}_MAKEFILES}
+        $${TARGET_DIR}/${1}: $${${1}_OBJECTS} $${${1}_PREREQS} $${${1}_LDLIBS} $${${1}_GENLDSCRIPT} $${${1}_MAKEFILES}
 	    @mkdir -p $$(dir $$@)
-	    $$(strip $${${1}_LINKER} -o $$@ $${${1}_OBJECTS} \
+	    ${MSG} "LD" "$$@"
+	    ${Q}$$(strip $${${1}_LINKER} -o $$@ $${${1}_OBJECTS} \
 	        $${${1}_LDFLAGS} $${${1}_LDLIBS} $${${1}_LDFLAGS_POST} \
 		$${LDFLAGS} $${LDLIBS} $${LDFLAGS_POST} \
 		$$(addprefix -T,$${${1}_GENLDSCRIPT}))
@@ -133,7 +154,8 @@ define add-target
         $${${1}_GENLDSCRIPT}: $${${1}_LDSCRIPT} $${${1}_OBJECTS}
 	    @mkdir -p $$(dir $$@)
 	    @printf '/*\n * THIS FILE WAS AUTO-GENERATED. DO NOT EDIT!\n * Source: $${${1}_LDSCRIPT}\n */\n' > $$@
-	    $$(strip ${CC} -E -P -x c -D__LDSCRIPT__ $${INCLUDES} $$< >> $$@)
+	    ${MSG} "GENLD" "$$<"
+	    ${Q}$$(strip ${CC} -E -P -x c -D__LDSCRIPT__ $${INCLUDES} $$< >> $$@)
     endif
 endef
 
@@ -150,7 +172,8 @@ endef
 # COMPILE_C_CMDS - Commands for compiling C source code.
 define COMPILE_C_CMDS
 	@mkdir -p $(dir $@)
-	$(strip ${CC} -o $@ -c -MD ${CFLAGS} ${SOURCE_CFLAGS} ${DEFINES} \
+	${MSG} "CC" "$<"
+	${Q}$(strip ${CC} -o $@ -c -MD ${CFLAGS} ${SOURCE_CFLAGS} ${DEFINES} \
 	    ${SOURCE_DEFINES} ${INCLUDES} ${SOURCE_INCLUDES} $<)
 	@cp ${@:%$(suffix $@)=%.d} ${@:%$(suffix $@)=%.P}; \
 	 sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
@@ -162,7 +185,8 @@ endef
 # COMPILE_CXX_CMDS - Commands for compiling C++ source code.
 define COMPILE_CXX_CMDS
 	@mkdir -p $(dir $@)
-	$(strip ${CXX} -o $@ -c -MD ${CXXFLAGS} ${SOURCE_CXXFLAGS} ${DEFINES} \
+	${MSG} "CXX" "$<"
+	${Q}$(strip ${CXX} -o $@ -c -MD ${CXXFLAGS} ${SOURCE_CXXFLAGS} ${DEFINES} \
 	    ${SOURCE_DEFINES} ${INCLUDES} ${SOURCE_INCLUDES} $<)
 	@cp ${@:%$(suffix $@)=%.d} ${@:%$(suffix $@)=%.P}; \
 	 sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
@@ -174,7 +198,8 @@ endef
 # COMPILE_ASM_CMDS - Commands for compiling ASM source code.
 define COMPILE_ASM_CMDS
 	@mkdir -p $(dir $@)
-	$(strip ${AS} -o $@ -c -MD ${ASFLAGS} ${SOURCE_ASFLAGS} ${DEFINES} \
+	${MSG} "AS" "$<"
+	${Q}$(strip ${AS} -o $@ -c -MD ${ASFLAGS} ${SOURCE_ASFLAGS} ${DEFINES} \
 	    ${SOURCE_DEFINES} ${INCLUDES} ${SOURCE_INCLUDES} $<)
 	@cp ${@:%$(suffix $@)=%.d} ${@:%$(suffix $@)=%.P}; \
 	 sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
@@ -196,7 +221,8 @@ define make-rawbin
 all: $${TARGET_DIR}/${1}
 $${TARGET_DIR}/${1}: $${TARGET_DIR}/${TARGET}
 	@mkdir -p $$(dir $$@)
-	$$(strip $${OBJCOPY} -Obinary ${2} $$< $$@)
+	${MSG} "OBJCOPY" "$$@"
+	${Q}$$(strip $${OBJCOPY} -Obinary ${2} $$< $$@)
         $$(eval $$(call add-clean,${1}))
 endef
 
