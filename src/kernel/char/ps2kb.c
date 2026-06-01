@@ -45,6 +45,8 @@
 #define SELFTEST        0       // perform keyboard self-test
 #define PROBE_SCANSETS  0       // probe for supported scancode sets
 
+#define SCANSET         1       // do not change this; only set 1 is supported
+
 #define TYPEMATIC_BYTE  0x22    // repeat rate = 24cps, delay = 500ms
 #define RETRY_COUNT     3       // command resends before giving up
 #define WARN_INTERVAL   10      // warn every N times a stray packet shows up
@@ -61,8 +63,11 @@ struct kb {
     bool supports_sc2 : 1;  // can do scancode set 2
     bool supports_sc3 : 1;  // can do scancode set 3
 
+    bool in_interrupt : 1;  // currently handling a keyboard interrupt
+
     bool enable_tty   : 1;  // send typed chars to active TTY input buffer
     bool enable_sysrq : 1;  // allow SysRq functions
+    bool enable_int3  : 1;  // allow Ctrl+Alt+F3 debug break
 
     union {
         struct {
@@ -119,8 +124,23 @@ static const uint8_t scanmap_e0[128];
 static const char * g_keynames[122];
 #endif
 
-static void sysrq(char c);
-void hard_reset(void);
+// global exports
+
+bool kb_avail(void)   { return g_kb->initialized && !g_kb->in_interrupt; }
+bool kb_tty_enabled(void)   { return g_kb->enable_tty; }
+bool kb_sysrq_enabled(void) { return g_kb->enable_sysrq; }
+bool kb_int3_enabled(void)  { return g_kb->enable_int3; }
+
+void kb_enable_tty(bool enable)   { g_kb->enable_tty = enable; }
+void kb_enable_sysrq(bool enable) { g_kb->enable_sysrq = enable; }
+void kb_enable_int3(bool enable)  { g_kb->enable_int3 = enable; }
+
+int kb_getc(void);
+
+void __debug_break();
+void __hard_reset(void) __noreturn;
+
+// local functions
 
 static void kb_interrupt(int irq, struct iregs *regs);
 static void kb_putq(char c);
@@ -138,17 +158,16 @@ static bool kb_sendcmd(uint8_t cmd);
 static uint8_t kb_rdport(void);
 static void kb_wrport(uint8_t data);
 
+static void do_sysrq(char c);
+
+// local imports
+
+extern __init void init_ps2(void);
+
 #define RIF(x)  if (!(x)) { return; }
 #define RIF_FALSE(x)  if (!(x)) { return false; }
 
 // ----------------------------------------------------------------------------
-
-bool kb_initialized(void)   { return g_kb->initialized; }
-bool kb_tty_enabled(void)   { return g_kb->enable_tty; }
-bool kb_sysrq_enabled(void) { return g_kb->enable_sysrq; }
-
-void kb_enable_tty(bool enable)   { g_kb->enable_tty = enable; }
-void kb_enable_sysrq(bool enable) { g_kb->enable_sysrq = enable; }
 
 int kb_getc(void)
 {
@@ -173,9 +192,27 @@ int kb_getc(void)
     return c;
 }
 
-// ----------------------------------------------------------------------------
+void __debug_break(void)
+{
+    // TODO: !! break-in and allow continue if debugger attached
+    __int3();
+}
 
-extern __init void init_ps2(void);
+__noreturn void __hard_reset(void)
+{
+    // first, try resetting via the PS/2 controller
+    ps2_cmd(PS2_CMD_SYSRESET);
+
+    // if that didn't work, triple fault
+    struct table_desc idt_desc = { .limit = 0, .base = 0 };
+    __lidt(idt_desc);   // yoink away the IDT :D
+
+    // and if by some miracle /that/ didn't work, show a message and spin forever
+    panic("unable to shut down -- please hard-reset your computer");
+    for (;;);
+}
+
+// ----------------------------------------------------------------------------
 
 __init void init_kb(void)
 {
@@ -207,14 +244,15 @@ __init void init_kb(void)
 
 #if PROBE_SCANSETS
     // detect supported scancode sets (for fun...)
-    g_kb->sc3_support = kb_scset(3);
-    g_kb->sc2_support = kb_scset(2);
+    g_kb->supports_sc3 = kb_scset(3);
+    g_kb->supports_sc2 = kb_scset(2);
 #endif
 
     // we are using scancode set 1 for now...
-    if (!kb_scset(1)) {
-        // if somehow that failed w/ scancode set 1 (it shouldn't)... turn
-        // translation back on so we are guaranteed to be using set 1
+    if (!kb_scset(SCANSET)) {
+        // if somehow that failed... turn translation
+        // on so we are guaranteed to be using set 1
+        pr_warn("ps2kb: switch to scan set %d failed! falling back to set 1... (very old keyboard?)\n", SCANSET);
         ps2cfg |= PS2_CFG_TRANSLATE;
         ps2_cmd(PS2_CMD_WRCFG);
         ps2_write(ps2cfg);
@@ -244,8 +282,16 @@ __init void init_kb(void)
         g_kb->scan_mode,  YN(g_kb->supports_sc2), YN(g_kb->supports_sc3));
 #endif
 
+    pr_info("ps2kb: %s keyboard detected\n",
+        (g_kb->scan_mode) == 1 ? "AT" :
+        (g_kb->scan_mode) == 2 ? "XT" :
+        (g_kb->scan_mode) == 3 ? "WIN" : "???");
+
     g_kb->enable_tty = true;
     g_kb->enable_sysrq = true;
+#if DEBUG
+    g_kb->enable_int3 = true;
+#endif
     g_kb->initialized = true;
 }
 
@@ -254,7 +300,13 @@ static void kb_putq(char c)
     struct tty *tty = get_terminal(0)->tty;
     if (tty) {
         if (!tty->ldisc.recv) {
-            panic("keyboard has no input receiver!");
+            pr_alert("ps2kb: no input receiver!");
+            if (isprint(c)) {
+                pr_cont(" got '%c' (#%x)\n", c, c);
+            }
+            else {
+                pr_cont(" got #%x\n", c);
+            }
         }
         tty->ldisc.recv(tty, &c, 1);
     }
@@ -285,6 +337,8 @@ static void kb_interrupt(int irq, struct iregs *regs)
 
     // prevent keyboard from sending more interrupts
     cli_save(flags);
+    g_kb->in_interrupt = true;
+
     disable_ps2_kb_port();
 
     // check keyboard status
@@ -442,17 +496,22 @@ static void kb_interrupt(int irq, struct iregs *regs)
     }
 
     //
-    // handle special keystrokes
-    //
+    // Handle Special Keystrokes
+    // ----------------------------------------------------------------
 
-    // CTRL+ALT+DEL: system reboot
+    // Ctrl+Alt+Del: system reboot
     if (g_kb->ctrl && g_kb->alt && (key == KEY_DELETE || key == KEY_KPDOT)) {
-        hard_reset();
+        __hard_reset();
+    }
+
+    // Ctrl+Alt+F3: debug break
+    if (g_kb->enable_int3 && g_kb->ctrl && g_kb->alt && (key == KEY_F3)) {
+        __debug_break();
     }
 
     // SysRq: special system operations
     if (g_kb->enable_sysrq && g_kb->sysrq) {
-        sysrq(c);
+        do_sysrq(c);
         goto done;
     }
 
@@ -599,10 +658,11 @@ record_key_event:
 
 done:   // re-enable keyboard interrupts from controller
     enable_ps2_kb_port();
+    g_kb->in_interrupt = false;
     restore_flags(flags);
 }
 
-static void sysrq(char c)
+static void do_sysrq(char c)
 {
     switch (c) {
         default:
@@ -617,23 +677,9 @@ static void sysrq(char c)
             __int3();
             break;
         case 'r':
-            hard_reset();
+            __hard_reset();
             break;
     }
-}
-
-__noreturn void hard_reset(void)
-{
-    // first, try resetting via the PS/2 controller
-    ps2_cmd(PS2_CMD_SYSRESET);
-
-    // if that didn't work, triple fault
-    struct table_desc idt_desc = { .limit = 0, .base = 0 };
-    __lidt(idt_desc);   // yoink away the IDT :D
-
-    // and if by some miracle /that/ didn't work, show a message and spin forever
-    panic("unable to shut down -- please hard-reset your computer");
-    for (;;);
 }
 
 static bool kb_selftest(void)
@@ -785,7 +831,7 @@ static void enable_ps2_kb_port(void)
     ps2_cmd(PS2_CMD_P1ON);
 }
 
-bool kb_sendcmd(uint8_t cmd)
+static bool kb_sendcmd(uint8_t cmd)
 {
     uint32_t flags;
     uint8_t resp;
@@ -825,7 +871,7 @@ bool kb_sendcmd(uint8_t cmd)
     return ack;
 }
 
-uint8_t kb_rdport(void)
+static uint8_t kb_rdport(void)
 {
     uint8_t status;
     uint32_t flags;
@@ -876,7 +922,7 @@ done:
     return data;
 }
 
-void kb_wrport(uint8_t data)
+static void kb_wrport(uint8_t data)
 {
     uint8_t status;
     uint32_t flags;

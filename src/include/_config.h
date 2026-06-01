@@ -24,6 +24,13 @@
 
 #include <i386/paging.h>        // for PAGE_SIZE
 
+// OS version info strings
+#define OS_NAME                 "OH-WES"
+#define OS_VERSION              "0.1"
+#define OS_AUTHOR               "Wes Hampson"
+#define OS_COPYRIGHT            "Copyright (C) 2020-2025 " OS_AUTHOR ". " \
+                                "All Rights Reserved."
+
 //
 // ----------------------------------------------------------------------------
 // General Configuration
@@ -36,8 +43,25 @@
 #define MEMORY_REQUIRED         (1536 * KB)
 #define HIGHER_GROUND           1   // (bool) map kernel in high virtual address space
 
+// general printing
+#define PRINT_LOGO              0   // (bool) show a special logo at boot
+#define PRINT_PAGE_MAP          0   // (bool) show initial page table mappings
+#define PRINT_IOCTL             1   // (bool) show ioctl calls
+#define SHOW_CRASH_SCREEN       1   // (bool) display blue screen of death upon crash
+
+// kernel log
+#define KERNEL_LOG_SIZE         (32*PAGE_SIZE)
+#define KPRINT_TIME             1   // (bool) show timestamp in kernel log messages
+#define DEFAULT_LOG_LEVEL       5   // (0-5)  default console log level
+
 // virtual terminal (VGA)
-#define DEFAULT_VT              1   // initial virtual terminal activated
+#define DEFAULT_VT              1   // (1-NR_TERMINAL) initial virtual terminal activated
+
+// debugging
+#define SERIAL_DEBUGGING        0   // (bool) enable debugging over COM port
+#define SERIAL_DEBUG_PORT       COM1_PORT
+#define SERIAL_DEBUG_BAUD       BAUD_115200
+#define ENABLE_CRASH_KEY        1   // (bool) test various crash scenarios w/ keystroke
 
 // console
 #define ENABLE_VT_CONSOLE       1   // (bool) use a virtual terminal as a console device
@@ -49,28 +73,6 @@
 #define E9_HACK                 1   // (bool) tee terminal output to 0xE9
 #define ENABLE_E9HACK_CONSOLE   1   // (bool) (requires E9_HACK) register a console as 0xE9 interface
 #define ENABLE_E9HACK_PRINTF    1   // (bool) (requires E9_HACK) tee regular printf calls on active terminal to 0xE9
-
-// general printing
-#define PRINT_LOGO              0   // (bool) show a special logo at boot
-#define PRINT_PAGE_MAP          0   // (bool) show initial page table mappings
-#define PRINT_IOCTL             1   // (bool) show ioctl calls
-
-// kernel log
-#define KERNEL_LOG_SIZE         (32*PAGE_SIZE)
-#define KPRINT_TIME             1   // (bool) show timestamp in kernel log messages
-#define DEFAULT_LOG_LEVEL       5   // (0-5)  default console log level
-
-// debugging
-#define SERIAL_DEBUGGING        0   // (bool) enable debugging over COM port
-#define SERIAL_DEBUG_PORT       COM1_PORT
-#define SERIAL_DEBUG_BAUD       BAUD_115200
-#define ENABLE_CRASH_KEY        1   // (bool) test various crash scenarios w/ keystroke
-
-// OS version info strings
-#define OS_NAME                 "OH-WES"
-#define OS_VERSION              "0.1"
-#define OS_AUTHOR               "Wes Hampson"
-#define OS_COPYRIGHT            "Copyright (C) 2020-2025 " OS_AUTHOR ". All Rights Reserved."
 
 
 //

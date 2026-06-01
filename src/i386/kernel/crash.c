@@ -35,7 +35,7 @@
 #include <kernel/vga.h>
 #include <sys/ohwes.h>
 
-#define CRASH_BUFSIZ        1024
+#define CRASH_MSG_BUFSIZ    256
 #define CRASH_COLOR         ANSI_BLUE
 #define CRASH_MARGIN        5
 #define CRASH_SCALE         2
@@ -43,14 +43,10 @@
 #define MSG_FATAL_REBOOT    "The system cannot be recovered and must be restarted."
 
 // convenient ANSI escape sequence wrappers
-#define BOLD(s)             CONSOLE_BOLD s CONSOLE_UNBOLD
+#define BOLD(s)             VT_BOLD s VT_UNBOLD
 #define ITALIC(s)           "\e[3m"      s "\e[23m"
 #define UNDERLINE(s)        "\e[4m"      s "\e[24m"
-#define RED(s)              CONSOLE_RED  s CONSOLE_DEFAULT
-
-// optional visual information
-#define DUMP_SEGMENT_REGS   1
-#define DUMP_STACK          1
+#define RED(s)              VT_RED  s VT_DEFAULT
 
 // stack dump dimensions
 #define STACK_DUMP_ROWS     8
@@ -65,20 +61,21 @@ extern struct kb *g_kb;
 extern struct console *g_consoles;
 static const char *exception_names[NR_EXCEPTIONS];
 
-static int cprint(const char *fmt, ...);
-static int tprint(const char *fmt, ...);
+static int console_print(const char *fmt, ...) __format_printf(1, 2);
+static int vga_print(const char *fmt, ...) __format_printf(1, 2);
 
-static void center_text(int maxwidth, const char *fmt, ...);
-static void wrap_text(int margin, const char *fmt, ...);
+static void vga_print_centered(int maxwidth, const char *fmt, ...);
+static void vga_print_wrapped(int margin, const char *fmt, ...);
 
 typedef int (*dumpfn)(const char *fmt, ...);
 
 // all the "dump" functions print a leading newline
 static void dump_cpu(struct cpu_state *cpu, dumpfn to);
-static void dump_cntlregs(struct cpu_state *cpu, dumpfn to);
-static void dump_regs(struct iregs *regs, dumpfn to);
+static void dump_gprs(struct iregs *regs, dumpfn to);
+static void dump_ctrl_regs(struct cpu_state *cpu, dumpfn to);
+static void dump_table_regs(struct cpu_state *cpu, dumpfn to);
 static void dump_segregs(struct cpu_state *cpu, dumpfn to);
-static void dump_stack(struct cpu_state *cpu, dumpfn to);
+static void dump_stack(struct cpu_state *cpu, dumpfn to, int max_rows, int num_cols);
 static void dump_segsel(struct segsel *segsel, dumpfn to);
 
 extern void terminal_initialize(int num, struct terminal *term);    // terminal.c
@@ -123,22 +120,23 @@ static __noreturn void die(const struct cpu_state *state)
 {
     irq_setmask(IRQ_MASKALL);
 
-    tprint("\n\n\n");
-    if (kb_initialized() && state->iregs.vec != IRQ_KEYBOARD) {
+    bool has_kb = kb_avail() && state->iregs.vec != IRQ_KEYBOARD;
+    bool has_tm = state->iregs.vec != IRQ_TIMER;
+
+    if (has_kb) {
         kb_enable_tty(false);
         kb_enable_sysrq(false);
+        kb_enable_int3(false);
         irq_unmask(IRQ_KEYBOARD);
-        center_text(vga_get_cols(), "Press CTRL+ALT+DEL to restart your computer . . . \e6");
     }
-    else {
-        center_text(vga_get_cols(), "Please restart your computer manually.\e6");
-    }
-    if (state->iregs.vec != IRQ_TIMER) {
+
+    if (has_tm) {
         irq_unmask(IRQ_TIMER);
         __sti();
         beep(913, 276, true);   // NOTE: BLOCKS!!!
         beep(1370, 276, true);  // TODO: rewrite beep()
         beep(1777, 380, true);
+        // "We're sorry..."
     }
     else {
         __sti();
@@ -147,6 +145,7 @@ static __noreturn void die(const struct cpu_state *state)
     for (;;);   // this is the end... my only friend... the end...
 }
 
+#if SHOW_CRASH_SCREEN
 static __noreturn void show_crash_screen(
     struct cpu_state *cpu,
     int color, int margin,
@@ -157,20 +156,62 @@ static __noreturn void show_crash_screen(
     const int MaxWidth = vga_get_cols();
     const int MaxHeight = vga_get_rows();
 
-    tprint("\e5\e[22;4%d;39m\e[2J", color & 7);
-    tprint("\e[%dH", MaxHeight / 3);
-    center_text(MaxWidth, "\e[7m %s \e[27m", banner);
-    if (primary_text) {
-        tprint("\n\n\n");
-        wrap_text(margin, primary_text);
+    const int NumLinesRegs = 4;
+
+    bool has_primary = (primary_text && *primary_text);
+    bool has_secondary = (secondary_text && *secondary_text);
+
+    // clear screen
+    vga_print(VT_UNBOLD VT_DEFAULT);
+    vga_print("\e[4%dm\e[2J", color & 7);
+
+    // dump regs
+    int stack_max_lines = (has_secondary) ? 5 : STACK_DUMP_ROWS;
+    int stack_lines = min(stack_max_lines, max((ptrdiff_t) ((cpu->iregs.ebp - cpu->iregs.esp) >> 2) / STACK_DUMP_ROWS, 0));
+    int reg_pos = NumLinesRegs + stack_lines;
+
+    vga_print("\e[999;999H\r\e[%dA", reg_pos);
+    dump_stack(cpu, vga_print, stack_max_lines, STACK_DUMP_COLS);
+    vga_print("\n");
+    dump_gprs(&cpu->iregs, vga_print);
+    dump_ctrl_regs(cpu, vga_print);
+
+    int banner_pos = max(4,
+        (MaxHeight / 3) - stack_lines -
+        (STACK_DUMP_ROWS - stack_max_lines));
+
+    // print banner
+    vga_print("\e[%dH", banner_pos);
+    vga_print_centered(MaxWidth, VT_INVERT " %s " VT_UNINVERT, banner);
+
+    // print messages
+    if (has_primary) {
+        vga_print("\n\n\n");
+        vga_print_wrapped(margin, primary_text);
     }
-    if (secondary_text) {
-        tprint("\n\n");
-        wrap_text(margin, secondary_text);
+    if (has_secondary) {
+        vga_print("\n\n");
+        vga_print_wrapped(margin, secondary_text);
+    }
+
+    bool has_kb = kb_avail() && cpu->iregs.vec != IRQ_KEYBOARD;
+
+    // prompt
+    vga_print("\n\n\n");
+    if (has_kb) {
+        vga_print_centered(MaxWidth,
+            "Press CTRL+ALT+DEL to restart your computer . . . \e6");
+    }
+    else {
+        vga_print_centered(MaxWidth,
+            "The exception occurred in the keyboard handler.\n");
+        vga_print_centered(MaxWidth,
+            "Please restart your computer manually.\e6");
     }
 
     die(cpu);
 }
+#endif // SHOW_CRASH_SCREEN
 
 //
 // Uh oh! An exception occurred in the exception handler.
@@ -180,24 +221,29 @@ static __noreturn void show_crash_screen(
 // handling an exception!
 //
 __noreturn void handle_soft_double_fault(
-    struct cpu_state *cpu, struct cpu_state *orig_cpu)
+    struct cpu_state *curr_cpu, struct cpu_state *prev_cpu)
 {
-    char msgbuf[CRASH_BUFSIZ];
+    console_print(VT_BOLD "\n(1) %s at %p", exception_names[curr_cpu->iregs.vec], _P(curr_cpu->iregs.eip));
+    dump_cpu(curr_cpu, console_print);
+    dump_stack(curr_cpu, console_print, STACK_DUMP_ROWS, STACK_DUMP_COLS);
+    console_print("\n\n(2) %s at %p", exception_names[prev_cpu->iregs.vec], _P(prev_cpu->iregs.eip));
+    dump_cpu(prev_cpu, console_print);
+    dump_stack(prev_cpu, console_print, STACK_DUMP_ROWS, STACK_DUMP_COLS);
+    console_print("\n\n" RED("*** FATAL: %s (1) occurred while handling %s (2)"),
+        exception_names[curr_cpu->iregs.vec], exception_names[prev_cpu->iregs.vec]);
+    console_print("\n" VT_UNBOLD VT_DEFAULT);
 
-    cprint("\n\n" CONSOLE_BOLD RED("*** FATAL: soft double fault -- %s (1) occurred while handling previous %s (2)."),
-        exception_names[cpu->iregs.vec], exception_names[orig_cpu->iregs.vec]);
-    cprint("\n\n(1) %s at %p", exception_names[cpu->iregs.vec], _P(cpu->iregs.eip));
-    dump_cpu(cpu, cprint);
-    cprint("\n\n(2) %s at %p", exception_names[orig_cpu->iregs.vec], _P(orig_cpu->iregs.eip));
-    dump_cpu(orig_cpu, cprint);
-
+#if SHOW_CRASH_SCREEN
+    char msgbuf[CRASH_MSG_BUFSIZ];
     snprintf(msgbuf, sizeof(msgbuf),
-        "An fatal exception %02lX (%s) occurred at %p while handling a previous "
-        "exception %02lX (%s) that occurred at %p. " MSG_FATAL_REBOOT,
-        cpu->iregs.vec, exception_names[cpu->iregs.vec], _P(cpu->iregs.eip),
-        orig_cpu->iregs.vec, exception_names[orig_cpu->iregs.vec], _P(orig_cpu->iregs.eip));
-
-    show_crash_screen(cpu, ANSI_RED, 5, "Double Fault", msgbuf, NULL);
+        "A fatal %s exception %02lX occurred at %p while handling a previous "
+        "%s exception %02lX at %p. " MSG_FATAL_REBOOT,
+        exception_names[curr_cpu->iregs.vec], curr_cpu->iregs.vec, _P(curr_cpu->iregs.eip),
+        exception_names[prev_cpu->iregs.vec], prev_cpu->iregs.vec, _P(prev_cpu->iregs.eip));
+    show_crash_screen(curr_cpu, ANSI_RED, 5, "Double Fault", msgbuf, NULL);
+#else
+    die(curr_cpu);
+#endif
 }
 
 //
@@ -206,11 +252,10 @@ __noreturn void handle_soft_double_fault(
 __fastcall __noreturn void handle_exception(struct iregs *iregs)
 {
     // static vars for soft double-fault detection
-    static bool crashing = false;
-    static struct cpu_state orig_cpu;
+    static bool already_crashing = false;
+    static struct cpu_state prev_cpu;
 
-    char msgbuf[CRASH_BUFSIZ];
-    char errbuf[CRASH_BUFSIZ];
+    char errbuf[CRASH_MSG_BUFSIZ];
     struct cpu_state cpu;
     size_t errbuf_len;
 
@@ -223,16 +268,15 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
     }
 #endif
 
-
     // get the remaining regs
     capture_cpu_state(&cpu, iregs);
 
     // if we're already crashing... well... that's not good... handle it here!
-    if (test_and_set_bit(&crashing, 0)) {
-        handle_soft_double_fault(&cpu, &orig_cpu);  // noreturn
+    if (test_and_set_bit(&already_crashing, 0)) {
+        handle_soft_double_fault(&cpu, &prev_cpu);  // noreturn
     }
-    crashing = true;
-    orig_cpu = cpu;
+    already_crashing = true;
+    prev_cpu = cpu;
 
 #if DEBUG
     // test a software double fault
@@ -241,72 +285,69 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
     }
 #endif
 
-    cprint("\n\n" CONSOLE_BOLD RED("*** FATAL: exception %02X (%s) occurred at %p.") "\n",
-        iregs->vec, exception_names[iregs->vec], _P(iregs->eip));
-    dump_cpu(&cpu, cprint);
-
     // collect error info
     if (iregs->vec == PAGE_FAULT) {
         int us = iregs->err & PF_US;
         int wr = iregs->err & PF_WR;
         int p = iregs->err & PF_P;
         int rsvd = iregs->err & PF_RSVD;
-        errbuf_len = snprintf(errbuf, CRASH_BUFSIZ, "An attempt to perform a %s%s%p resulted in %s. ",
+        errbuf_len = snprintf(errbuf, CRASH_MSG_BUFSIZ, "%s caused by %s%s%p.",
+            (p) ? ((rsvd) ? "Reserved bit violation" : "Privilege violation")
+                : "Access violation",
             (us) ? "user mode " : "kernel mode ",
             (wr) ? "write to " : "read from ",
-            _P(cpu.cr2),
-            (p) ? ((rsvd) ? "a reserved bit violation" : "an access violation")
-                : "an access violation (page not present)");
+            _P(cpu.cr2));
     }
     else if (iregs->err) {
-        errbuf_len = snprintf(errbuf, sizeof(errbuf), "The issue occurred in %s(%02lX)%s. ",
+        errbuf_len = snprintf(errbuf, sizeof(errbuf), "The issue occurred in %s(%02lX)%s.",
             (iregs->err & ERR_IDT) ? "IDT" :
                 (iregs->err & ERR_TI) ? "LDT" : "GDT",
             (iregs->err & ERR_INDEX) >> 3,
-            (iregs->err & ERR_EXT) ? " and originated via an interrupt" : "");
+            (iregs->err & ERR_EXT) ? " and originated via interrupt" : "");
     }
     else {
-       errbuf_len = snprintf(errbuf, sizeof(errbuf), "%s", "");
+        errbuf_len = snprintf(errbuf, sizeof(errbuf), "%s", "");    // ensure NUL written
     }
 
-    snprintf(errbuf+errbuf_len, sizeof(errbuf)-errbuf_len, "%s", MSG_FATAL_REBOOT);
+    // print it all to the console
+    console_print(VT_BOLD "\n");
+    dump_cpu(&cpu, console_print);
+    dump_stack(&cpu, console_print, STACK_DUMP_ROWS, STACK_DUMP_COLS);
+    console_print("\n\n"
+        RED("*** FATAL: %s exception %02lX occurred at %p"),
+        exception_names[iregs->vec], iregs->vec, _P(iregs->eip));
+    if (errbuf_len) {
+        console_print("\n%s", errbuf);
+    }
+    console_print("\n" VT_UNBOLD VT_DEFAULT);
 
+
+#if SHOW_CRASH_SCREEN
+    char msgbuf[CRASH_MSG_BUFSIZ];
     snprintf(msgbuf, sizeof(msgbuf),
-        "A fatal exception %02lX (%s) occurred at %p.",
-        iregs->vec, exception_names[iregs->vec],
-        _P(iregs->eip));
-
+        "A fatal %s exception %02lX occurred at %p. " MSG_FATAL_REBOOT,
+        exception_names[iregs->vec], iregs->vec, _P(iregs->eip));
     show_crash_screen(&cpu, CRASH_COLOR, CRASH_MARGIN, OS_NAME, msgbuf, errbuf);
+#else
+    die(&cpu);
+#endif
 }
 
 static void dump_cpu(struct cpu_state *cpu, dumpfn dump)
 {
-#if DUMP_STACK
-    dump_stack(cpu, dump);
-#endif
-
-    if (cpu->iregs.err) {
-        dump("\nERR=%08X", cpu->iregs.err);
-    }
-
-    dump_cntlregs(cpu, dump);
-    dump_regs(&cpu->iregs, dump);
-
-#if DUMP_SEGMENT_REGS
+    dump_gprs(&cpu->iregs, dump);
+    dump_ctrl_regs(cpu, dump);
+    dump_table_regs(cpu, vga_print);
     dump_segregs(cpu, dump);
-#endif
-
 }
 
-static void dump_cntlregs(struct cpu_state *cpu, dumpfn dump)
-{
-    dump("\nCR0=%08X CR2=%08X CR3=%08X CR4=%08X",
-        cpu->cr0, cpu->cr2, cpu->cr3, cpu->cr4);
-}
-
-static void dump_regs(struct iregs *regs, dumpfn dump)
+static void dump_gprs(struct iregs *regs, dumpfn dump)
 {
     struct eflags *flags = (struct eflags *) &regs->eflags;
+
+    if (regs->err) {
+        dump("\nERR=%08X", regs->err);
+    }
 
     dump("\nEAX=%08X EBX=%08X ECX=%08X EDX=%08X",
         regs->eax, regs->ebx, regs->ecx, regs->edx);
@@ -335,7 +376,13 @@ static void dump_regs(struct iregs *regs, dumpfn dump)
     dump(" ]");
 }
 
-static void dump_segregs(struct cpu_state *cpu, dumpfn dump)
+static void dump_ctrl_regs(struct cpu_state *cpu, dumpfn dump)
+{
+    dump("\nCR0=%08X CR2=%08X CR3=%08X CR4=%08X",
+        cpu->cr0, cpu->cr2, cpu->cr3, cpu->cr4);
+}
+
+static void dump_table_regs(struct cpu_state *cpu, dumpfn dump)
 {
     struct table_desc *gdt_desc = (struct table_desc *) &cpu->gdtr;
     struct table_desc *idt_desc = (struct table_desc *) &cpu->idtr;
@@ -343,28 +390,30 @@ static void dump_segregs(struct cpu_state *cpu, dumpfn dump)
     dump("\nGDTR=%08X,%05X", gdt_desc->base, gdt_desc->limit);
     dump("\nIDTR=%08X,%05X", idt_desc->base, idt_desc->limit);
     dump("\nLDTR="); dump_segsel((struct segsel *) &cpu->ldtr, dump);
+    dump("\nTR="); dump_segsel((struct segsel *) &cpu->tr, dump);
+}
+
+static void dump_segregs(struct cpu_state *cpu, dumpfn dump)
+{
     dump("\nSS="); dump_segsel((struct segsel *) &cpu->iregs.ss, dump);
     dump("\nCS="); dump_segsel((struct segsel *) &cpu->iregs.cs, dump);
     dump("\nDS="); dump_segsel((struct segsel *) &cpu->iregs.ds, dump);
     dump("\nES="); dump_segsel((struct segsel *) &cpu->iregs.es, dump);
     dump("\nFS="); dump_segsel((struct segsel *) &cpu->iregs.fs, dump);
     dump("\nGS="); dump_segsel((struct segsel *) &cpu->iregs.gs, dump);
-    dump("\nTR="); dump_segsel((struct segsel *) &cpu->tr, dump);
-    dump("\n");
 }
 
-static void dump_stack(struct cpu_state *cpu, dumpfn dump)
+static void dump_stack(struct cpu_state *cpu, dumpfn dump, int max_rows, int num_cols)
 {
     const uint32_t *esp = (const uint32_t *) cpu->iregs.esp;
     const uint32_t *ebp = (const uint32_t *) cpu->iregs.ebp;
 
-    for (int i = 0; i < STACK_DUMP_ROWS
+    for (int i = 0; i < max_rows
             && ((uint32_t) esp % PAGE_SIZE) != 0
-            && esp < ebp;
-        i++)
+            && esp < ebp; i++)
     {
         dump("\n%08X:", esp);
-        for (int k = 0; k < STACK_DUMP_COLS
+        for (int k = 0; k < num_cols
                 && ((uint32_t) esp % PAGE_SIZE) != 0
                 && esp < ebp;
             k++, esp++)
@@ -394,7 +443,7 @@ static void dump_segsel(struct segsel *segsel, dumpfn dump)
     }
 }
 
-static int _tprint(const char *buf, size_t count)
+static int _vga_print(const char *buf, size_t count)
 {
     struct terminal *term;
     const char *p;
@@ -415,36 +464,36 @@ static int _tprint(const char *buf, size_t count)
     return (p - buf);
 }
 
-// print directly to active the terminal's frame buffer
-static int tprint(const char *fmt, ...)
+// print directly to vga frame buffer via the terminal
+static int vga_print(const char *fmt, ...)
 {
     va_list args;
     size_t count;
-    char buf[CRASH_BUFSIZ] = { };
+    char buf[CRASH_MSG_BUFSIZ] = { };
 
     va_start(args, fmt);
-    count = vsnprintf(buf, CRASH_BUFSIZ, fmt, args);
+    count = vsnprintf(buf, CRASH_MSG_BUFSIZ, fmt, args);
     va_end(args);
 
-    return _tprint(buf, count);
+    return _vga_print(buf, count);
 }
 
 
-// lik kprint but with no klog features
-// and will write directly to frame buffer if no console is registered
-static int cprint(const char *fmt, ...)
+// lik kprint but with no klog features,
+// will write directly to vga if no console is registered
+static int console_print(const char *fmt, ...)
 {
-    char buf[CRASH_BUFSIZ] = { };
+    char buf[CRASH_MSG_BUFSIZ] = { };
     va_list args;
     size_t count;
     struct console *cons;
 
     va_start(args, fmt);
-    count = vsnprintf(buf, CRASH_BUFSIZ, fmt, args);
+    count = vsnprintf(buf, CRASH_MSG_BUFSIZ, fmt, args);
     va_end(args);
 
     if (!g_consoles) {
-        return _tprint(buf, count);
+        return _vga_print(buf, count);
     }
     for (cons = g_consoles; cons; cons = cons->next) {
         cons->write(cons, buf, count);
@@ -452,14 +501,14 @@ static int cprint(const char *fmt, ...)
     return count;
 }
 
-static void center_text(int maxwidth, const char *fmt, ...)
+static void vga_print_centered(int maxwidth, const char *fmt, ...)
 {
     int len;
     int col;
     char c;
     int esc;
     const char *p;
-    char buf[CRASH_BUFSIZ];
+    char buf[CRASH_MSG_BUFSIZ];
     va_list args;
 
     // TODO: handle multiple lines
@@ -470,7 +519,7 @@ static void center_text(int maxwidth, const char *fmt, ...)
     }
 
     va_start(args, fmt);
-    vsnprintf(buf, CRASH_BUFSIZ, fmt, args);
+    vsnprintf(buf, CRASH_MSG_BUFSIZ, fmt, args);
     va_end(args);
 
     esc = 0;
@@ -510,17 +559,17 @@ static void center_text(int maxwidth, const char *fmt, ...)
         col = 0;
     }
 
-    tprint("\e[%dG%s", col, buf);
+    vga_print("\e[%dG%s", col, buf);
 }
 
-static void wrap_text(int margin, const char *fmt, ...)
+static void vga_print_wrapped(int margin, const char *fmt, ...)
 {
     const int MaxWidth = vga_get_cols();
 
     // technically "wrap and left justify within margin"
 
     va_list args;
-    char buf[CRASH_BUFSIZ];
+    char buf[CRASH_MSG_BUFSIZ];
     const char *word;
     const char *p;
     int linelen;
@@ -534,7 +583,7 @@ static void wrap_text(int margin, const char *fmt, ...)
     }
 
     va_start(args, fmt);
-    vsnprintf(buf, CRASH_BUFSIZ, fmt, args);
+    vsnprintf(buf, CRASH_MSG_BUFSIZ, fmt, args);
     va_end(args);
 
     esc = 0;
@@ -546,14 +595,14 @@ static void wrap_text(int margin, const char *fmt, ...)
     p = buf;
     word = p;
 
-    while ((p - buf) < CRASH_BUFSIZ && *p != '\0') {
+    while ((p - buf) < CRASH_MSG_BUFSIZ && *p != '\0') {
         // find end of word by looking for space
         word = p;
         wordlen = 0;
         esclen = 0;
-        for (; (p - buf) < CRASH_BUFSIZ && *p != '\0'; p++) {
+        for (; (p - buf) < CRASH_MSG_BUFSIZ && *p != '\0'; p++) {
             if (linelen > MaxWidth) {
-                tprint("\n");
+                vga_print("\n");
                 linelen = (2 * margin) + wordlen;
                 print_margin = true;
             }
@@ -561,7 +610,7 @@ static void wrap_text(int margin, const char *fmt, ...)
             // TODO: handle tabs?
 
             if (*p == '\n') {
-                tprint("%.*s", wordlen + esclen, word);
+                vga_print("%.*s", wordlen + esclen, word);
                 linelen = (2 * margin);
                 print_margin = true;
                 break;
@@ -593,13 +642,13 @@ static void wrap_text(int margin, const char *fmt, ...)
 
             if (print_margin) {
                 for (int i = 0; i < margin; i++) {
-                    tprint(" ");
+                    vga_print(" ");
                 }
                 print_margin = false;
             }
 
             if (isspace(*p)) {
-                tprint("%.*s", wordlen + esclen, word);
+                vga_print("%.*s", wordlen + esclen, word);
                 break;
             }
 
@@ -610,7 +659,7 @@ static void wrap_text(int margin, const char *fmt, ...)
         // eat up trailing spaces
         for (; isspace(*p) && *p != '\0'; p++) {
             if (linelen > MaxWidth) {
-                tprint("\n");
+                vga_print("\n");
                 linelen = (2 * margin) + wordlen;
                 print_margin = true;
                 break;
@@ -618,11 +667,11 @@ static void wrap_text(int margin, const char *fmt, ...)
 
             if (linelen > 0) {
                 linelen++;
-                tprint("%c", *p);
+                vga_print("%c", *p);
             }
         }
     }
-    tprint("%.*s", wordlen + esclen, word);
+    vga_print("%.*s", wordlen + esclen, word);
 }
 
 #ifdef DEBUG
@@ -706,11 +755,11 @@ void crash_key_irq(int irq, struct iregs *regs)   // TODO: call this vis sysreq.
 static const char *exception_names[NR_EXCEPTIONS] =
 {
     /*0x00*/ "DIVIDE_ERROR",
-    /*0x01*/ "DEBUG_EXCEPTION",
+    /*0x01*/ "DEBUG_TRAP",
     /*0x02*/ "NMI_INTERRUPT",
     /*0x03*/ "BREAKPOINT",
-    /*0x04*/ "OVERFLOW_EXCEPTION",
-    /*0x05*/ "BOUND_RANGE_EXCEEDED",
+    /*0x04*/ "OVERFLOW",
+    /*0x05*/ "BOUND_RANGE",
     /*0x06*/ "INVALID_OPCODE",
     /*0x07*/ "DEVICE_NOT_AVAILABLE",
     /*0x08*/ "DOUBLE_FAULT",
@@ -720,23 +769,23 @@ static const char *exception_names[NR_EXCEPTIONS] =
     /*0x0C*/ "STACK_FAULT",
     /*0x0D*/ "PROTECTION_FAULT",
     /*0x0E*/ "PAGE_FAULT",
-    /*0x0F*/ "INVALID_EXCEPTION_0F",
+    /*0x0F*/ "UNBOUND_0F",
     /*0x10*/ "MATH_FAULT",
     /*0x11*/ "ALIGNMENT_CHECK",
     /*0x12*/ "MACHINE_CHECK",
     /*0x13*/ "SIMD_FAULT",
-    /*0x14*/ "INVALID_EXCEPTION_14",
-    /*0x15*/ "INVALID_EXCEPTION_15",
-    /*0x16*/ "INVALID_EXCEPTION_16",
-    /*0x17*/ "INVALID_EXCEPTION_17",
-    /*0x18*/ "INVALID_EXCEPTION_18",
-    /*0x19*/ "INVALID_EXCEPTION_19",
-    /*0x1A*/ "INVALID_EXCEPTION_1A",
-    /*0x1B*/ "INVALID_EXCEPTION_1B",
-    /*0x1C*/ "INVALID_EXCEPTION_1C",
-    /*0x1D*/ "INVALID_EXCEPTION_1D",
-    /*0x1E*/ "INVALID_EXCEPTION_1E",
-    /*0x1F*/ "INVALID_EXCEPTION_1F",
+    /*0x14*/ "UNBOUND_14",
+    /*0x15*/ "UNBOUND_15",
+    /*0x16*/ "UNBOUND_16",
+    /*0x17*/ "UNBOUND_17",
+    /*0x18*/ "UNBOUND_18",
+    /*0x19*/ "UNBOUND_19",
+    /*0x1A*/ "UNBOUND_1A",
+    /*0x1B*/ "UNBOUND_1B",
+    /*0x1C*/ "UNBOUND_1C",
+    /*0x1D*/ "UNBOUND_1D",
+    /*0x1E*/ "UNBOUND_1E",
+    /*0x1F*/ "UNBOUND_1F",
 };
 static_assert(
     countof(exception_names) == NR_EXCEPTIONS, "countof(exception_names)");
