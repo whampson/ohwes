@@ -39,14 +39,7 @@ struct ring2 {
 #define ring_pop    ring_pop_front
 #define ring_peek   ring_peek_front
 
-#define RING_INIT(r, buffer, capacity) \
-    (r)->buf = (buffer); \
-    (r)->cap = (capacity); \
-    (r)->count = 0; \
-    (r)->head = 0; \
-    (r)->tail = 0
-
-#define RING_INITIALIZER(buffer, capacity) \
+#define RING_INIT(buffer, capacity) \
     { .buf = (buffer), .cap = (capacity) }
 
 #define ring_count(r) \
@@ -60,6 +53,11 @@ struct ring2 {
 
 #define ring_full(r) \
     ((r)->count == (r)->cap)
+
+#define ring_clear(r) \
+    (r)->head = 0; \
+    (r)->tail = 0; \
+    (r)->count = 0
 
 #define ring_peek_back(r, T) \
     ((T*)(r)->buf)[((r)->tail - 1 + (r)->cap) % (r)->cap]

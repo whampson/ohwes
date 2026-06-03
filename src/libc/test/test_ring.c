@@ -24,14 +24,17 @@
 #include "framework.h"
 #include <ring.h>
 
+typedef struct {
+    int id;
+    char name[16];
+} test_struct;
+
 static void test_ring_init(void)
 {
     int buffer[10];
-    struct ring2 r;
+    struct ring2 r = RING_INIT(buffer, 10);
 
     TEST("basic initialization");
-    ring_init(&r, buffer, 10);
-
     ASSERT_EQ_INT((void *)buffer, r.buf, "buffer pointer incorrect");
     ASSERT_EQ_INT(10, r.cap, "capacity incorrect");
     ASSERT_EQ_INT(0, r.count, "count should be 0");
@@ -40,15 +43,34 @@ static void test_ring_init(void)
     PASS();
 }
 
+static void test_ring_clear(void)
+{
+    int buffer[5];
+    struct ring2 r = RING_INIT(buffer, 5);
+
+    TEST("clear/reset");
+    ring_push_back(&r, 10, int);
+    ring_push_back(&r, 20, int);
+
+    ASSERT(r.count == 2, "expected 2 items in ring before clear");
+    ASSERT(r.head == 0, "expected head to be 0 before clear");
+    ASSERT(r.tail == 2, "expected tail to be 2 before clear");
+
+    ring_clear(&r);
+
+    ASSERT(r.count == 0, "expected 0 items in ring after clear");
+    ASSERT(r.head == 0, "expected head to be 0 after clear");
+    ASSERT(r.tail == 0, "expected tail to be 0 after clear");
+    PASS();
+}
+
 static void test_push_pop_int(void)
 {
     int buffer[5];
-    struct ring2 r;
+    struct ring2 r = RING_INIT(buffer, 5);
     int val;
 
-    TEST("push_pop_int - push back and pop front");
-    ring_init(&r, buffer, 5);
-
+    TEST("push back and pop front (int)");
     ASSERT(ring_push_back(&r, 10, int) == 1, "push 10 failed");
     ASSERT(ring_push_back(&r, 20, int) == 1, "push 20 failed");
     ASSERT(ring_push_back(&r, 30, int) == 1, "push 30 failed");
@@ -82,12 +104,10 @@ static void test_push_pop_int(void)
 static void test_push_pop_char(void)
 {
     char buffer[5];
-    struct ring2 r;
+    struct ring2 r = RING_INIT(buffer, 5);
     char val;
 
-    TEST("push_pop_char - char buffer operations");
-    ring_init(&r, buffer, 5);
-
+    TEST("push back and pop front (char)");
     ASSERT(ring_push_back(&r, 'a', char) == 1, "push 'a' failed");
     ASSERT(ring_push_back(&r, 'b', char) == 1, "push 'b' failed");
     ASSERT(ring_push_back(&r, 'c', char) == 1, "push 'c' failed");
@@ -117,14 +137,62 @@ static void test_push_pop_char(void)
     PASS();
 }
 
+static void test_push_pop_struct(void)
+{
+    test_struct buffer[5];
+    struct ring2 r = RING_INIT(buffer, 5);
+    test_struct val;
+
+    TEST("push back and pop front (struct)");
+    val.id = 10;
+    strcpy(val.name, "Nick");
+    ASSERT(ring_push_back(&r, val, test_struct) == 1, "push struct failed");
+
+    val.id = 20;
+    strcpy(val.name, "Roger");
+    ASSERT(ring_push_back(&r, val, test_struct) == 1, "push struct failed");
+
+    val.id = 30;
+    strcpy(val.name, "Richard");
+    ASSERT(ring_push_back(&r, val, test_struct) == 1, "push struct failed");
+
+    val.id = 40;
+    strcpy(val.name, "David");
+    ASSERT(ring_push_back(&r, val, test_struct) == 1, "push struct failed");
+
+    val.id = 50;
+    strcpy(val.name, "Syd");
+    ASSERT(ring_push_back(&r, val, test_struct) == 1, "push struct failed");
+
+    ASSERT(ring_full(&r) == 1, "ring should be full");
+    ASSERT(ring_push_back(&r, val, test_struct) == 0, "push on full ring should fail");
+
+    ASSERT(ring_pop_front(&r, val, test_struct) == 1, "pop struct failed");
+    ASSERT(val.id == 10 && strcmp(val.name, "Nick") == 0, "expected id=10, name=Nick");
+
+    ASSERT(ring_pop_front(&r, val, test_struct) == 1, "pop struct failed");
+    ASSERT(val.id == 20 && strcmp(val.name, "Roger") == 0, "expected id=20, name=Roger");
+
+    ASSERT(ring_pop_front(&r, val, test_struct) == 1, "pop struct failed");
+    ASSERT(val.id == 30 && strcmp(val.name, "Richard") == 0, "expected id=30, name=Richard");
+
+    ASSERT(ring_pop_front(&r, val, test_struct) == 1, "pop struct failed");
+    ASSERT(val.id == 40 && strcmp(val.name, "David") == 0, "expected id=40, name=David");
+
+    ASSERT(ring_pop_front(&r, val, test_struct) == 1, "pop struct failed");
+    ASSERT(val.id == 50 && strcmp(val.name, "Syd") == 0, "expected id=50, name=Syd");
+
+    ASSERT(ring_empty(&r) == 1, "ring should be empty");
+    ASSERT(ring_pop_front(&r, val, test_struct) == 0, "pop from empty should fail");
+    PASS();
+}
+
 static void test_peek(void)
 {
     int buffer[5];
-    struct ring2 r;
+    struct ring2 r = RING_INIT(buffer, 5);
 
-    TEST("peek - peek front and back");
-    ring_init(&r, buffer, 5);
-
+    TEST("peek front and back");
     ring_push_back(&r, 10, int);
     ring_push_back(&r, 20, int);
     ring_push_back(&r, 30, int);
@@ -137,12 +205,10 @@ static void test_peek(void)
 static void test_get_set_at(void)
 {
     int buffer[5];
-    struct ring2 r;
+    struct ring2 r = RING_INIT(buffer, 5);
     int val;
 
-    TEST("get_set_at - get and set at position");
-    ring_init(&r, buffer, 5);
-
+    TEST("get and set at position");
     ring_push_back(&r, 10, int);
     ring_push_back(&r, 20, int);
     ring_push_back(&r, 30, int);
@@ -165,12 +231,10 @@ static void test_get_set_at(void)
 static void test_iterator_int(void)
 {
     int buffer[5];
-    struct ring2 r;
+    struct ring2 r = RING_INIT(buffer, 5);
     int val;
 
-    TEST("iterator_int - forward iteration");
-    ring_init(&r, buffer, 5);
-
+    TEST("forward iteration");
     ring_push_back(&r, 10, int);
     ring_push_back(&r, 20, int);
     ring_push_back(&r, 30, int);
@@ -184,15 +248,49 @@ static void test_iterator_int(void)
     PASS();
 }
 
+static void test_iterator_struct(void)
+{
+    test_struct buffer[5];
+    struct ring2 r = RING_INIT(buffer, 5);
+    test_struct val;
+
+    TEST("forward iteration (struct)");
+    val.id = 10;
+    strcpy(val.name, "Nick");
+    ring_push_back(&r, val, test_struct);
+
+    val.id = 20;
+    strcpy(val.name, "Roger");
+    ring_push_back(&r, val, test_struct);
+
+    val.id = 30;
+    strcpy(val.name, "Richard");
+    ring_push_back(&r, val, test_struct);
+
+    test_struct expected[3] = {
+        {10, "Nick"},
+        {20, "Roger"},
+        {30, "Richard"}
+    };
+    size_t i = 0;
+
+    for (ring_iterator(&r, val, test_struct)) {
+        ASSERT(val.id == expected[i].id && strcmp(val.name, expected[i].name) == 0,
+            "expected id=%d, name=%s, got id=%d, name=%s",
+            expected[i].id, expected[i].name, val.id, val.name);
+        i++;
+    }
+
+    PASS();
+}
+
 static void test_reverse_iterator_int(void)
 {
     int buffer[5];
-    struct ring2 r;
+    struct ring2 r = RING_INIT(buffer, 5);
     int val;
 
-    TEST("reverse_iterator_int - reverse iteration");
-    ring_init(&r, buffer, 5);
-
+    TEST("reverse iteration");
     ring_push_back(&r, 10, int);
     ring_push_back(&r, 20, int);
     ring_push_back(&r, 30, int);
@@ -206,15 +304,49 @@ static void test_reverse_iterator_int(void)
     PASS();
 }
 
+static void test_reverse_iterator_struct(void)
+{
+    test_struct buffer[5];
+    struct ring2 r = RING_INIT(buffer, 5);
+    test_struct val;
+
+    TEST("reverse iteration (struct)");
+    val.id = 10;
+    strcpy(val.name, "Nick");
+    ring_push_back(&r, val, test_struct);
+
+    val.id = 20;
+    strcpy(val.name, "Roger");
+    ring_push_back(&r, val, test_struct);
+
+    val.id = 30;
+    strcpy(val.name, "Richard");
+    ring_push_back(&r, val, test_struct);
+
+    test_struct expected[3] = {
+        {30, "Richard"},
+        {20, "Roger"},
+        {10, "Nick"}
+    };
+    size_t i = 0;
+
+    for (ring_reverse_iterator(&r, val, test_struct)) {
+        ASSERT(val.id == expected[i].id && strcmp(val.name, expected[i].name) == 0,
+            "expected id=%d, name=%s, got id=%d, name=%s",
+            expected[i].id, expected[i].name, val.id, val.name);
+        i++;
+    }
+
+    PASS();
+}
+
 static void test_push_front_pop_back_int(void)
 {
     int buffer[5];
-    struct ring2 r;
+    struct ring2 r = RING_INIT(buffer, 5);
     int val;
 
-    TEST("push_front_pop_back_int - push front and pop back");
-    ring_init(&r, buffer, 5);
-
+    TEST("push front and pop back (int)");
     ASSERT(ring_push_front(&r, 10, int) == 1, "push front 10 failed");
     ASSERT(ring_push_front(&r, 20, int) == 1, "push front 20 failed");
     ASSERT(ring_push_front(&r, 30, int) == 1, "push front 30 failed");
@@ -247,12 +379,10 @@ static void test_push_front_pop_back_int(void)
 static void test_push_front_pop_back_char(void)
 {
     char buffer[5];
-    struct ring2 r;
+    struct ring2 r = RING_INIT(buffer, 5);
     char val;
 
-    TEST("push_front_pop_back_char - char push front and pop back");
-    ring_init(&r, buffer, 5);
-
+    TEST("push front and pop back (char)");
     ASSERT(ring_push_front(&r, 'a', char) == 1, "push front 'a' failed");
     ASSERT(ring_push_front(&r, 'b', char) == 1, "push front 'b' failed");
     ASSERT(ring_push_front(&r, 'c', char) == 1, "push front 'c' failed");
@@ -282,14 +412,62 @@ static void test_push_front_pop_back_char(void)
     PASS();
 }
 
+static void test_push_front_pop_back_struct(void)
+{
+    test_struct buffer[5];
+    struct ring2 r = RING_INIT(buffer, 5);
+    test_struct val;
+
+    TEST("push front and pop back (struct)");
+    val.id = 10;
+    strcpy(val.name, "Nick");
+    ASSERT(ring_push_front(&r, val, test_struct) == 1, "push front failed");
+
+    val.id = 20;
+    strcpy(val.name, "Roger");
+    ASSERT(ring_push_front(&r, val, test_struct) == 1, "push front failed");
+
+    val.id = 30;
+    strcpy(val.name, "Richard");
+    ASSERT(ring_push_front(&r, val, test_struct) == 1, "push front failed");
+
+    val.id = 40;
+    strcpy(val.name, "David");
+    ASSERT(ring_push_front(&r, val, test_struct) == 1, "push front failed");
+
+    val.id = 50;
+    strcpy(val.name, "Syd");
+    ASSERT(ring_push_front(&r, val, test_struct) == 1, "push front failed");
+
+    ASSERT(ring_full(&r) == 1, "ring should be full");
+    ASSERT(ring_push_front(&r, val, test_struct) == 0, "push on full should fail");
+
+    ASSERT(ring_pop_back(&r, val, test_struct) == 1, "pop back failed");
+    ASSERT(val.id == 10 && strcmp(val.name, "Nick") == 0, "expected id=10, name=Nick");
+
+    ASSERT(ring_pop_back(&r, val, test_struct) == 1, "pop back failed");
+    ASSERT(val.id == 20 && strcmp(val.name, "Roger") == 0, "expected id=20, name=Roger");
+
+    ASSERT(ring_pop_back(&r, val, test_struct) == 1, "pop back failed");
+    ASSERT(val.id == 30 && strcmp(val.name, "Richard") == 0, "expected id=30, name=Richard");
+
+    ASSERT(ring_pop_back(&r, val, test_struct) == 1, "pop back failed");
+    ASSERT(val.id == 40 && strcmp(val.name, "David") == 0, "expected id=40, name=David");
+
+    ASSERT(ring_pop_back(&r, val, test_struct) == 1, "pop back failed");
+    ASSERT(val.id == 50 && strcmp(val.name, "Syd") == 0, "expected id=50, name=Syd");
+
+    ASSERT(ring_empty(&r) == 1, "ring should be empty");
+    ASSERT(ring_pop_back(&r, val, test_struct) == 0, "pop from empty should fail");
+    PASS();
+}
+
 static void test_peek_both_ends_int(void)
 {
     int buffer[5];
-    struct ring2 r;
+    struct ring2 r = RING_INIT(buffer, 5);
 
-    TEST("peek_both_ends_int - peek both ends after mixed ops");
-    ring_init(&r, buffer, 5);
-
+    TEST("peek both ends after mixed ops (int)");
     ring_push_back(&r, 10, int);
     ring_push_back(&r, 20, int);
     ring_push_back(&r, 30, int);
@@ -308,11 +486,9 @@ static void test_peek_both_ends_int(void)
 static void test_peek_both_ends_char(void)
 {
     char buffer[5];
-    struct ring2 r;
+    struct ring2 r = RING_INIT(buffer, 5);
 
-    TEST("peek_both_ends_char - peek both ends after mixed ops");
-    ring_init(&r, buffer, 5);
-
+    TEST("peek both ends after mixed ops (char)");
     ring_push_back(&r, 'a', char);
     ring_push_back(&r, 'b', char);
     ring_push_back(&r, 'c', char);
@@ -328,22 +504,72 @@ static void test_peek_both_ends_char(void)
     PASS();
 }
 
+static void test_peek_both_ends_struct(void)
+{
+    test_struct buffer[5];
+    struct ring2 r = RING_INIT(buffer, 5);
+    test_struct val;
+
+    TEST("peek both ends after mixed ops (struct)");
+    val.id = 10;
+    strcpy(val.name, "Nick");
+    ring_push_back(&r, val, test_struct);
+
+    val.id = 20;
+    strcpy(val.name, "Roger");
+    ring_push_back(&r, val, test_struct);
+
+    val.id = 30;
+    strcpy(val.name, "Richard");
+    ring_push_back(&r, val, test_struct);
+
+    val.id = 40;
+    strcpy(val.name, "David");
+    ring_push_front(&r, val, test_struct);
+
+    val.id = 50;
+    strcpy(val.name, "Syd");
+    ring_push_front(&r, val, test_struct);
+
+    ASSERT(ring_peek_front(&r, test_struct).id == 50
+            && strcmp(ring_peek_front(&r, test_struct).name, "Syd") == 0,
+        "peek front should be id=50, name=Syd");
+    ASSERT(ring_peek_back(&r, test_struct).id == 30
+            && strcmp(ring_peek_back(&r, test_struct).name, "Richard") == 0,
+        "peek back should be id=30, name=Richard");
+    PASS();
+}
+
 /* ========================================================================= */
 /*  run_ring_tests                                                           */
 /* ========================================================================= */
 
 TEST_SUITE(ring, "ring.h tests")
 {
+    printf(COLOR_YELLOW "[initialization]" COLOR_RESET "\n");
     test_ring_init();
+    test_ring_clear();
+
+    printf(COLOR_YELLOW "[push/pop]" COLOR_RESET "\n");
     test_push_pop_int();
     test_push_pop_char();
+    test_push_pop_struct();
+
+    printf(COLOR_YELLOW "[get/set/peek]" COLOR_RESET "\n");
     test_peek();
     test_get_set_at();
+
+    printf(COLOR_YELLOW "[iterator]" COLOR_RESET "\n");
     test_iterator_int();
+    test_iterator_struct();
     test_reverse_iterator_int();
+    test_reverse_iterator_struct();
+
+    printf(COLOR_YELLOW "[double-ended push/pop/peek]" COLOR_RESET "\n");
     test_push_front_pop_back_int();
     test_push_front_pop_back_char();
+    test_push_front_pop_back_struct();
     test_peek_both_ends_int();
     test_peek_both_ends_char();
+    test_peek_both_ends_struct();
 }
-
