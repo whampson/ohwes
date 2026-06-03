@@ -31,6 +31,8 @@ DECLARE_TEST_SUITE(stdarg);
 DECLARE_TEST_SUITE(stdtypes);
 DECLARE_TEST_SUITE(stdlib_math);
 
+DECLARE_TEST_SUITE(ring);
+
 // int main(void)
 int test_libc(void)
 {
@@ -45,6 +47,8 @@ int test_libc(void)
 #if TEST_STDLIB_MATH
     run_stdlib_math_tests();
 #endif
+
+    run_ring_tests();
 
     if (tests_failed > 0)
         printf("\n" COLOR_BOLD "=== " COLOR_GREEN "%d/%d passed" COLOR_RESET COLOR_BOLD ", " COLOR_RED "%d FAILED" COLOR_RESET COLOR_BOLD " ===" COLOR_RESET "\n",

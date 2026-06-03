@@ -129,23 +129,25 @@ extern int tests_failed;
         printf(COLOR_GREEN "[PASS]" COLOR_RESET "\n"); \
     } while (0)
 
-#define FAIL(msg) \
+#define FAIL(...) \
     do { \
-        record_failure(msg, __FILE__, __LINE__); \
-        printf(COLOR_BOLD COLOR_RED "[FAIL]" COLOR_NOBOLD " %s" COLOR_RESET "\n", msg); \
-        FAIL_FAST_CHECK(msg); \
+        char msg_buf[MAX_FAIL_MSG_LEN]; \
+        snprintf(msg_buf, sizeof(msg_buf), __VA_ARGS__); \
+        record_failure(msg_buf, __FILE__, __LINE__); \
+        printf(COLOR_BOLD COLOR_RED "[FAIL]" COLOR_NOBOLD " %s" COLOR_RESET "\n", msg_buf); \
+        FAIL_FAST_CHECK(msg_buf); \
     } while (0)
 
-#define ASSERT(cond, msg) \
+#define ASSERT(cond, ...) \
     do { \
-        if (!(cond)) { FAIL(msg); return; } \
+        if (!(cond)) { FAIL(__VA_ARGS__); return; } \
     } while (0)
 
-#define ASSERT_EQ_INT(expected, actual, msg) \
-    ASSERT((expected) == (actual), msg)
+#define ASSERT_EQ_INT(expected, actual, ...) \
+    ASSERT((expected) == (actual), __VA_ARGS__)
 
-#define ASSERT_EQ_STR(expected, actual, msg) \
-    ASSERT(strcmp((expected), (actual)) == 0, msg)
+#define ASSERT_EQ_STR(expected, actual, ...) \
+    ASSERT(strcmp((expected), (actual)) == 0, __VA_ARGS__)
 
 /* -- Suite macros ---------------------------------------------------------- */
 

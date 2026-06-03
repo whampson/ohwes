@@ -1,8 +1,10 @@
 # debug build toggle and params
 DEBUG           := 1
-DEBUGOPT        := 1
-TEST_BUILD      := 0
+DEBUGOPT        := 0
 OPT_LEVEL       := 2
+
+# TEST_BUILD      := 0
+TEST_LIBC       := 1
 
 # default flags
 ASFLAGS         := -Wa,--fatal-warnings
@@ -50,6 +52,10 @@ endif
 
 ifeq "${TEST_BUILD}" "1"
   DEFINES += TEST_BUILD
+endif
+
+ifeq (${TEST_LIBC}, 1)
+  DEFINES += TEST_LIBC
 endif
 
 # -----------------------------------------------------------------------------

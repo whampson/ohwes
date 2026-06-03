@@ -1502,9 +1502,9 @@ static void test_snprintf_embedded_nul_truncation(void)
     int ret = snprintf(buf, 8, "a%cb%cd", '\0', '\0');
     ASSERT_EQ_INT(5, ret, "returns 5 (NULs counted as chars)");
     ASSERT(buf[0] == 'a', "first char");
-    ASSERT(buf[1] == '\0', "embedded NUL from first %c");
+    ASSERT(buf[1] == '\0', "embedded NUL from first %%c");
     ASSERT(buf[2] == 'b', "char after first NUL");
-    ASSERT(buf[3] == '\0', "embedded NUL from second %c");
+    ASSERT(buf[3] == '\0', "embedded NUL from second %%c");
     ASSERT(buf[4] == 'd', "last content char");
     ASSERT(buf[5] == '\0', "terminating NUL");
     PASS();
