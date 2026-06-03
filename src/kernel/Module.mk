@@ -27,7 +27,6 @@ SOURCES := \
     mm.c \
     open.c \
     pool.c \
-    ring.c \
     sys.c \
     task.c \
 

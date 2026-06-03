@@ -31,6 +31,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <ring.h>
 #include <signal.h>
 #include <i386/bitops.h>
 #include <i386/gdbstub.h>
@@ -41,7 +42,6 @@
 #include <kernel/io.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
-#include <kernel/ring.h>
 #include <kernel/serial.h>
 #include <kernel/tty.h>
 
@@ -558,7 +558,7 @@ static int serial_write(struct tty *tty, const char *buf, size_t count)
     cli_save(flags);
 
     // calculate remaining buffer space
-    room = ring_length(&com->tx_ring) - ring_count(&com->tx_ring);
+    room = ring_capacity(&com->tx_ring) - ring_count(&com->tx_ring);
     if (count > room) {
         count = room;
     }
@@ -566,7 +566,7 @@ static int serial_write(struct tty *tty, const char *buf, size_t count)
     // fill the TX buffer
     ptr = buf;
     while (count > 0) {
-        ring_put(&com->tx_ring, *ptr);
+        ring_push_back(&com->tx_ring, *ptr, char);
         ptr++; count--;
     }
 
@@ -597,7 +597,7 @@ static size_t serial_write_room(struct tty *tty)
     }
 
     cli_save(flags);
-    room = ring_length(&com->tx_ring) - ring_count(&com->tx_ring);
+    room = ring_capacity(&com->tx_ring) - ring_count(&com->tx_ring);
     restore_flags(flags);
 
     return room;
@@ -631,7 +631,7 @@ static void serial_clear(struct tty *tty)
     }
 
     cli_save(flags);
-    ring_reset(&com->tx_ring);
+    ring_clear(&com->tx_ring);
     restore_flags(flags);
 }
 
@@ -1071,13 +1071,10 @@ static void send_chars(struct com *com)
 
     // send chars
     count = XMIT_MAX;
-    do {
-        c = ring_get(&com->tx_ring);
+    while (count > 0 && ring_pop_front(&com->tx_ring, c, char)) {
         com_out(com, UART_TX, c);
-        if (ring_empty(&com->tx_ring)) {
-            break;
-        }
-    } while (--count > 0);
+        count--;
+    }
 
     // nothing left to send? disable transmitter
     if (ring_empty(&com->tx_ring)) {

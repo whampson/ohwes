@@ -22,9 +22,9 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <ring.h>
 #include <i386/interrupt.h>
 #include <kernel/kernel.h>
-#include <kernel/ring.h>
 #include <kernel/tty.h>
 
 //
@@ -98,7 +98,7 @@ void n_tty_clear(struct tty *tty)
 
     struct n_tty_ldisc_data *ldisc_data;
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
-    ring_reset(&ldisc_data->rx_ring);
+    ring_clear(&ldisc_data->rx_ring);
 }
 
 static ssize_t n_tty_read(struct tty *tty, struct file *file, char *buf, size_t count)
@@ -143,7 +143,7 @@ static ssize_t n_tty_read(struct tty *tty, struct file *file, char *buf, size_t 
         // grab the characters
         do {
             cli_save(flags);
-            *ptr++ = ring_get(&ldisc_data->rx_ring);
+            ring_pop_front(&ldisc_data->rx_ring, *ptr++, char);
             restore_flags(flags);
         } while (--nremain > 0 && --count > 0);
 
@@ -271,7 +271,7 @@ static void n_tty_recv(struct tty *tty, char *buf, size_t count)
 
         // add char to buffer
         cli_save(flags);
-        ring_put(&ldisc_data->rx_ring, c);
+        ring_push_back(&ldisc_data->rx_ring, c, char);
         restore_flags(flags);
         ptr++; count--;
     }
@@ -296,7 +296,7 @@ static size_t n_tty_recv_room(struct tty *tty)
     ldisc_data = (struct n_tty_ldisc_data *) tty->ldisc_data;
 
     cli_save(flags);
-    room = ring_length(&ldisc_data->rx_ring) - ring_count(&ldisc_data->rx_ring);
+    room = ring_capacity(&ldisc_data->rx_ring) - ring_count(&ldisc_data->rx_ring);
     restore_flags(flags);
 
     return room;

@@ -27,7 +27,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-struct ring2 {
+struct ring {
     void *buf;      // externally-allocated backing buffer
     size_t cap;     // maximum number of elements that can fit in the buffer
     size_t count;   // current number of elements in the buffer
@@ -41,6 +41,13 @@ struct ring2 {
 
 #define RING_INIT(buffer, capacity) \
     { .buf = (buffer), .cap = (capacity) }
+
+#define ring_init(r, buffer, capacity) \
+    (r)->buf = (buffer); \
+    (r)->cap = (capacity); \
+    (r)->count = 0; \
+    (r)->head = 0; \
+    (r)->tail = 0
 
 #define ring_count(r) \
     (r)->count

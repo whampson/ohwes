@@ -20,6 +20,7 @@
  */
 
 #include <errno.h>
+#include <ring.h>
 #include <i386/boot.h>
 #include <kernel/kernel.h>
 #include <kernel/char.h>
@@ -27,7 +28,6 @@
 #include <kernel/ioctls.h>
 #include <kernel/mm.h>
 #include <kernel/pool.h>
-#include <kernel/ring.h>
 #include <kernel/task.h>
 #include <kernel/tty.h>
 

@@ -25,7 +25,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <kernel/ring.h>
+#include <ring.h>
 #include <kernel/tty.h>
 #include <kernel/vga.h>
 

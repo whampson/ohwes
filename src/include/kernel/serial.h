@@ -89,9 +89,9 @@
 
 #ifndef __ASSEMBLER__
 #include <assert.h>
+#include <ring.h>
 #include <stdint.h>
 #include <i386/io.h>
-#include <kernel/ring.h>
 #include <kernel/tty.h>
 
 //
