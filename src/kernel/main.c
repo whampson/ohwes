@@ -45,6 +45,8 @@
 #include <kernel/termios.h>
 #include <sys/ioctl.h>
 
+#include <ring.h>
+
 extern __init void init_mm(void);
 extern __init void init_io(void);
 extern __init void init_fs(void);
@@ -60,7 +62,7 @@ static __init __noreturn void go_to_ring3(void *entry, void *stack);
 extern void run_tests(void);
 #endif
 
-void _crt0_init(void);
+void init(void);
 
 // init globals
 __init struct boot_info *g_boot;
@@ -87,7 +89,7 @@ __fastcall __init __noreturn void kmain(struct boot_info **info)
 // #endif
 
     pr_info("boot: switching to ring 3...\n");
-    go_to_ring3(_crt0_init, __ustack_end);    // TODO: declare user stack in high memory
+    go_to_ring3(init, __ustack_end);    // TODO: declare user stack in high memory
     for (;;);
 
     // for future reference...
@@ -306,7 +308,295 @@ static __init void print_page_mappings(void)
     __ret;                      \
 })
 
-void _crt0_init(void)
+#define PASS() \
+    do { \
+        printf(COLOR_GREEN "[PASS]" COLOR_RESET "\n"); \
+    } while (0)
+
+#define FAIL(msg) \
+    do { \
+        printf(VT_BOLD VT_RED "[FAIL]" VT_UNBOLD " %s" VT_DEFAULT "\n", msg); \
+    } while (0)
+
+#define ASSERT(cond) \
+    do { \
+        if (!(cond)) { FAIL(#cond); return; } \
+    } while (0)
+
+
+// Helper function to print the ring buffer contents
+void print_ring(const struct ring2 *r, size_t element_size, const char *type_name) {
+    printf("Ring: head=%zu, tail=%zu, count=%zu, cap=%zu\n", r->head, r->tail, r->count, r->cap);
+    for (size_t i = 0; i < r->count; i++) {
+        char *val = (char *)((char *)r->buf + (r->head + i) % r->cap * element_size);
+        printf(" %d", *(int *)val);  // Cast to int for display purposes
+    }
+    printf("\n");
+}
+
+void test_ring_init() {
+    int buffer[10];
+    struct ring2 r;
+    RING_INIT(&r, buffer, 10);
+
+    ASSERT(r.buf == buffer);
+    ASSERT(r.cap == 10);
+    ASSERT(r.count == 0);
+    ASSERT(r.head == 0);
+    ASSERT(r.tail == 0);
+}
+
+void test_push_pop_int() {
+    int buffer[5];
+    struct ring2 r;
+    RING_INIT(&r, buffer, 5);
+
+    int val;
+
+    // Push back
+    ASSERT(ring_push_back(&r, 10, int) == 1);
+    ASSERT(ring_push_back(&r, 20, int) == 1);
+    ASSERT(ring_push_back(&r, 30, int) == 1);
+    ASSERT(ring_push_back(&r, 40, int) == 1);
+    ASSERT(ring_push_back(&r, 50, int) == 1);
+
+    // Full
+    ASSERT(ring_full(&r) == 1);
+    ASSERT(ring_push_back(&r, 60, int) == 0);
+
+    // Pop front
+    ASSERT(ring_pop_front(&r, val, int) == 1);
+    ASSERT(val == 10);
+    ASSERT(ring_pop_front(&r, val, int) == 1);
+    ASSERT(val == 20);
+    ASSERT(ring_pop_front(&r, val, int) == 1);
+    ASSERT(val == 30);
+    ASSERT(ring_pop_front(&r, val, int) == 1);
+    ASSERT(val == 40);
+    ASSERT(ring_pop_front(&r, val, int) == 1);
+    ASSERT(val == 50);
+
+    // Empty
+    ASSERT(ring_empty(&r) == 1);
+    ASSERT(ring_pop_front(&r, val, int) == 0);
+}
+
+void test_push_pop_char() {
+    char buffer[5];
+    struct ring2 r;
+    RING_INIT(&r, buffer, 5);
+
+    char val;
+
+    // Push back
+    ASSERT(ring_push_back(&r, 'a', char) == 1);
+    ASSERT(ring_push_back(&r, 'b', char) == 1);
+    ASSERT(ring_push_back(&r, 'c', char) == 1);
+    ASSERT(ring_push_back(&r, 'd', char) == 1);
+    ASSERT(ring_push_back(&r, 'e', char) == 1);
+
+    // Full
+    ASSERT(ring_full(&r) == 1);
+    ASSERT(ring_push_back(&r, 'f', char) == 0);
+
+    // Pop front
+    ASSERT(ring_pop_front(&r, val, char) == 1);
+    ASSERT(val == 'a');
+    ASSERT(ring_pop_front(&r, val, char) == 1);
+    ASSERT(val == 'b');
+    ASSERT(ring_pop_front(&r, val, char) == 1);
+    ASSERT(val == 'c');
+    ASSERT(ring_pop_front(&r, val, char) == 1);
+    ASSERT(val == 'd');
+    ASSERT(ring_pop_front(&r, val, char) == 1);
+    ASSERT(val == 'e');
+
+    // Empty
+    ASSERT(ring_empty(&r) == 1);
+    ASSERT(ring_pop_front(&r, val, char) == 0);
+}
+
+void test_peek() {
+    int buffer[5];
+    struct ring2 r;
+    RING_INIT(&r, buffer, 5);
+
+    ring_push_back(&r, 10, int);
+    ring_push_back(&r, 20, int);
+    ring_push_back(&r, 30, int);
+
+    ASSERT(ring_peek_front(&r, int) == 10);
+    ASSERT(ring_peek_back(&r, int) == 30);
+}
+
+void test_get_set_at() {
+    int buffer[5];
+    struct ring2 r;
+    RING_INIT(&r, buffer, 5);
+
+    ring_push_back(&r, 10, int);
+    ring_push_back(&r, 20, int);
+    ring_push_back(&r, 30, int);
+
+    int val;
+    ASSERT(ring_get_at(&r, 0, val, int) == 1);
+    ASSERT(val == 10);
+    ASSERT(ring_get_at(&r, 1, val, int) == 1);
+    ASSERT(val == 20);
+    ASSERT(ring_get_at(&r, 2, val, int) == 1);
+    ASSERT(val == 30);
+
+    ASSERT(ring_set_at(&r, 1, 99, int) == 1);
+    ASSERT(ring_get_at(&r, 1, val, int) == 1);
+    ASSERT(val == 99);
+}
+
+void test_iterator_int() {
+    int buffer[5];
+    struct ring2 r;
+    RING_INIT(&r, buffer, 5);
+
+    ring_push_back(&r, 10, int);
+    ring_push_back(&r, 20, int);
+    ring_push_back(&r, 30, int);
+
+    int val;
+    int expected[] = {10, 20, 30};
+
+    size_t i = 0;
+    for (ring_iterator(&r, val, int)) {
+        ASSERT(val == expected[i++]);
+    }
+}
+
+void test_reverse_iterator_int() {
+    int buffer[5];
+    struct ring2 r;
+    RING_INIT(&r, buffer, 5);
+
+    ring_push_back(&r, 10, int);
+    ring_push_back(&r, 20, int);
+    ring_push_back(&r, 30, int);
+
+    int val;
+    int expected[] = {30, 20, 10};
+
+    size_t i = 0;
+    for (ring_reverse_iterator(&r, val, int)) {
+        ASSERT(val == expected[i++]);
+    }
+}
+
+void test_push_front_pop_back_int() {
+    int buffer[5];
+    struct ring2 r;
+    RING_INIT(&r, buffer, 5);
+
+    int val;
+
+    // Push front
+    ASSERT(ring_push_front(&r, 10, int) == 1);
+    ASSERT(ring_push_front(&r, 20, int) == 1);
+    ASSERT(ring_push_front(&r, 30, int) == 1);
+    ASSERT(ring_push_front(&r, 40, int) == 1);
+    ASSERT(ring_push_front(&r, 50, int) == 1);
+
+    // Full
+    ASSERT(ring_full(&r) == 1);
+    ASSERT(ring_push_front(&r, 60, int) == 0);
+
+    // Pop back
+    ASSERT(ring_pop_back(&r, val, int) == 1);
+    ASSERT(val == 10);
+    ASSERT(ring_pop_back(&r, val, int) == 1);
+    ASSERT(val == 20);
+    ASSERT(ring_pop_back(&r, val, int) == 1);
+    ASSERT(val == 30);
+    ASSERT(ring_pop_back(&r, val, int) == 1);
+    ASSERT(val == 40);
+    ASSERT(ring_pop_back(&r, val, int) == 1);
+    ASSERT(val == 50);
+
+    // Empty
+    ASSERT(ring_empty(&r) == 1);
+    ASSERT(ring_pop_back(&r, val, int) == 0);
+}
+
+void test_push_front_pop_back_char() {
+    char buffer[5];
+    struct ring2 r;
+    RING_INIT(&r, buffer, 5);
+
+    char val;
+
+    // Push front
+    ASSERT(ring_push_front(&r, 'a', char) == 1);
+    ASSERT(ring_push_front(&r, 'b', char) == 1);
+    ASSERT(ring_push_front(&r, 'c', char) == 1);
+    ASSERT(ring_push_front(&r, 'd', char) == 1);
+    ASSERT(ring_push_front(&r, 'e', char) == 1);
+
+    // Full
+    ASSERT(ring_full(&r) == 1);
+    ASSERT(ring_push_front(&r, 'f', char) == 0);
+
+    // Pop back
+    ASSERT(ring_pop_back(&r, val, char) == 1);
+    ASSERT(val == 'a');
+    ASSERT(ring_pop_back(&r, val, char) == 1);
+    ASSERT(val == 'b');
+    ASSERT(ring_pop_back(&r, val, char) == 1);
+    ASSERT(val == 'c');
+    ASSERT(ring_pop_back(&r, val, char) == 1);
+    ASSERT(val == 'd');
+    ASSERT(ring_pop_back(&r, val, char) == 1);
+    ASSERT(val == 'e');
+
+    // Empty
+    ASSERT(ring_empty(&r) == 1);
+    ASSERT(ring_pop_back(&r, val, char) == 0);
+}
+
+void test_peek_both_ends_int() {
+    int buffer[5];
+    struct ring2 r;
+    RING_INIT(&r, buffer, 5);
+
+    ring_push_back(&r, 10, int);
+    ring_push_back(&r, 20, int);
+    ring_push_back(&r, 30, int);
+
+    ASSERT(ring_peek_front(&r, int) == 10);
+    ASSERT(ring_peek_back(&r, int) == 30);
+
+    ring_push_front(&r, 5, int);
+    ring_push_front(&r, 4, int);
+
+    ASSERT(ring_peek_front(&r, int) == 4);
+    ASSERT(ring_peek_back(&r, int) == 30);
+}
+
+void test_peek_both_ends_char() {
+    char buffer[5];
+    struct ring2 r;
+    RING_INIT(&r, buffer, 5);
+
+    ring_push_back(&r, 'a', char);
+    ring_push_back(&r, 'b', char);
+    ring_push_back(&r, 'c', char);
+
+    ASSERT(ring_peek_front(&r, char) == 'a');
+    ASSERT(ring_peek_back(&r, char) == 'c');
+
+    ring_push_front(&r, 'd', char);
+    ring_push_front(&r, 'e', char);
+
+    ASSERT(ring_peek_front(&r, char) == 'e');
+    ASSERT(ring_peek_back(&r, char) == 'c');
+}
+
+
+void init(void)
 {
     // TODO: this should be /bin/init
     assert(getpl() == USER_PL);
@@ -322,8 +612,26 @@ void _crt0_init(void)
     int main(void);
     extern int shell(void);
 
+#ifdef TEST_LIBC
     extern int test_libc(void);
     test_libc();
+#endif
+
+    printf("Running ring buffer tests...\n");
+
+    test_ring_init();
+    test_push_pop_int();
+    test_push_pop_char();
+    test_peek();
+    test_get_set_at();
+    test_iterator_int();
+    test_reverse_iterator_int();
+    test_push_front_pop_back_int();
+    test_push_front_pop_back_char();
+    test_peek_both_ends_int();
+    test_peek_both_ends_char();
+
+    printf("All tests passed successfully!\n");
 
     int ret = shell();
     (void) close(STDERR_FILENO);
