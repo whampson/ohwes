@@ -32,7 +32,7 @@
 #ifdef DEBUG
 
 #ifdef __KERNEL__
-extern __noreturn void panic(const char *fmt, ...);
+#include <kernel/kernel.h>
 
 #define assert(x) \
 do { \

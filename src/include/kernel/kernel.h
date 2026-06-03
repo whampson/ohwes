@@ -38,11 +38,23 @@
 #ifndef __ASSEMBLER__
 
 #include <assert.h>
+#include <inttypes.h>
+#include <stdbool.h>
+#include <stdio.h>
 #include <kernel/console.h>
 #include <kernel/kprint.h>
 #include <sys/ohwes.h>
 
 #define __init  // TODO: put in special .init section or something
+
+extern char g_panic_buf[BUFSIZ];
+extern __fastcall __noreturn void _panic(const char *reason);
+
+#define panic(...) \
+do { \
+    snprintf(g_panic_buf, sizeof(g_panic_buf), __VA_ARGS__); \
+    _panic(g_panic_buf); \
+} while (0)
 
 // beep at hz for millis;
 //  interrupts must be ON or it will beep/block forever!

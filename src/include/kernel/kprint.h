@@ -64,8 +64,4 @@ extern int vkprint(const char *fmt, va_list args);
 #define pr_err      pr_error
 #define pr_dbg      pr_debug
 
-// halt and catch fire
-__format_printf(1, 2)
-extern __noreturn void panic(const char *fmt, ...);
-
 #endif // __KPRINT_H

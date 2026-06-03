@@ -63,11 +63,12 @@ static const char *exception_names[NR_EXCEPTIONS];
 
 static int console_print(const char *fmt, ...) __format_printf(1, 2);
 static int vga_print(const char *fmt, ...) __format_printf(1, 2);
+static int klog_print(const char *fmt, ...) __format_printf(1, 2);
 
-static void vga_print_centered(int maxwidth, const char *fmt, ...);
-static void vga_print_wrapped(int margin, const char *fmt, ...);
+static void vga_print_centered(int maxwidth, const char *fmt, ...) __format_printf(2, 3);
+static void vga_print_wrapped(int margin, const char *fmt, ...) __format_printf(2, 3);
 
-typedef int (*dumpfn)(const char *fmt, ...);
+typedef int (*dumpfn)(const char *fmt, ...) __format_printf(1, 2);
 
 // all the "dump" functions print a leading newline
 static void dump_cpu(struct cpu_state *cpu, dumpfn to);
@@ -118,6 +119,7 @@ static void capture_cpu_state(struct cpu_state *state, struct iregs *iregs)
 
 static __noreturn void die(const struct cpu_state *state)
 {
+    __cli();
     irq_setmask(IRQ_MASKALL);
 
     bool has_kb = kb_avail() && state->iregs.vec != IRQ_KEYBOARD;
@@ -137,12 +139,21 @@ static __noreturn void die(const struct cpu_state *state)
         beep(1370, 276, true);  // TODO: rewrite beep()
         beep(1777, 380, true);
         // "We're sorry..."
-    }
-    else {
-        __sti();
+        __cli();
     }
 
-    for (;;);   // this is the end... my only friend... the end...
+#if SERIAL_DEBUGGING
+    if (SERIAL_DEBUG_PORT == COM1_PORT || SERIAL_DEBUG_PORT == COM3_PORT) {
+        irq_unmask(IRQ_COM1);
+    }
+    else {
+        irq_unmask(IRQ_COM2);
+    }
+    __int3();
+#endif
+
+    __sti();
+    for (;;) __hlt();   // this is the end... my only friend... the end...
 }
 
 #if SHOW_CRASH_SCREEN
@@ -220,7 +231,7 @@ static __noreturn void show_crash_screen(
 // This is to be called ONLY by handle_exception() if we were previously
 // handling an exception!
 //
-__noreturn void handle_soft_double_fault(
+static __noreturn void handle_soft_double_fault(
     struct cpu_state *curr_cpu, struct cpu_state *prev_cpu)
 {
     console_print(VT_BOLD "\n(1) %s at %p", exception_names[curr_cpu->iregs.vec], _P(curr_cpu->iregs.eip));
@@ -333,6 +344,16 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
 #endif
 }
 
+__fastcall __noreturn void _panic(const char *reason)
+{
+    struct cpu_state dummy_cpu;
+
+    pr_fatal("*** KERNEL PANIC - %s\n", reason);
+    // TODO: stack trace
+
+    die(&dummy_cpu);
+}
+
 static void dump_cpu(struct cpu_state *cpu, dumpfn dump)
 {
     dump_gprs(&cpu->iregs, dump);
@@ -346,16 +367,16 @@ static void dump_gprs(struct iregs *regs, dumpfn dump)
     struct eflags *flags = (struct eflags *) &regs->eflags;
 
     if (regs->err) {
-        dump("\nERR=%08X", regs->err);
+        dump("\nERR=%08lX", regs->err);
     }
 
-    dump("\nEAX=%08X EBX=%08X ECX=%08X EDX=%08X",
+    dump("\nEAX=%08lX EBX=%08lX ECX=%08lX EDX=%08lX",
         regs->eax, regs->ebx, regs->ecx, regs->edx);
-    dump("\nESI=%08X EDI=%08X ESP=%08X EBP=%08X",
+    dump("\nESI=%08lX EDI=%08lX ESP=%08lX EBP=%08lX",
         regs->esi, regs->edi, regs->esp, regs->ebp);
-    dump("\nEIP=%08X ", regs->eip);
+    dump("\nEIP=%08lX ", regs->eip);
 
-    dump("EFL=%08x [", flags->_value);
+    dump("EFL=%08lx [", flags->_value);
     if (flags->id)   dump(" ID");
     if (flags->vip)  dump(" VIP");
     if (flags->vif)  dump(" VIF");
@@ -378,7 +399,7 @@ static void dump_gprs(struct iregs *regs, dumpfn dump)
 
 static void dump_ctrl_regs(struct cpu_state *cpu, dumpfn dump)
 {
-    dump("\nCR0=%08X CR2=%08X CR3=%08X CR4=%08X",
+    dump("\nCR0=%08lX CR2=%08lX CR3=%08lX CR4=%08lX",
         cpu->cr0, cpu->cr2, cpu->cr3, cpu->cr4);
 }
 
@@ -387,8 +408,8 @@ static void dump_table_regs(struct cpu_state *cpu, dumpfn dump)
     struct table_desc *gdt_desc = (struct table_desc *) &cpu->gdtr;
     struct table_desc *idt_desc = (struct table_desc *) &cpu->idtr;
 
-    dump("\nGDTR=%08X,%05X", gdt_desc->base, gdt_desc->limit);
-    dump("\nIDTR=%08X,%05X", idt_desc->base, idt_desc->limit);
+    dump("\nGDTR=%08lX,%05X", gdt_desc->base, gdt_desc->limit);
+    dump("\nIDTR=%08lX,%05X", idt_desc->base, idt_desc->limit);
     dump("\nLDTR="); dump_segsel((struct segsel *) &cpu->ldtr, dump);
     dump("\nTR="); dump_segsel((struct segsel *) &cpu->tr, dump);
 }
@@ -412,13 +433,13 @@ static void dump_stack(struct cpu_state *cpu, dumpfn dump, int max_rows, int num
             && ((uint32_t) esp % PAGE_SIZE) != 0
             && esp < ebp; i++)
     {
-        dump("\n%08X:", esp);
+        dump("\n%p:", esp);
         for (int k = 0; k < num_cols
                 && ((uint32_t) esp % PAGE_SIZE) != 0
                 && esp < ebp;
             k++, esp++)
         {
-            dump(" %08X", *((uint32_t *) esp));
+            dump(" %08lX", *((uint32_t *) esp));
         }
     }
 }
@@ -499,6 +520,18 @@ static int console_print(const char *fmt, ...)
         cons->write(cons, buf, count);
     }
     return count;
+}
+
+static int klog_print(const char *fmt, ...)
+{
+    char buf[CRASH_MSG_BUFSIZ] = { };
+    va_list args;
+
+    va_start(args, fmt);
+    vsnprintf(buf, CRASH_MSG_BUFSIZ, fmt, args);
+    va_end(args);
+
+    return kprint(KLOG_CONT "%s", buf);
 }
 
 static void vga_print_centered(int maxwidth, const char *fmt, ...)
