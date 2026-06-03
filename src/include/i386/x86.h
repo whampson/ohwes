@@ -598,6 +598,7 @@ __asm__ volatile (                              \
 #define __cli() __asm__ volatile ("cli")
 #define __sti() __asm__ volatile ("sti")
 
+#define __hlt()   __asm__ volatile("hlt")
 #define __int3()  __asm__ volatile ("int3")
 
 #define __lgdt(table_desc) __asm__ volatile ("lgdt %0" :: "m"(table_desc) : "memory")

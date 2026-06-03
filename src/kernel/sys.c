@@ -42,7 +42,7 @@ SYSCALL_ENTRY(_exit, int status)
 
     kprint("user mode returned %d: %s\n", status, strerror(status));
     kprint("\e[1;5;31msystem halted\e[0m");
-    for (;;);   // TODO: return to parent
+    for (;;) __hlt();   // TODO: return to parent
 }
 
 SYSCALL_ENTRY(read, int fd, void *buf, size_t count)
