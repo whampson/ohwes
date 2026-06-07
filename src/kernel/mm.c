@@ -193,7 +193,7 @@ static __init void init_zones(void)
     assert(zone->alloc_end >= zone->mem_end);
 
     // set up a bitmap for keeping track of physical page alloc status
-    char *bitmap = (char *) KERNEL_ADDR(zone->mem_start);
+    char *bitmap = KERNEL_ADDR(zone->mem_start);
 
     // figure out bitmap layout for each order
     size_t total_num_bits = 0;
@@ -291,7 +291,7 @@ void * alloc_pages(int flags, int order)
         panic("%s: alloc out of bounds!!", zone->name);
     }
 
-    void *kern_addr = (void *) KERNEL_ADDR(addr);
+    void *kern_addr = KERNEL_ADDR(addr);
 
     zone->free_pages -= (order_size >> PAGE_SHIFT);
     pr_info("mem: alloc_pages order %d %p-%p %s; %zd pages left\n",

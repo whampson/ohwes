@@ -279,7 +279,7 @@ static __init void print_page_mappings(void)
             continue;   // large
         }
 
-        pgtbl = (struct pginfo *) KERNEL_ADDR(page->pfn << PAGE_SHIFT);
+        pgtbl = KERNEL_ADDR(page->pfn << PAGE_SHIFT);
         for (int j = 0; j < PTE_COUNT; j++) {
             page = &pgtbl[j];
             if (!page->p) {

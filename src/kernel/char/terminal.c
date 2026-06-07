@@ -554,7 +554,7 @@ void * get_vga_fb(void)
     struct vga_fb_info fb_info;
     vga_get_fb_info(&fb_info);
 
-    return (void *) KERNEL_ADDR(fb_info.framebuf);
+    return KERNEL_ADDR(fb_info.framebuf);
 }
 
 void terminal_save(struct terminal *term, struct terminal_save_state *save)

@@ -231,7 +231,7 @@ struct x86_pde * get_pgdir(void)
     uint32_t cr3; store_cr3(cr3);
 
     assert(cr3 == (uint32_t) __page_dir);
-    return (struct x86_pde *) KERNEL_ADDR(cr3);
+    return KERNEL_ADDR(cr3);
 }
 
 int get_cpl(void)

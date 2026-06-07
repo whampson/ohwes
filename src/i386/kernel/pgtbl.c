@@ -45,12 +45,12 @@ bool walk_page_table(uint32_t va, pte_t **pte)
     }
 
     pgdir = (pde_t *) get_pgdir();
-    pde = (pde_t *) KERNEL_ADDR(pde_offset(pgdir, va));
+    pde = KERNEL_ADDR(pde_offset(pgdir, va));
     if (!pde_present(*pde)) {
         return false;
     }
 
-    *pte = (pte_t *) KERNEL_ADDR(pte_offset(pde, va));
+    *pte = KERNEL_ADDR(pte_offset(pde, va));
     return true;
 }
 
@@ -82,13 +82,13 @@ void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flag
     uintptr_t base_va = va;
 
     for (int i = 0; i < count; i++) {
-        pde = (pde_t *) KERNEL_ADDR(pde_offset(pgdir, va));
+        pde = KERNEL_ADDR(pde_offset(pgdir, va));
         if (!pde_present(*pde)) {
             // TODO: map a new PDE and associated page table...
             panic("mem: mappings that require a new PDE and page table not yet implemented! pa(%p) va(%p)\n",
                 _P(pa), _P(va));
         }
-        pte = (pte_t *) KERNEL_ADDR(pte_offset(pde, va));
+        pte = KERNEL_ADDR(pte_offset(pde, va));
 
         pte_clear(pte);
         if (!unmap) {   // map

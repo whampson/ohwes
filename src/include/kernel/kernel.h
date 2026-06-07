@@ -65,7 +65,7 @@ extern uint64_t get_uptime(void);
 
 // TODO: verify/test these!!
 #define PHYSICAL_ADDR(v)    (((uintptr_t) (v) >= KERNEL_VA) ? ((uintptr_t) (v) - KERNEL_VA) : (uintptr_t) (v))
-#define KERNEL_ADDR(p)      (((uintptr_t) (p) >= -KERNEL_VA)  ? (uintptr_t) (p) : ((uintptr_t) (p) + KERNEL_VA))
+#define KERNEL_ADDR(p)      ((void* )(((uintptr_t) (p) >= KERNEL_VA)  ? (uintptr_t) (p) : ((uintptr_t) (p) + KERNEL_VA)))
 
 // convert integer to pointer type, useful for %p
 #define _P(addr) ((void *) (addr))
