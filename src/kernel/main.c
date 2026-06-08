@@ -90,8 +90,6 @@ __fastcall __init __noreturn void kmain(struct boot_info **info)
     init_fs();
     init_tty();
 
-    panic("Ah shit, here we go again!");
-
 // #if TEST_BUILD
 //     run_tests(); // TODO lol
 // #endif
