@@ -25,9 +25,11 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <ring.h>
 #include <i386/io.h>
 #include <kernel/console.h>
 #include <kernel/kernel.h>
+#include <kernel/kprint.h>
 #include <kernel/irq.h>
 #include <kernel/mm.h>
 #include <kernel/terminal.h>
@@ -37,28 +39,21 @@
 // TODO: configurable
 const char* _klog_console_level_prefix[LOG_LEVEL_MAX+1] =
 {
-/* KLOG_FATAL */ "\e[1;31m\a\a\a",
-/* KLOG_ERROR */ "\e[1;31m",
-/* KLOG_ALERT */ "\e[1;33m\a",
-/* KLOG_WARN  */ "\e[1;33m",
-/* KLOG_INFO  */ "\e[37m",
-/* KLOG_DEBUG */ "\e[37m",
+/* KLOG_FATAL */ "\e[91m",
+/* KLOG_ERROR */ "\e[91m",
+/* KLOG_ALERT */ "\e[93m",
+/* KLOG_WARN  */ "\e[93m",
+/* KLOG_INFO  */ "\e[0;37m",
+/* KLOG_DEBUG */ "\e[0;37m",
 };
-const char *_klog_console_level_suffix = "\e[0m";
-const char *_klog_console_time_prefix = "\e[32m";
+const char *_klog_console_level_suffix = "\e[0;39m";
 
-static char _kprint_buf[BUFSIZ+1] = { };
+static unsigned int _klog_set_level = DEFAULT_LOG_LEVEL; // current log level; higher is less important // TODO: control this somehow
+static unsigned int _klog_curr_msg_level = DEFAULT_LOG_LEVEL;
 
-#if KPRINT_TIME
-static bool _kprint_time = true;
-#else
-static bool _kprint_time = false;
-#endif
+struct ring klog_ring = RING_INIT(__klog, KERNEL_LOG_SIZE);
 
-static unsigned int _klog_tail = 0;
-static unsigned int _klog_count = 0;
-static unsigned int _klog_level = DEFAULT_LOG_LEVEL; // TODO: control this somehow
-static unsigned int _klog_curr_level = DEFAULT_LOG_LEVEL;
+static char _kprint_buf[BUFSIZ] = { };
 
 struct console *g_consoles = NULL;  // linked list
 
@@ -96,7 +91,7 @@ struct console e9_console =
 {
     .name = "e9cons",
     .number = 0,
-    .flags = CONSOLE_FLAG_PRINTBUF,
+    .flags = _CONSOLE_FLAG_KLOG,
     .device = e9_console_device,
     .init = e9_console_setup,
     .write = e9_console_write,
@@ -105,6 +100,27 @@ struct console e9_console =
 #endif
 
 // ----------------------------------------------------------------------------
+
+static int klog_write_char(char c)
+{
+    if (ring_full(&klog_ring)) {
+        char tmp;
+        (void) ring_pop_front(&klog_ring, tmp, char);
+        (void) tmp; // this is annoying...
+    }
+
+    return ring_push_back(&klog_ring, c, char);
+}
+
+static int klog_write_buf(const char *buf, size_t count)
+{
+    size_t nwritten = 0;
+    while (buf && *buf && (count--)) {
+        nwritten += klog_write_char(*buf++);
+    }
+
+    return nwritten;
+}
 
 static int klog_parse_prefix(const char *buf, unsigned int *level, char *special)
 {
@@ -149,101 +165,46 @@ static int klog_parse_prefix(const char *buf, unsigned int *level, char *special
     return len;
 }
 
-static void klog_write_to_console(struct console *cons, int start, int count)
+static void klog_write_to_console(struct console *cons, int offset, int count)
 {
     // clamp params
-    start %= KERNEL_LOG_SIZE;
-    count = (count > _klog_count) ? _klog_count : count;
+    offset %= ring_capacity(&klog_ring);
+    count = (count > ring_count(&klog_ring)) ? ring_count(&klog_ring) : count;
 
-    char * const p_start = &__klog[start];
-    char *p = p_start;
+    unsigned int msg_level = _klog_curr_msg_level;
 
-    const char *cons_prefix, *cons_suffix;
+    char prefix_buf[3];
+    int nprefix;
+    int nremain;
 
-    int nwritten = 0;
-    int nprefix = 0;
-    int ntime = 0;
+    // TODO: ideally I'd like to buffer 'til I see a prefix or reach 'count',
+    // then print the buffer and repeat 'til we hit the end... but this will do
+    // for now
 
-    // TODO: need to handle ring buffer wrap!!
-    while (nwritten + nprefix < count) {
-        nprefix = klog_parse_prefix(p, &_klog_curr_level, NULL);
-        p += nprefix;
-
-        int n = 0;
-        for (char sp; (nwritten + nprefix + n < count) &&
-               (p + n < __klog + KERNEL_LOG_SIZE); n++) {
-            if (klog_parse_prefix(p + n, NULL, &sp)) {
+    nremain = count;
+    while (nremain > 0) {
+        prefix_buf[0] = '\0';
+        for (int k = 0; k < sizeof(prefix_buf); k++) {
+            if (!ring_get_at(&klog_ring, offset+k, prefix_buf[k], char)) {
+                prefix_buf[k] = '\0';
                 break;
             }
         }
+        nprefix = klog_parse_prefix(prefix_buf, &msg_level, NULL);
+        offset += nprefix;
+        nremain -= nprefix;
 
-        if (_klog_curr_level > _klog_level) {
-            goto next;
-        }
-
-        cons_prefix = _klog_console_level_prefix[_klog_curr_level];
-        cons_suffix = _klog_console_level_suffix;
-
-        if (_kprint_time) {
-            ntime = 0;
-            while (ntime < n) {
-                ntime++;
-                if (*(p + ntime - 1) == ']') {
-                    break;
+        int idx = 0;
+        do {
+            if (nprefix == 0) {
+                if (msg_level <= _klog_curr_msg_level && msg_level <= _klog_set_level) {
+                    cons->write(cons, &prefix_buf[idx++], 1);
                 }
+                offset += 1;
+                nremain -= 1;
             }
-            cons->write(cons, _klog_console_time_prefix, strlen(_klog_console_time_prefix));
-            cons->write(cons, p, ntime);
-        }
-
-        int nmod = 0;
-        while (ntime + nmod < n) {
-            nmod++;
-            if (*(p + ntime + nmod) == ' ') {
-                nmod = 0;
-                break;
-            }
-            else if (*(p + ntime + nmod) == ':') {
-                break;
-            }
-        }
-
-        if (nmod > 0) {
-            cons->write(cons, "\e[33m", 5);
-            cons->write(cons, p+ntime, nmod);
-        }
-
-        cons->write(cons, cons_prefix, strlen(cons_prefix));
-        cons->write(cons, p+ntime+nmod, n-ntime-nmod);
-        cons->write(cons, cons_suffix, strlen(cons_suffix));
-
-    next:
-        nwritten += n;
-        p += nwritten;
+        } while (nremain < sizeof(prefix_buf));
     }
-
-    // int end = start + count;
-    // if (end < KERNEL_LOG_SIZE) {
-    //     cons->write(cons, &__klog[start], count);
-    // }
-    // else {
-    //     cons->write(cons, &__klog[start], KERNEL_LOG_SIZE - start);
-    //     cons->write(cons, &__klog[0], end - KERNEL_LOG_SIZE);
-    // }
-}
-
-static int klog_write_char(char c)
-{
-    __klog[(_klog_tail + _klog_count) % KERNEL_LOG_SIZE] = c;
-    if (_klog_count < KERNEL_LOG_SIZE) {
-        _klog_count++;
-    }
-    else {
-        _klog_tail += 1;
-        _klog_tail %= KERNEL_LOG_SIZE;
-    }
-
-    return 1;
 }
 
 int vkprint(const char *fmt, va_list args)
@@ -251,31 +212,30 @@ int vkprint(const char *fmt, va_list args)
     static bool start_new_line = true;
     static bool in_kprint = false;
 
-    char timebuf[32];
-    const char *p, *tp;
+    char special = 0;   // prefix special char (<c>, <d>, etc.)
+    int nprefix = 0;    // prefix length
+    int nprinted = 0;   // num chars printed to log
+    int nbufwrit = 0;   // num chars written to _kprint_buf
+    unsigned int log_ptr = ring_count(&klog_ring);
+
+    const char *p;
     struct console *cons;
 
-    char special = 0;   // prefix special char
-    int nprefix = 0;    // prefix length
-    int nprinted = 0;   // chars printed to log
-    int nbufwrit = 0;   // chars written to _kprint_buf
-    unsigned int log_ptr = (_klog_tail + _klog_count) % KERNEL_LOG_SIZE;
-    unsigned int log_level = DEFAULT_LOG_LEVEL;
-
-    bool recursion_bug = false;
+    // check for and warn about kprint recursion
     if (in_kprint) {
-        recursion_bug = true;   // TODO: need to test this more
-        const char *bug_msg = KLOG_ERROR "BUG: recent kprint recursion!\n";
+        const char *bug_msg = KLOG_ERROR "BUG: kprint recursion detected!\n";
         strcpy(_kprint_buf, bug_msg);
         nbufwrit += strlen(bug_msg);
     }
     in_kprint = true;
 
+    // parse printf format string
     nbufwrit += vsnprintf(_kprint_buf + nbufwrit,
         sizeof(_kprint_buf) - nbufwrit, fmt, args);
 
+    // parse <N> prefix
     p = _kprint_buf;
-    nprefix = klog_parse_prefix(p, &log_level, &special);
+    nprefix = klog_parse_prefix(p, &_klog_curr_msg_level, &special);
     if (nprefix > 0) {
         p += nprefix;
         switch (special) {
@@ -284,6 +244,7 @@ int vkprint(const char *fmt, va_list args)
                 break;
             case 'd':   // LOG_DEFAULT: strip <d> and print new line
                 nprefix = 0;
+                _klog_curr_msg_level = DEFAULT_LOG_LEVEL;
                 __fallthrough;
             default:
                 if (!start_new_line) {
@@ -294,30 +255,62 @@ int vkprint(const char *fmt, va_list args)
         }
     }
 
+    // count leading spaces
+    int nspace = 0, nlinefeed = 0;
+    for (; nspace < nbufwrit - nprefix; nspace++) {
+        if (!isspace(*(p + nspace))) {
+            break;
+        }
+        if (*(p + nspace) == '\n') {
+            nlinefeed++;
+        }
+    }
+
+    // don't allow empty/blank log lines
+    if (nspace == nbufwrit - nprefix) {
+        goto kprint_done;
+    }
+
+    // skip past leading newlines; leave one if start_new_line==false
+    if (nlinefeed) {
+        p += nlinefeed - (!start_new_line);
+    }
+
+    // write the log line to the buffer
     for (; *p; p++) {
         if (start_new_line) {
             start_new_line = false;
             if (nprefix > 0) {
-                for (int i = 0; i < nprefix; i++) {
-                    nprinted += klog_write_char(_kprint_buf[i]);
-                }
+                nprinted += klog_write_buf(_kprint_buf, nprefix);
             }
             else {
                 nprinted += klog_write_char('<');
-                nprinted += klog_write_char('0' + log_level);
+                nprinted += klog_write_char('0' + _klog_curr_msg_level);
                 nprinted += klog_write_char('>');
             }
 
-            if (_kprint_time) {
-                uint64_t ns = get_uptime();
-                snprintf(timebuf, sizeof(timebuf),
-                    "[%5lu.%06lu] ",
-                    (uint32_t) (ns / 1000000000),           // seconds
-                    (uint32_t) ((ns % 1000000000) / 1000)); // microseconds
-                for (tp = timebuf; *tp; tp++) {
-                    nprinted += klog_write_char(*tp);
-                }
-            }
+        // #if KPRINT_COLOR
+            const char *ansi_suffix = _klog_console_level_suffix;
+            nprinted += klog_write_buf(ansi_suffix, strlen(ansi_suffix));   // TODO: move formatting to log flush/dump
+        // #endif
+
+        #if KPRINT_TIME
+            char timebuf[64];
+            uint64_t ns = get_uptime();
+            snprintf(timebuf, sizeof(timebuf),
+            #if KPRINT_COLOR
+                ANSI_UNBOLD ANSI_GREEN
+            #endif
+                "[%5lu.%06lu] ",         // TODO: move color formatting to log flush/dump
+                (uint32_t) (ns / 1000000000),           // seconds
+                (uint32_t) ((ns % 1000000000) / 1000)); // microseconds
+            nprinted += klog_write_buf(timebuf, sizeof(timebuf));
+        #endif
+
+        #if KPRINT_COLOR
+            const char *ansi_prefix = _klog_console_level_prefix[_klog_curr_msg_level];
+            nprinted += klog_write_buf(ansi_prefix, strlen(ansi_prefix));   // TODO: move formatting to log flush/dump
+        #endif
         }
 
         nprinted += klog_write_char(*p);
@@ -326,13 +319,23 @@ int vkprint(const char *fmt, va_list args)
         }
     }
 
-    if (recursion_bug)
-        goto kprint_done;
+    // write log message to consoles
+    cons = g_consoles;
+    while (cons) {
+        if (cons->flags & _CONSOLE_FLAG_KLOG) {
+            klog_write_to_console(cons, log_ptr, nprinted);
+        }
+        cons = cons->next;
+    }
 
-#if ENABLE_E9HACK_CONSOLE
+    // deal with early console registrations;
+    //   register_console will dump current klog if _CONSOLE_FLAG_KLOG set
+#if E9_HACK && ENABLE_E9HACK_CONSOLE
     static bool e9_console_registered = false;
     if (!e9_console_registered) {
-        register_console(&e9_console);
+        if (!register_console(&e9_console)) {
+            panic("failed to register e9_console!\n");
+        }
         e9_console_registered = true;
     }
 #endif
@@ -342,22 +345,20 @@ int vkprint(const char *fmt, va_list args)
     if (!early_cons_registered) {
   #if ENABLE_VT_CONSOLE
         extern struct console vt_console;       // see char/terminal.c
-        register_console(&vt_console);
+        if (!register_console(&vt_console)) {
+            panic("failed to register vt_console!\n");
+        }
   #elif ENABLE_SERIAL_CONSOLE
         extern struct console serial_console;   // see char/serial.c
-        register_console(&serial_console);
+        if (!register_console(&serial_console)) {
+            panic("failed to register serial_console!\n");
+        }
   #else
     #error "config: no console enabled for early print!"
   #endif
         early_cons_registered = true;
     }
 #endif
-
-    cons = g_consoles;
-    while (cons) {
-        klog_write_to_console(cons, log_ptr, nprinted);
-        cons = cons->next;
-    }
 
 kprint_done:
     in_kprint = false;
@@ -374,40 +375,6 @@ int kprint(const char *fmt, ...)
     va_end(args);
 
     return count;
-}
-
-__noreturn void panic(const char *fmt, ...)
-{
-    char buf[BUFSIZ];
-    va_list args;
-
-    va_start(args, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
-
-    pr_fatal(KLOG_FATAL "panic: %s", buf);
-
-    irq_disable();
-    irq_setmask(IRQ_MASKALL);
-#if SERIAL_DEBUGGING
-    if (SERIAL_DEBUG_PORT == COM1_PORT || SERIAL_DEBUG_PORT == COM3_PORT) {
-        irq_unmask(IRQ_COM1);
-    }
-    else {
-        irq_unmask(IRQ_COM2);
-    }
-#endif
-    irq_unmask(IRQ_TIMER);
-    if (kb_initialized()) {
-        irq_unmask(IRQ_KEYBOARD);
-    }
-    irq_enable();
-
-#if SERIAL_DEBUGGING
-    __int3();
-#else
-    for (;;);
-#endif
 }
 
 bool register_console(struct console *cons)
@@ -443,9 +410,9 @@ bool register_console(struct console *cons)
     success = cons->init(cons);
     cons->next = NULL;
 
-    if (cons->flags & CONSOLE_FLAG_PRINTBUF) {
+    if (cons->flags & _CONSOLE_FLAG_KLOG) {
         // flush entire log to console
-        klog_write_to_console(cons, _klog_tail, _klog_count);
+        klog_write_to_console(cons, 0, ring_count(&klog_ring));
     }
 
 registered:
