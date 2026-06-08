@@ -204,6 +204,7 @@ void gdb_main(struct gdb_state *state, struct iregs *regs, int signum)
     // disable debug COM interrupts
     com_out(state->com, UART_IER, 0);
 
+    len = 0;
     while (status != EOF) {
         status = gdb_recv_packet(state, pkt, sizeof(pkt), &len);
         if (status == EOF) {
