@@ -40,6 +40,9 @@
 #include <kernel/irq.h>
 #include <kernel/terminal.h>
 
+#define pr_fmt(fmt)     "ps2-kb: " fmt
+#include <kernel/kprint.h>
+
 #define CHATTY_KB       1       // print extra debug messages
 #define PRINT_EVENTS    0       // print key events
 #define SELFTEST        0       // perform keyboard self-test
@@ -60,8 +63,8 @@ struct kb {
 
     bool initialized  : 1;
     bool typematic    : 1;  // supports auto-repeat
-    bool supports_sc2 : 1;  // can do scancode set 2
-    bool supports_sc3 : 1;  // can do scancode set 3
+    bool supports_set2: 1;  // can do scancode set 2
+    bool supports_set3: 1;  // can do scancode set 3
 
     bool in_interrupt : 1;  // currently handling a keyboard interrupt
 
@@ -252,7 +255,7 @@ __init void init_kb(void)
     if (!kb_scset(SCANSET)) {
         // if somehow that failed... turn translation
         // on so we are guaranteed to be using set 1
-        pr_warn("ps2kb: switch to scan set %d failed! falling back to set 1... (very old keyboard?)\n", SCANSET);
+        pr_warn("switch to scan set %d failed! falling back to set 1... (very old keyboard?)\n", SCANSET);
         ps2cfg |= PS2_CFG_TRANSLATE;
         ps2_cmd(PS2_CMD_WRCFG);
         ps2_write(ps2cfg);
@@ -271,21 +274,21 @@ __init void init_kb(void)
     irq_register(IRQ_KEYBOARD, kb_interrupt);
     irq_unmask(IRQ_KEYBOARD);
 
-#if CHATTY_KB
-    #define YN(cond)    A_OR_B(cond, "yes","no")
-    #define ONOFF(cond) A_OR_B(cond, "on", "off")
-    kprint("ps2kb: ident=%02Xh,%02Xh translation=%s\n",
-        g_kb->ident[0], g_kb->ident[1], ONOFF(ps2cfg & PS2_CFG_TRANSLATE));
-    kprint("ps2kb: leds=%02Xh typematic=%02Xh\n",
-        g_kb->leds, g_kb->typematic_byte);
-    kprint("ps2kb: scan_mode=%d supports_sc2=%s supports_sc3=%s\n",
-        g_kb->scan_mode,  YN(g_kb->supports_sc2), YN(g_kb->supports_sc3));
-#endif
-
-    pr_info("ps2kb: %s keyboard detected\n",
+    pr_info("%s keyboard detected\n",
         (g_kb->scan_mode) == 1 ? "AT" :
         (g_kb->scan_mode) == 2 ? "XT" :
         (g_kb->scan_mode) == 3 ? "WIN" : "???");
+
+#if CHATTY_KB
+    #define YN(cond)    A_OR_B(cond, "yes","no")
+    #define ONOFF(cond) A_OR_B(cond, "on", "off")
+    pr_info("ident=%02Xh,%02Xh translation=%s\n",
+        g_kb->ident[0], g_kb->ident[1], ONOFF(ps2cfg & PS2_CFG_TRANSLATE));
+    pr_info("led_state=%02Xh typematic_byte=%02Xh\n",
+        g_kb->leds, g_kb->typematic_byte);
+    pr_info("scan_mode=%d supports_set2=%s supports_set3=%s\n",
+        g_kb->scan_mode, YN(g_kb->supports_set2), YN(g_kb->supports_set3));
+#endif
 
     g_kb->enable_tty = true;
     g_kb->enable_sysrq = true;
@@ -300,7 +303,7 @@ static void kb_putq(char c)
     struct tty *tty = get_terminal(0)->tty;
     if (tty) {
         if (!tty->ldisc.recv) {
-            pr_alert("ps2kb: no input receiver!");
+            pr_alert("kb_putq: no input receiver!");
             if (isprint(c)) {
                 pr_cont(" got '%c' (#%x)\n", c, c);
             }
@@ -345,10 +348,10 @@ static void kb_interrupt(int irq, struct iregs *regs)
     status = ps2_status();
 #if CHATTY_KB
     if (status & PS2_STATUS_TIMEOUT) {
-        kprint("ps2kb: timeout error\n");
+        pr_alert("kb_interrupt: timeout error\n");
     }
     if (status & PS2_STATUS_PARITY) {
-        kprint("ps2kb: parity error\n");
+        pr_alert("kb_interrupt: parity error\n");
     }
 #endif
     (void) status;
@@ -361,7 +364,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
         case 0xFA:
             g_kb->ack_count++;
             if ((g_kb->ack_count % WARN_INTERVAL) == 0) {
-                pr_alert("ps2kb: seen %llu stray acks\n", g_kb->ack_count);
+                pr_alert("seen %llu stray acks\n", g_kb->ack_count);
             }
             // TODO: panic after some amount...?
             goto done;
@@ -369,24 +372,24 @@ static void kb_interrupt(int irq, struct iregs *regs)
         case 0xFE:
             g_kb->resend_count++;
             if ((g_kb->resend_count % WARN_INTERVAL) == 0) {
-                pr_alert("ps2kb: seen %llu stray resend requests\n", g_kb->resend_count);
+                pr_alert("seen %llu stray resend requests\n", g_kb->resend_count);
             }
             goto done;
 
         case 0xFC: __fallthrough;   // self-test failed
         case 0xFD:                  // self-test failed
             g_kb->selftest_errors++;
-            pr_alert("ps2kb: self-test returned 0x%X\n", sc);
+            pr_warn("self-test returned 0x%X\n", sc);
             goto done;
 
         case 0xFF: __fallthrough;   // error
         case 0x00:                  // error
             g_kb->error_count++;
             if (g_kb->error_count == 1) {
-                pr_alert("ps2kb: got error 0x%X\n", sc);
+                pr_alert("kb_interrupt: got error 0x%X\n", sc);
             }
             if ((g_kb->error_count % WARN_INTERVAL) == 0) {
-                pr_alert("ps2kb: seen %llu errors\n", g_kb->error_count);
+                pr_alert("kb_interrupt: seen %llu keyboard errors\n", g_kb->error_count);
             }
             goto done;
     }
@@ -647,13 +650,11 @@ record_key_event:
     // TODO: add to event queue
 
 #if PRINT_EVENTS
-    kprint("ps2kb: ");
-    kprint("%-8s  ", (release) ? "release" : "press");
-    kprint("%c  ", isprint(c) ? c : ' ');
-    kprint("% 4.2x ", key);
-    kprint("% 4.2x ", sc);
-    kprint("  %s", g_keynames[key]);
-    kprint("\n");
+    pr_debug("%-8s  ", (release) ? "release" : "press");
+    pr_cont("%c  ", isprint(c) ? c : ' ');
+    pr_cont("% 4.2x ", key);
+    pr_cont("% 4.2x ", sc);
+    pr_cont("  %s\n", g_keynames[key]);
 #endif
 
 done:   // re-enable keyboard interrupts from controller
@@ -707,13 +708,13 @@ static bool kb_selftest(void)
         }
         else if (data == 0xFC || data == 0xFD) {
 #if CHATTY_KB
-            kprint("ps2kb: self-test failed!\n");
+            pr_warn("self-test failed!\n");
 #endif
             return false;
         }
         else {
 #if CHATTY_KB
-            kprint("ps2kb: self-test failed! (got 0x%X)\n", data);
+            pr_warn("self-test failed! (got 0x%X)\n", data);
 #endif
             return false;
         }
@@ -724,7 +725,7 @@ static bool kb_selftest(void)
         // but the result byte never comes... not sure why this is, let's
         // consider it a command support bug and thus vacuous
 #if CHATTY_KB
-        kprint("ps2kb: self-test did not respond!\n");
+        pr_warn("self-test did not respond!\n");
 #endif
         return true;
     }
@@ -853,17 +854,17 @@ static bool kb_sendcmd(uint8_t cmd)
         }
 #if CHATTY_KB
         if (resp != 0) {
-            kprint("ps2kb: cmd 0x%X returned 0x%X, trying again...\n", cmd, resp);
+            pr_warn("kb_sendcmd: cmd 0x%X returned 0x%X, trying again...\n", cmd, resp);
         }
 #endif
     } while (resp != 0 && retries);
 
 #if CHATTY_KB
     if (!retries) {
-        kprint("ps2kb: cmd 0x%X timed out after %d retries!\n", cmd, RETRY_COUNT);
+        pr_warn("kb_sendcmd: cmd 0x%X timed out after %d retries!\n", cmd, RETRY_COUNT);
     }
     else if (resp == 0) {
-        kprint("ps2kb: cmd 0x%X not supported\n", cmd);
+        pr_warn("kb_sendcmd: cmd 0x%X not supported\n", cmd);
     }
 #endif
 
@@ -891,10 +892,10 @@ static uint8_t kb_rdport(void)
 
 #if CHATTY_KB
     if (status & PS2_STATUS_TIMEOUT) {
-        kprint("ps2kb: timeout error\n");
+        pr_warn("kb_rdport: timeout error\n");
     }
     if (status & PS2_STATUS_PARITY) {
-        kprint("ps2kb: parity error\n");
+        pr_warn("kb_rdport: parity error\n");
     }
 #endif
 
@@ -907,7 +908,7 @@ static uint8_t kb_rdport(void)
     switch (data) {
         case 0xFF:
 #if CHATTY_KB
-            kprint("ps2kb: kb_rdport: inb 0x%X\n", data);
+            pr_warn("kb_rdport: inb 0x%X\n", data);
 #endif
             g_kb->error_count++;
              __fallthrough;
@@ -941,16 +942,16 @@ static void kb_wrport(uint8_t data)
 
 #if CHATTY_KB
     if (status & PS2_STATUS_TIMEOUT) {
-        kprint("ps2kb: timeout error\n");
+        pr_warn("kb_wrport: timeout error\n");
     }
     if (status & PS2_STATUS_PARITY) {
-        kprint("ps2kb: parity error\n");
+        pr_warn("kb_wrport: parity error\n");
     }
 #endif
 
     if (count >= PS2_IO_TIMEOUT) {
 #if CHATTY_KB
-        panic("ps2kb: timed out waiting for write\n");
+        pr_alert("kb_wrport: timed out waiting for write\n");
 #endif
     }
     else {

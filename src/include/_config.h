@@ -44,7 +44,7 @@
 #define HIGHER_GROUND           1   // (bool) map kernel in high virtual address space
 
 // general printing
-#define PRINT_LOGO              0   // (bool) show a special logo at boot
+#define PRINT_LOGO              1   // (bool) show a special logo at boot
 #define PRINT_PAGE_MAP          0   // (bool) show initial page table mappings
 #define PRINT_IOCTL             1   // (bool) show ioctl calls
 #define SHOW_CRASH_SCREEN       1   // (bool) display blue screen of death upon crash
@@ -52,7 +52,8 @@
 // kernel log
 #define KERNEL_LOG_SIZE         (32*PAGE_SIZE)
 #define KPRINT_TIME             1   // (bool) show timestamp in kernel log messages
-#define DEFAULT_LOG_LEVEL       5   // (0-5)  default console log level
+#define KPRINT_COLOR            1   // (bool) print a colorful kernel log
+#define DEFAULT_LOG_LEVEL       5   // (0-5)  default console log level (4=INFO)
 
 // virtual terminal (VGA)
 #define DEFAULT_VT              1   // (1-NR_TERMINAL) initial virtual terminal activated

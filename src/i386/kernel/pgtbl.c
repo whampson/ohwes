@@ -105,13 +105,13 @@ void update_page_mappings(uintptr_t va, uintptr_t pa, size_t count, pgflags_t fl
 
     size_t size_bytes = (count << PAGE_SHIFT);
     if (unmap) {
-        kprint("mem: unmap p:%p-%p " VT_BOLD VT_YELLOW "(TODO: ZONE!!)" VT_UNBOLD VT_DEFAULT " v:%p-%p size_pages=%zd flags=%02lXh\n",
+        pr_info("mem: unmap p:%p-%p (TODO: ZONE!!) v:%p-%p size_pages=%zd flags=%02lXh\n",
             _P(base_pa), _P(base_pa+size_bytes-1),
             _P(base_va), _P(base_va+size_bytes-1),
             count, flags);
     }
     else {
-        kprint("mem: map p:%p-%p " VT_BOLD VT_YELLOW "(TODO: ZONE!!)" VT_UNBOLD VT_DEFAULT " v:%p-%p size_pages=%zd flags=%02lXh\n",
+        pr_info("mem: map p:%p-%p (TODO: ZONE!!) v:%p-%p size_pages=%zd flags=%02lXh\n",
             _P(base_pa), _P(base_pa+size_bytes-1),
             _P(base_va), _P(base_va+size_bytes-1),
             count, flags);

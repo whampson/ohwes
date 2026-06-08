@@ -35,6 +35,7 @@
 #include <i386/syscall.h>
 #include <i386/x86.h>
 #include <kernel/kernel.h>
+#include <kernel/kprint.h>
 #include <kernel/io.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
@@ -53,6 +54,7 @@ extern __init void init_fs(void);
 extern __init void init_tty(void);
 
 static __init void print_boot_info(void);
+static __init void print_cpu_info(void);
 static __init void print_kernel_image_sections(void);
 static __init void print_page_mappings(void);
 
@@ -72,23 +74,29 @@ __fastcall __init __noreturn void kmain(struct boot_info **info)
     g_boot = *info; // copy boot info pointer kernel memory
                     // TODO: validate that this ptr isn't bogus
 
-    pr_info("%s %s (gcc %s) %s %s\n", OS_NAME, OS_VERSION, __VERSION__, __DATE__, __TIME__);
-    pr_info("%s\n", OS_COPYRIGHT);  // printing will lazy-initialize terminal
-
+#if PRINT_LOGO
+    pr_info(ANSI_BOLD "  ____  __ __   _      __________");
+    pr_info(ANSI_BOLD " / __ \\/ // /__| | /| / / __/ __/");
+    pr_info(ANSI_BOLD "/ /_/ / _  /___/ |/ |/ / _/_\\ \\  ");
+    pr_info(ANSI_BOLD "\\____/_//_/    |__/|__/___/___/  ");
+#endif
+    pr_info(ANSI_BOLD "%s %s (gcc %s) %s %s\n", OS_NAME, OS_VERSION, __VERSION__, __DATE__, __TIME__);
+    pr_info(ANSI_BOLD "%s\n", OS_COPYRIGHT);  // printing will lazy-initialize terminal
     print_boot_info();
-    print_kernel_image_sections();
-    // print_page_mappings();
+    print_cpu_info();
 
     init_mm();
     init_io();
     init_fs();
     init_tty();
 
+    panic("Ah shit, here we go again!");
+
 // #if TEST_BUILD
 //     run_tests(); // TODO lol
 // #endif
 
-    pr_info("boot: switching to ring 3...\n");
+    pr_info("switching to ring 3...\n");
     go_to_ring3(init, __ustack_end);    // TODO: declare user stack in high memory
     for (;;);
 
@@ -143,56 +151,29 @@ static __init void print_boot_info(void)
         pr_info("bios-boot: EBDA=%08lX,%lXh\n",
             g_boot->ebda_base, EBDA_TOP - g_boot->ebda_base);
     }
-    pr_info("bios-boot: kernel uses %lu bytes (%ld sectors) on disk\n",
-        g_boot->kernel_size, div_ceil(g_boot->kernel_size, 512));
 
     #undef FMT_PL
     #undef FMT_PL2
+}
 
-    int total_mem_kilobytes = 0;
-    int free_mem_kilobytes = 0;
-    int bad_mem_kilobytes = 0;
-    int free_pages = 0;
-    const struct acpi_mmap_entry *e;
+static __init void print_cpu_info(void)
+{
+    struct cpuid cpuid;
+    get_cpu_info(&cpuid);
 
-    // tally up the amount of usable RAM
-    pr_info("bios-boot: physical memory map:\n");
-    for (e = (const struct acpi_mmap_entry *) KERNEL_ADDR(g_boot->mem_map); mmap_valid(e); e++) {
-        size_t size_kb = (e->length) >> KB_SHIFT;
-        char size_char = 'k';
-        size_t disp_size = size_kb;
-        if (disp_size >= 1024) {
-            size_char = 'M';
-            disp_size = div_ceil(disp_size, 1024);
-        }
-        uintptr_t base = (uintptr_t) e->base;
-        uintptr_t limit = (uintptr_t) (e->base + e->length - 1);
-        pr_cont("bios-boot:   [%p-%p] %5lu%c %s",
-            _P(base), _P(limit),
-            disp_size, size_char,
-            mmap_bad(e)     ? "*** BAD ***" :
-            mmap_acpi(e)    ? "ACPI" :
-            mmap_usable(e)  ? "free" : "reserved");
-        if (e->attr) {
-            pr_cont(" (attr = 0x%lX)", e->attr);
-        }
-        pr_cont("\n");
+    #define YN(cond)    A_OR_B(cond, "yes","no")
 
-        total_mem_kilobytes += size_kb;
-        if (mmap_bad(e)) {
-            bad_mem_kilobytes += size_kb;
-        }
-        if (mmap_usable(e)) {
-            free_mem_kilobytes += size_kb;
-        }
-    }
+    pr_info("%s: family=%02Xh model=%02Xh stepping=%02Xh type=%02Xh\n",
+        cpuid.vendor_id, cpuid.family, cpuid.model, cpuid.stepping, cpuid.type);
+    pr_info("%s\n", cpuid.brand_name);
+    pr_info("  on-chip FPU? %s\n", YN(cpuid.fpu_support));
+    pr_info("  large pages? %s\n", YN(cpuid.pse_support));
+    pr_info(" global pages? %s\n", YN(cpuid.pge_support));
+    // pr_info("  PAT support? %s\n", YN(cpuid.pat_support));
+    pr_info("  TSC support? %s\n", YN(cpuid.tsc_support));
+    pr_info("  MSR support? %s\n", YN(cpuid.msr_support));
 
-    free_pages = (free_mem_kilobytes >> (PAGE_SHIFT - KB_SHIFT));
-    kprint("bios-boot: %dk total, %dk usable\n", total_mem_kilobytes, free_mem_kilobytes);
-    kprint("bios-boot: %d usable pages\n", free_pages);
-    if (bad_mem_kilobytes > 0) {
-        pr_warn("bios-boot: found %dk of bad memory!\n", bad_mem_kilobytes);
-    }
+    #undef YN
 }
 
 static __init void print_kernel_image_sections(void)
@@ -221,16 +202,16 @@ static __init void print_kernel_image_sections(void)
         { ".estack",        __estack_start,     __estack_end },
     };
 
-    pr_info("mem-init: kernel image mappings:\n");
+    pr_info("kernel image mappings:\n");
     for (int i = 0; i < countof(sections); i++) {
         struct section *sec = &sections[i];
         size_t sec_size = (sec->end - sec->start);
-        pr_info("mem-init:   [%p-%p] %6lu %s\n",
+        pr_info("  [%p-%p] %6lu %s\n",
             _P(KERNEL_ADDR(sec->start)), _P(KERNEL_ADDR(sec->end)-1),
             sec_size, sec->name);
     }
 
-    pr_info("mem-init: kernel occupies %ldk (%ld pages) of static memory\n",
+    pr_info("kernel occupies %ldk (%ld pages) of static memory\n",
         align(__kernel_size, KB) >> KB_SHIFT,
         PAGE_ALIGN(__kernel_size) >> PAGE_SHIFT);
 }

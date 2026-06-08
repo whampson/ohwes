@@ -76,75 +76,106 @@ __init void init_mm(void)
     init_phys_mmap();
     check_memory();     // make sure we have enough!
     init_zones();
+
+    // TODO: mark 0000-ffff reserved
+    // TODO: mark VGA memory reserved
+}
+
+static void print_mmap_entry(const struct acpi_mmap_entry *e)
+{
+    size_t disp_size;
+    char size_char;
+    uintptr_t base, limit;
+
+    size_char = 'k';
+    disp_size = (e->length) >> KB_SHIFT;
+    if (disp_size >= 1024) {
+        size_char = 'M';
+        disp_size = div_ceil(disp_size, 1024);
+    }
+
+    base = (uintptr_t) e->base;
+    limit = (uintptr_t) (e->base + e->length - 1);
+    pr_cont("  [%p-%p] %5lu%c %s",
+        _P(base), _P(limit),
+        disp_size, size_char,
+        mmap_bad(e)     ? "*** BAD ***" :
+        mmap_acpi(e)    ? "ACPI" :
+        mmap_usable(e)  ? "usable" : "reserved");
+    if (e->attr) {
+        pr_cont(" (attr = 0x%lX)", e->attr);
+    }
+    pr_cont("\n");
 }
 
 static __init void init_phys_mmap(void)
 {
-    int i;
-    const struct acpi_mmap_entry *e;
+    ;
+    void *bios_mem_map = g_boot->mem_map;
 
-    if (!g_boot->mem_map) {
-        pr_warn("bios-e820: memory map not available\n");
-        init_phys_mmap_legacy();
-        return;
-    }
-
-    e = (const struct acpi_mmap_entry *) KERNEL_ADDR(g_boot->mem_map);
-    for (i = 0; i < countof(_phys_mmap) && mmap_valid(e); i++, e++) {
-        _phys_mmap[i] = *e;
-    }
-
-    if (i >= countof(_phys_mmap)) {
-        panic("too many entries for physical memory map table!\n");
-    }
-}
-
-static __init void init_phys_mmap_legacy(void)
-{
-    int kb_free_low;    //   0 - 640K
-    int kb_free_1M;     //  1M - 16M
-    int kb_free_16M;    // 16M - 4G
-    struct acpi_mmap_entry *map;
-
-    map = _phys_mmap;
-
-    kb_free_low = g_boot->kb_low;
-    if (g_boot->kb_high_e801h != 0) {
-        kb_free_1M = g_boot->kb_high_e801h;
-        kb_free_16M = (g_boot->kb_extended << 6);
+    if (bios_mem_map) {
+        pr_info("INT-15h,AX=E820h memory map found at %p\n", bios_mem_map);
+        memcpy(_phys_mmap, KERNEL_ADDR(bios_mem_map), sizeof(_phys_mmap));
+        if (_phys_mmap[countof(_phys_mmap) - 1].type != 0) {
+            pr_alert("kernel buffer memory map buffer too small - truncating at %zu entries!\n", countof(_phys_mmap));
+        }
     }
     else {
-        pr_warn("bios-e801: memory map not available\n");
-        kb_free_1M = g_boot->kb_high;
-        kb_free_16M = 0;
+        // ---------- legacy init (386) ----------
+        int kb_free_low = 0;    //   0 - 640K
+        int kb_free_1M = 0;     //  1M - 16M
+        int kb_free_16M = 0;    // 16M - 4G
+
+        kb_free_low = g_boot->kb_low;
+        if (g_boot->kb_high_e801h != 0) {
+            kb_free_1M = g_boot->kb_high_e801h;
+            kb_free_16M = (g_boot->kb_extended << 6);
+        }
+        else {
+            pr_warn("INT-15h,AX=E801h memory map not available!");
+        }
+        if (g_boot->kb_high) {
+            kb_free_1M = g_boot->kb_high;
+            kb_free_16M = 0;
+        }
+        else {
+            pr_warn("INT-15h,AX=88h memory map not available!");
+        }
+
+    #define init_mmap_entry(entry, bas,len,typ) \
+        (entry)->base = (bas); \
+        (entry)->length = (len); \
+        (entry)->type = (typ); \
+        (entry)->attr = 0
+
+        struct acpi_mmap_entry *map = _phys_mmap;
+        if (kb_free_low) {
+            init_mmap_entry(map, 0, (kb_free_low << 10), ACPI_MMAP_TYPE_USABLE);
+            map++;
+        }
+        if (kb_free_1M) {
+            init_mmap_entry(map, (1 * MB), (kb_free_1M << 10), ACPI_MMAP_TYPE_USABLE);
+            map++;
+        }
+        if (kb_free_16M) {
+            init_mmap_entry(map, (16 * MB), (kb_free_16M << 10), ACPI_MMAP_TYPE_USABLE);
+            map++;
+        }
+
+    #undef init_mmap_entry
     }
 
-    if (kb_free_low) {
-        map->base = 0;
-        map->length = (kb_free_low << 10);
-        map->type = ACPI_MMAP_TYPE_USABLE;
-        map->attr = 0;
-        map++;
-    }
-    if (kb_free_1M) {
-        map->base = (1 * MB);
-        map->length = (kb_free_1M << 10);
-        map->type = ACPI_MMAP_TYPE_USABLE;
-        map->attr = 0;
-        map++;
-    }
-    if (kb_free_16M) {
-        map->base = (16 * MB);
-        map->length = (kb_free_16M << 10);
-        map->type = ACPI_MMAP_TYPE_USABLE;
-        map->attr = 0;
-        map++;
+    pr_info("physical memory map:\n");
+    for (const struct acpi_mmap_entry *e = _phys_mmap; mmap_valid(e); e++) {
+        print_mmap_entry(e);
     }
 }
 
 static __init void check_memory(void)
 {
-    int free_mem_kilobytes = 0;
+    size_t total_mem_kilobytes = 0;
+    size_t free_mem_kilobytes = 0;
+    size_t bad_mem_kilobytes = 0;
     struct acpi_mmap_entry *e;
 
     // tally up the amount of usable RAM
@@ -153,12 +184,24 @@ static __init void check_memory(void)
         if (mmap_usable(e)) {
             free_mem_kilobytes += size_kb;
         }
+        if (mmap_bad(e)) {
+            bad_mem_kilobytes += size_kb;
+        }
+        total_mem_kilobytes += size_kb;
     }
 
     if (free_mem_kilobytes < (MEMORY_REQUIRED >> KB_SHIFT)) {
-        panic("not enough memory! " OS_NAME " needs least %dk to operate!",
+        panic("%zuk detected - not enough memory!\n" OS_NAME " needs least %uk to operate!",
+            free_mem_kilobytes,
             (MEMORY_REQUIRED >> KB_SHIFT));
     }
+
+    if (bad_mem_kilobytes > 0) {
+        pr_alert("found %zuk of bad memory!\n", bad_mem_kilobytes);
+    }
+
+    pr_info("detected %zuk total, %zuk usable\n",
+        total_mem_kilobytes, free_mem_kilobytes);
 }
 
 static __init void init_zones(void)
@@ -236,15 +279,16 @@ static __init void init_zones(void)
         }
     }
 
-    pr_info("mem-init: init zone %s mem_start=%p mem_end=%p mem_size_pages=%zd\n",
-        zone->name, _P(zone->mem_start), _P(zone->mem_end), zone->mem_size_pages);
-    pr_info("mem-init: init zone %s bitmap=%p size_pages=%ld\n",
-        zone->name, bitmap, bitmap_size_pages);
+    // TODO: get rid of zone->mem_size_pages, just calculate based on start/end
+
+    pr_info("mem: init %s phys %p-%p bitmap %p-%p\n",
+        zone->name, _P(zone->mem_start), _P(zone->mem_end),
+        bitmap, bitmap + (bitmap_size_pages << PAGE_SHIFT) - 1);
 
     // ensure pages are mapped to speed up allocation time
     uintptr_t top = min((4*MB), zone->mem_end+1); // TODO: temp workaround for update_page_mappings 4M limit...
     size_t size_pages = (top - zone->mem_start) >> PAGE_SHIFT;
-    pr_warn("mem-init: only mappings up to 4M supported until multiple PDEs implemented!\n");
+    pr_warn("mem: RAM limited to 4M until multiple PDEs implemented!\n");
     pgflags_t flags = _PAGE_RW | _PAGE_PRESENT;
     update_page_mappings((uintptr_t) KERNEL_ADDR(zone->mem_start), zone->mem_start, size_pages, flags);
 

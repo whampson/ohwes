@@ -29,6 +29,7 @@
 #include <i386/io.h>
 #include <i386/ps2.h>
 #include <kernel/kernel.h>
+#include <kernel/kprint.h>
 
 static void wait_for_read(void);
 static void wait_for_write(void);
@@ -36,7 +37,7 @@ static void wait_for_write(void);
 __init void init_ps2(void)
 {
     uint8_t cfg, resp;
-    bool port2;
+    bool port1, port2;
 
     //
     // disable ports and flush output buffer
@@ -46,6 +47,17 @@ __init void init_ps2(void)
     ps2_flush();
 
     //
+    // test for the existence of port 1
+    //
+    ps2_cmd(PS2_CMD_P1ON);
+    ps2_cmd(PS2_CMD_RDCFG);
+    cfg = ps2_read();
+    port1 = !(cfg & PS2_CFG_P1CLKOFF);
+    if (port1) {
+        pr_info("detected PS/2 keyboard\n");
+    }
+
+    //
     // test for the existence of port 2
     //
     ps2_cmd(PS2_CMD_P2ON);
@@ -53,7 +65,7 @@ __init void init_ps2(void)
     cfg = ps2_read();
     port2 = !(cfg & PS2_CFG_P2CLKOFF);
     if (port2) {
-        kprint("ps2: PS/2 mouse detected\n");
+        pr_info("detected PS/2 mouse\n");
     }
 
     //
@@ -62,20 +74,20 @@ __init void init_ps2(void)
     ps2_cmd(PS2_CMD_TEST);
     resp = ps2_read();
     if (resp != PS2_RESP_PASS) {
-        panic("PS/2 controller self-test failed!");
+        pr_error("PS/2 controller self-test failed!");
     }
 
     ps2_cmd(PS2_CMD_P1TEST);
     resp = ps2_read();
     if (resp != PS2_RESP_PASS && resp != PS2_RESP_P1PASS) {
-        panic("PS/2 controller port 1 self-test failed!");
+        pr_error("PS/2 controller port 1 self-test failed!");
     }
 
     if (port2) {
         ps2_cmd(PS2_CMD_P2TEST);
         resp = ps2_read();
         if (resp != PS2_RESP_PASS && resp != PS2_RESP_P2PASS) {
-            panic("PS/2 controller port 2 self-test failed!");
+            pr_error("PS/2 controller port 2 self-test failed!");
         }
         ps2_cmd(PS2_CMD_P2OFF);
     }
@@ -93,10 +105,8 @@ __init void init_ps2(void)
     //
     // enable PS/2 ports
     //
-    ps2_cmd(PS2_CMD_P1ON);
-    if (port2) {
-        ps2_cmd(PS2_CMD_P2ON);
-    }
+    ps2_cmd(port1 ? PS2_CMD_P1ON : PS2_CMD_P1OFF);
+    ps2_cmd(port2 ? PS2_CMD_P2ON : PS2_CMD_P2OFF);
     ps2_flush();
 }
 

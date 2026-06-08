@@ -21,6 +21,7 @@
 
 #include <ctype.h>
 #include <kernel/kernel.h>
+#include <kernel/kprint.h>
 #include <kernel/mm.h>
 #include <kernel/pool.h>
 #include <sys/ohwes.h>
@@ -172,7 +173,7 @@ pool_t * pool_create(const char *name, size_t capacity, size_t size, int flags)
         list_push(&p->free_list, &chunk->list);
     }
 
-    kprint("pool: created pool '%s' size_pages=%zd capacity=%zd item_size=%zd flags=%Xh\n",
+    kprint("pool: '%s' created size_pages=%zd capacity=%zd item_size=%zd flags=%Xh\n",
         name, get_order_size(p->order) >> PAGE_SHIFT, capacity, size, flags);
     return p;
 }
@@ -211,7 +212,7 @@ void pool_destroy(pool_t *pool)
     g_poolinfo->count--;
     assert(g_poolinfo->count >= 0);
 
-    kprint("pool: destroyed pool '%s'\n", name);
+    kprint("pool: '%s' destroyed\n", name);
 }
 
 void * pool_alloc(pool_t *pool, int flags)
