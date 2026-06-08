@@ -39,6 +39,7 @@
 #include <i386/io.h>
 #include <kernel/console.h>
 #include <kernel/kernel.h>
+#include <kernel/kprint.h>
 #include <kernel/io.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>

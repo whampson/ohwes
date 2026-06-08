@@ -26,6 +26,7 @@
 #include <i386/io.h>
 #include <i386/x86.h>
 #include <kernel/kernel.h>
+#include <kernel/kprint.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
 #include <kernel/rtc.h>

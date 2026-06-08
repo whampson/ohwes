@@ -29,6 +29,7 @@
 #include <i386/paging.h>
 #include <i386/x86.h>
 #include <kernel/kernel.h>
+#include <kernel/kprint.h>
 #include <kernel/char.h>
 #include <kernel/console.h>
 #include <kernel/irq.h>
@@ -333,7 +334,7 @@ __init void init_terminal_driver(void)
     vga_get_fb_info(&fb_info);
     get_terminal(DEFAULT_VT)->framebuf = KERNEL_ADDR(fb_info.framebuf);
 
-    pr_info("vga-term: VGA frame buffer switched to %p\n", KERNEL_ADDR(fb_info.framebuf));
+    pr_info("VGA frame buffer switched to %p\n", KERNEL_ADDR(fb_info.framebuf));
 
     // make sure we have enough memory for the configured number of terminals
     if (fb_info.size_pages - FB_SIZE_PAGES < NR_TERMINAL * FB_SIZE_PAGES) {

@@ -42,7 +42,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <kernel/console.h>
-#include <kernel/kprint.h>
 #include <sys/ohwes.h>
 
 #define __init  // TODO: put in special .init section or something

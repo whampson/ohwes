@@ -26,6 +26,7 @@
 #include <kernel/list.h>
 #include <kernel/pool.h>
 #include <kernel/serial.h>
+#include <kernel/kprint.h>
 
 #ifdef DEBUG
 extern void crash_key_irq(int irq, struct iregs *regs);

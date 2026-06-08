@@ -23,6 +23,7 @@
 #include <ring.h>
 #include <i386/boot.h>
 #include <kernel/kernel.h>
+#include <kernel/kprint.h>
 #include <kernel/char.h>
 #include <kernel/fs.h>
 #include <kernel/ioctls.h>
