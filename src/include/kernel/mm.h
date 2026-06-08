@@ -43,11 +43,11 @@ enum zone_type {
 bool virt_addr_valid(void *va);
 
 // walk the page table and return the PTE pointed to by the virtual address
-bool walk_page_table(uint32_t va, pte_t **pte);
+bool walk_page_table(uintptr_t va, pte_t **pte);
 
 // update a range of contiguous page mappings with the specified attributes,
 //   flags set to 0 will clear the mapping
-void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flags);
+void update_page_mappings(uintptr_t va, uintptr_t pa, size_t count, pgflags_t flags);
 
 // allocate physical page frames;
 //  uses a buddy allocator

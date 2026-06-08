@@ -30,6 +30,7 @@
 #include <i386/cpu.h>
 #include <i386/paging.h>
 #include <kernel/kernel.h>
+#include <kernel/kprint.h>
 #include <kernel/list.h>
 #include <kernel/mm.h>
 #include <kernel/pool.h>
@@ -245,7 +246,7 @@ static __init void init_zones(void)
     size_t size_pages = (top - zone->mem_start) >> PAGE_SHIFT;
     pr_warn("mem-init: only mappings up to 4M supported until multiple PDEs implemented!\n");
     pgflags_t flags = _PAGE_RW | _PAGE_PRESENT;
-    update_page_mappings(KERNEL_ADDR(zone->mem_start), zone->mem_start, size_pages, flags);
+    update_page_mappings((uintptr_t) KERNEL_ADDR(zone->mem_start), zone->mem_start, size_pages, flags);
 
     // TODO: could calculate how many page tables are needed to alloc all of
     // "Normal" memory, then stuff them before the bitmap too...

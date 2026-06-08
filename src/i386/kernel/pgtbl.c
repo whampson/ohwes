@@ -36,7 +36,7 @@ bool virt_addr_valid(void *va)
     return pte_present(*pte);
 }
 
-bool walk_page_table(uint32_t va, pte_t **pte)
+bool walk_page_table(uintptr_t va, pte_t **pte)
 {
     pde_t *pgdir;
     pde_t *pde;
@@ -55,7 +55,7 @@ bool walk_page_table(uint32_t va, pte_t **pte)
     return true;
 }
 
-void update_page_mappings(uint32_t va, uint32_t pa, size_t count, pgflags_t flags)
+void update_page_mappings(uintptr_t va, uintptr_t pa, size_t count, pgflags_t flags)
 {
     pde_t *pgdir;
     pde_t *pde;
