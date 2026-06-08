@@ -28,6 +28,7 @@
 #include <i386/interrupt.h>
 #include <i386/x86.h>
 #include <kernel/kernel.h>
+#include <kernel/kprint.h>
 #include <kernel/console.h>
 #include <kernel/irq.h>
 #include <kernel/terminal.h>
@@ -35,18 +36,27 @@
 #include <kernel/vga.h>
 #include <sys/ohwes.h>
 
-#define CRASH_MSG_BUFSIZ    256
-#define CRASH_COLOR         ANSI_BLUE
-#define CRASH_MARGIN        5
-#define CRASH_SCALE         2
 
-#define MSG_FATAL_REBOOT    "The system cannot be recovered and must be restarted."
+// ESC[<x>m color code
+enum csi_color {
+    CSI_COLOR_BLACK   = 0,
+    CSI_COLOR_RED     = 1,
+    CSI_COLOR_GREEN   = 2,
+    CSI_COLOR_YELLOW  = 3,
+    CSI_COLOR_BLUE    = 4,
+    CSI_COLOR_MAGENTA = 5,
+    CSI_COLOR_CYAN    = 6,
+    CSI_COLOR_WHITE   = 7
+};
+
+#define CRASH_MSG_BUFSIZ    256
+#define CRASH_MARGIN        5
 
 // convenient ANSI escape sequence wrappers
-#define BOLD(s)             VT_BOLD s VT_UNBOLD
-#define ITALIC(s)           "\e[3m"      s "\e[23m"
-#define UNDERLINE(s)        "\e[4m"      s "\e[24m"
-#define RED(s)              VT_RED  s VT_DEFAULT
+#define BOLD(s)             ANSI_BOLD s ANSI_UNBOLD
+#define RED(s)              ANSI_RED  s ANSI_FG_DEFAULT
+
+#define MSG_FATAL_REBOOT    "The system cannot be recovered and must be restarted."
 
 // stack dump dimensions
 #define STACK_DUMP_ROWS     8
@@ -57,27 +67,28 @@ int g_test_crashkey;
 int g_test_soft_double_fault;
 #endif
 
-extern struct kb *g_kb;
 extern struct console *g_consoles;
 static const char *exception_names[NR_EXCEPTIONS];
 
 static int console_print(const char *fmt, ...) __format_printf(1, 2);
 static int vga_print(const char *fmt, ...) __format_printf(1, 2);
-static int klog_print(const char *fmt, ...) __format_printf(1, 2);
+static int vga_vprint(const char *fmt, va_list args);
 
 static void vga_print_centered(int maxwidth, const char *fmt, ...) __format_printf(2, 3);
 static void vga_print_wrapped(int margin, const char *fmt, ...) __format_printf(2, 3);
 
-typedef int (*dumpfn)(const char *fmt, ...) __format_printf(1, 2);
+extern __init void init_early_terminal(int num, struct terminal *term);
+
+typedef int (*dumpfn_t)(const char *fmt, ...) __format_printf(1, 2);
 
 // all the "dump" functions print a leading newline
-static void dump_cpu(struct cpu_state *cpu, dumpfn to);
-static void dump_gprs(struct iregs *regs, dumpfn to);
-static void dump_ctrl_regs(struct cpu_state *cpu, dumpfn to);
-static void dump_table_regs(struct cpu_state *cpu, dumpfn to);
-static void dump_segregs(struct cpu_state *cpu, dumpfn to);
-static void dump_stack(struct cpu_state *cpu, dumpfn to, int max_rows, int num_cols);
-static void dump_segsel(struct segsel *segsel, dumpfn to);
+static void dump_cpu(struct cpu_state *cpu, dumpfn_t to);
+static void dump_gprs(struct iregs *regs, dumpfn_t to);
+static void dump_ctrl_regs(struct cpu_state *cpu, dumpfn_t to);
+static void dump_table_regs(struct cpu_state *cpu, dumpfn_t to);
+static void dump_segregs(struct cpu_state *cpu, dumpfn_t to);
+static void dump_stack(struct cpu_state *cpu, dumpfn_t to, int max_rows, int num_cols);
+static void dump_segsel(struct segsel *segsel, dumpfn_t to);
 
 extern void terminal_initialize(int num, struct terminal *term);    // terminal.c
 
@@ -117,13 +128,13 @@ static void capture_cpu_state(struct cpu_state *state, struct iregs *iregs)
     __str(state->tr);
 }
 
-static __noreturn void die(const struct cpu_state *state)
+static __noreturn void die(int irq)
 {
     __cli();
     irq_setmask(IRQ_MASKALL);
 
-    bool has_kb = kb_avail() && state->iregs.vec != IRQ_KEYBOARD;
-    bool has_tm = state->iregs.vec != IRQ_TIMER;
+    bool has_kb = kb_avail() && irq != IRQ_KEYBOARD;
+    bool has_tm = irq != IRQ_TIMER;
 
     if (has_kb) {
         kb_enable_tty(false);
@@ -167,33 +178,34 @@ static __noreturn void show_crash_screen(
     const int MaxWidth = vga_get_cols();
     const int MaxHeight = vga_get_rows();
 
-    const int NumLinesRegs = 4;
-
     bool has_primary = (primary_text && *primary_text);
     bool has_secondary = (secondary_text && *secondary_text);
+    int banner_pos = max(4, (MaxHeight / 3));
 
     // clear screen
-    vga_print(VT_UNBOLD VT_DEFAULT);
-    vga_print("\e[4%dm\e[2J", color & 7);
+    vga_print(ANSI_UNBOLD ANSI_FG_DEFAULT); // default foreground
+    vga_print("\e[4%dm\e[2J", color & 7);   // paint background
 
     // dump regs
-    int stack_max_lines = (has_secondary) ? 5 : STACK_DUMP_ROWS;
-    int stack_lines = min(stack_max_lines, max((ptrdiff_t) ((cpu->iregs.ebp - cpu->iregs.esp) >> 2) / STACK_DUMP_ROWS, 0));
-    int reg_pos = NumLinesRegs + stack_lines;
+    if (cpu) {
+        int stack_max_lines = (has_secondary) ? 5 : STACK_DUMP_ROWS;
+        int stack_lines = min(stack_max_lines, max((ptrdiff_t) ((cpu->iregs.ebp - cpu->iregs.esp) >> 2) / STACK_DUMP_ROWS, 0));
+        int regs_pos = 4 + stack_lines;
 
-    vga_print("\e[999;999H\r\e[%dA", reg_pos);
-    dump_stack(cpu, vga_print, stack_max_lines, STACK_DUMP_COLS);
-    vga_print("\n");
-    dump_gprs(&cpu->iregs, vga_print);
-    dump_ctrl_regs(cpu, vga_print);
+        vga_print("\e[999;999H\r\e[%dA", regs_pos);
+        dump_stack(cpu, vga_print, stack_max_lines, STACK_DUMP_COLS);
+        vga_print("\n");
+        dump_gprs(&cpu->iregs, vga_print);
+        dump_ctrl_regs(cpu, vga_print);
 
-    int banner_pos = max(4,
-        (MaxHeight / 3) - stack_lines -
-        (STACK_DUMP_ROWS - stack_max_lines));
+        banner_pos = max(4,
+            (MaxHeight / 3) - stack_lines -
+            (STACK_DUMP_ROWS - stack_max_lines));
+    }
 
     // print banner
     vga_print("\e[%dH", banner_pos);
-    vga_print_centered(MaxWidth, VT_INVERT " %s " VT_UNINVERT, banner);
+    vga_print_centered(MaxWidth, ANSI_INVERT " %s " ANSI_UNINVERT, banner);
 
     // print messages
     if (has_primary) {
@@ -205,22 +217,26 @@ static __noreturn void show_crash_screen(
         vga_print_wrapped(margin, secondary_text);
     }
 
-    bool has_kb = kb_avail() && cpu->iregs.vec != IRQ_KEYBOARD;
+    if (cpu) {
+        bool has_kb = kb_avail() && cpu->iregs.vec != IRQ_KEYBOARD;
 
-    // prompt
-    vga_print("\n\n\n");
-    if (has_kb) {
-        vga_print_centered(MaxWidth,
-            "Press CTRL+ALT+DEL to restart your computer . . . \e6");
+        // prompt
+        vga_print("\n\n\n");
+        if (has_kb) {
+            vga_print_centered(MaxWidth,
+                "Press CTRL+ALT+DEL to restart your computer . . . \e6");
+        }
+        else {
+            vga_print_centered(MaxWidth,
+                "The exception occurred in the keyboard handler.\n");
+            vga_print_centered(MaxWidth,
+                "Please restart your computer manually.\e6");
+        }
+        die(cpu->iregs.vec);
     }
     else {
-        vga_print_centered(MaxWidth,
-            "The exception occurred in the keyboard handler.\n");
-        vga_print_centered(MaxWidth,
-            "Please restart your computer manually.\e6");
+        die(-1);
     }
-
-    die(cpu);
 }
 #endif // SHOW_CRASH_SCREEN
 
@@ -234,7 +250,7 @@ static __noreturn void show_crash_screen(
 static __noreturn void handle_soft_double_fault(
     struct cpu_state *curr_cpu, struct cpu_state *prev_cpu)
 {
-    console_print(VT_BOLD "\n(1) %s at %p", exception_names[curr_cpu->iregs.vec], _P(curr_cpu->iregs.eip));
+    console_print(ANSI_FG_DEFAULT ANSI_BOLD "\n(1) %s at %p", exception_names[curr_cpu->iregs.vec], _P(curr_cpu->iregs.eip));
     dump_cpu(curr_cpu, console_print);
     dump_stack(curr_cpu, console_print, STACK_DUMP_ROWS, STACK_DUMP_COLS);
     console_print("\n\n(2) %s at %p", exception_names[prev_cpu->iregs.vec], _P(prev_cpu->iregs.eip));
@@ -242,7 +258,7 @@ static __noreturn void handle_soft_double_fault(
     dump_stack(prev_cpu, console_print, STACK_DUMP_ROWS, STACK_DUMP_COLS);
     console_print("\n\n" RED("*** FATAL: %s (1) occurred while handling %s (2)"),
         exception_names[curr_cpu->iregs.vec], exception_names[prev_cpu->iregs.vec]);
-    console_print("\n" VT_UNBOLD VT_DEFAULT);
+    console_print(ANSI_UNBOLD ANSI_FG_DEFAULT);
 
 #if SHOW_CRASH_SCREEN
     char msgbuf[CRASH_MSG_BUFSIZ];
@@ -251,9 +267,9 @@ static __noreturn void handle_soft_double_fault(
         "%s exception %02lX at %p. " MSG_FATAL_REBOOT,
         exception_names[curr_cpu->iregs.vec], curr_cpu->iregs.vec, _P(curr_cpu->iregs.eip),
         exception_names[prev_cpu->iregs.vec], prev_cpu->iregs.vec, _P(prev_cpu->iregs.eip));
-    show_crash_screen(curr_cpu, ANSI_RED, 5, "Double Fault", msgbuf, NULL);
+    show_crash_screen(curr_cpu, CSI_COLOR_RED, 5, "Double Fault", msgbuf, NULL);
 #else
-    die(curr_cpu);
+    die(curr_cpu->iregs.vec);
 #endif
 }
 
@@ -289,7 +305,7 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
     already_crashing = true;
     prev_cpu = cpu;
 
-#if DEBUG
+#if DEBUG && ENABLE_CRASH_KEY
     // test a software double fault
     if (g_test_soft_double_fault) {
         __asm__ volatile (".short 0x0A0F");
@@ -321,7 +337,7 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
     }
 
     // print it all to the console
-    console_print(VT_BOLD "\n");
+    console_print(ANSI_FG_DEFAULT ANSI_BOLD "\n");
     dump_cpu(&cpu, console_print);
     dump_stack(&cpu, console_print, STACK_DUMP_ROWS, STACK_DUMP_COLS);
     console_print("\n\n"
@@ -330,7 +346,7 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
     if (errbuf_len) {
         console_print("\n%s", errbuf);
     }
-    console_print("\n" VT_UNBOLD VT_DEFAULT);
+    console_print(ANSI_UNBOLD ANSI_FG_DEFAULT);
 
 
 #if SHOW_CRASH_SCREEN
@@ -338,23 +354,37 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
     snprintf(msgbuf, sizeof(msgbuf),
         "A fatal %s exception %02lX occurred at %p. " MSG_FATAL_REBOOT,
         exception_names[iregs->vec], iregs->vec, _P(iregs->eip));
-    show_crash_screen(&cpu, CRASH_COLOR, CRASH_MARGIN, OS_NAME, msgbuf, errbuf);
+    show_crash_screen(&cpu, CSI_COLOR_BLUE, CRASH_MARGIN, OS_NAME, msgbuf, errbuf);
 #else
-    die(&cpu);
+    die(cpu.iregs.vec);
 #endif
 }
 
-__fastcall __noreturn void _panic(const char *reason)
+__fastcall __noreturn void _kpanic(const char *fmt, ...)
 {
-    struct cpu_state dummy_cpu;
+    typedef int (*vdumpfn_t)(const char *fmt, va_list args);
 
-    pr_fatal("*** KERNEL PANIC - %s\n", reason);
+    va_list args;
+    dumpfn_t dump;
+    vdumpfn_t vdump;
+    const char *prefix, *suffix;
+
+    dump = (g_consoles) ? kprint  : vga_print;
+    vdump = (g_consoles) ? vkprint : vga_vprint;
+    prefix = (g_consoles) ? KLOG_FATAL : ANSI_BOLD ANSI_RED;
+    suffix = ANSI_UNBOLD ANSI_FG_DEFAULT;
+
+    va_start(args, fmt);
+    dump(prefix);
+    vdump(fmt, args);
+    dump(suffix);
+    va_end(args);
+
     // TODO: stack trace
-
-    die(&dummy_cpu);
+    die(-1);    // programmatic death; no IRQ
 }
 
-static void dump_cpu(struct cpu_state *cpu, dumpfn dump)
+static void dump_cpu(struct cpu_state *cpu, dumpfn_t dump)
 {
     dump_gprs(&cpu->iregs, dump);
     dump_ctrl_regs(cpu, dump);
@@ -362,7 +392,7 @@ static void dump_cpu(struct cpu_state *cpu, dumpfn dump)
     dump_segregs(cpu, dump);
 }
 
-static void dump_gprs(struct iregs *regs, dumpfn dump)
+static void dump_gprs(struct iregs *regs, dumpfn_t dump)
 {
     struct eflags *flags = (struct eflags *) &regs->eflags;
 
@@ -397,13 +427,13 @@ static void dump_gprs(struct iregs *regs, dumpfn dump)
     dump(" ]");
 }
 
-static void dump_ctrl_regs(struct cpu_state *cpu, dumpfn dump)
+static void dump_ctrl_regs(struct cpu_state *cpu, dumpfn_t dump)
 {
     dump("\nCR0=%08lX CR2=%08lX CR3=%08lX CR4=%08lX",
         cpu->cr0, cpu->cr2, cpu->cr3, cpu->cr4);
 }
 
-static void dump_table_regs(struct cpu_state *cpu, dumpfn dump)
+static void dump_table_regs(struct cpu_state *cpu, dumpfn_t dump)
 {
     struct table_desc *gdt_desc = (struct table_desc *) &cpu->gdtr;
     struct table_desc *idt_desc = (struct table_desc *) &cpu->idtr;
@@ -414,7 +444,7 @@ static void dump_table_regs(struct cpu_state *cpu, dumpfn dump)
     dump("\nTR="); dump_segsel((struct segsel *) &cpu->tr, dump);
 }
 
-static void dump_segregs(struct cpu_state *cpu, dumpfn dump)
+static void dump_segregs(struct cpu_state *cpu, dumpfn_t dump)
 {
     dump("\nSS="); dump_segsel((struct segsel *) &cpu->iregs.ss, dump);
     dump("\nCS="); dump_segsel((struct segsel *) &cpu->iregs.cs, dump);
@@ -424,7 +454,7 @@ static void dump_segregs(struct cpu_state *cpu, dumpfn dump)
     dump("\nGS="); dump_segsel((struct segsel *) &cpu->iregs.gs, dump);
 }
 
-static void dump_stack(struct cpu_state *cpu, dumpfn dump, int max_rows, int num_cols)
+static void dump_stack(struct cpu_state *cpu, dumpfn_t dump, int max_rows, int num_cols)
 {
     const uint32_t *esp = (const uint32_t *) cpu->iregs.esp;
     const uint32_t *ebp = (const uint32_t *) cpu->iregs.ebp;
@@ -444,7 +474,7 @@ static void dump_stack(struct cpu_state *cpu, dumpfn dump, int max_rows, int num
     }
 }
 
-static void dump_segsel(struct segsel *segsel, dumpfn dump)
+static void dump_segsel(struct segsel *segsel, dumpfn_t dump)
 {
     volatile struct table_desc _gdt_desc = { }; __sgdt(_gdt_desc);
     struct x86_desc *gdt = (struct x86_desc *) _gdt_desc.base;
@@ -471,7 +501,7 @@ static int _vga_print(const char *buf, size_t count)
 
     term = get_terminal(VT_CONSOLE_NUM);
     if (!term->initialized) {
-        terminal_initialize(VT_CONSOLE_NUM, term);
+        init_early_terminal(VT_CONSOLE_NUM, term);
     }
 
     p = buf;
@@ -490,17 +520,24 @@ static int vga_print(const char *fmt, ...)
 {
     va_list args;
     size_t count;
-    char buf[CRASH_MSG_BUFSIZ] = { };
 
     va_start(args, fmt);
-    count = vsnprintf(buf, CRASH_MSG_BUFSIZ, fmt, args);
+    count = vga_vprint(fmt, args);
     va_end(args);
 
+    return count;
+}
+
+static int vga_vprint(const char *fmt, va_list args)
+{
+    size_t count;
+    char buf[CRASH_MSG_BUFSIZ] = { };
+
+    count = vsnprintf(buf, CRASH_MSG_BUFSIZ, fmt, args);
     return _vga_print(buf, count);
 }
 
-
-// lik kprint but with no klog features,
+// like kprint but with no klog features,
 // will write directly to vga if no console is registered
 static int console_print(const char *fmt, ...)
 {
@@ -520,18 +557,6 @@ static int console_print(const char *fmt, ...)
         cons->write(cons, buf, count);
     }
     return count;
-}
-
-static int klog_print(const char *fmt, ...)
-{
-    char buf[CRASH_MSG_BUFSIZ] = { };
-    va_list args;
-
-    va_start(args, fmt);
-    vsnprintf(buf, CRASH_MSG_BUFSIZ, fmt, args);
-    va_end(args);
-
-    return kprint(KLOG_CONT "%s", buf);
 }
 
 static void vga_print_centered(int maxwidth, const char *fmt, ...)
@@ -707,7 +732,7 @@ static void vga_print_wrapped(int margin, const char *fmt, ...)
     vga_print("%.*s", wordlen + esclen, word);
 }
 
-#ifdef DEBUG
+#if DEBUG && ENABLE_CRASH_KEY
 void crash_key_irq(int irq, struct iregs *regs)   // TODO: call this vis sysreq...
 {
     int crash_type;
@@ -739,13 +764,13 @@ void crash_key_irq(int irq, struct iregs *regs)   // TODO: call this vis sysreq.
         case 6:     // F6 - unexpected device interrupt vector
             __asm__ volatile ("int $0x2D");
             break;
-        // case 7:     // F7 - kernel stack page fault
-        //     __asm__ volatile ("movl $0, %esp; popl %eax");
-        //     break;
-
-        case 7:     // F7 - spurious interrupt
-            __asm__ volatile ("int $0x27");
+        case 7:     // F7 - kernel stack page fault
+            __asm__ volatile ("movl $0, %esp; popl %eax");
             break;
+
+        // case 7:     // F7 - spurious interrupt
+        //     __asm__ volatile ("int $0x27");
+        //     break;
 
         case 8: {   // F8 - nullptr read
             volatile uint32_t *badptr = NULL;

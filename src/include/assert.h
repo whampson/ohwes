@@ -27,7 +27,7 @@
 #define static_assert _Static_assert
 
 #define _ASSERT_STRING_FORMAT(x) \
-    "%s(%d): assertion failed:\n    " #x, __FILE__, __LINE__
+    "assertion failed:\n%s(%d):\n    " #x, __FILE__, __LINE__
 
 #ifdef DEBUG
 

@@ -46,13 +46,11 @@
 
 #define __init  // TODO: put in special .init section or something
 
-extern char g_panic_buf[BUFSIZ];
-extern __fastcall __noreturn void _panic(const char *reason);
+extern __fastcall __noreturn void _kpanic(const char *fmt, ...);
 
 #define panic(...) \
 do { \
-    snprintf(g_panic_buf, sizeof(g_panic_buf), __VA_ARGS__); \
-    _panic(g_panic_buf); \
+    _kpanic("\n*** KERNEL PANIC - " __VA_ARGS__); \
 } while (0)
 
 // beep at hz for millis;
