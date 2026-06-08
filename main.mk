@@ -1,10 +1,10 @@
 # debug build toggle and params
 DEBUG           := 1
-DEBUGOPT        := 0
-OPT_LEVEL       := 2
+DEBUGOPT        := 1
+OPT_LEVEL       := 1
 
 # TEST_BUILD      := 0
-TEST_LIBC       := 1
+TEST_LIBC       := 0
 
 # default flags
 ASFLAGS         := -Wa,--fatal-warnings
