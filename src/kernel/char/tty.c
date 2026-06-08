@@ -185,8 +185,8 @@ int tty_hung_up(struct file *file)
 // private functions
 
 extern __init void init_n_tty(void);
-extern __init void init_serial(void);
-extern __init void init_terminal(void);
+extern __init void init_serial_driver(void);
+extern __init void init_terminal_driver(void);
 
 __init void init_tty(void)
 {
@@ -195,8 +195,8 @@ __init void init_tty(void)
     termios_pool = pool_create("termios", NR_TTY, sizeof(struct termios), 0);
 
     init_n_tty();
-    init_serial();
-    init_terminal();
+    init_serial_driver();
+    init_terminal_driver();
 
     // TODO: figure out which TTYs are valid
     // (like, no ttyS3 if PC has 1 serial port)

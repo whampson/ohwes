@@ -46,6 +46,14 @@ void terminal_initialize(int num, struct terminal *term);
 static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y);
 static void pos2xy(struct terminal *term, uint16_t pos);
 
+int g_currterm = DEFAULT_VT;
+static_assert(DEFAULT_VT > 0 && DEFAULT_VT <= NR_TERMINAL,
+    "config.h: invalid value for DEFAULT_VT");
+
+#define is_current(term)    ((term)->number == current_terminal())
+
+struct terminal g_terminals[NR_TERMINAL];
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -193,22 +201,32 @@ static dev_t vt_console_device(struct console *cons)
     return __mkttydev((cons->number) ? cons->number : current_terminal());
 }
 
+__init void init_early_terminal(int num, struct terminal *term)
+{
+    // init terminal structure
+    terminal_initialize(num, term);
+
+    // inherit virtual terminal properties from VGA
+    if (term->number == DEFAULT_VT) {
+        struct vga_fb_info fb_info;
+        // VGA likely hasn't been set-up yet, so we can't assume the frame buffer
+        // assignment made by terminal_initialize() is correct;
+        // grab the actual frame buffer address currently in use
+        vga_get_fb_info(&fb_info);
+        term->framebuf = KERNEL_ADDR(fb_info.framebuf);
+
+        // read the current cursor position and print initial newline
+        pos2xy(term, vga_get_cursor_pos());
+        terminal_print(term, "\r\n");
+    }
+}
+
 static __init bool vt_console_setup(struct console *cons)
 {
-    struct vga_fb_info fb_info;
-
-    init_vga(); // ok to call more than once
-    vga_get_fb_info(&fb_info);
-
     struct terminal *term = get_terminal(cons->number);
     if (!term->initialized) {
         int num = _DEV_MIN(cons->device(cons));
-        terminal_initialize(num, term);
-        if (num == 1) {
-            term->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
-            pos2xy(term, vga_get_cursor_pos());
-            terminal_print(term, "\r\n");
-        }
+        init_early_terminal(num, term);
     }
 
     return true;
@@ -242,7 +260,7 @@ struct console vt_console =
 {
     .name = "tty",
     .number = VT_CONSOLE_NUM,
-    .flags = CONSOLE_FLAG_PRINTBUF,
+    .flags = _CONSOLE_FLAG_KLOG,
     .device = vt_console_device,
     .init = vt_console_setup,
     .write = vt_console_write,
@@ -255,11 +273,6 @@ struct console vt_console =
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // virtual terminal implementation
-
-#define is_current(term)        ((term)->number == current_terminal())
-
-struct terminal g_terminals[NR_TERMINAL];
-int g_currterm = 1;
 
 enum terminal_state {
     S_NORM,
@@ -311,16 +324,16 @@ static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr a
 // ----------------------------------------------------------------------------
 // initialization
 
-__init void init_terminal(void)
+__init void init_terminal_driver(void)
 {
     struct vga_fb_info fb_info;
 
-    init_kb();
-    init_vga(); // ok to call more than once
-
+    // switch the frame buffer
+    vga_set_fb(VGA_MEMORY_128K);    // 32 pages, up to 16 80x50 VTs
     vga_get_fb_info(&fb_info);
-    pr_info("vga: frame buffer is %ld pages at %p\n",
-        fb_info.size_pages, _P(fb_info.framebuf));
+    get_terminal(DEFAULT_VT)->framebuf = KERNEL_ADDR(fb_info.framebuf);
+
+    pr_info("vga-term: VGA frame buffer switched to %p\n", KERNEL_ADDR(fb_info.framebuf));
 
     // make sure we have enough memory for the configured number of terminals
     if (fb_info.size_pages - FB_SIZE_PAGES < NR_TERMINAL * FB_SIZE_PAGES) {
@@ -329,27 +342,29 @@ __init void init_terminal(void)
             NR_TERMINAL, FB_SIZE_PAGES);
     }
 
-    // register the terminal TTY driver
-    if (tty_register_driver(&terminal_driver)) {
-        panic("unable to register terminal driver!");
-    }
+    // get the keyboard working
+    init_kb();
 
-    // initialize virtual terminals
+    // initialize all virtual terminals
     for (int i = 1; i <= NR_TERMINAL; i++) {
         struct terminal *term = get_terminal(i);
-        if (term->initialized) {
-            // terminal already initialized if console was registered early
+        if (term->initialized && term->number == DEFAULT_VT) {
+            // terminal already initialized if console was registered early;
+            // just restore the boot cursor position
+            pos2xy(get_terminal(DEFAULT_VT), vga_get_cursor_pos());
             continue;
         }
         terminal_initialize(i, term);
         erase(term, ERASE_ALL);
     }
 
-    // restore boot terminal state
-    get_terminal(1)->framebuf = (void *) KERNEL_ADDR(fb_info.framebuf);
-    pos2xy(get_terminal(1), vga_get_cursor_pos());
+    // register the terminal TTY driver, needed for terminal switch
+    if (tty_register_driver(&terminal_driver)) {
+        panic("unable to register terminal driver!");
+    }
 
-    // do a proper 'switch' to the initial virtual terminal
+    // do a proper 'switch' to the initial virtual terminal;
+    // this will move the frame buffer to the correct address
     int ret = switch_terminal(DEFAULT_VT);
     if (ret != 0) {
         panic("unable to switch to terminal %d!", DEFAULT_VT);
@@ -366,38 +381,16 @@ __init void init_terminal(void)
     register_console(&vt_console);
 #endif
 
-#if PRINT_LOGO
-    kprint( // let's print a bird with a blinking eye lol
-    "\e[1;37m                                                                           \n\
-                                                     ,::::.._                           \n\
-                                                  ,':::::::::.                          \n\
-                                              _,-'`:::,::(\e[5;31mo\e[25;37m)::`-,.._   \n\
-                                           _.', ', `:::::::::;'-..__`.                  \n\
-                                      _.-'' ' ,' ,' ,\\:::,'::-`'''                     \n\
-                                  _.-'' , ' , ,'  ' ,' `:::/                            \n\
-                            _..-'' , ' , ' ,' , ,' ',' '/::                             \n\
-                    _...:::'`-..'_, ' , ,'  , ' ,'' , ,'::|                             \n\
-                 _`.:::::,':::::,'::`-:..'_',_'_,'..-'::,'|                             \n\
-         _..-:::'::,':::::::,':::,':,'::,':::,'::::::,':::;                             \n\
-           `':,'::::::,:,':::::::::::::::::':::,'::_:::,'/                              \n\
-           __..:'::,':::::::--''' `-:,':,':::'::-' ,':::/                               \n\
-      _.::::::,:::.-''-`-`..'_,'. ,',  , ' , ,'  ', `','                                \n\
-    ,::SSt:''''`                 \\:. . ,' '  ,',' '_,'                                 \n\
-                                  ``::._,'_'_,',.-'                                     \n\
-                                      \\\\ \\\\                                         \n\
-                                       \\\\_\\\\                                        \n\
-                                        \\\\`-`.-'_                                     \n\
-                                     .`-.\\\\__`. ``                                    \n\
-                                        ``-.-._                                         \n\
-                                            `                                           \n\
-    \e[0m\n"); //https://ascii.co.uk/art/raven
-#endif
 }
 
 void terminal_initialize(int num, struct terminal *term)
 {
     if (term->initialized) {
         return;
+    }
+
+    if (num == 0) {
+        num = g_currterm;
     }
 
     terminal_defaults(term);
@@ -621,10 +614,10 @@ int terminal_putchar(struct terminal *term, char c)
     bool update_cursor_pos = true;
     uint16_t char_pos;
 
-    // prevent reentrancy
+    // prevent reentrancy to avoid mucking with terminal state
     if (test_and_set_bit(&term->printing, 0)) {
         return 0;   // TODO: do we just drop the char?
-                    // we should buffer the char then flush it at the end
+                    // should we buffer the chars then flush them at the end
     }
 
     // handle escape sequences if not a control character
@@ -717,8 +710,6 @@ write_vga:
     if (update_cursor_pos && is_current(term)) {
         set_cursor_pos(term);
     }
-
-    // TODO: flush buffered chars?
 
 done:
     clear_bit(&term->printing, 0);
@@ -940,9 +931,10 @@ csi_next:   // we need more CSI characters; do not alter terminal state
 
 static void csi_m(struct terminal *term, char p)
 {
-    static const char CSI_COLORS[8] =
+    static const char CSI_VGA_COLOR_MAP[8] =
     {
-        // TODO: configure via ioctl
+        // maps ANSI CSI<n>m 3-bit colors to VGA 3-bit color.
+        // TODO: configure via ioctl??
         VGA_BLACK,
         VGA_RED,
         VGA_GREEN,
@@ -1001,16 +993,16 @@ static void csi_m(struct terminal *term, char p)
             break;
         default:
             // colors
-            if (p >= 30 && p <= 37) term->attr.fg = CSI_COLORS[p - 30];
-            if (p >= 40 && p <= 47) term->attr.bg = CSI_COLORS[p - 40];
+            if (p >= 30 && p <= 37) term->attr.fg = CSI_VGA_COLOR_MAP[p - 30];
+            if (p >= 40 && p <= 47) term->attr.bg = CSI_VGA_COLOR_MAP[p - 40];
             if (p == 39) term->attr.fg = term->csi_defaults.attr.fg;
             if (p == 49) term->attr.bg = term->csi_defaults.attr.bg;
             if (p >= 90 && p <= 97) {
-                term->attr.fg = CSI_COLORS[p - 90];
+                term->attr.fg = CSI_VGA_COLOR_MAP[p - 90];
                 term->attr.bright = 1;
             }
             if (p >= 100 && p <= 107) {
-                term->attr.bg = CSI_COLORS[p - 100];
+                term->attr.bg = CSI_VGA_COLOR_MAP[p - 100];
                 term->attr.bright = !term->attr.blink;  // blink overrides bright
             }
             break;

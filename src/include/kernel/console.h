@@ -24,36 +24,36 @@
 
 #include <kernel/device.h>
 
-// TOOD: rename VT_*
-#define VT_RESET       "\e[0m"
-#define VT_BOLD        "\e[1m"
-#define VT_UNBOLD      "\e[22m"
-#define VT_INVERT      "\e[7m"
-#define VT_UNINVERT    "\e[27m"
-#define VT_BLACK       "\e[30m"
-#define VT_RED         "\e[31m"
-#define VT_GREEN       "\e[32m"
-#define VT_YELLOW      "\e[33m"
-#define VT_BLUE        "\e[34m"
-#define VT_PURPLE      "\e[35m"
-#define VT_CYAN        "\e[36m"
-#define VT_WHITE       "\e[37m"
-#define VT_DEFAULT     "\e[39m"
-#define VT_BG_BLACK    "\e[40m"
-#define VT_BG_RED      "\e[41m"
-#define VT_BG_GREEN    "\e[42m"
-#define VT_BG_YELLOW   "\e[43m"
-#define VT_BG_BLUE     "\e[44m"
-#define VT_BG_PURPLE   "\e[45m"
-#define VT_BG_CYAN     "\e[46m"
-#define VT_BG_WHITE    "\e[47m"
-#define VT_BG_DEFAULT  "\e[49m"
+#define ANSI_RESET       "\e[0m"
+#define ANSI_BOLD        "\e[1m"
+#define ANSI_UNBOLD      "\e[22m"
+#define ANSI_INVERT      "\e[7m"
+#define ANSI_UNINVERT    "\e[27m"
+#define ANSI_BLACK       "\e[30m"
+#define ANSI_RED         "\e[31m"
+#define ANSI_GREEN       "\e[32m"
+#define ANSI_YELLOW      "\e[33m"
+#define ANSI_BLUE        "\e[34m"
+#define ANSI_PURPLE      "\e[35m"
+#define ANSI_CYAN        "\e[36m"
+#define ANSI_WHITE       "\e[37m"
+#define ANSI_FG_DEFAULT  "\e[39m"
+#define ANSI_BG_BLACK    "\e[40m"
+#define ANSI_BG_RED      "\e[41m"
+#define ANSI_BG_GREEN    "\e[42m"
+#define ANSI_BG_YELLOW   "\e[43m"
+#define ANSI_BG_BLUE     "\e[44m"
+#define ANSI_BG_PURPLE   "\e[45m"
+#define ANSI_BG_CYAN     "\e[46m"
+#define ANSI_BG_WHITE    "\e[47m"
+#define ANSI_BG_DEFAULT  "\e[49m"
+#define ANSI_DEFAULT     "\e[39;49m"
 
 
 /**
  * Dump the klog buffer to this console when registered.
  */
-#define CONSOLE_FLAG_PRINTBUF  (1 << 0)
+#define _CONSOLE_FLAG_KLOG  (1 << 0)
 
 /**
  * Represents a console device.

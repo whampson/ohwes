@@ -33,25 +33,6 @@
 
 // Text mode only for now!
 
-__init void init_vga(void)
-{
-    struct vga_fb_info fb_old, fb_new;
-
-    // may get called twice: once during vt_console setup and another
-    // during init_terminal to ensure frame buffer is set correctly
-    static bool vga_initialized = false;
-    if (vga_initialized) {
-        return;
-    }
-
-    // set frame buffer address
-    vga_get_fb_info(&fb_old);
-    vga_set_fb(VGA_MEMORY_128K);    // 32 pages, up to 16 80x50 VTs
-    vga_get_fb_info(&fb_new);
-
-    vga_initialized = true;
-}
-
 uint8_t vga_get_rows(void)
 {
     uint8_t of = vga_crtc_read(VGA_CRTC_REG_OF);

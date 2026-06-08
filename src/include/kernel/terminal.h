@@ -40,18 +40,6 @@
 #define MAX_TABSTOP             80      // maximum number of tabstops allowed
 #define TABSTOP_WIDTH           8       // TODO: make configurable
 
-// ESC[<x>m color code
-enum ansi_color {
-    ANSI_BLACK   = 0,
-    ANSI_RED     = 1,
-    ANSI_GREEN   = 2,
-    ANSI_YELLOW  = 3,
-    ANSI_BLUE    = 4,
-    ANSI_MAGENTA = 5,
-    ANSI_CYAN    = 6,
-    ANSI_WHITE   = 7
-};
-
 struct terminal_save_state {
     bool blink_on;
     char tabstops[MAX_TABSTOP];

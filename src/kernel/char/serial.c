@@ -309,7 +309,7 @@ struct console serial_console =
 {
     .name = "ttyS",
     .number = SERIAL_CONSOLE_NUM,
-    .flags = CONSOLE_FLAG_PRINTBUF,
+    .flags = _CONSOLE_FLAG_KLOG,
     .device = serial_console_device,
     .init = serial_console_setup,
     .write = serial_console_write,
@@ -320,7 +320,7 @@ struct console serial_console =
 
 // ----------------------------------------------------------------------------
 
-__init void init_serial(void)
+__init void init_serial_driver(void)
 {
     struct com *com;
 
@@ -570,12 +570,7 @@ static int serial_write(struct tty *tty, const char *buf, size_t count)
         ptr++; count--;
     }
 
-#if CHATTY_COM
-    if (ring_full(&com->tx_ring)) {
-        pr_alert("com%d: write buffer full!\n", com->num);
-    }
-#endif
-
+    assert(ring_full(&com->tx_ring) == false);
     if (!ring_empty(&com->tx_ring) && !tty->stopped && !tty->hw_stopped) {
         tx_enable(com);
     }
