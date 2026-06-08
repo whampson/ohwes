@@ -43,34 +43,62 @@ struct ring {
     { .buf = (buffer), .cap = (capacity) }
 
 #define ring_init(r, buffer, capacity) \
+({ \
     (r)->buf = (buffer); \
     (r)->cap = (capacity); \
     (r)->count = 0; \
     (r)->head = 0; \
-    (r)->tail = 0
-
-#define ring_count(r) \
-    (r)->count
+    (r)->tail = 0; \
+})
 
 #define ring_capacity(r) \
-    (r)->cap
+    ({ (r)->cap; })
+
+#define ring_count(r) \
+    ({ (r)->count; })
+
+#define ring_head(r) \
+    ({ (r)->head; })
+
+#define ring_tail(r) \
+    ({ (r)->tail; })
 
 #define ring_empty(r) \
-    ((r)->count == 0)
+    ({ ((r)->count == 0); })
 
 #define ring_full(r) \
-    ((r)->count == (r)->cap)
+    ({ ((r)->count == (r)->cap); })
 
 #define ring_clear(r) \
+({ \
     (r)->head = 0; \
     (r)->tail = 0; \
-    (r)->count = 0
+    (r)->count = 0; \
+})
 
 #define ring_peek_back(r, T) \
-    ((T*)(r)->buf)[((r)->tail - 1 + (r)->cap) % (r)->cap]
+    ({ ((T*)(r)->buf)[((r)->tail - 1 + (r)->cap) % (r)->cap]; })
 
 #define ring_peek_front(r, T) \
-    ((T*)(r)->buf)[(r)->head]
+    ({ ((T*)(r)->buf)[(r)->head]; })
+
+#define ring_get_at(r, pos, item, T) \
+( /* kind of an insane way to return a success bit lol */ \
+    (ring_empty(r) || (pos) > (r)->count - 1) ? 0 : \
+    ( \
+        (item) = ((T*)(r)->buf)[((r)->head + (pos)) % (r)->cap], \
+        1 \
+    ) \
+)
+
+#define ring_set_at(r, pos, item, T) \
+( \
+    (ring_empty(r) || (pos) > (r)->count - 1) ? 0 : \
+    ( \
+        ((T*)(r)->buf)[((r)->head + (pos)) % (r)->cap] = (item), \
+        1 \
+    ) \
+)
 
 #define ring_push_back(r, item, T) \
 ( \
@@ -112,24 +140,6 @@ struct ring {
         (r)->count--, \
         (item) = ((T*)(r)->buf)[(r)->head], \
         (r)->head = ((r)->head + 1) % (r)->cap, \
-        1 \
-    ) \
-)
-
-#define ring_get_at(r, pos, item, T) \
-( \
-    (ring_empty(r) || (pos) > (r)->count - 1) ? 0 : \
-    ( \
-        (item) = ((T*)(r)->buf)[((r)->head + (pos)) % (r)->cap], \
-        1 \
-    ) \
-)
-
-#define ring_set_at(r, pos, item, T) \
-( \
-    (ring_empty(r) || (pos) > (r)->count - 1) ? 0 : \
-    ( \
-        ((T*)(r)->buf)[((r)->head + (pos)) % (r)->cap] = (item), \
         1 \
     ) \
 )
