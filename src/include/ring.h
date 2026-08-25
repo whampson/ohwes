@@ -21,9 +21,12 @@
  * =============================================================================
  */
 
+ // NOT threadsafe!
+
 #ifndef __RING_H
 #define __RING_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -35,123 +38,145 @@ struct ring {
     size_t tail;    // current forward-write position
 };
 
-#define ring_push   ring_push_back
-#define ring_pop    ring_pop_front
-#define ring_peek   ring_peek_front
+#define fifo_push   ring_push_back
+#define fifo_pop    ring_pop_front
+#define fifo_peek   ring_peek_front
 
-#define RING_INIT(buffer, capacity) \
-    { .buf = (buffer), .cap = (capacity) }
+#define lifo_push   ring_push_back
+#define lifo_pop    ring_pop_back
+#define lifo_peek   ring_peek_back
 
+// initializer list
+// NOTE: capacity must be >0 */
+#define RING_INIT(buffer, capacity) { \
+    .buf = (buffer), .cap = (capacity), \
+    .count = 0, .head = 0, .tail = 0, \
+}
+
+// initialize / reinitialize
 #define ring_init(r, buffer, capacity) \
 ({ \
-    (r)->buf = (buffer); \
-    (r)->cap = (capacity); \
-    (r)->count = 0; \
-    (r)->head = 0; \
-    (r)->tail = 0; \
+    struct ring *_r = (r); \
+    _r->buf = (buffer); \
+    _r->cap = (capacity) < 1 ? 1 : (capacity); \
+    _r->count = _r->head = _r->tail = 0; \
+    (void)0; \
 })
 
-#define ring_capacity(r) \
-    ({ (r)->cap; })
-
-#define ring_count(r) \
-    ({ (r)->count; })
-
-#define ring_head(r) \
-    ({ (r)->head; })
-
-#define ring_tail(r) \
-    ({ (r)->tail; })
-
-#define ring_empty(r) \
-    ({ ((r)->count == 0); })
-
-#define ring_full(r) \
-    ({ ((r)->count == (r)->cap); })
+#define ring_capacity(r)    ((r)->cap)
+#define ring_count(r)       ((r)->count)
+#define ring_head(r)        ((r)->head)
+#define ring_tail(r)        ((r)->tail)
+#define ring_empty(r)       ((r)->count == 0)
+#define ring_full(r)        ((r)->count == (r)->cap)
 
 #define ring_clear(r) \
 ({ \
-    (r)->head = 0; \
-    (r)->tail = 0; \
-    (r)->count = 0; \
+    struct ring *_r = (r); \
+    _r->count = _r->head = _r->tail = 0; \
+    (void)0; \
 })
 
-#define ring_peek_back(r, T) \
-    ({ ((T*)(r)->buf)[((r)->tail - 1 + (r)->cap) % (r)->cap]; })
+#define ring_peek_back(r, item, T) \
+({ \
+    struct ring *_r = (r); \
+    ring_empty(_r) ? false : \
+    ( \
+        (item) = ((T*)_r->buf)[(_r->tail - 1 + _r->cap) % _r->cap], \
+        true \
+    ); \
+})
 
-#define ring_peek_front(r, T) \
-    ({ ((T*)(r)->buf)[(r)->head]; })
+#define ring_peek_front(r, item, T) \
+({ \
+    struct ring *_r = (r); \
+    ring_empty(_r) ? false : \
+    ( \
+        (item) = ((T*)_r->buf)[_r->head], \
+        true \
+    ); \
+})
+
+#define ring_peek_at ring_get_at
 
 #define ring_get_at(r, pos, item, T) \
-( /* kind of an insane way to return a success bit lol */ \
-    (ring_empty(r) || (pos) > (r)->count - 1) ? 0 : \
+({ \
+    struct ring *_r = (r); \
+    size_t _pos = (pos); \
+    (ring_empty(_r) || _pos >= _r->count) ? false : \
     ( \
-        (item) = ((T*)(r)->buf)[((r)->head + (pos)) % (r)->cap], \
-        1 \
-    ) \
-)
+        (item) = ((T*)_r->buf)[(_r->head + _pos) % _r->cap], \
+        true \
+    ); \
+})
 
 #define ring_set_at(r, pos, item, T) \
-( \
-    (ring_empty(r) || (pos) > (r)->count - 1) ? 0 : \
+({ \
+    struct ring *_r = (r); \
+    size_t _pos = (pos); \
+    (ring_empty(_r) || _pos >= _r->count) ? false : \
     ( \
-        ((T*)(r)->buf)[((r)->head + (pos)) % (r)->cap] = (item), \
-        1 \
-    ) \
-)
+        ((T*)_r->buf)[(_r->head + _pos) % _r->cap] = (item), \
+        true \
+    ); \
+})
 
 #define ring_push_back(r, item, T) \
-( \
-    ring_full(r) ? 0 : \
+({ \
+    struct ring *_r = (r); \
+    ring_full(_r) ? false : \
     ( \
-        ((T*)(r)->buf)[(r)->tail] = (item), \
-        (r)->tail = ((r)->tail + 1) % (r)->cap, \
-        (r)->count++, \
-        1 \
-    ) \
-)
+        ((T*)_r->buf)[_r->tail] = (item), \
+        _r->tail = (_r->tail + 1) % _r->cap, \
+        _r->count++, \
+        true \
+    ); \
+})
 
 #define ring_push_front(r, item, T) \
-( \
-    ring_full(r) ? 0 : \
+({ \
+    struct ring *_r = (r); \
+    ring_full(_r) ? false : \
     ( \
-        (r)->head = ((r)->head - 1 + (r)->cap) % (r)->cap, \
-        ((T*)(r)->buf)[(r)->head] = (item), \
-        (r)->count++, \
-        1 \
-    ) \
-)
+        _r->head = (_r->head - 1 + _r->cap) % _r->cap, \
+        ((T*)_r->buf)[_r->head] = (item), \
+        _r->count++, \
+        true \
+    ); \
+})
 
 #define ring_pop_back(r, item, T) \
-( \
-    ring_empty(r) ? 0 : \
+({ \
+    struct ring *_r = (r); \
+    ring_empty(_r) ? false : \
     ( \
-        (r)->count--, \
-        (r)->tail = ((r)->tail - 1 + (r)->cap) % (r)->cap, \
-        (item) = ((T*)(r)->buf)[(r)->tail], \
-        1 \
-    ) \
-)
+        _r->count--, \
+        _r->tail = (_r->tail - 1 + _r->cap) % _r->cap, \
+        (item) = ((T*)_r->buf)[_r->tail], \
+        true \
+    ); \
+})
 
 #define ring_pop_front(r, item, T) \
-( \
-    ring_empty(r) ? 0 : \
+({ \
+    struct ring *_r = (r); \
+    ring_empty(_r) ? false : \
     ( \
-        (r)->count--, \
-        (item) = ((T*)(r)->buf)[(r)->head], \
-        (r)->head = ((r)->head + 1) % (r)->cap, \
-        1 \
-    ) \
-)
+        _r->count--, \
+        (item) = ((T*)_r->buf)[_r->head], \
+        _r->head = (_r->head + 1) % _r->cap, \
+        true \
+    ); \
+})
 
-#define ring_iterator(r, item, T) \
-    size_t _idx = ({ (item) = ((T*)(r)->buf)[(r)->head]; 0; }); \
-    _idx < (r)->count; \
-    _idx++, (item) = ((T*)(r)->buf)[((r)->head + _idx) % (r)->cap]
+#define ring_iterator(r, item, T, idx) \
+    struct ring *_r = (r); \
+    idx < _r->count && ((item) = ((T*)_r->buf)[(_r->head + idx) % _r->cap], true); \
+    idx++
 
-#define ring_reverse_iterator(r, item, T) \
-    size_t _idx = ({ (item) = ((T*)(r)->buf)[(r)->tail - 1]; 0; }); \
-    _idx < (r)->count; \
-    _idx++, (item) = ((T*)(r)->buf)[((r)->tail - _idx - 1 + (r)->cap) % (r)->cap]
+#define ring_reverse_iterator(r, item, T, idx) \
+    struct ring *_r = (r); \
+    idx < _r->count && ((item) = ((T*)_r->buf)[(_r->tail - idx - 1 + _r->cap) % _r->cap], true); \
+    idx++
 
 #endif // __RING_H

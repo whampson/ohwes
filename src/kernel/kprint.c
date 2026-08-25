@@ -103,13 +103,12 @@ struct console e9_console =
 
 static int klog_write_char(char c)
 {
+    char d = c;
     if (ring_full(&klog_ring)) {
-        char tmp;
-        (void) ring_pop_front(&klog_ring, tmp, char);
-        (void) tmp; // this is annoying...
+        (void) ring_pop_front(&klog_ring, c, char);
     }
 
-    return ring_push_back(&klog_ring, c, char);
+    return ring_push_back(&klog_ring, d, char);
 }
 
 static int klog_write_buf(const char *buf, size_t count)
@@ -165,45 +164,59 @@ static int klog_parse_prefix(const char *buf, unsigned int *level, char *special
     return len;
 }
 
-static void klog_write_to_console(struct console *cons, int offset, int count)
+static void klog_write_to_console(struct console *cons, size_t offset, size_t count)
 {
-    // clamp params
-    offset %= ring_capacity(&klog_ring);
-    count = (count > ring_count(&klog_ring)) ? ring_count(&klog_ring) : count;
+    // clamp params to the valid relative range
+    size_t n = ring_count(&klog_ring);
+
+    if (offset > n) {
+        offset = n;
+    }
+    if (offset + count > n) {
+        count = n - offset;
+    }
 
     unsigned int msg_level = _klog_curr_msg_level;
 
-    char prefix_buf[3];
-    int nprefix;
-    int nremain;
+    size_t nremain = count;
 
-    // TODO: ideally I'd like to buffer 'til I see a prefix or reach 'count',
-    // then print the buffer and repeat 'til we hit the end... but this will do
-    // for now
-
-    nremain = count;
     while (nremain > 0) {
-        prefix_buf[0] = '\0';
-        for (int k = 0; k < sizeof(prefix_buf); k++) {
-            if (!ring_get_at(&klog_ring, offset+k, prefix_buf[k], char)) {
+        // peek up to 3 chars to look for a <N> prefix
+        char prefix_buf[3] = { '\0', '\0', '\0' };
+        for (int k = 0; k < (int) sizeof(prefix_buf); k++) {
+            if (!ring_get_at(&klog_ring, offset + k, prefix_buf[k], char)) {
                 prefix_buf[k] = '\0';
                 break;
             }
         }
-        nprefix = klog_parse_prefix(prefix_buf, &msg_level, NULL);
+        int nprefix = klog_parse_prefix(prefix_buf, &msg_level, NULL);
         offset += nprefix;
         nremain -= nprefix;
 
-        int idx = 0;
-        do {
-            if (nprefix == 0) {
-                if (msg_level <= _klog_curr_msg_level && msg_level <= _klog_set_level) {
-                    cons->write(cons, &prefix_buf[idx++], 1);
-                }
-                offset += 1;
-                nremain -= 1;
+        // write the message body (up to the next prefix or end of range)
+        while (nremain > 0) {
+            char c;
+            if (!ring_get_at(&klog_ring, offset, c, char)) {
+                break;
             }
-        } while (nremain < sizeof(prefix_buf));
+
+            // stop if we hit another <N> prefix
+            char peek[3] = { '\0', '\0', '\0' };
+            for (int k = 0; k < (int) sizeof(peek); k++) {
+                if (!ring_get_at(&klog_ring, offset + k, peek[k], char)) {
+                    break;
+                }
+            }
+            if (klog_parse_prefix(peek, NULL, NULL) > 0) {
+                break;
+            }
+
+            if (msg_level <= _klog_curr_msg_level && msg_level <= _klog_set_level) {
+                cons->write(cons, &c, 1);
+            }
+            offset += 1;
+            nremain -= 1;
+        }
     }
 }
 
@@ -216,7 +229,6 @@ int vkprint(const char *fmt, va_list args)
     int nprefix = 0;    // prefix length
     int nprinted = 0;   // num chars printed to log
     int nbufwrit = 0;   // num chars written to _kprint_buf
-    unsigned int log_ptr = ring_count(&klog_ring);
 
     const char *p;
     struct console *cons;
@@ -323,7 +335,9 @@ int vkprint(const char *fmt, va_list args)
     cons = g_consoles;
     while (cons) {
         if (cons->flags & _CONSOLE_FLAG_KLOG) {
-            klog_write_to_console(cons, log_ptr, nprinted);
+            size_t n = ring_count(&klog_ring);
+            size_t new_count = ((size_t) nprinted < n) ? (size_t) nprinted : n;
+            klog_write_to_console(cons, n - new_count, new_count);
         }
         cons = cons->next;
     }
