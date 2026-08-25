@@ -22,6 +22,9 @@
 #ifndef __BITOPS_H
 #define __BITOPS_H
 
+#include <assert.h>
+#include <stdint.h>
+
 /**
  * Set a bit in a bitstring.
  *
@@ -30,8 +33,12 @@
  */
 static inline void set_bit(volatile void *addr, unsigned int index)
 {
-    volatile char *bits = (volatile char *) addr;
-    __asm__ volatile ("lock btsl %1, %0" : "+m"(*bits) : "Ir"(index));
+    volatile uint32_t *bits = (volatile uint32_t *) addr;
+    __asm__ volatile (
+        "lock btsl %1, %0"
+        : "+m"(*bits)
+        : "Ir"(index)
+        : "cc", "memory");
 }
 
 /**
@@ -42,8 +49,12 @@ static inline void set_bit(volatile void *addr, unsigned int index)
  */
 static inline void clear_bit(volatile void *addr, unsigned int index)
 {
-    volatile char *bits = (volatile char *) addr;
-    __asm__ volatile ("lock btrl %1, %0" : "+m"(*bits) : "Ir"(index));
+    volatile uint32_t *bits = (volatile uint32_t *) addr;
+    __asm__ volatile (
+        "lock btrl %1, %0"
+        : "+m"(*bits)
+        : "Ir"(index)
+        : "cc", "memory");
 }
 
 /**
@@ -54,8 +65,12 @@ static inline void clear_bit(volatile void *addr, unsigned int index)
  */
 static inline void flip_bit(volatile void *addr, unsigned int index)
 {
-    volatile char *bits = (volatile char *) addr;
-    __asm__ volatile ("lock btcl %1, %0" : "+m"(*bits) : "Ir"(index));
+    volatile uint32_t *bits = (volatile uint32_t *) addr;
+    __asm__ volatile (
+        "lock btcl %1, %0"
+        : "+m"(*bits)
+        : "Ir"(index)
+        : "cc", "memory");
 }
 
 /**
@@ -67,20 +82,24 @@ static inline void flip_bit(volatile void *addr, unsigned int index)
  */
 static inline int test_bit(volatile void *addr, unsigned int index)
 {
-    volatile char *bits = (volatile char *) addr;
+    volatile uint32_t *bits = (volatile uint32_t *) addr;
 
     // incredibly clever usage of SBB here to extract carry flag, taken from:
     //   https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html#OutputOperand
     // saves us a push and a pop :)
+    //
+    // [08-24-2026] except now I've changed it to use SETC because it turns out
+    // sbb %0, %0 computes %0 = %0 - %0 - CF = -CF, yielding 0 or -1, not 0 or 1
 
-    int bit;
+    unsigned char bit;
     __asm__ volatile (
         "                   \n\
         btl     %2, %1      \n\
-        sbb     %0, %0      \n\
+        setc    %0          \n\
         "
-        : "=r"(bit)
+        : "=q"(bit)
         : "m"(*bits), "Ir"(index)
+        : "cc", "memory"
     );
 
     return bit;
@@ -95,16 +114,17 @@ static inline int test_bit(volatile void *addr, unsigned int index)
  */
 static inline int test_and_set_bit(volatile void *addr, unsigned int index)
 {
-    volatile char *bits = (volatile char *) addr;
+    volatile uint32_t *bits = (volatile uint32_t *) addr;
 
-    int bit;
+    unsigned char bit;
     __asm__ volatile (
         "                   \n\
    lock btsl    %2, %1      \n\
-        sbb     %0, %0      \n\
+        setc    %0          \n\
         "
-        : "=r"(bit), "=m"(*bits)
+        : "=q"(bit), "+m"(*bits)
         : "Ir"(index)
+        : "cc", "memory"
     );
 
     return bit;
@@ -120,16 +140,17 @@ static inline int test_and_set_bit(volatile void *addr, unsigned int index)
  */
 static inline int test_and_clear_bit(volatile void *addr, unsigned int index)
 {
-    volatile char *bits = (volatile char *) addr;
+    volatile uint32_t *bits = (volatile uint32_t *) addr;
 
-    int bit;
+    unsigned char bit;
     __asm__ volatile (
         "                   \n\
    lock btrl    %2, %1      \n\
-        sbb     %0, %0      \n\
+        setc    %0          \n\
         "
-        : "=r"(bit), "=m"(*bits)
+        : "=q"(bit), "+m"(*bits)
         : "Ir"(index)
+        : "cc", "memory"
     );
 
     return bit;
@@ -145,16 +166,17 @@ static inline int test_and_clear_bit(volatile void *addr, unsigned int index)
  */
 static inline int test_and_flip_bit(volatile void *addr, unsigned int index)
 {
-    volatile char *bits = (volatile char *) addr;
+    volatile uint32_t *bits = (volatile uint32_t *) addr;
 
-    int bit;
+    unsigned char bit;
     __asm__ volatile (
         "                   \n\
    lock btcl    %2, %1      \n\
-        sbb     %0, %0      \n\
+        setc    %0          \n\
         "
-        : "=r"(bit), "=m"(*bits)
+        : "=q"(bit), "+m"(*bits)
         : "Ir"(index)
+        : "cc", "memory"
     );
 
     return bit;
@@ -170,9 +192,11 @@ static inline int test_and_flip_bit(volatile void *addr, unsigned int index)
  */
 static inline int bit_scan_forward(volatile void *addr, unsigned int size)
 {
+    assert(size % 4 == 0);
+
     int dword_index = -1;
     int dword_count = size >> 2;
-    int bit_index;
+    int bit_index = 0;
 
     __asm__ volatile (
         "                                   \n\
@@ -184,8 +208,9 @@ static inline int bit_scan_forward(volatile void *addr, unsigned int size)
         jz      1b                          \n\
     2:                                      \n\
         "
-        : "=a"(bit_index), "+c"(dword_index), "+d"(dword_count)
+        : "+a"(bit_index), "+c"(dword_index), "+d"(dword_count)
         : "b"(addr)
+        : "cc", "memory"
     );
 
     if (dword_count < 0) {
