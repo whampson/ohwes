@@ -177,7 +177,9 @@ bool cpu_has_cpuid(void)
     cli_save(flags);
     flags |= EFLAGS_ID;         // attempt to set ID flags
     restore_flags(flags);
+
     cli_save(flags);            // readback
+    restore_flags(flags);       // and restore so we don't screw ourselves by disabling interrupts
 
     return flags & EFLAGS_ID;   // if it's still set, CPUID supported
 }
