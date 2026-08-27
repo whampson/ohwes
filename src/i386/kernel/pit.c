@@ -197,7 +197,7 @@ __init void init_timer(void)
     reload_timer(SCHED_TIMER, calculate_divisor(div_round(1000, QUANTUM_MS)));
 
     // clock timer setup
-    mode = _PIT_MODE(CHANNEL_1, ACCESS_LOHI, MODE_INTERRUPT);
+    mode = _PIT_MODE(CHANNEL_1, ACCESS_LOHI, MODE_RATEGEN);
     outb(PIT_PORT_CFG, mode);
     reload_timer(CLOCK_TIMER, MAX_RELOAD);
 
