@@ -40,7 +40,7 @@ enum zone_type {
 #define MEM_ZERO            1
 
 // check whether reading or writing a virtual address would cause a page fault
-bool virt_addr_valid(void *va);
+bool virt_addr_valid(uintptr_t va);
 
 // walk the page table and return the PTE pointed to by the virtual address
 bool walk_page_table(uintptr_t va, pte_t **pte);

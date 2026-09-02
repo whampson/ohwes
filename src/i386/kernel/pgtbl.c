@@ -29,7 +29,7 @@
 bool virt_addr_valid(void *va)
 {
     pte_t *pte;
-    if (!walk_page_table((uint32_t) va, &pte)) {
+    if (!walk_page_table(va, &pte)) {
         return false;
     }
 

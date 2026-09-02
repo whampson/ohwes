@@ -49,6 +49,24 @@
 #define MB                      (1 << MB_SHIFT)
 #define GB                      (1 << GB_SHIFT)
 
+
+//
+// Page Attribute Flags
+//
+#define _PAGE_PRESENT           (1 << 0)        // present in memory
+#define _PAGE_WRITABLE          (1 << 1)        // write accessible
+#define _PAGE_USER              (1 << 2)        // user accessible
+#define _PAGE_PWT               (1 << 3)        // cache: write-through
+#define _PAGE_PCD               (1 << 4)        // cache: disable
+#define _PAGE_ACCESSED          (1 << 5)        // page accessed
+#define _PAGE_DIRTY             (1 << 6)        // page written
+#define _PAGE_PS                (1 << 7)        // 4M page (PDEs); PAT (PTEs)
+#define _PAGE_GLOBAL            (1 << 8)        // TLB pinned
+#define _PAGE_PDE               (1 << 9)        // this is a PDE
+#define _PAGE_LARGE             (_PAGE_PS)
+
+#if !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)
+
 //   10987654321098765432109876543210
 //  +---------+---------+-----------+
 //  |   PDN   |   PTN   |  OFFSET   | Linear Address
@@ -66,23 +84,6 @@
 
 #define PAGE_ALIGN(addr)        ((uintptr_t) ((addr) + (PAGE_SIZE - 1)) & PAGE_MASK)
 #define LARGE_PAGE_ALIGN(addr)  ((uintptr_t) ((addr) + (LARGE_PAGE_SIZE - 1)) & LARGE_PAGE_MASK)
-
-//
-// Page Attribute Flags
-//
-#define _PAGE_PRESENT           (1 << 0)        // present in memory
-#define _PAGE_RW                (1 << 1)        // read/write accessible
-#define _PAGE_USER              (1 << 2)        // user accessible
-#define _PAGE_PWT               (1 << 3)        // cache: write-through
-#define _PAGE_PCD               (1 << 4)        // cache: disable
-#define _PAGE_ACCESSED          (1 << 5)        // page accessed
-#define _PAGE_DIRTY             (1 << 6)        // page written
-#define _PAGE_PS                (1 << 7)        // 4M page (PDEs); PAT (PTEs)
-#define _PAGE_GLOBAL            (1 << 8)        // TLB pinned
-#define _PAGE_PDE               (1 << 9)        // this is a PDE
-#define _PAGE_LARGE             (_PAGE_PS)
-
-#if !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)
 
 #include <assert.h>
 #include <stdbool.h>
@@ -150,7 +151,7 @@ static inline pde_t * pde_offset(pde_t *pde, uint32_t va)
 
 static inline bool pde_read(pde_t pde)          { return (pde & _PAGE_USER) == _PAGE_USER; }
 static inline bool pde_exec(pde_t pde)          { return (pde & _PAGE_USER) == _PAGE_USER; }
-static inline bool pde_write(pde_t pde)         { return (pde & _PAGE_RW) == _PAGE_RW; }
+static inline bool pde_write(pde_t pde)         { return (pde & _PAGE_WRITABLE) == _PAGE_WRITABLE; }
 static inline bool pde_user(pde_t pde)          { return (pde & _PAGE_USER) == _PAGE_USER; }
 static inline bool pde_dirty(pde_t pde)         { return (pde & _PAGE_DIRTY) == _PAGE_DIRTY; }
 static inline bool pde_large(pde_t pde)         { return (pde & _PAGE_LARGE) == _PAGE_LARGE; }
@@ -163,15 +164,15 @@ static inline bool pde_bad(pde_t pde)   // i.e. misconfigured
 
 static inline pde_t pde_mkread(pde_t pde)       { pde |= _PAGE_USER; return pde; }
 static inline pde_t pde_mkexec(pde_t pde)       { pde |= _PAGE_USER; return pde; }
-static inline pde_t pde_mkwrite(pde_t pde)      { pde |= _PAGE_RW; return pde; }
+static inline pde_t pde_mkwrite(pde_t pde)      { pde |= _PAGE_WRITABLE; return pde; }
 static inline pde_t pde_mkuser(pde_t pde)       { pde |= _PAGE_USER; return pde; }
 static inline pde_t pde_mkdirty(pde_t pde)      { pde |= _PAGE_DIRTY; return pde; }
 static inline pde_t pde_mkclean(pde_t pde)      { pde &= ~_PAGE_DIRTY; return pde; }
-static inline pde_t pde_mkpresent(pde_t pde)    { pde &= _PAGE_PRESENT; return pde; }
+static inline pde_t pde_mkpresent(pde_t pde)    { pde |= _PAGE_PRESENT; return pde; }
 
 static inline pde_t pde_rdprotect(pde_t pde)    { pde &= ~_PAGE_USER; return pde; }
 static inline pde_t pde_exprotect(pde_t pde)    { pde &= ~_PAGE_USER; return pde; }
-static inline pde_t pde_wrprotect(pde_t pde)    { pde &= ~_PAGE_RW; return pde; }
+static inline pde_t pde_wrprotect(pde_t pde)    { pde &= ~_PAGE_WRITABLE; return pde; }
 
 // ------------------------------------------------------------------------------------------------
 
@@ -188,22 +189,22 @@ static inline pte_t * pte_offset(pde_t *pde, uint32_t va)
 
 static inline bool pte_read(pte_t pte)          { return (pte & _PAGE_USER) == _PAGE_USER; }
 static inline bool pte_exec(pte_t pte)          { return (pte & _PAGE_USER) == _PAGE_USER; }
-static inline bool pte_write(pte_t pte)         { return (pte & _PAGE_RW) == _PAGE_RW; }
+static inline bool pte_write(pte_t pte)         { return (pte & _PAGE_WRITABLE) == _PAGE_WRITABLE; }
 static inline bool pte_user(pte_t pte)          { return (pte & _PAGE_USER) == _PAGE_USER; }
 static inline bool pte_dirty(pte_t pte)         { return (pte & _PAGE_DIRTY) == _PAGE_DIRTY; }
 static inline bool pte_present(pte_t pte)       { return (pte & _PAGE_PRESENT) == _PAGE_PRESENT; }
 
 static inline pte_t pte_mkread(pte_t pte)       { pte |= _PAGE_USER; return pte; }
 static inline pte_t pte_mkexec(pte_t pte)       { pte |= _PAGE_USER; return pte; }
-static inline pte_t pte_mkwrite(pte_t pte)      { pte |= _PAGE_RW; return pte; }
+static inline pte_t pte_mkwrite(pte_t pte)      { pte |= _PAGE_WRITABLE; return pte; }
 static inline pte_t pte_mkuser(pte_t pte)       { pte |= _PAGE_USER; return pte; }
 static inline pte_t pte_mkdirty(pte_t pte)      { pte |= _PAGE_DIRTY; return pte; }
 static inline pte_t pte_mkclean(pte_t pte)      { pte &= ~_PAGE_DIRTY; return pte; }
-static inline pte_t pte_mkpresent(pte_t pte)    { pte &= _PAGE_PRESENT; return pte; }
+static inline pte_t pte_mkpresent(pte_t pte)    { pte |= _PAGE_PRESENT; return pte; }
 
 static inline pte_t pte_rdprotect(pte_t pte)    { pte &= ~_PAGE_USER; return pte; }
 static inline pte_t pte_exprotect(pte_t pte)    { pte &= ~_PAGE_USER; return pte; }
-static inline pte_t pte_wrprotect(pte_t pte)    { pte &= ~_PAGE_RW; return pte; }
+static inline pte_t pte_wrprotect(pte_t pte)    { pte &= ~_PAGE_WRITABLE; return pte; }
 
 #endif  // __ASSEMBLER__
 
