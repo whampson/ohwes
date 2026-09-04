@@ -29,9 +29,6 @@
 #include <kernel/tty.h>
 #include <kernel/vga.h>
 
-#define FB_SIZE_PAGES           2       // 8192 bytes (enough for 80x50)
-#define FB_SIZE                 ((FB_SIZE_PAGES)<<PAGE_SHIFT)
-
 // TODO: set via ioctl
 #define BELL_FREQ               750     // Hz
 #define BELL_TIME               50      // ms
@@ -51,13 +48,14 @@ struct terminal {
     int number;                         // virtual terminal number
     int state;                          // current control state
     bool initialized;                   // terminal has been switched to once
-    bool printing;                      // terminal is currently printing
+    uint32_t printing;                  // terminal is currently printing (atomic)
 
     struct tty *tty;
     int refcount;
 
     uint16_t cols, rows;                // screen dimensions
-    void *framebuf;                     // frame buffer
+    void *framebuf;                     // frame buffer, always valid (i.e. when visible or hidden)
+    uintptr_t backbuf;                  // physical address of terminal's back buffer
 
     char tabstops[MAX_TABSTOP];         // tab stops
 
@@ -114,12 +112,6 @@ int current_terminal(void);
 // switch to a virtual terminal
 int switch_terminal(int num);
 
-// get a terminal's virtual frame buffer
-void * get_terminal_fb(int num);
-
-// get real VGA frame buffer
-void * get_vga_fb(void);
-
 // has the keyboard driver been configured
 // and is the keyboard currently usable?
 bool kb_avail(void);
@@ -145,7 +137,7 @@ void terminal_restore(struct terminal *term, struct terminal_save_state *save);
 void terminal_defaults(struct terminal *term);
 
 // write directly to terminal, bypassing TTY
-int terminal_putchar(struct terminal *term, char c);
+void terminal_putchar(struct terminal *term, char c);
 int terminal_print(struct terminal *term, const char *str);
 int terminal_write(struct terminal *term, const char *buf, size_t count);
 

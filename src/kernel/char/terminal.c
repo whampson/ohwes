@@ -19,6 +19,13 @@
  * =============================================================================
  */
 
+#define VT_FB_SIZE_PAGES            8
+#define VT_FB_SIZE                  (VT_FB_SIZE_PAGES << PAGE_SHIFT)
+#define VT_FB_WORDS                 (VT_FB_SIZE >> 1)
+// // TODO: better distinction between entire and visible portion of VGA frame buffer
+// #define VT_FB_VISIBLE_SIZE_PAGES    8
+// #define VT_FB_VISIBLE_SIZE          (VT_FB_VISIBLE_SIZE_PAGES << PAGE_SHIFT)
+
 #include <ctype.h>
 #include <errno.h>
 #include <i386/bitops.h>
@@ -214,7 +221,8 @@ __init void init_early_terminal(int num, struct terminal *term)
         // assignment made by terminal_initialize() is correct;
         // grab the actual frame buffer address currently in use
         vga_get_fb_info(&fb_info);
-        term->framebuf = KERNEL_ADDR(fb_info.framebuf);
+        term->framebuf = KERNEL_ADDR(fb_info.base_physical);
+        term->backbuf = fb_info.base_physical;
 
         // read the current cursor position and print initial newline
         pos2xy(term, vga_get_cursor_pos());
@@ -245,8 +253,7 @@ static ssize_t vt_console_write(struct console *cons, const char *buf, size_t co
         if (*p == '\n') {
             terminal_putchar(term, '\r');
         }
-        terminal_putchar(term, *p);
-        p++;
+        terminal_putchar(term, *p++);
     }
 
     return (p - buf);
@@ -321,6 +328,7 @@ static void update_vga_state(const struct terminal *term);
 // frame buffer
 static void set_fb_char(struct terminal *term, uint16_t pos, char c);
 static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr attr);
+static void map_terminal_fb(struct terminal *term, uintptr_t phys);
 
 // ----------------------------------------------------------------------------
 // initialization
@@ -329,46 +337,47 @@ __init void init_terminal_driver(void)
 {
     struct vga_fb_info fb_info;
 
-    // switch the frame buffer
-    vga_set_fb(VGA_MEMORY_128K);    // 32 pages, up to 16 80x50 VTs
+    // set frame buffer physical address
+    vga_set_fb(VGA_MEMORY_32K_HI);  // 0xB8000 - 0xBFFFF
     vga_get_fb_info(&fb_info);
-    get_terminal(DEFAULT_VT)->framebuf = KERNEL_ADDR(fb_info.framebuf);
 
-    pr_info("VGA frame buffer switched to %p\n", KERNEL_ADDR(fb_info.framebuf));
-
-    // make sure we have enough memory for the configured number of terminals
-    if (fb_info.size_pages - FB_SIZE_PAGES < NR_TERMINAL * FB_SIZE_PAGES) {
-        panic("not enough video memory available for %d terminals at "
-            "%d frame buffer\npages each! See config.h.",
-            NR_TERMINAL, FB_SIZE_PAGES);
-    }
+    pr_debug("vga: frame buffer %u pages %p-%p\n",
+        fb_info.size_pages, KERNEL_ADDR(fb_info.base_physical),
+        KERNEL_ADDR(fb_info.base_physical + (fb_info.size_pages << PAGE_SHIFT)-1));
 
     // get the keyboard working
+    extern __init void init_kb(void);
     init_kb();
 
-    // initialize all virtual terminals
+    // allocate a back buffer for each terminal
     for (int i = 1; i <= NR_TERMINAL; i++) {
         struct terminal *term = get_terminal(i);
-        if (term->initialized && term->number == DEFAULT_VT) {
-            // terminal already initialized if console was registered early;
-            // just restore the boot cursor position
-            pos2xy(get_terminal(DEFAULT_VT), vga_get_cursor_pos());
-            continue;
+        if (!term->initialized) {
+            terminal_initialize(i, term);
         }
-        terminal_initialize(i, term);
-        erase(term, ERASE_ALL);
+
+        void *backbuf = alloc_pages(MEM_ZERO, get_order(VT_FB_SIZE));
+        if (!backbuf) {
+            panic("unable to allocate frame buffer for terminal %d!", i);
+        }
+        term->framebuf = backbuf;
+        term->backbuf = PHYSICAL_ADDR(backbuf);
+
+        if (term->number == DEFAULT_VT) {
+            // preserve boot output by copying VGA into back buffer
+            memcpy(term->framebuf, KERNEL_ADDR(fb_info.base_physical), VT_FB_SIZE);
+            // map the default terminal's frame buffer into VGA memory
+            map_terminal_fb(term, fb_info.base_physical);
+            pos2xy(term, vga_get_cursor_pos());
+        }
+        else {
+            erase(term, ERASE_ALL);
+        }
     }
 
     // register the terminal TTY driver, needed for terminal switch
     if (tty_register_driver(&terminal_driver)) {
         panic("unable to register terminal driver!");
-    }
-
-    // do a proper 'switch' to the initial virtual terminal;
-    // this will move the frame buffer to the correct address
-    int ret = switch_terminal(DEFAULT_VT);
-    if (ret != 0) {
-        panic("unable to switch to terminal %d!", DEFAULT_VT);
     }
 
     // create a restore point
@@ -396,7 +405,9 @@ void terminal_initialize(int num, struct terminal *term)
 
     terminal_defaults(term);
     term->number = num;
-    term->framebuf = get_terminal_fb(num);
+    term->framebuf = NULL;
+    term->backbuf = 0;
+    clear_bit(&term->printing, 0);
     term->initialized = true;
 }
 
@@ -432,8 +443,6 @@ void terminal_defaults(struct terminal *term)
     save_terminal(term);
 }
 
-extern int tty_startup(dev_t device, struct tty **out_tty);
-
 int switch_terminal(int num)
 {
     if (num <= 0 || num > NR_TERMINAL) {
@@ -443,57 +452,36 @@ int switch_terminal(int num)
     uint32_t flags;
     cli_save(flags);
 
-    pde_t *pgdir;
-    struct vga_fb_info fb_info;
-    struct terminal *curr = get_terminal(0);
+    struct terminal *curr = get_terminal(current_terminal());
     struct terminal *next = get_terminal(num);
-    struct tty *tty = NULL;
 
-    if (tty_startup(__mkttydev(num), &tty)) {
-        panic("could not switch terminals -- unable to open tty%d", num);
+    if (curr == next) {
+        restore_flags(flags);
+        return 0;
+    }
+    if (!next->initialized) {
+        restore_flags(flags);
+        return -EIO;
     }
 
+    struct vga_fb_info fb_info;
     vga_get_fb_info(&fb_info);
-    curr->framebuf = get_terminal_fb(curr->number);
-    next->framebuf = get_terminal_fb(next->number);
 
-    pgdir = (pde_t *) get_pgdir();
+    // map current terminal's frame buffer to its own back buffer
+    map_terminal_fb(curr, curr->backbuf);
 
-#if HIGHER_GROUND
-    // enable kernel identity mapping so we can operate on page tables
-    pde_t *ident_pde = &pgdir[0];
-    *ident_pde = __mkpde((uint32_t) __page_tbl, _PAGE_RW);
-#endif
+    // save current VGA contents to old terminal's back buffer
+    memcpy(curr->framebuf, KERNEL_ADDR(fb_info.base_physical), VT_FB_SIZE);
 
-    // identity map old frame buffer, so it will write to back buffer
-    for (int i = 0; i < FB_SIZE_PAGES; i++) {
-        uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
-        pte_t *pte = pte_offset(pgdir, fb_page);
-        *pte = __mkpte(PHYSICAL_ADDR(fb_page), _PAGE_RW);
-    }
-    flush_tlb();
+    // restore new terminal's back buffer into VGA memory
+    memcpy(KERNEL_ADDR(fb_info.base_physical), next->framebuf, VT_FB_SIZE);
 
-    // swap buffers
-    memcpy(curr->framebuf, (void *) fb_info.framebuf, FB_SIZE);
-    memcpy((void *) fb_info.framebuf, next->framebuf, FB_SIZE);
-    curr = next;
+    // map new terminal's frame buffer to VGA memory
+    map_terminal_fb(next, fb_info.base_physical);
 
-    // map new frame buffer to VGA
-    for (int i = 0; i < FB_SIZE_PAGES; i++) {
-        uint32_t fb_page = (uint32_t) curr->framebuf + (i << PAGE_SHIFT);
-        uint32_t vga_page = fb_info.framebuf + (i << PAGE_SHIFT);
-        pte_t *pte = pte_offset(pgdir, fb_page);
-        *pte = __mkpte(PHYSICAL_ADDR(vga_page), _PAGE_RW);
-    }
-
-#if HIGHER_GROUND
-    pde_clear(ident_pde);
-#endif
-
-    flush_tlb();
-
-    update_vga_state(curr);
-    g_currterm = curr->number;
+    // apply new terminal's VGA state
+    update_vga_state(next);
+    g_currterm = next->number;
 
     restore_flags(flags);
     return 0;
@@ -523,32 +511,6 @@ struct terminal * get_terminal(int num)
     }
 
     return term;
-}
-
-void * get_terminal_fb(int num)
-{
-    char *fb;
-
-    if (num < 0 || num > NR_TERMINAL) {
-        panic("attempt to get nonexistant terminal %d frame buffer!", num);
-    }
-    if (num == 0) {
-        num = current_terminal();
-    }
-    assert(num > 0);
-
-    fb = (char *) get_vga_fb();
-    fb += (num * FB_SIZE_PAGES) << PAGE_SHIFT;
-
-    return fb;
-}
-
-void * get_vga_fb(void)
-{
-    struct vga_fb_info fb_info;
-    vga_get_fb_info(&fb_info);
-
-    return KERNEL_ADDR(fb_info.framebuf);
 }
 
 void terminal_save(struct terminal *term, struct terminal_save_state *save)
@@ -581,7 +543,7 @@ int terminal_print(struct terminal *term, const char *buf)
 
     p = buf;
     while (*p != '\0' && (p - buf) < MAX_PRINTBUF) {
-        p += terminal_putchar(term, *p);
+        terminal_putchar(term, *p++);
     }
 
     return (p - buf);
@@ -602,13 +564,13 @@ int terminal_write(struct terminal *term, const char *buf, size_t count)
         outb(0xE9, *p);
     }
 #endif
-        p += terminal_putchar(term, *p);
+        terminal_putchar(term, *p++);
     }
 
     return count;
 }
 
-int terminal_putchar(struct terminal *term, char c)
+void terminal_putchar(struct terminal *term, char c)
 {
     bool update_char = false;
     bool update_attr = false;
@@ -616,9 +578,8 @@ int terminal_putchar(struct terminal *term, char c)
     uint16_t char_pos;
 
     // prevent reentrancy to avoid mucking with terminal state
-    if (test_and_set_bit(&term->printing, 0)) {
-        return 0;   // TODO: do we just drop the char?
-                    // should we buffer the chars then flush them at the end
+    if (test_and_set_bit(&term->printing, 0)) {     // TODO: consider using atomic xchg (faster than `lock`)
+        return; // TODO: do we just drop the char?
     }
 
     // handle escape sequences if not a control character
@@ -714,7 +675,7 @@ write_vga:
 
 done:
     clear_bit(&term->printing, 0);
-    return 1;
+    return;
 }
 
 // ----------------------------------------------------------------------------
@@ -1264,6 +1225,12 @@ static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr a
     if (attr.invert) {
         swap(vga_attr->color_bg, vga_attr->color_fg);
     }
+}
+
+static void map_terminal_fb(struct terminal *term, uintptr_t phys)
+{
+    update_page_mappings((uintptr_t) term->framebuf, phys,
+        VT_FB_SIZE_PAGES, _PAGE_WRITABLE | _PAGE_PRESENT);
 }
 
 static void enable_blink(const struct terminal *term)
