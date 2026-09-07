@@ -19,13 +19,6 @@
  * =============================================================================
  */
 
-#define VT_FB_SIZE_PAGES            8
-#define VT_FB_SIZE                  (VT_FB_SIZE_PAGES << PAGE_SHIFT)
-#define VT_FB_WORDS                 (VT_FB_SIZE >> 1)
-// // TODO: better distinction between entire and visible portion of VGA frame buffer
-// #define VT_FB_VISIBLE_SIZE_PAGES    8
-// #define VT_FB_VISIBLE_SIZE          (VT_FB_VISIBLE_SIZE_PAGES << PAGE_SHIFT)
-
 #include <ctype.h>
 #include <errno.h>
 #include <i386/bitops.h>
@@ -45,9 +38,15 @@
 #include <kernel/terminal.h>
 #include <kernel/vga.h>
 
+#define VGA_FB_SIZE_PAGES   8                   // B8000-BFFFF
+#define VGA_FB_SIZE         (VGA_FB_SIZE_PAGES << PAGE_SHIFT)
+#define VGA_FB_WORDS        (VGA_FB_SIZE >> 1)  // 2 bytes per char
+
+#define FAST_SCROLL         1   // uses VGA hardware regs to control scrolling
+
+// TODO: name 'vgaterm.c'
+
 // initialization
-extern __init void init_kb(void);
-extern __init void init_vga(void);
 void terminal_initialize(int num, struct terminal *term);
 
 // screen positioning
@@ -324,6 +323,7 @@ static void enable_cursor(const struct terminal *term); // ESC 5 / ESC 6
 static void set_cursor_pos(const struct terminal *term);// ESC [ <n>;<m>H
 static void set_cursor_shape(const struct terminal *term);
 static void update_vga_state(const struct terminal *term);
+static void update_cursor_state(const struct terminal *term);
 
 // frame buffer
 static void set_fb_char(struct terminal *term, uint16_t pos, char c);
@@ -356,7 +356,7 @@ __init void init_terminal_driver(void)
             terminal_initialize(i, term);
         }
 
-        void *backbuf = alloc_pages(MEM_ZERO, get_order(VT_FB_SIZE));
+        void *backbuf = alloc_pages(MEM_ZERO, get_order(VGA_FB_SIZE));
         if (!backbuf) {
             panic("unable to allocate frame buffer for terminal %d!", i);
         }
@@ -365,8 +365,8 @@ __init void init_terminal_driver(void)
 
         if (term->number == DEFAULT_VT) {
             // preserve boot output by copying VGA into back buffer
-            memcpy(term->framebuf, KERNEL_ADDR(fb_info.base_physical), VT_FB_SIZE);
-            // map the default terminal's frame buffer into VGA memory
+            memcpy(term->framebuf, KERNEL_ADDR(fb_info.base_physical), VGA_FB_SIZE);
+            // now map the default terminal's frame buffer into VGA memory
             map_terminal_fb(term, fb_info.base_physical);
             pos2xy(term, vga_get_cursor_pos());
         }
@@ -390,7 +390,6 @@ __init void init_terminal_driver(void)
     // register the virtual terminal console
     register_console(&vt_console);
 #endif
-
 }
 
 void terminal_initialize(int num, struct terminal *term)
@@ -419,6 +418,7 @@ void terminal_defaults(struct terminal *term)
     term->state = S_NORM;
     term->cols = vga_get_cols();
     term->rows = vga_get_rows();
+    term->origin = 0;
     for (int i = 0; i < MAX_TABSTOP; i++) {
         term->tabstops[i] = (((i + 1) % TABSTOP_WIDTH) == 0);
     }
@@ -471,10 +471,10 @@ int switch_terminal(int num)
     map_terminal_fb(curr, curr->backbuf);
 
     // save current VGA contents to old terminal's back buffer
-    memcpy(curr->framebuf, KERNEL_ADDR(fb_info.base_physical), VT_FB_SIZE);
+    memcpy(curr->framebuf, KERNEL_ADDR(fb_info.base_physical), VGA_FB_SIZE);
 
     // restore new terminal's back buffer into VGA memory
-    memcpy(KERNEL_ADDR(fb_info.base_physical), next->framebuf, VT_FB_SIZE);
+    memcpy(KERNEL_ADDR(fb_info.base_physical), next->framebuf, VGA_FB_SIZE);
 
     // map new terminal's frame buffer to VGA memory
     map_terminal_fb(next, fb_info.base_physical);
@@ -999,7 +999,7 @@ static void restore_cursor(struct terminal *term)
 {
     term->cursor._value = term->saved_state.cursor;
     if (is_current(term)) {
-        update_vga_state(term);
+        update_cursor_state(term);
     }
 }
 
@@ -1035,53 +1035,76 @@ static void reverse_linefeed(struct terminal *term)
 
 static void tab(struct terminal *term)
 {
-    while (term->cursor.x < term->cols) {
+    assert(MAX_TABSTOP == term->cols);
+
+    while (term->cursor.x < MAX_TABSTOP - 1) {
         if (term->tabstops[++term->cursor.x]) {
             break;
         }
     }
 
-    if (term->cursor.x >= term->cols) {
-        term->cursor.x = term->cols - 1;
+    if (term->cursor.x >= MAX_TABSTOP - 1) {
+        term->cursor.x = MAX_TABSTOP - 1;
     }
 }
 
 static void scroll(struct terminal *term, int n)   // n < 0 is reverse scroll
 {
-    int n_cells;
-    int n_blank;
-    int n_bytes;
-    bool reverse;
-    void *src;
-    void *src_end;
-    void *dst;
-    int i;
+    if (n == 0) return;
 
-    reverse = (n < 0);
-    if (reverse) {
-        n = -n;
-    }
-    if (n > term->rows) {
-        n = term->rows;
-    }
-    if (n == 0) {
-        return;
+    bool reverse = (n < 0);
+    if (reverse) n = -n;
+
+    if (n > term->rows) n = term->rows;
+
+    // NOTE: no vertical sync, fast-scrolling text may tear
+
+#if FAST_SCROLL
+    int n_blank = n * term->cols;
+    int n_visible = term->cols * term->rows;
+    int n_kept = n_visible - n_blank;
+
+    int last_row_start = VGA_FB_WORDS - (VGA_FB_WORDS % term->cols);
+
+    term->origin += (reverse) ? -n_blank : n_blank;
+    if (term->origin + n_visible >= last_row_start) {   // will wrap if negative
+        if (reverse) {
+            memmove(term->framebuf + ((last_row_start - n_visible) << 1), term->framebuf, n_kept << 1);
+            term->origin = last_row_start - n_visible - n_blank;
+        }
+        else {
+            memmove(term->framebuf, term->framebuf + ((last_row_start - n_visible) << 1), n_kept << 1);
+            term->origin = 0;
+        }
     }
 
-    n_blank = n * term->cols;
-    n_cells = (term->rows * term->cols) - n_blank;
-    n_bytes = n_cells * sizeof(struct vga_cell);
+    for (int i = 0; i < n_blank; i++) {
+        int pos = (reverse) ? i : n_visible - n_blank + i;
+        set_fb_char(term, pos, ' ');
+        set_fb_attr(term, pos, term->attr);
+    }
 
-    src_end = &((struct vga_cell *) term->framebuf)[n_blank];
-    src = (reverse) ? term->framebuf : src_end;
-    dst = (reverse) ? src_end : term->framebuf;
+    if (is_current(term)) {
+        vga_set_scan_start(term->origin);
+    }
+
+#else
+
+    int n_blank = n * term->cols;
+    int n_cells = (term->rows * term->cols) - n_blank;
+    int n_bytes = n_cells * sizeof(struct vga_cell);
+
+    void *src_end = &((struct vga_cell *) term->framebuf)[n_blank];
+    void *src = (reverse) ? term->framebuf : src_end;
+    void *dst = (reverse) ? src_end : term->framebuf;
     memmove(dst, src, n_bytes);
 
-    for (i = 0; i < n_blank; i++) {
+    for (int i = 0; i < n_blank; i++) {
         int pos = (reverse) ? i : n_cells + i;
         set_fb_char(term, pos, ' ');
         set_fb_attr(term, pos, term->attr);
     }
+#endif
 }
 
 static void erase(struct terminal *term, int mode)
@@ -1187,18 +1210,22 @@ static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y)
 
 static void pos2xy(struct terminal *term, uint16_t pos)
 {
+    pos = (pos - term->origin + VGA_FB_WORDS) % VGA_FB_WORDS;
     term->cursor.x = pos % term->cols;
     term->cursor.y = pos / term->cols;
 }
 
 static void set_fb_char(struct terminal *term, uint16_t pos, char c)
 {
+    pos = (term->origin + pos) % VGA_FB_WORDS;
     ((struct vga_cell *) term->framebuf)[pos].ch = c;
 }
 
 static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr attr)
 {
     struct vga_attr *vga_attr;
+
+    pos = (term->origin + pos) % VGA_FB_WORDS;
     vga_attr = &((struct vga_cell *) term->framebuf)[pos].attr;
 
     vga_attr->bg = attr.bg;
@@ -1230,7 +1257,7 @@ static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr a
 static void map_terminal_fb(struct terminal *term, uintptr_t phys)
 {
     update_page_mappings((uintptr_t) term->framebuf, phys,
-        VT_FB_SIZE_PAGES, _PAGE_WRITABLE | _PAGE_PRESENT);
+        VGA_FB_SIZE_PAGES, _PAGE_WRITABLE | _PAGE_PRESENT);
 }
 
 static void enable_blink(const struct terminal *term)
@@ -1247,7 +1274,7 @@ static void set_cursor_pos(const struct terminal *term)
 {
     uint16_t pos;
 
-    pos = xy2pos(term, term->cursor.x, term->cursor.y);
+    pos = term->origin + xy2pos(term, term->cursor.x, term->cursor.y);
     vga_set_cursor_pos(pos);
 }
 
@@ -1256,10 +1283,16 @@ static void set_cursor_shape(const struct terminal *term)
     vga_set_cursor_shape(term->cursor.shape);
 }
 
-static void update_vga_state(const struct terminal *term)
+static void update_cursor_state(const struct terminal *term)
 {
-    enable_blink(term);
     enable_cursor(term);
     set_cursor_shape(term);
     set_cursor_pos(term);
+}
+
+static void update_vga_state(const struct terminal *term)
+{
+    enable_blink(term);
+    update_cursor_state(term);
+    vga_set_scan_start(term->origin);
 }
