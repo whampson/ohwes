@@ -965,7 +965,6 @@ static void csi_m(struct terminal *term, char p)
             }
             if (p >= 100 && p <= 107) {
                 term->attr.bg = CSI_VGA_COLOR_MAP[p - 100];
-                term->attr.bright = !term->attr.blink;  // blink overrides bright
             }
             break;
     }
