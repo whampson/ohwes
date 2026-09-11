@@ -63,7 +63,7 @@
     _x;                                                                     \
 })
 
-#define inb_delay(port)                                                     \
+#define inb_slow(port)                                                     \
 ({                                                                          \
     uint8_t _x;                                                             \
     __asm__ volatile (                                                      \
@@ -87,7 +87,7 @@ do {                                                                        \
     );                                                                      \
 } while (0)
 
-#define outb_delay(port,data)                                               \
+#define outb_slow(port,data)                                               \
 do {                                                                        \
     __asm__ volatile (                                                      \
         "                                                                   \n\
@@ -102,14 +102,14 @@ do {                                                                        \
 
 #define cmos_read(addr)                                                     \
 ({                                                                          \
-    outb_delay(CMOS_INDEX_PORT, addr);                                      \
+    outb_slow(CMOS_INDEX_PORT, addr);                                      \
     inb(CMOS_DATA_PORT);                                                    \
 })
 
 #define cmos_write(addr,data)                                               \
 ({                                                                          \
-    outb_delay(CMOS_INDEX_PORT, addr);                                      \
-    outb_delay(CMOS_DATA_PORT, data);                                       \
+    outb_slow(CMOS_INDEX_PORT, addr);                                      \
+    outb_slow(CMOS_DATA_PORT, data);                                       \
 })
 
 #define nmi_disable()                                                       \

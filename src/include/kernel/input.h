@@ -37,13 +37,54 @@
 #define numpad_index(k)         ((is_numpad(k)) ? (k) - KEY_KP0 : -1)
 #define fnkey_index(k)          ((is_fnkey(k)) ? (k) - KEY_F1 + 1 : -1)
 
-struct key_event
+struct keystroke
 {
-    uint16_t keycode;
+    uint16_t keycode;   // TODO: need to encode modifier key state
     uint16_t scancode;
     bool release;
+};
+
+struct key_event
+{
+    struct keystroke key;
     char c;
 };
+
+// TODO:
+// typedef void (*key_action_t)(struct key_event *evt);
+// void register_keystroke(struct keystroke *k, key_action_t *callback);
+
+struct ps2kb_state
+{
+    union {
+        struct {
+            union {
+                struct {
+                    int ctrl    : 2;        // [1:0] = { LCTRL,  RCTRL }; use _DNMASK
+                    int alt     : 2;
+                    int shift   : 2;
+                    int meta    : 2;
+                    int sysrq   : 1;
+                };
+                uint32_t _modkeys;
+            };
+            union {
+                struct {
+                    bool scrlk  : 1; // scroll lock
+                    bool numlk  : 1; // number lock
+                    bool capslk : 1; // caps lock
+                }; // note: do not change the order!
+                uint32_t _leds;       // LED state
+            };
+        };
+        uint32_t _flags;
+    };
+
+    // input state
+    char altchar;           // ALT+<NUMPAD> state
+};
+
+void kb_update_state(const struct ps2kb_state *state);
 
 //
 // Virtual Key Code Definitions
@@ -170,5 +211,19 @@ struct key_event
 static_assert(KEY_KP0 < KEY_KP9, "KEY_KP0 < KEY_KP9");
 static_assert(KEY_A == 'A', "KEY_A == 'A'");
 // etc.
+
+// TODO: move to hardware-specific location
+#define PS2KB_RCTRL         (1 << 0)
+#define PS2KB_LCTRL         (1 << 1)
+#define PS2KB_RALT          (1 << 2)
+#define PS2KB_LALT          (1 << 3)
+#define PS2KB_RSHIFT        (1 << 4)
+#define PS2KB_LSHIFT        (1 << 5)
+#define PS2KB_RMETA         (1 << 6)
+#define PS2KB_LMETA         (1 << 7)
+#define PS2KB_SYSRQ         (1 << 8)
+#define PS2KB_NUMLK         (1 << 9)
+#define PS2KB_CAPSLK        (1 << 10)
+#define PS2KB_SCRLK         (1 << 11)
 
 #endif /* __INPUT_H */

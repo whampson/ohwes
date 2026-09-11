@@ -37,7 +37,7 @@
 #define PS2_CMD_WRCFG           0x60    // Write Controller Configuration Register
 #define PS2_CMD_RDOUT           0xD0    // Read Controller Output Register
 #define PS2_CMD_WROUT           0xD1    // Write Controller Output Register
-#define PS2_CMD_TEST            0xAA    // Test PS/2 Controller
+#define PS2_CMD_SELFTEST        0xAA    // Test PS/2 Controller
 #define PS2_CMD_P1OFF           0xAD    // Disable Port 1
 #define PS2_CMD_P1ON            0xAE    // Enable Port 1
 #define PS2_CMD_P1TEST          0xAB    // Test Port 1
@@ -80,18 +80,22 @@
 #define PS2_OUT_P1CLK           (1<<6)  // First Device Port Clock (output)
 #define PS2_OUT_P1DAT           (1<<7)  // First Device Port Data (output)
 
-bool ps2_canread(void);
-bool ps2_canwrite(void);
-uint8_t ps2_read(void);
-void ps2_write(uint8_t data);
-void ps2_flush(void);
-uint8_t ps2_status(void);
-void ps2_cmd(uint8_t cmd);
+// port 1 only
+uint8_t ps2_read(void);                 // read PS/2 data port
+uint8_t ps2_read_fast(void);            // read PS/2 data port, with faster timeout
+uint8_t ps2_read_status(void);          // read PS/2 status register
+uint8_t ps2_read_config(void);          // read PS/2 controller config register
+void ps2_write(uint8_t data);           // write PS/2 data port
+bool ps2_write_fast(uint8_t data);      // write PS/2 data port, with faster timeout
+void ps2_write_cmd(uint8_t cmd);        // write PS/2 command port
+void ps2_write_config(uint8_t cfg);     // write PS/2 config register
+void ps2_flush(void);                   // flush pending read data
 
-#define PS2_IO_TIMEOUT          25000   // register poll count before giving up
+
 
 // Keyboard Commands
 #define PS2KB_CMD_SETLED        0xED    // Set Caps Lock, Num Lock, and Scroll Lock LEDs
+#define PS2KB_CMD_ECHO          0xEE    // Echo
 #define PS2KB_CMD_SCANCODE      0xF0    // Set Scan Code Mapping (1, 2, or 3)
 #define PS2KB_CMD_IDENT         0xF2    // Identify Keyboard
 #define PS2KB_CMD_TYPEMATIC     0xF3    // Set Typematic Rate

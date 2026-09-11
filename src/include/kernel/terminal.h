@@ -31,7 +31,7 @@
 
 // TODO: set via ioctl
 #define BELL_FREQ               750     // Hz
-#define BELL_TIME               50      // ms
+#define BELL_TIME               100     // ms
 
 #define MAX_CSIPARAM            16      // ESC[p;q;r;s;...,n param count
 #define MAX_TABSTOP             80      // maximum number of tabstops allowed
@@ -65,6 +65,8 @@ struct terminal {
 
     bool blink_on;                      // character blinking enabled
     bool need_wrap;                     // wrap output to next line on next character
+
+    struct ps2kb_state kb_state;        // current keyboard state
 
     struct _char_attr {                 // character attributes
         union {
@@ -116,9 +118,6 @@ int switch_terminal(int num);
 // has the keyboard driver been configured
 // and is the keyboard currently usable?
 bool kb_avail(void);
-
-bool kb_tty_enabled(void);          // will typed chars be sent to the TTY?
-void kb_enable_tty(bool enable);    // enable/disable sending typed chars to TTY
 
 bool kb_sysrq_enabled(void);        // will SysRq functions work?
 void kb_enable_sysrq(bool enable);  // enable/disable SysRq key
