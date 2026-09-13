@@ -244,6 +244,12 @@ int gdb_main(struct iregs *regs, bool from_com)
     }
     cli_save(flags);
 
+    // clear TF in saved frame; guarantees that iret never leaves a stale
+    // single-step trap armed, which is what happens if a pending interrupt is
+    // delivered mid-step; gdb_step() explicitly re-arms TF when single-step
+    // requested by user
+    regs->eflags &= ~EFLAGS_TF;
+
     // zero state
     status = 0;
     zeromem(state, sizeof(struct gdb_state));   // TODO: preserve statistics
@@ -395,6 +401,7 @@ gdb_done:
 static void gdb_step(struct gdb_state *state)
 {
     state->regs[GDB_REG_I386_EFLAGS] |= EFLAGS_TF;
+    state->regs[GDB_REG_I386_EFLAGS] &= ~EFLAGS_IF; // don't let an IRQ preempt (would corrupt GDB)
     gdb_enable_com_int(state);
 }
 
