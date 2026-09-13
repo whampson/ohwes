@@ -55,9 +55,6 @@
 
 typedef void (*irq_handler)(int irq, struct iregs *regs);
 
-void irq_enable(void);
-void irq_disable(void);
-
 void irq_unmask(int irq);
 void irq_mask(int irq);
 

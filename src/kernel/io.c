@@ -28,10 +28,6 @@
 #include <kernel/serial.h>
 #include <kernel/kprint.h>
 
-#ifdef DEBUG
-extern void crash_key_irq(int irq, struct iregs *regs);
-#endif
-
 struct io_range {
     struct list_node chain;
     const char *name;
@@ -45,10 +41,6 @@ pool_t *io_ranges_pool;
 
 __init void init_io(void)
 {
-#if DEBUG && ENABLE_CRASH_KEY       // CTRL+ALT+F# to test crash kernel
-    irq_register(IRQ_TIMER, crash_key_irq);
-#endif
-
     io_ranges_pool = pool_create(
         "io_ranges",
         MAX_NR_IO_RANGES,

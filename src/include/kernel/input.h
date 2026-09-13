@@ -26,16 +26,19 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define is_ctrl(k)              (((k) == KEY_LCTRL || (k) == KEY_RCTRL))
-#define is_shift(k)             (((k) == KEY_LSHIFT || (k) == KEY_RSHIFT))
-#define is_alt(k)               (((k) == KEY_LALT || (k) == KEY_RALT))
-#define is_meta(k)              (((k) == KEY_LWIN || (k) == KEY_RWIN))
-#define is_numpad(k)            ((k) >= KEY_KP0 && (k) <= KEY_KP9)
-#define is_fnkey(k)             ((k) >= KEY_F1 && (k) <= KEY_F12)
-#define is_sysrq(k)             ((k) == KEY_SYSRQ)
+#define is_ctrl(k)      (((k) == KEY_LCTRL || (k) == KEY_RCTRL))
+#define is_shift(k)     (((k) == KEY_LSHIFT || (k) == KEY_RSHIFT))
+#define is_alt(k)       (((k) == KEY_LALT || (k) == KEY_RALT))
+#define is_meta(k)      (((k) == KEY_LWIN || (k) == KEY_RWIN))
+#define is_numpad(k)    ((k) >= KEY_KP0 && (k) <= KEY_KP9)
+#define is_fnkey(k)     ((k) >= KEY_F1 && (k) <= KEY_F12)
+#define is_sysrq(k)     ((k) == KEY_SYSRQ)
 
-#define numpad_index(k)         ((is_numpad(k)) ? (k) - KEY_KP0 : -1)
-#define fnkey_index(k)          ((is_fnkey(k)) ? (k) - KEY_F1 + 1 : -1)
+#define numpad_index(k) ((is_numpad(k)) ? (k) - KEY_KP0 : -1)
+#define fnkey_index(k)  ((is_fnkey(k)) ? (k) - KEY_F1 + 1 : -1)
+
+#define _DNMASK_RIGHT   (1 << 0) // Right key down flag
+#define _DNMASK_LEFT    (1 << 1) // Left key down flag
 
 struct keystroke
 {
@@ -58,33 +61,37 @@ struct ps2kb_state
 {
     union {
         struct {
-            union {
-                struct {
-                    int ctrl    : 2;        // [1:0] = { LCTRL,  RCTRL }; use _DNMASK
-                    int alt     : 2;
-                    int shift   : 2;
-                    int meta    : 2;
-                    int sysrq   : 1;
-                };
-                uint32_t _modkeys;
-            };
-            union {
-                struct {
-                    bool scrlk  : 1; // scroll lock
-                    bool numlk  : 1; // number lock
-                    bool capslk : 1; // caps lock
-                }; // note: do not change the order!
-                uint32_t _leds;       // LED state
-            };
-        };
-        uint32_t _flags;
+            bool scrlk  : 1; // scroll lock
+            bool numlk  : 1; // number lock
+            bool capslk : 1; // caps lock
+        }; // note: do not change the order!
+        uint32_t _leds;     // LED state that gets written to keyboard
     };
-
-    // input state
-    char altchar;           // ALT+<NUMPAD> state
 };
 
-void kb_update_state(const struct ps2kb_state *state);
+void ps2kb_apply_state(const struct ps2kb_state *state);
+
+
+struct keyboard_state
+{
+    // keydown state
+    union {
+        struct {
+            int ctrl    : 2;    // [1:0] = { LCTRL, RCTRL }; use _DNMASK_*
+            int alt     : 2;
+            int shift   : 2;
+            int meta    : 2;
+            int sysrq   : 1;
+        };
+        uint32_t _modkeys;
+    };
+
+    // current ALT+<NUMPAD> state
+    int altchar;
+
+    // keyboard hardware state
+    struct ps2kb_state hw_state;
+};
 
 //
 // Virtual Key Code Definitions

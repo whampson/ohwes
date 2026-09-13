@@ -25,6 +25,7 @@
 #include <i386/pic.h>
 #include <i386/interrupt.h>
 #include <i386/x86.h>
+#include <kernel/dpc.h>
 #include <kernel/kernel.h>
 #include <kernel/irq.h>
 #include <kernel/kprint.h>
@@ -44,16 +45,6 @@ static struct irq_stats _irqstats;
 struct irq_stats *g_irqstats = &_irqstats;
 
 static irq_handler _isr_map[NR_IRQS][MAX_ISR];
-
-void irq_enable(void)
-{
-    __sti();
-}
-
-void irq_disable(void)
-{
-    __cli();
-}
 
 void irq_mask(int irq)
 {
@@ -129,9 +120,7 @@ __fastcall void handle_irq(struct iregs *regs)
         return;     // no EOI for spurious IRQs
     }
 
-    pic_eoi(irq);
-
-    if (!masked) {
+    if (!_IRQ_MASKED(irq)) {
         for (int i = 0; i < MAX_ISR; i++) {
             irq_handler isr = _isr_map[irq][i];
             if (isr != NULL) {
@@ -144,4 +133,20 @@ __fastcall void handle_irq(struct iregs *regs)
     if (!handled) {
         pr_alert("unhandled irq%d\n", irq);
     }
+
+    pic_eoi(irq);
+
+    if (dpc_pending()) {
+        __sti();
+        dpc_run();  // DPCs scheduled here will run after next interrupt
+        __cli();
+    }
+
+#if DEBUG && ENABLE_CRASH_KEY   // CTRL+ALT+F# to test crash kernel
+    extern int g_test_crashkey;
+    extern void crash_key_irq(int irq, struct iregs *regs);
+    if (irq == IRQ_KEYBOARD && g_test_crashkey >= 0) {
+        crash_key_irq(irq, regs);
+    }
+#endif
 }

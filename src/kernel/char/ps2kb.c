@@ -35,6 +35,7 @@
 #include <i386/io.h>
 #include <i386/ps2.h>
 #include <i386/x86.h>
+#include <kernel/dpc.h>
 #include <kernel/kernel.h>
 #include <kernel/input.h>
 #include <kernel/irq.h>
@@ -52,10 +53,7 @@
 #define WARN_INTERVAL       10      // warn every N times a stray packet shows up
 #define MAX_PROBES          3       // max times to probe for device before giving up
 #define MAX_RESENDS         3       // max command resends (0xFE) before giving up
-#define MAX_SELFTEST_POLLS  6       // max stray chars to accept during self test
-
-#define _DNMASK_RIGHT   (1 << 0) // Right key down flag
-#define _DNMASK_LEFT    (1 << 1) // Left key down flag
+#define MAX_STRAYS          6       // max stray chars to accept during command sequence
 
 static inline void atomic_inc(uint32_t volatile *value)
 {
@@ -84,8 +82,19 @@ static inline uint32_t atomic_cmpxchg(uint32_t volatile *value, uint32_t xchg, u
 struct ps2kb
 {
     // keyboard hardware state
-    uint16_t ident;             // keyboard hardware identifier word
+    uint16_t ident;             // hardware identifier word
     uint8_t leds;               // shadow of last LED state written to keyboard
+
+    // DPC state
+    struct dpc leds_dpc;        // LED update
+    struct dpc hotplug_dpc;     // hotplug detection
+    struct dpc termsw_dpc;      // terminal switch
+    struct dpc sysrq_dpc;       // SysRq handler
+
+    volatile bool pending_leds      : 1; // an LED update is armed
+    volatile bool pending_hotplug   : 1; // a hotplug flush is armed
+    volatile bool pending_termsw    : 1; // a terminal switch is armed
+    volatile bool pending_sysrq     : 1; // a SysRq action is armed
 
     // atomic software state
     uint32_t atm_ps2ctl_init;   // (bool) PS/2 controller initialized
@@ -146,8 +155,19 @@ int kb_getc(void);
 
 // local functions
 
-static void kb_interrupt(int irq, struct iregs *regs);
-static void kb_putq(struct tty *tty, char c);
+#define __isr   // TODO: do something with this...
+
+static void __isr kb_interrupt(int irq, struct iregs *regs);
+static void __isr kb_hotplug_detect(int irq, struct iregs *regs);
+
+static void tty_putq(struct tty *tty, char c);
+
+static void ps2kb_queue_led_update(uint8_t leds);
+
+static void __dpc __ps2kb_leds_dpc(void *arg);
+static void __dpc __ps2kb_hotplug_detect_dpc(void *arg);
+static void __dpc __ps2kb_terminal_switch_dpc(void *arg);
+static void __dpc __ps2kb_sysrq_dpc(void *arg);
 
 static bool ps2kb_selftest(void);
 static uint16_t ps2kb_identify(void);
@@ -159,7 +179,6 @@ static bool ps2kb_set_typematic(uint8_t typ);
 
 static bool ps2kb_send_cmd(uint8_t cmd, uint8_t *data);
 
-static void do_sysrq(struct tty *tty, char c);
 
 // local imports
 
@@ -195,11 +214,9 @@ int kb_getc(void)
     }
 }
 
-void kb_update_state(const struct ps2kb_state *state)
+static bool ps2kb_set_scanmode(uint8_t set) // TODO: ioctl for this
 {
-    if (state) {
-        ps2kb_set_leds(state->_leds);
-    }
+    return ps2kb_send_cmd(PS2KB_CMD_SCANCODE, &set);
 }
 
 static bool ps2kb_set_typematic(uint8_t typ)    // TODO: ioctl for this
@@ -218,14 +235,57 @@ static bool ps2kb_set_leds(uint8_t leds)    // TODO: ioctl for this
     return success;
 }
 
-static bool ps2kb_set_scanmode(uint8_t set) // TODO: ioctl for this
+static void __dpc __ps2kb_leds_dpc(void *arg)
 {
-    return ps2kb_send_cmd(PS2KB_CMD_SCANCODE, &set);
+    uint32_t flags;
+    uint8_t leds = (uint8_t)(intptr_t) arg;
+
+    cli_save(flags);
+    g_kb->pending_leds = false;
+    ps2kb_set_leds(leds);   // do not touch hardware with interrupts on
+    restore_flags(flags);
+}
+
+static void ps2kb_queue_led_update(uint8_t leds)
+{
+    uint32_t flags;
+    cli_save(flags);
+
+    if (g_kb->leds != leds && !g_kb->pending_leds) {
+        g_kb->pending_leds = true;
+        schedule_dpc(&g_kb->leds_dpc, __ps2kb_leds_dpc, (void*)(intptr_t) leds);
+    }
+
+    restore_flags(flags);
+}
+
+void ps2kb_apply_state(const struct ps2kb_state *state)
+{
+    if (state) {
+        ps2kb_queue_led_update(state->_leds);
+    }
 }
 
 static bool ps2kb_init(void)
 {
     struct ps2kb_state *kb_state;
+    uint8_t ps2cfg;
+
+    // self-test
+#if SELFTEST
+    if (!ps2kb_selftest()) {
+        pr_error("self-test failed\n");
+        g_kb->init_errors++;
+        return false;
+    }
+#endif
+
+    ps2_flush();
+
+    // ensure keyboard interrupts and translation are off
+    ps2cfg = ps2_read_config();
+    ps2cfg &= ~(PS2_CFG_P1INTON|PS2_CFG_TRANSLATE);
+    ps2_write_config(ps2cfg);
 
     // identify
     g_kb->ident = ps2kb_identify();
@@ -240,14 +300,6 @@ static bool ps2kb_init(void)
     }
     pr_cont(" detected (ident: %04Xh)\n", g_kb->ident);
 
-    // self-test
-#if SELFTEST
-    if (!ps2kb_selftest()) {
-        pr_error("self-test failed\n");
-        g_kb->init_errors++;
-        return false;
-    }
-#endif
 
     // select scancode set
     if (!ps2kb_set_scanmode(SCANCODE_SET)) {
@@ -266,10 +318,11 @@ static bool ps2kb_init(void)
     }
 
     // set LED state
-    kb_state = &(get_terminal(0)->kb_state);
+    kb_state = &(get_terminal(0)->kb_state).hw_state;
     kb_state->numlk = NUMLOCK_ON;
-    kb_update_state(kb_state);
+    ps2kb_set_leds(kb_state->_leds);
 
+    // enable scanning
     if (!ps2kb_send_cmd(PS2KB_CMD_SCANON, NULL)) {
         pr_warn("failed to re-enable scanning\n");
     }
@@ -286,6 +339,11 @@ static bool ps2kb_init(void)
     g_kb->parity_errors = 0;
     g_kb->timeout_errors = 0;
 
+    // enable port and port interrupts
+    ps2cfg |= PS2_CFG_P1INTON;
+    ps2_write_config(ps2cfg);
+    ps2_write_cmd(PS2_CMD_P1ON);
+
     atomic_inc(&g_kb->atm_init_count);
     return true;
 }
@@ -296,13 +354,24 @@ static bool ps2kb_init(void)
 static void ps2kb_on_connect(void)
 {
     uint32_t flags;
-    cli_save(flags);
 
     pr_debug("keyboard connected\n");
     atomic_cmpxchg(&g_kb->atm_hw_connected, 1, 0);
 
-    ps2kb_init();
+    const uint64_t c_settle_time_ms = 2;
 
+    cli_save(flags);
+    ps2_flush();
+    restore_flags(flags);
+
+    uint64_t settle = get_uptime() + (c_settle_time_ms * 1000000);
+    while (get_uptime() < settle) {
+        __pause();  // 2ms spin-wait
+    }
+
+    cli_save(flags);
+    ps2_flush();
+    ps2kb_init();
     restore_flags(flags);
 }
 
@@ -314,47 +383,58 @@ static void ps2kb_on_disconnect(void)
     pr_debug("keyboard disconnected\n");
     atomic_cmpxchg(&g_kb->atm_hw_connected, 0, 1);
 
+    ps2_flush();
+    ps2_write_config(ps2_read_config() & ~PS2_CFG_P1INTON); // disable interrupts
+
     restore_flags(flags);
 }
 
-static void kb_heartbeat(int irq, struct iregs *regs)
+static void __dpc __ps2kb_hotplug_detect_dpc(void *arg)
+{
+    bool was, now;
+    uint32_t flags;
+    (void) arg;
+
+    cli_save(flags);
+    g_kb->pending_hotplug = false;
+
+    was = test_bit(&g_kb->atm_hw_connected, 0);
+    now = ps2kb_is_connected();
+
+    if (was && !now) {
+        ps2kb_on_disconnect();
+    }
+    if (!was && now) {
+        ps2kb_on_connect();
+    }
+
+    restore_flags(flags);
+}
+
+static void __isr kb_hotplug_detect(int irq, struct iregs *regs)
 {
     // PS/2 keyboard hotplug support
 
-    assert(irq == IRQ_TIMER);   // !!!! this is a timer ISR!!
+    assert(irq == IRQ_TIMER);
+    (void) regs;
 
-    static uint64_t s_last_tick = 0;
     const uint64_t c_heartbeat_ms = 500;
 
+    static uint64_t s_last_tick = 0;
     uint64_t tick = get_uptime();
 
     if ((tick - s_last_tick) / 1000000 >= c_heartbeat_ms) {
         s_last_tick = tick;
 
-        // TODO: do all of this in a deferred procedure call, NOT in the timer ISR
-
-        ps2_write_cmd(PS2_CMD_P1OFF);
-        // ps2_write_config(ps2_read_config() & ~PS2_CFG_P1INTON);
-        {
-            if (test_bit(&g_kb->atm_hw_connected, 0)) {
-                if (!ps2kb_is_connected()) {
-                    ps2kb_on_disconnect();
-                }
-            }
-            else {
-                if (ps2kb_is_connected()) {
-                    ps2kb_on_connect();
-                }
-            }
+        if (!g_kb->pending_hotplug) {
+            g_kb->pending_hotplug = true;
+            schedule_dpc(&g_kb->hotplug_dpc, __ps2kb_hotplug_detect_dpc, NULL);
         }
-        // ps2_write_config(ps2_read_config() | PS2_CFG_P1INTON);
-        ps2_write_cmd(PS2_CMD_P1ON);
     }
 }
 
 __init void init_kb(void)
 {
-    uint8_t ps2cfg;
     uint32_t flags;
 
     if (atomic_cmpxchg(&g_kb->atm_init_count, 0, 0) > 0) {
@@ -369,48 +449,79 @@ __init void init_kb(void)
     }
 
     // port 1 clock should be enabled if init passed...
-    ps2cfg = ps2_read_config();
-    if (ps2cfg & PS2_CFG_P1CLKOFF) {
+    if (ps2_read_config() & PS2_CFG_P1CLKOFF) {
         pr_error("no keyboard port detected on controller\n");
         goto init_kb_done;
     }
 
-    // ensure keyboard interrupts and translation are off
-    ps2cfg &= ~(PS2_CFG_P1INTON|PS2_CFG_TRANSLATE);
-    ps2_write_config(ps2cfg);
-
     // check if keyboard connected...
-    if (!ps2kb_is_connected()) {
-        pr_alert("keyboard not connected\n");
-        goto init_kb_done;
+    if (ps2kb_is_connected()) {
+        ps2kb_on_connect();
+    }
+    else {
+        ps2kb_on_disconnect();
     }
 
-    ps2kb_on_connect();
-
 init_kb_done:
-    // enable port and port interrupts
-    ps2_write_config(ps2_read_config() | PS2_CFG_P1INTON);
-    ps2_write_cmd(PS2_CMD_P1ON);
+    // enable hotplug detection
+    irq_register(IRQ_TIMER, kb_hotplug_detect);
 
     // register ISR and unmask IRQ1 on the PIC
     irq_register(IRQ_KEYBOARD, kb_interrupt);
     irq_unmask(IRQ_KEYBOARD);
 
-    // enable hotplug detection
-    // TODO: move this out of an ISR lol
-    irq_register(IRQ_TIMER, kb_heartbeat);
-
     restore_flags(flags);
 }
 
-static void kb_putq(struct tty *tty, char c)
+static void tty_putq(struct tty *tty, char c)
 {
     if (tty && tty->ldisc.recv) {
         tty->ldisc.recv(tty, &c, 1);
     }
 }
 
-static void kb_interrupt(int irq, struct iregs *regs)
+static void __dpc __ps2kb_terminal_switch_dpc(void *arg)
+{
+    uint32_t flags;
+    int term = (int)(intptr_t) arg;
+
+    cli_save(flags);
+    g_kb->pending_termsw = false;
+    restore_flags(flags);
+
+    if (switch_terminal(term) != 0) {
+        pr_error("failed to switch to tty%d!\n", term);
+    }
+}
+
+static void __dpc __ps2kb_sysrq_dpc(void *arg)
+{
+    uint32_t flags;
+    char c = (char)(intptr_t) arg;
+
+    cli_save(flags);
+    g_kb->pending_sysrq = false;
+    restore_flags(flags);
+
+    switch (c) {
+        case 'c':   // c - crash
+            __sti(); load_ss(0x00); for (;;);
+            // TODO: trigger crash_key_irq poison selection prompt
+        case 'g':   // g - debug break
+            __debug_break();
+            break;
+        case 'r':   // r - hard reset
+            __hard_reset();
+            break;
+        default:
+            if (c != '\0') {
+                pr_info("sysrq: HELP: crash(c) debug-break(g) reboot(r)\a\n");
+            }
+            break;
+    }
+}
+
+static void __isr kb_interrupt(int irq, struct iregs *regs)
 {
     uint32_t flags;
     uint16_t sc;
@@ -420,22 +531,18 @@ static void kb_interrupt(int irq, struct iregs *regs)
     char *s;
     struct key_event evt;
 
+    assert(irq == IRQ_KEYBOARD);
+    (void) regs;
+
     if (test_and_set_bit(&g_kb->atm_ih_active, 0) == 1) {
         pr_alert("keyboard interrupt recursion!!\n");
         return;
     }
 
-    zeromem(&evt, sizeof(struct key_event));
-
-    c = '\0';
-    s = NULL;
-
-    assert(irq == IRQ_KEYBOARD);
-
-
     struct terminal *term = get_terminal(0);
     struct tty *tty = term->tty;
-    struct ps2kb_state *kb_state = &term->kb_state;
+    struct keyboard_state *input_state = &term->kb_state;
+    struct ps2kb_state *kb_state = &input_state->hw_state;
 
     //
     // Scan Code to Key Code Mapping
@@ -470,7 +577,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
     // check for some unexpected scancodes
     switch (sc) {
         case 0xAA:
-            if (!kb_state->shift && !g_kb->e0) { // 0xAA is also shift break code...
+            if (!input_state->shift && !g_kb->e0) { // 0xAA is also shift break code...
                 g_kb->stray_aa++;
                 pr_debug("interrupt: got stray self-test pass %02Xh\n", sc);
                 goto done;
@@ -602,9 +709,8 @@ static void kb_interrupt(int irq, struct iregs *regs)
     }
 
     if (g_kb->leds != kb_state->_leds) {
-        ps2kb_set_leds(kb_state->_leds);
+        ps2kb_queue_led_update(kb_state->_leds);
     }
-
 
     // update modifier key state
     #define HANDLE_MODKEY(key,mod,l,r) \
@@ -613,10 +719,10 @@ static void kb_interrupt(int irq, struct iregs *regs)
         if ((key) == (r)) { _mask |= _DNMASK_LEFT; } \
         if ((key) == (l)) { _mask |= _DNMASK_RIGHT; } \
         if (_mask && !release) { \
-            kb_state->mod |= _mask; \
+            input_state->mod |= _mask; \
         } \
         else if (_mask && release) { \
-            kb_state->mod &= ~_mask; \
+            input_state->mod &= ~_mask; \
         } \
     })
     HANDLE_MODKEY(key, ctrl, KEY_LCTRL, KEY_RCTRL);
@@ -627,9 +733,14 @@ static void kb_interrupt(int irq, struct iregs *regs)
     #undef HANDLE_MODKEY
 
     // submit alt code upon release of ALT key
-    if (is_alt(key) && release && kb_state->altchar) {
-        kb_putq(tty, kb_state->altchar);
-        kb_state->altchar = 0;
+    if (is_alt(key) && release && input_state->altchar) {
+        tty_putq(tty, (unsigned char) input_state->altchar);
+        input_state->altchar = 0;
+        goto record_key_event;
+    }
+
+    // we don't care about key break events after this point
+    if (release) {
         goto record_key_event;
     }
 
@@ -637,61 +748,45 @@ static void kb_interrupt(int irq, struct iregs *regs)
     // Handle Special Keystrokes
     // ----------------------------------------------------------------
 
-    // Ctrl+Alt+Del: system reboot
-    if (kb_state->ctrl && kb_state->alt &&
-        (key == KEY_DELETE || key == KEY_KPDOT)) {
-        __hard_reset(); // TODO: soft reset
-    }
-
-    // // Ctrl+Alt+F3: debug break
-    // if (g_kb->enable_int3 && g_kb->ctrl && g_kb->alt && (key == KEY_F3)) {
-    //     __debug_break();     // TODO: defer this
-    // }
-
-    // we don't care about key break events after this point
-    if (release) {
-        goto record_key_event;
-    }
-
-    // TODO: SCRLK to pause terminal, link state with flow control (CTRL+S/Q)
-    // TODO: defer work!!
-    if (key == KEY_SCRLK) {
-        if (kb_state->scrlk)
-            kb_putq(tty, ASCII_DC3); // CTRL+S XOFF
-        else
-            kb_putq(tty, ASCII_DC1); // CTRL+Q XON
-    }
-
-    // TODO: CTRL+SCRLK = dump/flush kernel log
-
 #ifdef DEBUG
-    if (kb_state->ctrl && kb_state->alt && is_fnkey(key)) {
+    // Ctrl+Alt+<FN>: crash function select
+    if (input_state->ctrl && input_state->alt && is_fnkey(key)) {
         if (!g_test_crashkey) {
             g_test_crashkey = fnkey_index(key);
         }
     }
 #endif
 
+    // Ctrl+Alt+Del: system reboot
+    if (input_state->ctrl && input_state->alt &&
+        (key == KEY_DELETE || key == KEY_KPDOT)) {
+        __hard_reset(); // TODO: soft reset
+    }
+
+    // SCRLK: toggle terminal pause; uses flow control (CTRL+S/Q)
+    if (key == KEY_SCRLK) {
+        if (kb_state->scrlk)
+            tty_putq(tty, ASCII_DC3); // CTRL+S XOFF
+        else
+            tty_putq(tty, ASCII_DC1); // CTRL+Q XON
+    }
+
+    // TODO: CTRL+SCRLK = dump/flush kernel log
+
     // ALT+<FN>: switch terminal
-    // TODO: defer work!!
-    if (!kb_state->ctrl && kb_state->alt && is_fnkey(key)) {
+    if (!input_state->ctrl && input_state->alt && is_fnkey(key)) {
         int term = fnkey_index(key);
-        if (term >= 1 && term <= NR_TERMINAL) {
-            // uint64_t start = get_uptime();
-            int ret = switch_terminal(term);
-            // uint64_t end = get_uptime();
-            if (ret != 0) {
-                pr_error("failed to switch to tty%d!\n", term);
-            }
-            // pr_info("switch to tty%d took %lluus\n", term, (end - start) / 1000);
-            goto done;
+        if (term >= 1 && term <= NR_TERMINAL && !g_kb->pending_termsw) {
+            g_kb->pending_termsw = true;
+            schedule_dpc(&g_kb->termsw_dpc, __ps2kb_terminal_switch_dpc, (void*)(intptr_t) term);
         }
+        goto done;
     }
 
     // ALT+<NUMPAD>: handle character code entry (if NumLk on)
-    if (kb_state->alt && is_numpad(key)) {
-        kb_state->altchar *= 10;
-        kb_state->altchar += numpad_index(key);
+    if (input_state->alt && is_numpad(key)) {
+        input_state->altchar *= 10;
+        input_state->altchar += numpad_index(key);
         goto record_key_event;
     }
 
@@ -700,13 +795,16 @@ static void kb_interrupt(int irq, struct iregs *regs)
     // ----------------------------------------------------------------
 
     // map key to character
-    c = (kb_state->shift && key >= 0x20 && key <= 0x60)
+    c = (input_state->shift && key >= 0x20 && key <= 0x60)
         ? keymap_shift[key & 0x7F]
         : keymap[key & 0xFF];
 
     // handle SyRrq press
-    if (kb_state->sysrq) {
-        do_sysrq(tty, c);
+    if (input_state->sysrq) {
+        if (!g_kb->pending_sysrq) {
+            g_kb->pending_sysrq = true;
+            schedule_dpc(&g_kb->sysrq_dpc, __ps2kb_sysrq_dpc, (void *)(intptr_t) c);
+        }
         goto done;
     }
 
@@ -748,13 +846,13 @@ static void kb_interrupt(int irq, struct iregs *regs)
             default:        s = "\0"; break;
         }
         while (*s != '\0') {
-            kb_putq(tty, *s++);
+            tty_putq(tty, *s++);
         }
         goto record_key_event;
     }
 
     // handle control characters
-    if (kb_state->ctrl) {
+    if (input_state->ctrl) {
         switch (key) {
             case KEY_2: c = '@'; break;
             case KEY_6: c = '^'; break;
@@ -774,7 +872,7 @@ static void kb_interrupt(int irq, struct iregs *regs)
     }
 
     // handle caps lock
-    if (kb_state->capslk && !kb_state->alt) {
+    if (kb_state->capslk && !input_state->alt) {
         if (isupper(c)) {
             c = tolower(c);
         }
@@ -784,12 +882,13 @@ static void kb_interrupt(int irq, struct iregs *regs)
     }
 
     // put the character in the queue
-    if (kb_state->alt) {
-        kb_putq(tty, '\e');
+    if (input_state->alt) {
+        tty_putq(tty, '\e');
     }
-    kb_putq(tty, c);
+    tty_putq(tty, c);
 
 record_key_event:
+    zeromem(&evt, sizeof(struct key_event));
     evt.key.keycode = key;
     evt.key.scancode = sc;
     evt.key.release = release;
@@ -809,26 +908,6 @@ done:
     restore_flags(flags);
 }
 
-static void do_sysrq(struct tty *tty, char c)
-{
-    switch (c) {
-        case 'c':   // c - crash
-            __sti(); load_ss(0x00); for (;;);
-            // TODO: trigger crash_key_irq poison selection prompt
-        case 'g':   // g - debug break
-            __debug_break();
-            break;
-        case 'r':   // r - hard reset
-            __hard_reset();
-            break;
-        default:
-            if (c != '\0') {
-                kprint(KLOG_INFO "sysrq: HELP: crash(c) debug-break(g) reboot(r)\a\n");
-            }
-            break;
-    }
-}
-
 static bool ps2kb_selftest(void)
 {
     uint8_t recv;
@@ -837,7 +916,7 @@ static bool ps2kb_selftest(void)
         return false;
     }
 
-    for (int i = 0; i < MAX_SELFTEST_POLLS; i++) {
+    for (int i = 0; i < MAX_STRAYS; i++) {
         recv = ps2_read();
         if (recv == 0xAA) {
             return true;        // BAT pass
@@ -853,51 +932,56 @@ static bool ps2kb_selftest(void)
 
 static uint16_t ps2kb_identify(void)
 {
+    uint8_t hi, lo;
+
     if (!ps2kb_send_cmd(PS2KB_CMD_IDENT, NULL)) {
         return 0;
     }
 
-    uint16_t ident = 0;
-    for (int i = 0; i < 2; i++) {
-        ident |= ps2_read();
-        if (i == 0) {
-            ident <<= 8;
-        }
+    hi = ps2_read();
+    if (hi == 0) {
+        return 0;
     }
-    return ident;
+
+    lo = ps2_read();
+    if (lo == 0) {
+        return hi;
+    }
+
+    return (hi << 8) | lo;
 }
 
 static bool ps2kb_is_connected(void)
 {
-    uint8_t resp;
+    bool connected = false;
 
-    // TODO: !!! called in an ISR and BLOCKS due to poll w/o interrupts
-
-    for (int i = MAX_PROBES - 1; i >= 0; --i) {
+    ps2_flush();
+    for (int i = 0; i < MAX_PROBES; i++) {
         ps2_write_fast(PS2KB_CMD_ECHO);
-        resp = ps2_read_fast();
-        if (resp == 0xFE && i > 0) {
-            continue;   // resend...
-        }
-        else if (resp == 0xEE) {
-            return true;
+        uint8_t resp = ps2_read_fast();
+        if (resp == 0xEE) {
+            connected = true;
+            break;
         }
     }
+    ps2_flush();
 
-    return false;
+    return connected;
 }
 
 static bool ps2kb_send_cmd(uint8_t cmd, uint8_t *data)
 {
     enum { P_CMD, P_DATA } phase = P_CMD;
-    uint8_t byte, resp;
-    int resends = 0;
+    uint8_t byte = cmd, resp;
+    int resends = 0, strays = 0;
 
-    byte = cmd;
     while (true) {
+        // write command or data, depending on phase
         if (!ps2_write_fast(byte)) {
             goto sync_fail;     // device unresponsive
         }
+
+        // read response
         resp = ps2_read_fast(); // device ACK, or 0 on timeout
         if (resp == 0) {
             goto sync_fail;
@@ -906,12 +990,12 @@ static bool ps2kb_send_cmd(uint8_t cmd, uint8_t *data)
         switch (resp) {
             case 0xFA:      // ACK
                 resends = 0;
-                if (phase == P_CMD && data != NULL) {
+                if (data != NULL && phase == P_CMD) {
                     phase = P_DATA;
                     byte = *data;
                 }
                 else {
-                    return true;    // cmd + optional data full ACK'd
+                    return true;
                 }
                 break;
 
@@ -924,14 +1008,20 @@ static bool ps2kb_send_cmd(uint8_t cmd, uint8_t *data)
             case 0xAA:      // BAT in progress (0xFF/reset/selftest); ignore
                 break;
 
-            default:
-                pr_debug("unexpected %02Xh in response to command %02Xh\n", resp, cmd);
-                goto sync_fail;
+            default:        // could be queued scancode; ignore for a while
+                if (++strays > MAX_STRAYS) {
+                    goto sync_fail;
+                }
+                break;
+
         }
     }
 
 sync_fail:
-    ps2_flush();            // drain leftover so IRQ doesn't get confused
+    if (data != NULL && phase == P_CMD) {
+        ps2_write_fast(*data);  // make sure keyboard doesn't get out of whack
+    }
+    ps2_flush();                // drain leftover so IRQ doesn't get confused
     return false;
 }
 

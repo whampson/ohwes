@@ -66,7 +66,7 @@ struct terminal {
     bool blink_on;                      // character blinking enabled
     bool need_wrap;                     // wrap output to next line on next character
 
-    struct ps2kb_state kb_state;        // current keyboard state
+    struct keyboard_state kb_state;     // current keyboard state
 
     struct _char_attr {                 // character attributes
         union {
