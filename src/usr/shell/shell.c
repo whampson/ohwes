@@ -33,8 +33,8 @@
 #include <kernel/ioctls.h>      // TODO: some user-mode location for this
 
 #define NR_ARGV         64
-#define LINE_LENGTH     64
-#define ARG_LENGTH      1024
+#define LINE_LENGTH     128
+#define HISTORY_SIZE    32
 #define PROMPT_CHAR     '#'
 
 // syscall return if failed
@@ -42,8 +42,17 @@
 do { \
     int __ret; \
     if ((__ret = (x)) < 0) { \
-        perror("\e[1;31merror\e[0m: " #x); \
-        return -__ret; \
+        printf("%s: error: " #x ": %s\n", __FUNCTION__, strerror(errno)); \
+        return errno; \
+    } \
+} while (0)
+
+#define SYS_CHECK_GOTO(x, label) \
+do { \
+    int __ret; \
+    if ((__ret = (x)) < 0) { \
+        printf("%s: error: " #x ": %s\n", __FUNCTION__, strerror(errno)); \
+        goto label; \
     } \
 } while (0)
 
@@ -60,6 +69,7 @@ struct shell_context {
 static int cat(int argc, char *argv[]);
 static int echo(struct shell_context *ctx);
 static int cereal(int argc, char *argv[]);
+static int counter(int argc, char *argv[]);
 
 static int parse_command(struct shell_context *ctx, char *line, size_t len);
 
@@ -69,9 +79,9 @@ int shell(void)
 
     SYS_CHECK(ioctl(STDIN_FILENO, TCGETS, &termios));
     orig_termios = termios;
-    termios.c_iflag = (ICRNL);              // in  CR->NL
-    termios.c_oflag = (OPOST | ONLCR);      // out NL->CRNL
-    termios.c_lflag = ~(ECHO | ECHOCTL);    // disable echo
+    termios.c_iflag = (ICRNL | IXON | IXOFF);   // in  CR->NL, input/output flow control
+    termios.c_oflag = (OPOST | ONLCR);          // out NL->CRNL
+    termios.c_lflag = ~(ECHO | ECHOCTL);        // disable echo
     SYS_CHECK(ioctl(STDIN_FILENO, TCSETS, &termios));
 
     size_t len = 0;
@@ -167,10 +177,12 @@ static int parse_command(struct shell_context *ctx, char *line, size_t len)
     int ret = 0;
     // TODO: spawn program using exec()
     //   pass stdout_path to new process if set
+    errno = 0;  // HACK! C runtime should reset errno when launching program
     if (strcmp("help", cmd) == 0) {
         printf("help\n");
         printf("cat\n");
         printf("cereal\n");
+        printf("counter\n");
         printf("echo\n");
         printf("exit\n");
         ret = 0;
@@ -183,6 +195,9 @@ static int parse_command(struct shell_context *ctx, char *line, size_t len)
     }
     else if (strcmp("cereal", cmd) == 0) {
         ret = cereal(ctx->argc, ctx->argv);
+    }
+    else if (strcmp("counter", cmd) == 0) {
+        ret = counter(ctx->argc, ctx->argv);
     }
     else {
         printf("error: unknown command '%.*s'\n", (int) len, cmd);
@@ -269,7 +284,7 @@ static int echo(struct shell_context *ctx)
 
     ret = 0;
     for (int i = 1; i < ctx->argc; i++) {
-        size_t count = strnlen(ctx->argv[i], ARG_LENGTH);
+        size_t count = strnlen(ctx->argv[i], LINE_LENGTH);
         if (write(fd, ctx->argv[i], count) < 0) {
             CMD_PRINT("%s\n", strerror(errno));
             ret = ERROR_IO;
@@ -360,4 +375,45 @@ static int cereal(int argc, char *argv[])
 close_out:
     close(fd);
     return ret;
+}
+
+static int counter(int argc, char *argv[])
+{
+    int stdin_orig_flags;
+    int status;
+    int count = 0;
+    char c = 0;
+
+    // we don't have signals yet, so we need poll the keyboard
+    // for CTRL+C and the like so the user can exit :-)
+    // to do that, we need to make sure STDIN is nonblocking
+
+    // first, back up the old fd flags
+    SYS_CHECK(stdin_orig_flags = fcntl(STDIN_FILENO, F_GETFL));
+
+    // now, make stdin nonblocking
+    SYS_CHECK_GOTO(fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK), cleanup);
+
+    // now, count until the user tells us to quit!
+    while (true) {
+        printf("%d\n", count++);
+
+        // poll stdin for CTRL+C
+        if ((status = read(STDIN_FILENO, &c, 1)) < 0) {
+            if (status < 0 && errno != EAGAIN) {
+                CMD_PRINT("error: read(stdin): %s\n", strerror(errno));
+                break;
+            }
+            else if (c == 0x3) {
+                errno = 0;
+                printf("CTRL+C pressed, exiting...\n");
+                break;
+            }
+        }
+    }
+
+cleanup:
+    // set original stdin fd flags
+    SYS_CHECK(fcntl(STDIN_FILENO, F_SETFL, stdin_orig_flags));
+    return errno;
 }
