@@ -130,6 +130,14 @@ enum gdb_errno {
     GDB_ENAMETOOLONG = 91,
 };
 
+// hardware breakpoint support
+static void gdb_arm_hw_breakpoint(uint32_t addr);   // HW_BP0 only for now
+static void gdb_disarm_hw_breakpoint(void);
+
+// target process state capture/apply
+static void gdb_capture(struct gdb_state *state, const struct iregs *regs);
+static void gdb_apply(struct gdb_state *state, struct iregs *regs);
+
 // packet i/o
 static void gdb_report_break(struct gdb_state *state);
 static int gdb_recv_ack(struct gdb_state *state);
@@ -146,6 +154,7 @@ static int gdb_send_nack(struct gdb_state *state);
 static int gdb_handle_ack(struct gdb_state *state);
 static int gdb_handle_nack(struct gdb_state *state);
 
+// COM debug interface
 static void gdb_disable_com_int(struct gdb_state *state);
 static void gdb_enable_com_int(struct gdb_state *state);
 
@@ -162,6 +171,7 @@ static int gdb_write_regs(struct gdb_state *state, char *pkt, size_t pktlen);
 static int gdb_read_mem(struct gdb_state *state, char *pkt, size_t pktlen);
 static int gdb_write_mem(struct gdb_state *state, char *pkt, size_t pktlen);
 
+// parameter validation
 static bool gdb_range_valid(uintptr_t addr, size_t count, bool needs_write);
 
 // basic get/put functions
@@ -177,45 +187,7 @@ do { \
     } \
 } while (0)
 
-static void gdb_capture(struct gdb_state *state, const struct iregs *regs)
-{
-    state->regs[GDB_REG_I386_EBX] = regs->ebx;
-    state->regs[GDB_REG_I386_ECX] = regs->ecx;
-    state->regs[GDB_REG_I386_EDX] = regs->edx;
-    state->regs[GDB_REG_I386_ESI] = regs->esi;
-    state->regs[GDB_REG_I386_EDI] = regs->edi;
-    state->regs[GDB_REG_I386_EBP] = regs->ebp;
-    state->regs[GDB_REG_I386_EAX] = regs->eax;
-    state->regs[GDB_REG_I386_DS ] = regs->ds;
-    state->regs[GDB_REG_I386_ES ] = regs->es;
-    state->regs[GDB_REG_I386_FS ] = regs->fs;
-    state->regs[GDB_REG_I386_GS ] = regs->gs;
-    state->regs[GDB_REG_I386_EIP] = regs->eip;
-    state->regs[GDB_REG_I386_CS ] = regs->cs;
-    state->regs[GDB_REG_I386_EFLAGS] = regs->eflags;
-    state->regs[GDB_REG_I386_ESP] = regs->esp;
-    state->regs[GDB_REG_I386_SS ] = regs->ss;
-}
-
-static void gdb_apply(struct gdb_state *state, struct iregs *regs)
-{
-    regs->ebx = state->regs[GDB_REG_I386_EBX];
-    regs->ecx = state->regs[GDB_REG_I386_ECX];
-    regs->edx = state->regs[GDB_REG_I386_EDX];
-    regs->esi = state->regs[GDB_REG_I386_ESI];
-    regs->edi = state->regs[GDB_REG_I386_EDI];
-    regs->ebp = state->regs[GDB_REG_I386_EBP];
-    regs->eax = state->regs[GDB_REG_I386_EAX];
-    regs->ds  = state->regs[GDB_REG_I386_DS ];
-    regs->es  = state->regs[GDB_REG_I386_ES ];
-    regs->fs  = state->regs[GDB_REG_I386_FS ];
-    regs->gs  = state->regs[GDB_REG_I386_GS ];
-    regs->eip = state->regs[GDB_REG_I386_EIP];
-    regs->cs  = state->regs[GDB_REG_I386_CS ];
-    regs->eflags = state->regs[GDB_REG_I386_EFLAGS];
-    regs->esp = state->regs[GDB_REG_I386_ESP];
-    regs->ss  = state->regs[GDB_REG_I386_SS ];
-}
+// ----------------------------------------------------------------------------
 
 static volatile uint32_t s_debugging = false;
 
@@ -243,12 +215,6 @@ int gdb_main(struct iregs *regs, bool from_com)
         return 0;
     }
     cli_save(flags);
-
-    // clear TF in saved frame; guarantees that iret never leaves a stale
-    // single-step trap armed, which is what happens if a pending interrupt is
-    // delivered mid-step; gdb_step() explicitly re-arms TF when single-step
-    // requested by user
-    regs->eflags &= ~EFLAGS_TF;
 
     // zero state
     status = 0;
@@ -288,8 +254,18 @@ int gdb_main(struct iregs *regs, bool from_com)
         goto gdb_done;              // releases lock
     }
 
+    // clear TF in saved frame; guarantees that IRET never leaves a stale
+    // single-step trap armed, which is what happens if a pending interrupt is
+    // delivered mid-step; gdb_step() explicitly re-arms TF when single-step
+    // requested by user
+    regs->eflags &= ~EFLAGS_TF;
+
     // capture register state
     gdb_capture(state, regs);
+
+    // ensure any hardware breakpoints we set are disarmed when hit,
+    // currently we only use these for debugging tricky instructions like IRET
+    gdb_disarm_hw_breakpoint();
 
     // disable debug COM interrupts
     // note: reenabled on 'continue' and 'step', early exit due to EOF, and
@@ -398,11 +374,104 @@ gdb_done:
     return status;
 }
 
+static void gdb_capture(struct gdb_state *state, const struct iregs *regs)
+{
+    state->regs[GDB_REG_I386_EBX] = regs->ebx;
+    state->regs[GDB_REG_I386_ECX] = regs->ecx;
+    state->regs[GDB_REG_I386_EDX] = regs->edx;
+    state->regs[GDB_REG_I386_ESI] = regs->esi;
+    state->regs[GDB_REG_I386_EDI] = regs->edi;
+    state->regs[GDB_REG_I386_EBP] = regs->ebp;
+    state->regs[GDB_REG_I386_EAX] = regs->eax;
+    state->regs[GDB_REG_I386_DS ] = regs->ds;
+    state->regs[GDB_REG_I386_ES ] = regs->es;
+    state->regs[GDB_REG_I386_FS ] = regs->fs;
+    state->regs[GDB_REG_I386_GS ] = regs->gs;
+    state->regs[GDB_REG_I386_EIP] = regs->eip;
+    state->regs[GDB_REG_I386_CS ] = regs->cs;
+    state->regs[GDB_REG_I386_EFLAGS] = regs->eflags;
+    state->regs[GDB_REG_I386_ESP] = regs->esp;
+    state->regs[GDB_REG_I386_SS ] = regs->ss;
+}
+
+static void gdb_apply(struct gdb_state *state, struct iregs *regs)
+{
+    regs->ebx = state->regs[GDB_REG_I386_EBX];
+    regs->ecx = state->regs[GDB_REG_I386_ECX];
+    regs->edx = state->regs[GDB_REG_I386_EDX];
+    regs->esi = state->regs[GDB_REG_I386_ESI];
+    regs->edi = state->regs[GDB_REG_I386_EDI];
+    regs->ebp = state->regs[GDB_REG_I386_EBP];
+    regs->eax = state->regs[GDB_REG_I386_EAX];
+    regs->ds  = state->regs[GDB_REG_I386_DS ];
+    regs->es  = state->regs[GDB_REG_I386_ES ];
+    regs->fs  = state->regs[GDB_REG_I386_FS ];
+    regs->gs  = state->regs[GDB_REG_I386_GS ];
+    regs->eip = state->regs[GDB_REG_I386_EIP];
+    regs->cs  = state->regs[GDB_REG_I386_CS ];
+    regs->eflags = state->regs[GDB_REG_I386_EFLAGS];
+    regs->esp = state->regs[GDB_REG_I386_ESP];
+    regs->ss  = state->regs[GDB_REG_I386_SS ];
+}
+
+static void gdb_arm_hw_breakpoint(uint32_t addr)
+{
+    uint32_t dr7;
+
+    __set_dr0(addr);            // set breakpoint address
+    __set_dr6(0);               // clear sticky breakpoint/step status bits
+
+    __get_dr7(dr7);
+    dr7 &= ~(DR7_RW0|DR7_LEN0); // reset bp0 slot: execute / 1-byte instr len
+    dr7 |= DR7_G0;              // global breakpoint enable
+    __set_dr7(dr7);
+}
+
+static void gdb_disarm_hw_breakpoint(void)
+{
+    uint32_t dr7;
+
+    __get_dr7(dr7);
+    dr7 &= ~(DR7_L0|DR7_G0);    // disable bp0
+    __set_dr7(dr7);
+    __set_dr6(0);               // clear sticky breakpoint/step status bits
+}
+
 static void gdb_step(struct gdb_state *state)
 {
-    state->regs[GDB_REG_I386_EFLAGS] |= EFLAGS_TF;
-    state->regs[GDB_REG_I386_EFLAGS] &= ~EFLAGS_IF; // don't let an IRQ preempt (would corrupt GDB)
-    gdb_enable_com_int(state);
+    uint32_t eip = state->regs[GDB_REG_I386_EIP];
+    if (!gdb_range_valid(eip, 1, /*needs_write=*/false)) {
+        goto tf_step;      // fallback to TF if EIP bad
+    }
+
+    // IRET needs special handling because it changes the execution context;
+    //   set a hardware breakpoint instead of using TF
+    if ((*(uint8_t *) eip) == OP_IRET) {
+        // for IRET, EIP lives at the top of the stack,
+        uint32_t esp = state->regs[GDB_REG_I386_ESP];
+        if (!gdb_range_valid(esp, 4, /*needs_write=*/false)) {
+            goto tf_step;  // fallback to TF if ESP bad
+        }
+
+        // set a hardware breakpoint at the new EIP
+        gdb_arm_hw_breakpoint(*(volatile uint32_t *) esp);
+        gdb_continue(state);
+
+        // TODO: there is a still a bug where single stepping over STI or POPF
+        // (i.e. setting IF=1) while there is a pending interrupt AND a
+        // breakpoint sitting somewhere in that interrupt handler, the
+        // breakpoint will arrive at GDB with EIP ahead by one byte.
+        //
+        // Setting $eip=$eip-1 in GDB allows single-stepping to continue through
+        // the nested interrupt handler. This does not happen with IRET. I think
+        // this is due to the
+    }
+    else {
+tf_step:
+        // we can use TF-based single-stepping normally
+        state->regs[GDB_REG_I386_EFLAGS] |= EFLAGS_TF;
+        gdb_enable_com_int(state);
+    }
 }
 
 static void gdb_continue(struct gdb_state *state)

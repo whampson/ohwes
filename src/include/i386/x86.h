@@ -198,7 +198,17 @@
 #define TSS_IOBASE          0x68
 #define TSS_SSP             0x00
 
-#ifdef __ASSEMBLER__    // Assembler-only defines
+/**
+ * Debug Register Fields
+ */
+#define DR6_B0              (1 << 0)    // Breakpoint 0 hit
+#define DR6_BS              (1 << 14)   // Single-step (TF)
+#define DR7_L0              (1 << 0)    // Local enable, bp0
+#define DR7_G0              (1 << 1)    // Global enable, bp0
+#define DR7_RW0             (3 << 16)   // Read/write type, bp0 (00 = execute)
+#define DR7_LEN0            (3 << 18)   // Length, bp0 (00 = 1 byte)
+
+#if defined(__ASSEMBLER__)    // Assembler-only defines
 
 /**
  * Loads a segment register with the bottom 16 bits of a 32-bit value from
@@ -228,12 +238,27 @@
     movl    %eax, \dest
 .endm
 
-#else       // C-only defines
+#endif
+
+#if !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)      // C-only defines
 
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+
+/**
+ * Limited set of x86 opcodes.
+ */
+enum x86_op {
+    _OP_SIZE_PREFIX     = 0x66, // operand size override prefix
+
+    OP_POP_SS           = 0x17, // pop %ss          - pop value off stack into SS
+    OP_MOV_SEG          = 0x8E, // mov r/m, %sreg   - move reg/mem into segment register
+    OP_POPF             = 0x9D, // popf / popfd     - pop value off stack into EFLAGS
+    OP_IRET             = 0xCF, // iret / iretd     - pop interrupt return context
+    OP_STI              = 0xFB, // sti              - enable interrupts
+};
 
 /**
  * EFLAGS Register
@@ -598,8 +623,23 @@ __asm__ volatile (                              \
 #define __cli() __asm__ volatile ("cli")
 #define __sti() __asm__ volatile ("sti")
 
-#define __hlt()   __asm__ volatile("hlt")
-#define __int3()  __asm__ volatile ("int3")
+#define __pause() __asm__ volatile("pause")     // spin-wait loop processor hint
+#define __hlt()   __asm__ volatile("hlt")       // stop instruction execution
+#define __int3()  __asm__ volatile ("int3")     // trigger debug-break interrupt
+
+#define __get_dr0(v) __asm__ volatile ("movl %%dr0, %0" : "=r"(v))
+#define __set_dr0(v) __asm__ volatile ("movl %0, %%dr0" :: "r"(v) : "memory")
+#define __get_dr1(v) __asm__ volatile ("movl %%dr1, %0" : "=r"(v))
+#define __set_dr1(v) __asm__ volatile ("movl %0, %%dr1" :: "r"(v) : "memory")
+#define __get_dr2(v) __asm__ volatile ("movl %%dr2, %0" : "=r"(v))
+#define __set_dr2(v) __asm__ volatile ("movl %0, %%dr2" :: "r"(v) : "memory")
+#define __get_dr3(v) __asm__ volatile ("movl %%dr3, %0" : "=r"(v))
+#define __set_dr3(v) __asm__ volatile ("movl %0, %%dr3" :: "r"(v) : "memory")
+// DR4 and DR5 reserved...
+#define __get_dr6(v) __asm__ volatile ("movl %%dr6, %0" : "=r"(v))
+#define __set_dr6(v) __asm__ volatile ("movl %0, %%dr6" :: "r"(v) : "memory")
+#define __get_dr7(v) __asm__ volatile ("movl %%dr7, %0" : "=r"(v))
+#define __set_dr7(v) __asm__ volatile ("movl %0, %%dr7" :: "r"(v) : "memory")
 
 #define __lgdt(table_desc) __asm__ volatile ("lgdt %0" :: "m"(table_desc) : "memory")
 #define __sgdt(table_desc) __asm__ volatile ("sgdt %0" :: "m"(table_desc) : "memory")
@@ -652,46 +692,6 @@ __asm__ volatile (                          \
     ::: "eax"                               \
 );
 
-/**
- * Page Directory Entry for 32-bit Paging
- *
- * Points to a 4M page or a 4K page table.
- */
-struct x86_pde {
-    uint32_t p      : 1;    // Present
-    uint32_t rw     : 1;    // Read/Write; 1 = writable
-    uint32_t us     : 1;    // User/Supervisor; 1 = user accessible
-    uint32_t pwt    : 1;    // Page-Level Write-Through
-    uint32_t pcd    : 1;    // Page-Level Cache Disable
-    uint32_t a      : 1;    // Accessed; software has accessed this page
-    uint32_t d      : 1;    // Dirty; software has written this page
-    uint32_t ps     : 1;    // Page Size; 0 = 4K page table, 1 = 4M page (requires CR4.PSE=1)
-    uint32_t g      : 1;    // Global; pins page to TLB (requires CR4.PGE=1)
-    uint32_t        : 3;    // (available for software use)
-    uint32_t pfn    : 20;   // Page Frame Number: aligned address of 4K page table or 4M page
-};
-static_assert(sizeof(struct x86_pde) == 4, "bad PDE size!");
-
-/**
- * Page Table Entry for 32-bit Paging
- *
- * Points to a 4K page.
- */
-struct x86_pte {
-    uint32_t p      : 1;    // Present
-    uint32_t rw     : 1;    // Read/Write; 1 = writable
-    uint32_t us     : 1;    // User/Supervisor; 1 = user accessible
-    uint32_t pwt    : 1;    // Page-Level Write-Through
-    uint32_t pcd    : 1;    // Page-Level Cache Disable
-    uint32_t a      : 1;    // Accessed; software has accessed this page
-    uint32_t d      : 1;    // Dirty; software has written this page
-    uint32_t        : 1;    // (reserved; PAT)
-    uint32_t g      : 1;    // Global; pins page to TLB (requires CR4.PGE=1)
-    uint32_t        : 3;    // (available for software use)
-    uint32_t pfn    : 20;   // Page Frame Number: 4K-aligned address of 4K page
-};
-static_assert(sizeof(struct x86_pte) == 4, "bad PTE size!");
-
-#endif /* __ASSEMBLER__ */
+#endif /* !defined(__LDSCRIPT__) */
 
 #endif /* __X86_H */
