@@ -33,17 +33,22 @@
 
 // Text mode only for now!
 
-uint8_t vga_get_rows(void)
+uint16_t vga_get_rows(void)
 {
+    uint32_t flags;
+    cli_save(flags);
+
     uint8_t of = vga_crtc_read(VGA_CRTC_REG_OF);
     uint16_t vde = vga_crtc_read(VGA_CRTC_REG_VDE);
     vde |= ((of & VGA_CRTC_FLD_OF_VDE8_MASK) >> VGA_CRTC_FLD_OF_VDE8_SHIFT) << 8;
     vde |= ((of & VGA_CRTC_FLD_OF_VDE9_MASK) >> VGA_CRTC_FLD_OF_VDE9_SHIFT) << 9;
     uint8_t msl = vga_crtc_read(VGA_CRTC_REG_MSL) & VGA_CRTC_FLD_MSL_MSL_MASK;
-    return (uint8_t) ((vde + 1) / (msl + 1));
+
+    restore_flags(flags);
+    return ((vde + 1) / (msl + 1));
 }
 
-uint8_t vga_get_cols(void)
+uint16_t vga_get_cols(void)
 {
     uint8_t hde = vga_crtc_read(VGA_CRTC_REG_HDE);
     return hde + 1;
@@ -51,29 +56,37 @@ uint8_t vga_get_cols(void)
 
 void vga_get_fb_info(struct vga_fb_info *fb_info)
 {
+    uint32_t flags;
     uint8_t grfx_misc;
     uint8_t fb_select;
 
     assert(fb_info);
 
+    cli_save(flags);
+    fb_info->scan_start = vga_crtc_read(VGA_CRTC_REG_ADDR_HI) << 8;
+    fb_info->scan_start |= vga_crtc_read(VGA_CRTC_REG_ADDR_LO);
+    fb_info->scan_start <<= 1;  // 2 bytes per cell
     grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
-    fb_select = (grfx_misc & 0x0C) >> 2;
+    fb_select = (grfx_misc & VGA_GRFX_FLD_MISC_MMAP_MASK) >> 2;
+    restore_flags(flags);
+
+
 
     switch (fb_select) {
         case VGA_GRFX_ENUM_MISC_MMAP_128K:
-            fb_info->framebuf = 0xA0000;
+            fb_info->base_physical = 0xA0000;
             fb_info->size_pages = 32;
             break;
         case VGA_GRFX_ENUM_MISC_MMAP_64K:
-            fb_info->framebuf = 0xA0000;
+            fb_info->base_physical = 0xA0000;
             fb_info->size_pages = 16;
             break;
         case VGA_GRFX_ENUM_MISC_MMAP_32K_LO:
-            fb_info->framebuf = 0xB0000;
+            fb_info->base_physical = 0xB0000;
             fb_info->size_pages = 8;
             break;
         case VGA_GRFX_ENUM_MISC_MMAP_32K_HI:
-            fb_info->framebuf = 0xB8000;
+            fb_info->base_physical = 0xB8000;
             fb_info->size_pages = 8;
             break;
     }
@@ -81,14 +94,17 @@ void vga_get_fb_info(struct vga_fb_info *fb_info)
 
 void vga_set_fb(enum vga_fb_select fb_select)
 {
+    uint32_t flags;
     uint8_t grfx_misc;
 
+    cli_save(flags);
     grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
     grfx_misc = (grfx_misc & 0xF3) | ((fb_select & 3) << 2);
     vga_grfx_write(VGA_GRFX_REG_MISC, grfx_misc);
 
     grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
     assert((grfx_misc & 0x0C) >> 2 == fb_select);
+    restore_flags(flags);
 }
 
 void vga_enable_blink(bool enable)
@@ -176,6 +192,77 @@ void vga_set_cursor_shape(uint16_t shape)
     cse |= (end   & VGA_CRTC_FLD_CSE_CSE_MASK);
     vga_crtc_write(VGA_CRTC_REG_CSS, css);
     vga_crtc_write(VGA_CRTC_REG_CSE, cse);
+    restore_flags(flags);
+}
+
+uint16_t vga_get_scan_start(void)
+{
+    uint16_t word_offset;
+    uint32_t flags;
+
+    cli_save(flags);
+    word_offset = vga_crtc_read(VGA_CRTC_REG_ADDR_HI) << 8;
+    word_offset |= vga_crtc_read(VGA_CRTC_REG_ADDR_LO);
+    restore_flags(flags);
+
+    return word_offset;
+}
+
+void vga_set_scan_start(uint16_t word_offset)
+{
+    uint32_t flags;
+
+    cli_save(flags);
+    vga_crtc_write(VGA_CRTC_REG_ADDR_LO, word_offset & 0xFF);
+    vga_crtc_write(VGA_CRTC_REG_ADDR_HI, word_offset >> 8);
+    restore_flags(flags);
+}
+
+uint16_t vga_get_line_compare(void)
+{
+    uint8_t lc8_mask, lc9_mask;
+    uint16_t scan_line;
+    uint32_t flags;
+
+    cli_save(flags);
+    lc8_mask = vga_crtc_read(VGA_CRTC_REG_OF) & VGA_CRTC_FLD_OF_LC8_MASK;
+    lc9_mask = vga_crtc_read(VGA_CRTC_REG_MSL) & VGA_CRTC_FLD_MSL_LC9_MASK;
+    scan_line = vga_crtc_read(VGA_CRTC_REG_LC);
+    scan_line |= (lc8_mask >> VGA_CRTC_FLD_OF_LC8_SHIFT) << 8;
+    scan_line |= (lc9_mask >> VGA_CRTC_FLD_MSL_LC9_SHIFT) << 9;
+    restore_flags(flags);
+
+    return scan_line;
+}
+
+void vga_set_line_compare(uint16_t scan_line)
+{
+    uint8_t of, msl;
+    uint32_t flags;
+
+    cli_save(flags);
+    msl = vga_crtc_read(VGA_CRTC_REG_MSL) & ~VGA_CRTC_FLD_MSL_LC9_MASK;
+    msl |= ((scan_line >> 9) & 1) << VGA_CRTC_FLD_MSL_LC9_SHIFT;
+    of = vga_crtc_read(VGA_CRTC_REG_OF) & ~VGA_CRTC_FLD_OF_LC8_MASK;
+    of |= ((scan_line >> 8) & 1) << VGA_CRTC_FLD_OF_LC8_SHIFT;
+    vga_crtc_write(VGA_CRTC_REG_MSL, msl);
+    vga_crtc_write(VGA_CRTC_REG_OF, of);
+    vga_crtc_write(VGA_CRTC_REG_LC, scan_line & 0xFF);
+    restore_flags(flags);
+}
+
+
+void vga_wait_for_vsync(void)
+{
+    uint32_t flags;
+    cli_save(flags);
+
+    // wait 'til end of current retrace
+    while ((inb(VGA_EXTL_PORT_IS1) & VGA_EXTL_FLD_IS1_VRT_MASK) != 0);
+
+    // wait 'til start of next retrace
+    while ((inb(VGA_EXTL_PORT_IS1) & VGA_EXTL_FLD_IS1_VRT_MASK) == 0);
+
     restore_flags(flags);
 }
 

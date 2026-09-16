@@ -76,11 +76,16 @@
 #define VGA_CRTC_FLD_CSE_CSE_MASK   0x1F    /* Cursor Scan Line End Field */
 #define VGA_CRTC_FLD_CSE_CSK_MASK   0x60    /* Cursor Skew Field */
 
+/* Maximum Scan Line Register Fields*/
 #define VGA_CRTC_FLD_MSL_MSL_MASK   0x1F    /* Maximum Scan Line */
+#define VGA_CRTC_FLD_MSL_LC9_MASK   0x40    /* Line Compare (bit 9) */
+#define VGA_CRTC_FLD_MSL_LC9_SHIFT  6
 
+/* Overflow Register Fields */
+#define VGA_CRTC_FLD_OF_LC8_MASK    0x10    /* Line Compare (bit 8) */
+#define VGA_CRTC_FLD_OF_LC8_SHIFT   4
 #define VGA_CRTC_FLD_OF_VDE8_MASK   0x02    /* Vertical Display End (bit 8) */
 #define VGA_CRTC_FLD_OF_VDE8_SHIFT  1
-
 #define VGA_CRTC_FLD_OF_VDE9_MASK   0x40    /* Vertical Display End (bit 9) */
 #define VGA_CRTC_FLD_OF_VDE9_SHIFT  6
 
@@ -191,6 +196,9 @@
 #define VGA_EXTL_FLD_MO_HSYNCP      0x40    /* Horizontal Sync Polarity Field */
 #define VGA_EXTL_FLD_MO_VSYNCP      0x80    /* Vertical Sync Polarity Field */
 
+#define VGA_EXTL_FLD_IS1_VRT_MASK   0x08    /* Vertical Retrace */
+#define VGA_EXTL_FLD_IS1_VRT_SHIFT  3
+
 // ----------------------------------------------------------------------------
 
 /**
@@ -221,8 +229,9 @@ enum vga_fb_select {
  * Frame Buffer Geometry
  */
 struct vga_fb_info {
-    uintptr_t framebuf;     // frame buffer physical address
-    size_t size_pages;      // frame buffer size in pages
+    intptr_t base_physical; // frame buffer base physical address
+    uint16_t size_pages;    // frame buffer total size in pages
+    uint32_t scan_start;    // byte offset of visible portion of frame buffer
 };
 
 /**
@@ -264,12 +273,12 @@ static_assert(sizeof(struct vga_cell) == 2, "sizeof(struct vga_cell)");
 /**
  * Get the number of text mode rows.
  */
-uint8_t vga_get_rows(void);
+uint16_t vga_get_rows(void);
 
 /**
  * Get the number of text mode columns.
  */
-uint8_t vga_get_cols(void);
+uint16_t vga_get_cols(void);
 
 /**
  * Fill a vga_fb_info struct with the current frame buffer parameters.
@@ -331,6 +340,14 @@ uint16_t vga_get_cursor_shape(void);
  *  lower byte contains start scan line
  */
 void vga_set_cursor_shape(uint16_t shape);
+
+uint16_t vga_get_scan_start(void);
+uint16_t vga_get_line_compare(void);
+
+void vga_set_scan_start(uint16_t scan_line);
+void vga_set_line_compare(uint16_t scan_line);
+
+void vga_wait_for_vsync(void);
 
 // ----------------------------------------------------------------------------
 
