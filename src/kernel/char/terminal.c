@@ -43,6 +43,9 @@
 #define VGA_FB_WORDS        (VGA_FB_SIZE >> 1)  // 2 bytes per char
 
 #define FAST_SCROLL         1   // uses VGA hardware regs to control scrolling
+#define VSYNC               1   // sync large screen updates to vertical retrace
+#define VSYNC_SCROLL        0   // slows scrolling, but no tearing!
+// TODO: smooth scroll? :D
 
 // TODO: name 'vgaterm.c'
 
@@ -54,9 +57,6 @@ static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y);
 static void pos2xy(struct terminal *term, uint16_t pos);
 
 int g_currterm = DEFAULT_VT;
-static_assert(DEFAULT_VT > 0 && DEFAULT_VT <= NR_TERMINAL,
-    "config.h: invalid value for DEFAULT_VT");
-
 #define is_current(term)    ((term)->number == current_terminal())
 
 struct terminal g_terminals[NR_TERMINAL];
@@ -193,7 +193,7 @@ static size_t terminal_tty_write_room(struct tty *tty)
 {
     // we can write the frame buffer forever...
     // return something sufficiently large to satisfy ldisc logic
-    return 4096;
+    return (tty->stopped) ? 0 : 4096;
 }
 
 // ----------------------------------------------------------------------------
@@ -322,8 +322,8 @@ static void enable_blink(const struct terminal *term);  // ESC 3 / ESC 4
 static void enable_cursor(const struct terminal *term); // ESC 5 / ESC 6
 static void set_cursor_pos(const struct terminal *term);// ESC [ <n>;<m>H
 static void set_cursor_shape(const struct terminal *term);
-static void update_vga_state(const struct terminal *term);
-static void update_cursor_state(const struct terminal *term);
+static void apply_vga_state(const struct terminal *term);
+static void apply_cursor_state(const struct terminal *term);
 
 // frame buffer
 static void set_fb_char(struct terminal *term, uint16_t pos, char c);
@@ -371,7 +371,10 @@ __init void init_terminal_driver(void)
             pos2xy(term, vga_get_cursor_pos());
         }
         else {
+            char buf[8];
             erase(term, ERASE_ALL);
+            snprintf(buf, sizeof(buf), "tty%d", i);
+            terminal_print(term, buf);
         }
     }
 
@@ -425,7 +428,7 @@ void terminal_defaults(struct terminal *term)
     memset(term->csiparam, -1, sizeof(term->csiparam));
     term->paramidx = 0;
     term->blink_on = false;
-    term->need_wrap = false;
+    term->line_wrap_pending = false;
     term->attr.bg = VGA_BLACK;
     term->attr.fg = VGA_WHITE;
     term->attr.bright = false;
@@ -473,14 +476,20 @@ int switch_terminal(int num)
     // save current VGA contents to old terminal's back buffer
     memcpy(curr->framebuf, KERNEL_ADDR(fb_info.base_physical), VGA_FB_SIZE);
 
+    // apply new VGA state before we restore backbuffer
+    apply_vga_state(next);
+
     // restore new terminal's back buffer into VGA memory
     memcpy(KERNEL_ADDR(fb_info.base_physical), next->framebuf, VGA_FB_SIZE);
 
     // map new terminal's frame buffer to VGA memory
     map_terminal_fb(next, fb_info.base_physical);
 
-    // apply new terminal's VGA state
-    update_vga_state(next);
+    // restore new terminal's keyboard state, keep current held-down key state
+    next->kb_state._modkeys = curr->kb_state._modkeys;
+    ps2kb_apply_state(&next->kb_state.hw_state);
+
+    // make it official
     g_currterm = next->number;
 
     restore_flags(flags);
@@ -529,7 +538,7 @@ void terminal_restore(struct terminal *term, struct terminal_save_state *save)
     term->cursor._value = save->cursor;
 
     if (is_current(term)) {
-        update_vga_state(term);
+        apply_vga_state(term);
     }
 }
 
@@ -559,7 +568,7 @@ int terminal_write(struct terminal *term, const char *buf, size_t count)
 
     p = buf;
     while (p < buf + count) {
-#if E9_HACK && ENABLE_E9HACK_PRINTF
+#if CONFIG__E9_HACK && ENABLE_E9HACK_PRINTF
     if (term == get_terminal(0)) {
         outb(0xE9, *p);
     }
@@ -577,8 +586,9 @@ void terminal_putchar(struct terminal *term, char c)
     bool update_cursor_pos = true;
     uint16_t char_pos;
 
-    // prevent reentrancy to avoid mucking with terminal state
-    if (test_and_set_bit(&term->printing, 0)) {     // TODO: consider using atomic xchg (faster than `lock`)
+    // prevent reentrancy from interrupt/DPC context
+    // to avoid mucking with terminal state
+    if (test_and_set_bit(&term->printing, 0)) {
         return; // TODO: do we just drop the char?
     }
 
@@ -633,28 +643,21 @@ void terminal_putchar(struct terminal *term, char c)
                 goto done;
             }
 
-            update_char = true;
-            update_attr = true;
-
-            // handle deferred wrap
-            if (term->need_wrap) {
+            if (term->line_wrap_pending) {
                 carriage_return(term);
                 line_feed(term);
             }
 
+            update_char = true;
+            update_attr = true;
+
             // determine character position
             char_pos = xy2pos(term, term->cursor.x, term->cursor.y);
 
-            // advance cursor
+            // advance cursor, and wrap if needed
             term->cursor.x++;
             if (term->cursor.x >= term->cols) {
-                // if the cursor is at the end of the line, prevent
-                // the display from scrolling one line (wrapping) until
-                // the next character is received so we aren't left with
-                // an unnecessary blank line
-                term->cursor.x--;
-                term->need_wrap = true;
-                update_cursor_pos = false;
+                term->line_wrap_pending = true;
             }
             break;
     }
@@ -755,7 +758,7 @@ static void esc(struct terminal *term, char c)
             break;
     }
 
-    term->need_wrap = false;
+    term->line_wrap_pending = false;
     term->state = S_NORM;
 }
 
@@ -880,8 +883,8 @@ static void csi(struct terminal *term, char c)
             goto csi_done;  // invalid param char
     }
 
-csi_done:   // CSI processing done
-    term->need_wrap = false;
+csi_done:
+    term->line_wrap_pending = false;
     term->state = S_NORM;
 
 csi_next:   // we need more CSI characters; do not alter terminal state
@@ -893,10 +896,9 @@ csi_next:   // we need more CSI characters; do not alter terminal state
 
 static void csi_m(struct terminal *term, char p)
 {
-    static const char CSI_VGA_COLOR_MAP[8] =
+    static const char CSI_VGA_COLOR_MAP[8] =    // TODO: configure via ioctl??
     {
         // maps ANSI CSI<n>m 3-bit colors to VGA 3-bit color.
-        // TODO: configure via ioctl??
         VGA_BLACK,
         VGA_RED,
         VGA_GREEN,
@@ -975,7 +977,7 @@ static void reset_terminal(struct terminal *term)
     terminal_defaults(term);
     erase(term, ERASE_ALL);
     if (is_current(term)) {
-        update_vga_state(term);
+        apply_vga_state(term);
     }
 }
 
@@ -998,20 +1000,20 @@ static void restore_cursor(struct terminal *term)
 {
     term->cursor._value = term->saved_state.cursor;
     if (is_current(term)) {
-        update_cursor_state(term);
+        apply_cursor_state(term);
     }
 }
 
 static void backspace(struct terminal *term)
 {
     cursor_left(term, 1);
-    term->need_wrap = false;
+    term->line_wrap_pending = false;
 }
 
 static void carriage_return(struct terminal *term)
 {
     term->cursor.x = 0;
-    term->need_wrap = false;
+    term->line_wrap_pending = false;
 }
 
 static void line_feed(struct terminal *term)
@@ -1020,16 +1022,15 @@ static void line_feed(struct terminal *term)
         scroll(term, 1);
         term->cursor.y--;
     }
-    term->need_wrap = false;
+    term->line_wrap_pending = false;
 }
 
 static void reverse_linefeed(struct terminal *term)
 {
-    if (--term->cursor.y < 0) {     // TODO: fix so it doesn't wrap
+    if (term->cursor.y-- <= 0) {
         scroll(term, -1);
-        term->cursor.y++;
+        term->cursor.y = 0;
     }
-    term->need_wrap = false;
 }
 
 static void tab(struct terminal *term)
@@ -1056,13 +1057,10 @@ static void scroll(struct terminal *term, int n)   // n < 0 is reverse scroll
 
     if (n > term->rows) n = term->rows;
 
-    // NOTE: no vertical sync, fast-scrolling text may tear
-
 #if FAST_SCROLL
     int n_blank = n * term->cols;
     int n_visible = term->cols * term->rows;
     int n_kept = n_visible - n_blank;
-
     int last_row_start = VGA_FB_WORDS - (VGA_FB_WORDS % term->cols);
 
     term->origin += (reverse) ? -n_blank : n_blank;
@@ -1084,6 +1082,9 @@ static void scroll(struct terminal *term, int n)   // n < 0 is reverse scroll
     }
 
     if (is_current(term)) {
+#if VSYNC_SCROLL
+    vga_wait_for_vsync();   // makes scrolling sllooowww...
+#endif
         vga_set_scan_start(term->origin);
     }
 
@@ -1204,6 +1205,13 @@ static void cursor_right(struct terminal *term, int n)
 
 static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y)
 {
+    if (x > term->cols - 1) {
+        x = term->cols - 1;
+    }
+    if (y > term->rows - 1) {
+        y = term->rows - 1;
+    }
+
     return y * term->cols + x;
 }
 
@@ -1282,16 +1290,20 @@ static void set_cursor_shape(const struct terminal *term)
     vga_set_cursor_shape(term->cursor.shape);
 }
 
-static void update_cursor_state(const struct terminal *term)
+static void apply_cursor_state(const struct terminal *term)
 {
     enable_cursor(term);
     set_cursor_shape(term);
     set_cursor_pos(term);
 }
 
-static void update_vga_state(const struct terminal *term)
+static void apply_vga_state(const struct terminal *term)
 {
     enable_blink(term);
-    update_cursor_state(term);
+    apply_cursor_state(term);
+
+#if VSYNC
+    vga_wait_for_vsync();
+#endif
     vga_set_scan_start(term->origin);
 }

@@ -64,7 +64,7 @@ struct terminal {
     int paramidx;                       // control sequence parameter index
 
     bool blink_on;                      // character blinking enabled
-    bool need_wrap;                     // wrap output to next line on next character
+    bool line_wrap_pending;             // a line wrap is pending
 
     struct keyboard_state kb_state;     // current keyboard state
 

@@ -70,8 +70,6 @@ void vga_get_fb_info(struct vga_fb_info *fb_info)
     fb_select = (grfx_misc & VGA_GRFX_FLD_MISC_MMAP_MASK) >> 2;
     restore_flags(flags);
 
-
-
     switch (fb_select) {
         case VGA_GRFX_ENUM_MISC_MMAP_128K:
             fb_info->base_physical = 0xA0000;
