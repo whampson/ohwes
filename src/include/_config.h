@@ -31,16 +31,17 @@
 #define OS_COPYRIGHT            "Copyright (C) 2020-2025 " OS_AUTHOR ". " \
                                 "All Rights Reserved."
 
+// TODO: make a lot of this runtime configurable
+
 //
 // ----------------------------------------------------------------------------
 // General Configuration
 //
 
 // booting
-#define HDD_BOOT                0   // (bool) boot from hard disk; set for USB boot as well
+#define USB_BOOT        0   // (bool) set if booting from USB device
 
 // memory
-#define MEMORY_REQUIRED         (1536 * KB)
 #define HIGHER_GROUND           1   // (bool) map kernel in high virtual address space
 
 // general printing
@@ -50,7 +51,7 @@
 #define SHOW_CRASH_SCREEN       1   // (bool) display blue screen of death upon crash
 
 // kernel log
-#define KERNEL_LOG_SIZE         (32*PAGE_SIZE)
+#define KERNEL_LOG_SIZE         (4*PAGE_SIZE)
 #define KPRINT_TIME             1   // (bool) show timestamp in kernel log messages
 #define KPRINT_COLOR            1   // (bool) print a colorful kernel log
 #define DEFAULT_LOG_LEVEL       5   // (0-5)  default console log level (4=INFO)
@@ -59,8 +60,8 @@
 #define DEFAULT_VT              1   // (1-NR_TERMINAL) initial virtual terminal activated
 
 // debugging
-#define SERIAL_DEBUGGING        0   // (bool) enable debugging over COM port
-#define SERIAL_DEBUG_PORT       COM1_PORT
+#define SERIAL_DEBUGGING        1   // (bool) enable debugging over COM port
+#define SERIAL_DEBUG_PORT       COM1_PORT // TODO: make this COM port index
 #define SERIAL_DEBUG_BAUD       BAUD_115200
 #define ENABLE_CRASH_KEY        1   // (bool) test various crash scenarios w/ keystroke
 
@@ -68,13 +69,13 @@
 #define ENABLE_VT_CONSOLE       1   // (bool) use a virtual terminal as a console device
 #define VT_CONSOLE_NUM          0   //        (0) print console messages to active virtual terminal
 #define ENABLE_SERIAL_CONSOLE   1   // (bool) use a serial port as a console device
-#define SERIAL_CONSOLE_NUM      1   //        serial console COM port number
-#define SERIAL_CONSOLE_BAUD     BAUD_9600
+#define SERIAL_CONSOLE_COM      2   //        serial console COM port index
+#define SERIAL_CONSOLE_BAUD     BAUD_115200
 #define EARLY_PRINT             1   // (bool) register console when first char is printed
 #define E9_HACK                 1   // (bool) tee terminal output to 0xE9
 #define ENABLE_E9HACK_CONSOLE   1   // (bool) (requires E9_HACK) register a console as 0xE9 interface
 #define ENABLE_E9HACK_PRINTF    1   // (bool) (requires E9_HACK) tee regular printf calls on active terminal to 0xE9
-
+// TODO: make _PRINTF select which TTY to write-out to 0xE9, 0 for current
 
 //
 // ----------------------------------------------------------------------------
@@ -93,7 +94,7 @@
 #define MAX_NR_IO_RANGES        32    // max num I/O range reservations
 
 // i/o
-#define NR_TERMINAL             7     // number of virtual terminals
+#define NR_TERMINAL             8     // number of virtual terminals
 #define NR_SERIAL               4     // number of serial ports
 #define MAX_PRINTBUF            4096  // max num chars in print buffer
 
@@ -126,7 +127,6 @@ static_assert(DEFAULT_VT >= 1 && DEFAULT_VT <= NR_TERMINAL,
     "invalid DEFAULT_VT value");
 static_assert(VT_CONSOLE_NUM >= 0 && VT_CONSOLE_NUM <= NR_TERMINAL,
     "invalid VT_CONSOLE_NUM value");
-
 #endif  // !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)
 
 #endif  // __CONFIG_H
