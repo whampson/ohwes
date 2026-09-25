@@ -30,11 +30,13 @@
 #include <i386/cpu.h>
 #include <i386/paging.h>
 #include <kernel/kernel.h>
-#include <kernel/kprint.h>
 #include <kernel/list.h>
 #include <kernel/mm.h>
 #include <kernel/pool.h>
 #include <sys/ohwes.h>
+
+#define pr_fmt(fmt) "mem: " fmt
+#include <kernel/kprint.h>
 
 // struct free_page {
 //     struct free_page *next;
@@ -96,7 +98,7 @@ static void print_mmap_entry(const struct acpi_mmap_entry *e)
 
     base = (uintptr_t) e->base;
     limit = (uintptr_t) (e->base + e->length - 1);
-    pr_cont("  [%p-%p] %5lu%c %s",
+    pr_info("  [%p-%p] %5lu%c %s",
         _P(base), _P(limit),
         disp_size, size_char,
         mmap_bad(e)     ? "*** BAD ***" :
@@ -190,10 +192,9 @@ static __init void check_memory(void)
         total_mem_kilobytes += size_kb;
     }
 
-    if (free_mem_kilobytes < (MEMORY_REQUIRED >> KB_SHIFT)) {
+    if (free_mem_kilobytes < MINIMUM_KB_RAM) {
         panic("%zuk detected - not enough memory!\n" OS_NAME " needs least %uk to operate!",
-            free_mem_kilobytes,
-            (MEMORY_REQUIRED >> KB_SHIFT));
+            free_mem_kilobytes, MINIMUM_KB_RAM);
     }
 
     if (bad_mem_kilobytes > 0) {
@@ -281,15 +282,15 @@ static __init void init_zones(void)
 
     // TODO: get rid of zone->mem_size_pages, just calculate based on start/end
 
-    pr_info("mem: init %s phys %p-%p bitmap %p-%p\n",
+    pr_info("%s %p-%p bitmap %p-%p\n",
         zone->name, _P(zone->mem_start), _P(zone->mem_end),
         bitmap, bitmap + (bitmap_size_pages << PAGE_SHIFT) - 1);
 
     // ensure pages are mapped to speed up allocation time
     uintptr_t top = min((4*MB), zone->mem_end+1); // TODO: temp workaround for update_page_mappings 4M limit...
     size_t size_pages = (top - zone->mem_start) >> PAGE_SHIFT;
-    pr_warn("mem: RAM limited to 4M until multiple PDEs implemented!\n");
-    pgflags_t flags = _PAGE_RW | _PAGE_PRESENT;
+    pr_warn("RAM limited to 4M until multiple PDEs implemented!\n");
+    pgflags_t flags = _PAGE_WRITABLE | _PAGE_PRESENT;
     update_page_mappings((uintptr_t) KERNEL_ADDR(zone->mem_start), zone->mem_start, size_pages, flags);
 
     // TODO: could calculate how many page tables are needed to alloc all of
@@ -299,7 +300,7 @@ static __init void init_zones(void)
 void * alloc_pages(int flags, int order)
 {
     if (order < 0 || order > MAX_ORDER) {
-        pr_warn("mem: alloc_pages failed - invalid order '%d'\n", order);
+        pr_warn("alloc_pages failed - invalid order '%d'\n", order);
         return NULL;
     }
 
@@ -311,7 +312,7 @@ void * alloc_pages(int flags, int order)
     size_t bitmap_size_bytes = div_ceil(bitmap_size, 32) << 2;  // DWORD-aligned size
     int index = bit_scan_forward(zone->bitmap[order], bitmap_size_bytes);
     if (index < 0 || index >= bitmap_size) {
-        pr_fatal("mem: alloc_pages order %d failed - out of memory!\n", order);
+        pr_fatal("alloc_pages order %d failed - out of memory!\n", order);
         return NULL;
     }
 
@@ -339,8 +340,8 @@ void * alloc_pages(int flags, int order)
     void *kern_addr = KERNEL_ADDR(addr);
 
     zone->free_pages -= (order_size >> PAGE_SHIFT);
-    pr_info("mem: alloc_pages order %d %p-%p %s; %zd pages left\n",
-        order, kern_addr, kern_addr+order_size-1, zone->name, zone->free_pages);
+    pr_info("alloc_pages order %d %p-%p %s\n",
+        order, kern_addr, kern_addr+order_size-1, zone->name);
 
     if (flags & MEM_ZERO) {
         zeromem(kern_addr, order_size);
@@ -385,8 +386,8 @@ void free_pages(void *addr, int order)
     }
 
     zone->free_pages += (order_size >> PAGE_SHIFT);
-    pr_info("mem: free_pages order %d %p-%p %s; %zd pages left\n",
-        order, addr, addr+order_size-1, zone->name, zone->free_pages);
+    pr_info("free_pages order %d %p-%p %s\n",
+        order, addr, addr+order_size-1, zone->name);
 }
 
 int get_order(size_t size)

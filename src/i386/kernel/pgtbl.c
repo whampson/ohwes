@@ -26,7 +26,9 @@
 #include <kernel/kprint.h>
 #include <kernel/mm.h>
 
-bool virt_addr_valid(void *va)
+#define CHATTY 1
+
+bool virt_addr_valid(uintptr_t va)
 {
     pte_t *pte;
     if (!walk_page_table(va, &pte)) {
@@ -79,8 +81,10 @@ void update_page_mappings(uintptr_t va, uintptr_t pa, size_t count, pgflags_t fl
         return;
     }
 
+#if CHATTY
     uintptr_t base_pa = pa;
     uintptr_t base_va = va;
+#endif
 
     for (int i = 0; i < count; i++) {
         pde = KERNEL_ADDR(pde_offset(pgdir, va));
@@ -103,17 +107,15 @@ void update_page_mappings(uintptr_t va, uintptr_t pa, size_t count, pgflags_t fl
     // TODO: be able to control this w/ flag
     flush_tlb();
 
-    size_t size_bytes = (count << PAGE_SHIFT);
-    if (unmap) {
-        pr_info("mem: unmap p:%p-%p (TODO: ZONE!!) v:%p-%p size_pages=%zd flags=%02lXh\n",
-            _P(base_pa), _P(base_pa+size_bytes-1),
-            _P(base_va), _P(base_va+size_bytes-1),
-            count, flags);
+#if CHATTY
+    // size_t size_bytes = (count << PAGE_SHIFT);
+    if (unmap) { // TODO: show zone!!
+        pr_info("mem: unmap %p phys %p pages %zd flags %02lXh\n",
+            _P(base_va), _P(base_pa), count, flags);
     }
     else {
-        pr_info("mem: map p:%p-%p (TODO: ZONE!!) v:%p-%p size_pages=%zd flags=%02lXh\n",
-            _P(base_pa), _P(base_pa+size_bytes-1),
-            _P(base_va), _P(base_va+size_bytes-1),
-            count, flags);
+        pr_info("mem: map %p phys %p pages %zd flags %02lXh\n",
+            _P(base_va), _P(base_pa), count, flags);
     }
+#endif
 }
