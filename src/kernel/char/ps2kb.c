@@ -91,16 +91,17 @@ struct ps2kb
     struct dpc termsw_dpc;      // terminal switch
     struct dpc sysrq_dpc;       // SysRq handler
 
-    volatile bool pending_leds      : 1; // an LED update is armed
-    volatile bool pending_hotplug   : 1; // a hotplug flush is armed
-    volatile bool pending_termsw    : 1; // a terminal switch is armed
-    volatile bool pending_sysrq     : 1; // a SysRq action is armed
+    // atomic state
+    volatile bool pending_leds;     // an LED update is armed
+    volatile bool pending_hotplug;  // a hotplug flush is armed
+    volatile bool pending_termsw;   // a terminal switch is armed
+    volatile bool pending_sysrq;    // a SysRq action is armed
+    volatile bool ih_active;        // keyboard interrupt handler active
+    volatile bool hw_connected;     // keyboard hardware is connected
 
-    // atomic software state
-    uint32_t atm_ps2ctl_init;   // (bool) PS/2 controller initialized
-    uint32_t atm_ih_active;     // (bool) keyboard interrupt handler active
-    uint32_t atm_hw_connected;  // (bool) keyboard hardware is connected
-    uint32_t atm_init_count;    // (int) number of times keyboard initialized
+    // keyboard software state
+    bool ps2ctl_init;       // PS/2 controller initialized
+    int init_count;         // number of times keyboard initialized
 
     // keyboard scancode state
     bool e0     : 1;        // 0xE0 modifier received
@@ -147,11 +148,8 @@ static const char * g_keynames[122];
 
 bool kb_avail(void)
 {
-    return atomic_cmpxchg(&g_kb->atm_init_count, 0, 0) > 0 &&
-           test_bit(&g_kb->atm_hw_connected, 0);
+    return g_kb->init_count > 0 && g_kb->hw_connected;
 }
-
-int kb_getc(void);
 
 // local functions
 
@@ -188,31 +186,6 @@ extern __init void init_ps2(void);
 #define RIF_FALSE(x)  if (!(x)) { return false; }
 
 // ----------------------------------------------------------------------------
-
-int kb_getc(void)
-{
-    struct tty *tty;
-    int c;
-
-    if (!test_bit(&g_kb->atm_hw_connected, 0)) {
-        return -EAGAIN;
-    }
-
-    tty = get_terminal(0)->tty;
-
-    while (true) {
-        if (!test_bit(&g_kb->atm_hw_connected, 0)) {
-            return -EAGAIN;
-        }
-
-        c = n_tty_getc(tty);
-        if (c != -EAGAIN) {
-            return c;
-        }
-
-        // TODO: scheduler yield instead of busy loop
-    }
-}
 
 static bool ps2kb_set_scanmode(uint8_t set) // TODO: ioctl for this
 {
@@ -344,7 +317,7 @@ static bool ps2kb_init(void)
     ps2_write_config(ps2cfg);
     ps2_write_cmd(PS2_CMD_P1ON);
 
-    atomic_inc(&g_kb->atm_init_count);
+    g_kb->init_count++;
     return true;
 }
 
@@ -356,7 +329,7 @@ static void ps2kb_on_connect(void)
     uint32_t flags;
 
     pr_debug("keyboard connected\n");
-    atomic_cmpxchg(&g_kb->atm_hw_connected, 1, 0);
+    g_kb->hw_connected = true;
 
     const uint64_t c_settle_time_ms = 2;
 
@@ -381,7 +354,7 @@ static void ps2kb_on_disconnect(void)
     cli_save(flags);
 
     pr_debug("keyboard disconnected\n");
-    atomic_cmpxchg(&g_kb->atm_hw_connected, 0, 1);
+    g_kb->hw_connected = false;
 
     ps2_flush();
     ps2_write_config(ps2_read_config() & ~PS2_CFG_P1INTON); // disable interrupts
@@ -398,7 +371,7 @@ static void __dpc __ps2kb_hotplug_detect_dpc(void *arg)
     cli_save(flags);
     g_kb->pending_hotplug = false;
 
-    was = test_bit(&g_kb->atm_hw_connected, 0);
+    was = g_kb->hw_connected;
     now = ps2kb_is_connected();
 
     if (was && !now) {
@@ -436,15 +409,11 @@ static void __isr kb_hotplug_detect(int irq, struct iregs *regs)
 __init void init_kb(void)
 {
     uint32_t flags;
-
-    if (atomic_cmpxchg(&g_kb->atm_init_count, 0, 0) > 0) {
-        return;
-    }
-
     cli_save(flags);
 
     // initialize PS/2 controller
-    if (atomic_cmpxchg(&g_kb->atm_ps2ctl_init, 1, 0) == 0) {
+    if (!g_kb->ps2ctl_init) {
+        g_kb->ps2ctl_init = true;
         init_ps2();
     }
 
@@ -523,7 +492,6 @@ static void __dpc __ps2kb_sysrq_dpc(void *arg)
 
 static void __isr kb_interrupt(int irq, struct iregs *regs)
 {
-    uint32_t flags;
     uint16_t sc;
     uint16_t key;
     bool release;
@@ -534,10 +502,11 @@ static void __isr kb_interrupt(int irq, struct iregs *regs)
     assert(irq == IRQ_KEYBOARD);
     (void) regs;
 
-    if (test_and_set_bit(&g_kb->atm_ih_active, 0) == 1) {
+    if (g_kb->ih_active) {
         pr_alert("keyboard interrupt recursion!!\n");
         return;
     }
+    g_kb->ih_active = true;
 
     struct terminal *term = get_terminal(0);
     struct tty *tty = term->tty;
@@ -547,9 +516,6 @@ static void __isr kb_interrupt(int irq, struct iregs *regs)
     //
     // Scan Code to Key Code Mapping
     // ----------------------------------------------------------------
-
-    // prevent keyboard from sending more interrupts
-    cli_save(flags);
 
     // check keyboard status
     uint8_t status = ps2_read_status();
@@ -570,7 +536,7 @@ static void __isr kb_interrupt(int irq, struct iregs *regs)
     sc = ps2_read();
 
     // ignore it if the hardware hasn't been reconnected yet
-    if (test_bit(&g_kb->atm_hw_connected, 0) == 0) {
+    if (!g_kb->hw_connected) {
         goto done;
     }
 
@@ -904,8 +870,7 @@ record_key_event:
 #endif
 
 done:
-    clear_bit(&g_kb->atm_ih_active, 0);
-    restore_flags(flags);
+    g_kb->ih_active = false;
 }
 
 static bool ps2kb_selftest(void)

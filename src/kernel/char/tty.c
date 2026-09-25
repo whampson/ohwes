@@ -40,11 +40,11 @@
     _DEV_MIN((tty)->device) - (tty)->driver.minor_start
 
 // system line discipline table
-struct tty_ldisc ldiscs[NR_LDISC];
+static struct tty_ldisc s_ldiscs[NR_LDISC];
 
-static list_t tty_drivers;
-static pool_t *tty_pool;
-static pool_t *termios_pool;
+static list_t s_tty_drivers;
+static pool_t *s_tty_pool;
+static pool_t *s_termios_pool;
 
 //
 // tty file operations
@@ -79,6 +79,7 @@ static struct file_ops hung_up_tty_fops = {
 static int get_termios(struct tty *tty, struct termios *user_termios);
 static int set_termios(struct tty *tty, const struct termios *user_termios);
 static int tiocsti(struct tty *tty, const char *user_char);
+static int tiocgwinsz(struct tty *tty, struct winsize *winsz);
 
 static bool tty_driver_sane(const struct tty_driver *driver)
 {
@@ -114,7 +115,7 @@ int tty_register_driver(struct tty_driver *driver)
     if (ret < 0) {
         return ret;
     }
-    list_push_back(&tty_drivers, &driver->list);
+    list_push_back(&s_tty_drivers, &driver->list);
 
     driver->magic = TTY_DRIVER_MAGIC;
     return 0;
@@ -126,7 +127,7 @@ int tty_register_ldisc(int ldsic_num, struct tty_ldisc *ldisc)
         return -EINVAL;
     }
 
-    ldiscs[ldsic_num] = *ldisc;
+    s_ldiscs[ldsic_num] = *ldisc;
     return 0;
 }
 
@@ -191,9 +192,9 @@ extern __init void init_terminal_driver(void);
 
 __init void init_tty(void)
 {
-    list_init(&tty_drivers);
-    tty_pool = pool_create("tty", NR_TTY, sizeof(struct tty), 0);
-    termios_pool = pool_create("termios", NR_TTY, sizeof(struct termios), 0);
+    list_init(&s_tty_drivers);
+    s_tty_pool = pool_create("tty", NR_TTY, sizeof(struct tty), 0);
+    s_termios_pool = pool_create("termios", NR_TTY, sizeof(struct termios), 0);
 
     init_n_tty();
     init_serial_driver();
@@ -209,7 +210,7 @@ static const struct tty_driver * get_tty_driver(dev_t device)
         return NULL;
     }
 
-    for (list_iterator(it, &tty_drivers)) {
+    for (list_iterator(it, &s_tty_drivers)) {
         struct tty_driver *d = list_item(it, struct tty_driver, list);
         if (_DEV_MAJ(device) != d->major) {
             continue;
@@ -228,7 +229,7 @@ static void tty_free_mem(struct tty *tty, int index)
 {
     // TODO: control w/ flag in case we want to persist termios
     if (tty->driver.termios[index]) {
-        pool_free(termios_pool, tty->driver.termios[index]);
+        pool_free(s_termios_pool, tty->driver.termios[index]);
         tty->driver.termios[index] = NULL;
     }
 
@@ -241,7 +242,7 @@ static void tty_free_mem(struct tty *tty, int index)
 #endif
 
     // free TTY structure
-    pool_free(tty_pool, tty);
+    pool_free(s_tty_pool, tty);
     tty->driver.tty_table[index] = NULL;
 
     // decrease ref count
@@ -318,7 +319,7 @@ int tty_startup(dev_t device, struct tty **out_tty)
     ret = 0;
 
     // create new driver instance
-    driver->tty_table[index] = pool_alloc(tty_pool, 0);
+    driver->tty_table[index] = pool_alloc(s_tty_pool, 0);
     if (!driver->tty_table[index]) {
         ret = -ENOMEM;
         goto fail;
@@ -327,7 +328,7 @@ int tty_startup(dev_t device, struct tty **out_tty)
     (*driver->refcount)++;
 
     // create new termios   TODO: flag for this
-    driver->termios[index] = pool_alloc(termios_pool, 0);
+    driver->termios[index] = pool_alloc(s_termios_pool, 0);
     if (!driver->termios[index]) {
         ret = -ENOMEM;
         goto fail_dealloc;
@@ -339,7 +340,7 @@ int tty_startup(dev_t device, struct tty **out_tty)
     tty->device = device;
     *tty->termios = driver->default_termios;
     tty->driver = *driver;
-    tty->ldisc = ldiscs[tty->termios->c_line];
+    tty->ldisc = s_ldiscs[tty->termios->c_line];
 
     // open line discipline
     if (tty->ldisc.open) {
@@ -497,12 +498,16 @@ static int tty_ioctl(struct file *file, int op, void *arg)
     switch (op) {
         case TCGETS:
             return get_termios(tty, (struct termios *) arg);
-
         case TCSETS:
             return set_termios(tty, (const struct termios *) arg);
 
         case TIOCSTI:
             return tiocsti(tty, (const char *) arg);
+
+        case TIOCGWINSZ:
+            return tiocgwinsz(tty, (struct winsize *) arg);
+        case TIOCSWINSZ:
+            return -EPERM;  // resize not permitted
     }
 
     // forward to driver and ldisc
@@ -546,8 +551,18 @@ static int tiocsti(struct tty *tty, const char *user_char)
     if (!copy_from_user(&c, user_char, sizeof(char))) {
         return -EFAULT;
     }
-
+    if (!tty->ldisc.recv) {
+        return -ENOSYS;
+    }
     tty->ldisc.recv(tty, &c, 1);
+    return 0;
+}
+
+static int tiocgwinsz(struct tty *tty, struct winsize *winsz)
+{
+    if (!copy_to_user(winsz, &tty->winsz, sizeof(struct winsize))) {
+        return -EFAULT;
+    }
     return 0;
 }
 

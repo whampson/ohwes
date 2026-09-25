@@ -32,10 +32,12 @@
 #include <kernel/kprint.h>
 #include <kernel/char.h>
 #include <kernel/console.h>
+#include <kernel/ioctls.h>
 #include <kernel/irq.h>
 #include <kernel/mm.h>
 #include <kernel/tty.h>
 #include <kernel/terminal.h>
+#include <kernel/termios.h>
 #include <kernel/vga.h>
 
 #define VGA_FB_SIZE_PAGES   8                   // B8000-BFFFF
@@ -47,28 +49,31 @@
 #define VSYNC_SCROLL        0   // slows scrolling, but no tearing!
 // TODO: smooth scroll? :D
 
-// TODO: name 'vgaterm.c'
+#define __mkwinsize(rows, cols) \
+    (struct winsize) { (rows), (cols), 0, 0 }
 
-// initialization
-void terminal_initialize(int num, struct terminal *term);
+// TODO: rename 'vgaterm.c'
+// TODO: screen blanking
 
-// screen positioning
+static void initialize_terminal(int num, struct terminal *term);
+static void terminal_defaults(struct terminal *term);
+static int print_to_terminal(struct terminal *term, const char *str);
+static int write_to_terminal(struct terminal *term, const char *buf, size_t count);
 static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y);
 static void pos2xy(struct terminal *term, uint16_t pos);
+static bool is_current_terminal(struct terminal *term);
 
-int g_currterm = DEFAULT_VT;
-#define is_current(term)    ((term)->number == current_terminal())
-
-struct terminal g_terminals[NR_TERMINAL];
+static int s_currterm = DEFAULT_VT;
+static struct terminal s_terms[NR_TERMINAL];
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // TTY device implementation
 
-static int terminal_driver_refcount;
-static struct tty *terminal_ttys[NR_TERMINAL];
-static struct termios *terminal_termios[NR_TERMINAL];
+static int s_driver_refcnt;
+static struct tty *s_term_ttys[NR_TERMINAL];
+static struct termios *s_term_termios[NR_TERMINAL];
 
 static int terminal_tty_open(struct tty *);
 static void terminal_tty_close(struct tty *);
@@ -77,14 +82,17 @@ static int terminal_tty_write(struct tty *, const char *buf, size_t count);
 static void terminal_tty_write_char(struct tty *, char c);
 static size_t terminal_tty_write_room(struct tty *);
 
+static int terminal_tiocgwinsz(struct terminal *term, struct winsize *winsize);
+static int terminal_tiocswinsz(struct terminal *term, const struct winsize *winsize);
+
 static struct tty_driver terminal_driver = {
     .major = TTY_MAJOR,
     .minor_start = TTY_MIN,
     .device_count = NR_TERMINAL,
     .name = "tty",
-    .refcount = &terminal_driver_refcount,
-    .tty_table = terminal_ttys,
-    .termios = terminal_termios,
+    .refcount = &s_driver_refcnt,
+    .tty_table = s_term_ttys,
+    .termios = s_term_termios,
     .default_termios = TTY_STD_TERMIOS,
     .open = terminal_tty_open,
     .close = terminal_tty_close,
@@ -133,7 +141,8 @@ static int terminal_tty_open(struct tty *tty)
     }
 
     term->tty = tty;
-    // TODO: other open operations
+    tty->winsz = __mkwinsize(term->rows, term->cols);
+    // TODO: other startup/connect operations
 
 open_done:
     term->refcount++;
@@ -157,6 +166,7 @@ static void terminal_tty_close(struct tty *tty)
     }
 
     term->tty = NULL;
+    tty->winsz = __mkwinsize(0, 0);
     // TODO: other shutdown operations
 
 close_done:
@@ -176,7 +186,7 @@ static int terminal_tty_write(struct tty *tty, const char *buf, size_t count)
         return ret;
     }
 
-    ret = terminal_write(term, buf, count);
+    ret = write_to_terminal(term, buf, count);
     if (tty->driver.flush) {
         tty->driver.flush(tty);
     }
@@ -205,28 +215,23 @@ static size_t terminal_tty_write_room(struct tty *tty)
 
 static dev_t vt_console_device(struct console *cons)
 {
-    return __mkttydev((cons->number) ? cons->number : current_terminal());
+    return __mkttydev((cons->number) ? cons->number : s_currterm);
 }
 
 __init void init_early_terminal(int num, struct terminal *term)
 {
-    // init terminal structure
-    terminal_initialize(num, term);
+    struct vga_fb_info fb_info;
+    initialize_terminal(num, term);
+    s_currterm = num;
 
-    // inherit virtual terminal properties from VGA
-    if (term->number == DEFAULT_VT) {
-        struct vga_fb_info fb_info;
-        // VGA likely hasn't been set-up yet, so we can't assume the frame buffer
-        // assignment made by terminal_initialize() is correct;
-        // grab the actual frame buffer address currently in use
-        vga_get_fb_info(&fb_info);
-        term->framebuf = KERNEL_ADDR(fb_info.base_physical);
-        term->backbuf = fb_info.base_physical;
-
-        // read the current cursor position and print initial newline
-        pos2xy(term, vga_get_cursor_pos());
-        terminal_print(term, "\r\n");
-    }
+    // inherit virtual terminal properties from VGA,
+    // VGA likely hasn't been set-up yet, so we can't assume the frame buffer
+    // assignment made by initialize_terminal() is correct;
+    // grab the actual frame buffer address currently in use
+    vga_get_fb_info(&fb_info);
+    term->framebuf = KERNEL_ADDR(fb_info.base_physical);
+    term->backbuf = fb_info.base_physical;
+    pos2xy(term, vga_get_cursor_pos());
 }
 
 static __init bool vt_console_setup(struct console *cons)
@@ -248,11 +253,11 @@ static ssize_t vt_console_write(struct console *cons, const char *buf, size_t co
     term = get_terminal(cons->number);
 
     p = buf;
-    while (*p != '\0' && (p - buf) < count) {
-        if (*p == '\n') {
-            terminal_putchar(term, '\r');
+    while ((p - buf) < count) {
+        if (*p == '\n') {   // TODO: some kind of termios?
+            __terminal_putc(term, '\r');
         }
-        terminal_putchar(term, *p++);
+        __terminal_putc(term, *p++);
     }
 
     return (p - buf);
@@ -260,7 +265,27 @@ static ssize_t vt_console_write(struct console *cons, const char *buf, size_t co
 
 static int vt_console_getc(struct console *cons)
 {
-    return kb_getc();
+    char c;
+    struct tty *tty;
+
+    if (!kb_avail()) {
+        return -EAGAIN;
+    }
+
+    tty = get_terminal(0)->tty;
+
+    while (true) {
+        if (!kb_avail()) {
+            return -EAGAIN;
+        }
+        c = __n_tty_getc(tty);
+        if (c != -EAGAIN) {
+            break;
+        }
+        // TODO: scheduler yield instead of busy loop
+    }
+
+    return c;
 }
 
 struct console vt_console =
@@ -318,12 +343,12 @@ static void cursor_right(struct terminal *term, int n);  // ESC [<n>C
 static void cursor_left(struct terminal *term, int n);   // ESC [<n>D
 
 // VGA features
-static void enable_blink(const struct terminal *term);  // ESC 3 / ESC 4
-static void enable_cursor(const struct terminal *term); // ESC 5 / ESC 6
-static void set_cursor_pos(const struct terminal *term);// ESC [ <n>;<m>H
-static void set_cursor_shape(const struct terminal *term);
-static void apply_vga_state(const struct terminal *term);
+static void apply_blink_state(const struct terminal *term);     // ESC 3 / ESC 4
+static void apply_cursor_enabled(const struct terminal *term);  // ESC 5 / ESC 6
+static void apply_cursor_pos(const struct terminal *term);      // ESC [ <n>;<m>H
+static void apply_cursor_shape(const struct terminal *term);
 static void apply_cursor_state(const struct terminal *term);
+static void apply_vga_state(const struct terminal *term);
 
 // frame buffer
 static void set_fb_char(struct terminal *term, uint16_t pos, char c);
@@ -349,13 +374,14 @@ __init void init_terminal_driver(void)
     extern __init void init_kb(void);
     init_kb();
 
-    // allocate a back buffer for each terminal
+    // initialize each terminal
     for (int i = 1; i <= NR_TERMINAL; i++) {
         struct terminal *term = get_terminal(i);
         if (!term->initialized) {
-            terminal_initialize(i, term);
+            initialize_terminal(i, term);
         }
 
+        // backbuffer allocation
         void *backbuf = alloc_pages(MEM_ZERO, get_order(VGA_FB_SIZE));
         if (!backbuf) {
             panic("unable to allocate frame buffer for terminal %d!", i);
@@ -363,19 +389,21 @@ __init void init_terminal_driver(void)
         term->framebuf = backbuf;
         term->backbuf = PHYSICAL_ADDR(backbuf);
 
-        if (term->number == DEFAULT_VT) {
-            // preserve boot output by copying VGA into back buffer
+        if (term->number == s_currterm) {
+            // preserve boot output by copying VGA into back buffer,
+            // then map the default terminal's frame buffer into VGA memory
             memcpy(term->framebuf, KERNEL_ADDR(fb_info.base_physical), VGA_FB_SIZE);
-            // now map the default terminal's frame buffer into VGA memory
             map_terminal_fb(term, fb_info.base_physical);
             pos2xy(term, vga_get_cursor_pos());
         }
         else {
-            char buf[8];
-            erase(term, ERASE_ALL);
-            snprintf(buf, sizeof(buf), "tty%d", i);
-            terminal_print(term, buf);
+            char buf[32];
+            snprintf(buf, sizeof(buf), "\e[2J\e[Htty%d\r\n", i);
+            print_to_terminal(term, buf);
         }
+
+        // enable blink, show cursor
+        print_to_terminal(term, "\e4\e6");
     }
 
     // register the terminal TTY driver, needed for terminal switch
@@ -383,26 +411,25 @@ __init void init_terminal_driver(void)
         panic("unable to register terminal driver!");
     }
 
-    // create a restore point
-    save_terminal(get_terminal(DEFAULT_VT));
-
-    // enable blink, show cursor
-    terminal_print(get_terminal(DEFAULT_VT), "\e4\e6");
-
 #if ENABLE_VT_CONSOLE
     // register the virtual terminal console
     register_console(&vt_console);
 #endif
+
+    // switch to configured default terminal
+    if (s_currterm != DEFAULT_VT) {
+        switch_terminal(DEFAULT_VT);
+    }
 }
 
-void terminal_initialize(int num, struct terminal *term)
+static void initialize_terminal(int num, struct terminal *term)
 {
     if (term->initialized) {
         return;
     }
 
     if (num == 0) {
-        num = g_currterm;
+        num = s_currterm;
     }
 
     terminal_defaults(term);
@@ -418,6 +445,8 @@ void terminal_initialize(int num, struct terminal *term)
 
 void terminal_defaults(struct terminal *term)
 {
+    // TODO: why not memset here??
+
     term->state = S_NORM;
     term->cols = vga_get_cols();
     term->rows = vga_get_rows();
@@ -429,14 +458,9 @@ void terminal_defaults(struct terminal *term)
     term->paramidx = 0;
     term->blink_on = false;
     term->line_wrap_pending = false;
+    term->attr._value = 0;
     term->attr.bg = VGA_BLACK;
     term->attr.fg = VGA_WHITE;
-    term->attr.bright = false;
-    term->attr.faint = false;
-    term->attr.italic = false;
-    term->attr.underline = false;
-    term->attr.blink = false;
-    term->attr.invert = false;
     term->cursor.x = 0;
     term->cursor.y = 0;
     term->cursor.shape = vga_get_cursor_shape();    // TODO: default shape
@@ -452,56 +476,40 @@ int switch_terminal(int num)
         return -EINVAL;
     }
 
-    uint32_t flags;
-    cli_save(flags);
-
-    struct terminal *curr = get_terminal(current_terminal());
+    struct terminal *curr = get_terminal(0);
     struct terminal *next = get_terminal(num);
 
     if (curr == next) {
-        restore_flags(flags);
         return 0;
     }
     if (!next->initialized) {
-        restore_flags(flags);
         return -EIO;
     }
+
+    uint32_t flags;
+    cli_save(flags);
 
     struct vga_fb_info fb_info;
     vga_get_fb_info(&fb_info);
 
-    // map current terminal's frame buffer to its own back buffer
     map_terminal_fb(curr, curr->backbuf);
-
-    // save current VGA contents to old terminal's back buffer
     memcpy(curr->framebuf, KERNEL_ADDR(fb_info.base_physical), VGA_FB_SIZE);
-
-    // apply new VGA state before we restore backbuffer
-    apply_vga_state(next);
-
-    // restore new terminal's back buffer into VGA memory
-    memcpy(KERNEL_ADDR(fb_info.base_physical), next->framebuf, VGA_FB_SIZE);
-
-    // map new terminal's frame buffer to VGA memory
+    apply_vga_state(next);                                                      // will vsync
+    memcpy(KERNEL_ADDR(fb_info.base_physical), next->framebuf, VGA_FB_SIZE);    // updates the display
     map_terminal_fb(next, fb_info.base_physical);
 
-    // restore new terminal's keyboard state, keep current held-down key state
-    next->kb_state._modkeys = curr->kb_state._modkeys;
+    next->kb_state._modkeys = curr->kb_state._modkeys;  // preserve current held-down key state
     ps2kb_apply_state(&next->kb_state.hw_state);
 
-    // make it official
-    g_currterm = next->number;
+    s_currterm = next->number;  // make it official
 
     restore_flags(flags);
     return 0;
 }
 
-int current_terminal(void)
+static bool is_current_terminal(struct terminal *term)
 {
-    if (g_currterm <= 0 || g_currterm > NR_TERMINAL) {
-        panic("g_currterm is somehow %d!", g_currterm);
-    }
-    return g_currterm;
+    return term->number == s_currterm;
 }
 
 struct terminal * get_terminal(int num)
@@ -510,11 +518,11 @@ struct terminal * get_terminal(int num)
         panic("attempt to get nonexistant terminal %d!", num);
     }
     if (num == 0) {
-        num = current_terminal();
+        num = s_currterm;
     }
     assert(num > 0);
 
-    struct terminal *term = &g_terminals[num - 1];
+    struct terminal *term = &s_terms[num - 1];
     if (term->initialized) {
         assert(term->number == num);
     }
@@ -522,43 +530,15 @@ struct terminal * get_terminal(int num)
     return term;
 }
 
-void terminal_save(struct terminal *term, struct terminal_save_state *save)
+int print_to_terminal(struct terminal *term, const char *buf)
 {
-    memcpy(save->tabstops, term->tabstops, MAX_TABSTOP);
-    save->blink_on = term->blink_on;
-    save->attr = term->attr._value;
-    save->cursor = term->cursor._value;
-}
-
-void terminal_restore(struct terminal *term, struct terminal_save_state *save)
-{
-    memcpy(term->tabstops, save->tabstops, MAX_TABSTOP);
-    term->blink_on = save->blink_on;
-    term->attr._value = save->attr;
-    term->cursor._value = save->cursor;
-
-    if (is_current(term)) {
-        apply_vga_state(term);
-    }
-}
-
-int terminal_print(struct terminal *term, const char *buf)
-{
-    const char *p;
-
     if (!term || !buf) {
         return -EINVAL;
     }
-
-    p = buf;
-    while (*p != '\0' && (p - buf) < MAX_PRINTBUF) {
-        terminal_putchar(term, *p++);
-    }
-
-    return (p - buf);
+    return write_to_terminal(term, buf, strnlen(buf, MAX_PRINTBUF));
 }
 
-int terminal_write(struct terminal *term, const char *buf, size_t count)
+int write_to_terminal(struct terminal *term, const char *buf, size_t count)
 {
     const char *p;
 
@@ -568,18 +548,18 @@ int terminal_write(struct terminal *term, const char *buf, size_t count)
 
     p = buf;
     while (p < buf + count) {
-#if CONFIG__E9_HACK && ENABLE_E9HACK_PRINTF
+#if E9_HACK && ENABLE_E9HACK_PRINTF
     if (term == get_terminal(0)) {
         outb(0xE9, *p);
     }
 #endif
-        terminal_putchar(term, *p++);
+        __terminal_putc(term, *p++);
     }
 
     return count;
 }
 
-void terminal_putchar(struct terminal *term, char c)
+void __terminal_putc(struct terminal *term, char c)
 {
     bool update_char = false;
     bool update_attr = false;
@@ -591,6 +571,9 @@ void terminal_putchar(struct terminal *term, char c)
     if (test_and_set_bit(&term->printing, 0)) {
         return; // TODO: do we just drop the char?
     }
+
+    // TODO: ioctl to prevent processing of control characters
+    // so we can write to the VGA directly
 
     // handle escape sequences if not a control character
     if (!iscntrl(c)) {
@@ -667,13 +650,10 @@ write_vga:
         set_fb_char(term, char_pos, c);
     }
     if (update_attr) {
-        if (term->attr.bright && term->attr.faint) {
-            term->attr.bright = false;      // faint overrides bright
-        }
         set_fb_attr(term, char_pos, term->attr);
     }
-    if (update_cursor_pos && is_current(term)) {
-        set_cursor_pos(term);
+    if (update_cursor_pos && is_current_terminal(term)) {
+        apply_cursor_pos(term);
     }
 
 done:
@@ -720,26 +700,26 @@ static void esc(struct terminal *term, char c)
         //
         case '3':       // ESC 3    disable blink
             term->blink_on = false;
-            if (is_current(term)) {
-                enable_blink(term);
+            if (is_current_terminal(term)) {
+                apply_blink_state(term);
             }
             break;
         case '4':       // ESC 4    enable blink
             term->blink_on = true;
-            if (is_current(term)) {
-                enable_blink(term);
+            if (is_current_terminal(term)) {
+                apply_blink_state(term);
             }
             break;
         case '5':       // ESC 5    hide cursor
             term->cursor.hidden = true;
-            if (is_current(term)) {
-                enable_cursor(term);
+            if (is_current_terminal(term)) {
+                apply_cursor_enabled(term);
             }
             break;
         case '6':       // ESC 6    show cursor
             term->cursor.hidden = false;
-            if (is_current(term)) {
-                enable_cursor(term);
+            if (is_current_terminal(term)) {
+                apply_cursor_enabled(term);
             }
             break;
         case '7':       // ESC 7    save terminal
@@ -771,14 +751,14 @@ static void csi(struct terminal *term, char c)
     // https://en.wikipedia.org/wiki/ANSI_escape_code
     //
 
-    #define param_minimum(index,value)          \
+    #define csiparam_clampmin(index,value)      \
     do {                                        \
         if (term->csiparam[index] < (value)) {  \
             term->csiparam[index] = (value);    \
         }                                       \
     } while (0)
 
-    #define param_maximum(index,value)          \
+    #define csiparam_clampmax(index,value)      \
     do {                                        \
         if (term->csiparam[index] > (value)) {  \
             term->csiparam[index] = (value);    \
@@ -791,63 +771,63 @@ static void csi(struct terminal *term, char c)
         // "Standard" sequences
         //
         case 'A':       // CSI n A  - CUU - move cursor up n rows
-            param_minimum(0, 1);
+            csiparam_clampmin(0, 1);
             cursor_up(term, term->csiparam[0]);
             goto csi_done;
         case 'B':       // CSI n B  - CUD - move cursor down n rows
-            param_minimum(0, 1);
+            csiparam_clampmin(0, 1);
             cursor_down(term, term->csiparam[0]);
             goto csi_done;
         case 'C':       // CSI n C  - CUF - move cursor right (forward) n columns
-            param_minimum(0, 1);
+            csiparam_clampmin(0, 1);
             cursor_right(term, term->csiparam[0]);
             goto csi_done;
         case 'D':       // CSI n D  - CUB - move cursor left (back) n columns
-            param_minimum(0, 1);
+            csiparam_clampmin(0, 1);
             cursor_left(term, term->csiparam[0]);
             goto csi_done;
         case 'E':       // CSI n E  - CNL - move cursor to beginning of line, n rows down
-            param_minimum(0, 1);
+            csiparam_clampmin(0, 1);
             term->cursor.x = 0;
             cursor_down(term, term->csiparam[0]);
             goto csi_done;
         case 'F':       // CSI n F  - CPL - move cursor to beginning of line, n rows up
-            param_minimum(0, 1);
+            csiparam_clampmin(0, 1);
             term->cursor.x = 0;
             cursor_up(term, term->csiparam[0]);
             goto csi_done;
         case 'G':       // CSI n G  - CHA - move cursor to column n
-            param_minimum(0, 1);
-            param_maximum(0, term->cols);
+            csiparam_clampmin(0, 1);
+            csiparam_clampmax(0, term->cols);
             term->cursor.x = term->csiparam[0] - 1;
             goto csi_done;
         case 'H':       // CSI n ; m H - CUP - move cursor to row n, column m
-            param_minimum(0, 1);
-            param_minimum(1, 1);
-            param_maximum(0, term->rows);
-            param_maximum(1, term->cols);
+            csiparam_clampmin(0, 1);
+            csiparam_clampmin(1, 1);
+            csiparam_clampmax(0, term->rows);
+            csiparam_clampmax(1, term->cols);
             term->cursor.y = term->csiparam[0] - 1;
             term->cursor.x = term->csiparam[1] - 1;
             goto csi_done;
         case 'J':       // CSI n J  - ED - erase in display (n = mode)
-            param_minimum(0, 0);
+            csiparam_clampmin(0, 0);
             erase(term, term->csiparam[0]);
             goto csi_done;
         case 'K':       // CSI n K  - EL- erase in line (n = mode)
-            param_minimum(0, 0);
+            csiparam_clampmin(0, 0);
             erase_line(term, term->csiparam[0]);
             goto csi_done;
         case 'S':       // CSI n S  - SU - scroll n lines
-            param_minimum(0, 1);
+            csiparam_clampmin(0, 1);
             scroll(term, term->csiparam[0]);
             goto csi_done;
         case 'T':       // CSI n T  - ST - reverse scroll n lines
-            param_minimum(0, 1);
+            csiparam_clampmin(0, 1);
             scroll(term, -term->csiparam[0]);     // note the negative for reverse!
             goto csi_done;
         case 'm':       // CSI n m  - SGR - set graphics attribute
             for (int i = 0; i <= term->paramidx; i++){
-                param_minimum(i, 0);
+                csiparam_clampmin(i, 0);
                 csi_m(term, term->csiparam[i]);
             }
             goto csi_done;
@@ -890,13 +870,13 @@ csi_done:
 csi_next:   // we need more CSI characters; do not alter terminal state
     return;
 
-    #undef param_minimum
-    #undef param_maximum
+    #undef csiparam_clampmin
+    #undef csiparam_clampmax
 }
 
 static void csi_m(struct terminal *term, char p)
 {
-    static const char CSI_VGA_COLOR_MAP[8] =    // TODO: configure via ioctl??
+    static const int CSI_VGA_COLOR_MAP[8] =    // TODO: configure via ioctl??
     {
         // maps ANSI CSI<n>m 3-bit colors to VGA 3-bit color.
         VGA_BLACK,
@@ -921,8 +901,8 @@ static void csi_m(struct terminal *term, char p)
         case 0:     // reset to defaults
             term->attr = term->csi_defaults.attr;
             break;
-        case 1:     // set bright (bold)
-            term->attr.bright = true;
+        case 1:     // set bright foreground (bold)
+            term->attr.bold = true;
             break;
         case 2:     // set faint (simulated with color)
             term->attr.faint = true;
@@ -931,16 +911,24 @@ static void csi_m(struct terminal *term, char p)
             term->attr.italic = true;
             break;
         case 4:     // set underline (simulated with color)
+        case 21:    // double underline not supported on VGA, alias as normal underline
             term->attr.underline = true;
             break;
         case 5:     // set blink
+        case 6:     // rapid blink not supported on VGA; alias as normal blink
             term->attr.blink = true;
             break;
         case 7:     // set fg/bg color inversion
             term->attr.invert = true;
             break;
+        case 8:     // hide text
+            term->attr.conceal = true;
+            break;
+        case 9:     // strikethrough (simulated with color)
+            term->attr.strike = true;
+            break;
         case 22:    // normal intensity (neither bright nor faint)
-            term->attr.bright = false;
+            term->attr.bold = false;
             term->attr.faint = false;
             break;
         case 23:    // disable italic
@@ -955,18 +943,31 @@ static void csi_m(struct terminal *term, char p)
         case 27:    // disable fg/bg inversion
             term->attr.invert = false;
             break;
+        case 28:    // reveal text
+            term->attr.conceal = false;
+            break;
+        case 29:    // disable strikethrough
+            term->attr.strike = false;
+            break;
         default:
             // colors
-            if (p >= 30 && p <= 37) term->attr.fg = CSI_VGA_COLOR_MAP[p - 30];
-            if (p >= 40 && p <= 47) term->attr.bg = CSI_VGA_COLOR_MAP[p - 40];
-            if (p == 39) term->attr.fg = term->csi_defaults.attr.fg;
-            if (p == 49) term->attr.bg = term->csi_defaults.attr.bg;
-            if (p >= 90 && p <= 97) {
-                term->attr.fg = CSI_VGA_COLOR_MAP[p - 90];
-                term->attr.bright = 1;
+            if (p >= 30 && p <= 37) {
+                term->attr.fg = CSI_VGA_COLOR_MAP[p - 30];
             }
-            if (p >= 100 && p <= 107) {
-                term->attr.bg = CSI_VGA_COLOR_MAP[p - 100];
+            else if (p >= 40 && p <= 47) {
+                term->attr.bg = CSI_VGA_COLOR_MAP[p - 40];
+            }
+            else if (p == 39) {
+                term->attr.fg = term->csi_defaults.attr.fg;
+            }
+            else if (p == 49) {
+                term->attr.bg = term->csi_defaults.attr.bg;
+            }
+            else if (p >= 90 && p <= 97) {
+                term->attr.fg = VGA_BRIGHT | CSI_VGA_COLOR_MAP[p - 90];
+            }
+            else if (p >= 100 && p <= 107) {
+                term->attr.bg = VGA_BRIGHT | CSI_VGA_COLOR_MAP[p - 100];
             }
             break;
     }
@@ -976,19 +977,33 @@ static void reset_terminal(struct terminal *term)
 {
     terminal_defaults(term);
     erase(term, ERASE_ALL);
-    if (is_current(term)) {
+    if (is_current_terminal(term)) {
         apply_vga_state(term);
     }
 }
 
 static void save_terminal(struct terminal *term)
 {
-    terminal_save(term, &term->saved_state);
+    struct terminal_save_state *save = &term->saved_state;
+
+    memcpy(save->tabstops, term->tabstops, MAX_TABSTOP);
+    save->blink_on = term->blink_on;
+    save->attr = term->attr._value;
+    save->cursor = term->cursor._value;
 }
 
 static void restore_terminal(struct terminal *term)
 {
-    terminal_restore(term, &term->saved_state);
+    struct terminal_save_state *save = &term->saved_state;
+
+    memcpy(term->tabstops, save->tabstops, MAX_TABSTOP);
+    term->blink_on = save->blink_on;
+    term->attr._value = save->attr;
+    term->cursor._value = save->cursor;
+
+    if (is_current_terminal(term)) {
+        apply_vga_state(term);
+    }
 }
 
 static void save_cursor(struct terminal *term)
@@ -999,7 +1014,7 @@ static void save_cursor(struct terminal *term)
 static void restore_cursor(struct terminal *term)
 {
     term->cursor._value = term->saved_state.cursor;
-    if (is_current(term)) {
+    if (is_current_terminal(term)) {
         apply_cursor_state(term);
     }
 }
@@ -1081,7 +1096,7 @@ static void scroll(struct terminal *term, int n)   // n < 0 is reverse scroll
         set_fb_attr(term, pos, term->attr);
     }
 
-    if (is_current(term)) {
+    if (is_current_terminal(term)) {
 #if VSYNC_SCROLL
     vga_wait_for_vsync();   // makes scrolling sllooowww...
 #endif
@@ -1235,29 +1250,32 @@ static void set_fb_attr(struct terminal *term, uint16_t pos, struct _char_attr a
     pos = (term->origin + pos) % VGA_FB_WORDS;
     vga_attr = &((struct vga_cell *) term->framebuf)[pos].attr;
 
-    vga_attr->bg = attr.bg;
-    vga_attr->fg = attr.fg;
+    vga_attr->bg = attr.bg & 0xF;
+    vga_attr->fg = attr.fg & 0xF;
 
-    if (attr.bright) {
-        vga_attr->bright = 1;
+    if (attr.bold) {
+        vga_attr->fg |= VGA_BRIGHT;
     }
-    if (attr.faint) {
-        vga_attr->color_fg = VGA_BLACK;  // simulate faintness with dark gray   TODO: ioctl configure
-        vga_attr->bright = 1;
+    if (attr.faint) {   // TODO: ioctl configure color
+        vga_attr->fg = VGA_BRIGHT | VGA_BLACK;
     }
     if (attr.underline) {
-        vga_attr->color_fg = VGA_CYAN;   // simulate underline with cyan
-        vga_attr->bright = attr.bright;
+        vga_attr->fg = VGA_CYAN;
     }
     if (attr.italic) {
-        vga_attr->color_fg = VGA_GREEN;  // simulate italics with green
-        vga_attr->bright = attr.bright;
+        vga_attr->fg = VGA_GREEN;
     }
-    if (attr.blink) {
-        vga_attr->blink = 1;
+    if (attr.strike) {
+        vga_attr->fg = VGA_MAGENTA;
     }
     if (attr.invert) {
-        swap(vga_attr->color_bg, vga_attr->color_fg);
+        swap(vga_attr->bg, vga_attr->fg);
+    }
+    if (attr.conceal) {
+        vga_attr->fg = vga_attr->bg;
+    }
+    if (attr.blink) {
+        vga_attr->bg |= VGA_BRIGHT; // bright becomes blink when enabled
     }
 }
 
@@ -1267,17 +1285,17 @@ static void map_terminal_fb(struct terminal *term, uintptr_t phys)
         VGA_FB_SIZE_PAGES, _PAGE_WRITABLE | _PAGE_PRESENT);
 }
 
-static void enable_blink(const struct terminal *term)
+static void apply_blink_state(const struct terminal *term)
 {
     vga_enable_blink(term->blink_on);
 }
 
-static void enable_cursor(const struct terminal *term)
+static void apply_cursor_enabled(const struct terminal *term)
 {
     vga_enable_cursor(!term->cursor.hidden);
 }
 
-static void set_cursor_pos(const struct terminal *term)
+static void apply_cursor_pos(const struct terminal *term)
 {
     uint16_t pos;
 
@@ -1285,21 +1303,21 @@ static void set_cursor_pos(const struct terminal *term)
     vga_set_cursor_pos(pos);
 }
 
-static void set_cursor_shape(const struct terminal *term)
+static void apply_cursor_shape(const struct terminal *term)
 {
     vga_set_cursor_shape(term->cursor.shape);
 }
 
 static void apply_cursor_state(const struct terminal *term)
 {
-    enable_cursor(term);
-    set_cursor_shape(term);
-    set_cursor_pos(term);
+    apply_cursor_enabled(term);
+    apply_cursor_shape(term);
+    apply_cursor_pos(term);
 }
 
 static void apply_vga_state(const struct terminal *term)
 {
-    enable_blink(term);
+    apply_blink_state(term);
     apply_cursor_state(term);
 
 #if VSYNC

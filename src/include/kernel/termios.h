@@ -22,15 +22,16 @@
 #ifndef __TERMIOS_H
 #define __TERMIOS_H
 
-typedef unsigned int    tcflag_t;
-typedef unsigned char   cc_t;
-
 #define N_TTY           0           // TTY line discipline
 #define NR_LDISC        1           // num ldiscs
 
 #define VSTOP           0           // STOP character
 #define VSTART          1           // START character
 #define NCCS            2           // num control characters
+// TODO: the rest...
+
+typedef unsigned int    tcflag_t;
+typedef unsigned char   cc_t;
 
 struct termios {
     tcflag_t c_line;                // ldisc number
@@ -41,12 +42,24 @@ struct termios {
     cc_t c_cc[NCCS];                // control characters
 };
 
+struct winsize {
+    unsigned short ws_row;
+    unsigned short ws_col;
+    unsigned short ws_xpixel;       // unused
+    unsigned short ws_ypixel;       // unused
+};
+
 // c_iflag: input modes
 #define ICRNL           (1 << 0)    // map CR to NL (unless IGNCR is set)
 #define INLCR           (1 << 1)    // map NL to CR
 #define IGNCR           (1 << 2)    // ignore carriage return
 #define IXON            (1 << 3)    // enable software flow control on input
 #define IXOFF           (1 << 4)    // enable software flow control on output
+#define IGNBRK          (1 << 5)    // ignore break condition on input
+// #define BRKINT          (1 << 6)    // break condition generates SIGINT  // TODO: signals
+#define IGNPAR          (1 << 7)    // ignore framing and parity errors
+#define PARMRK          (1 << 8)    // mark framing and parity errors
+#define INPCK           (1 << 9)    // enable input parity checking
 
 // c_oflag: output modes
 #define OPOST           (1 << 0)    // enable post processing
@@ -61,7 +74,7 @@ struct termios {
 #define ECHO            (1 << 0)    // echo input characters
 #define ECHOCTL         (1 << 1)    // if ECHO set, echo control characters as ^C
 
-// serial modem control/status
+// serial modem control/status (TIOCMGET / TIOCMSET)
 #define TIOCM_DTR       (1 << 0)    // control: DTR (data terminal ready)
 #define TIOCM_RTS       (1 << 1)    // control: RTS (request to send)
 #define TIOCM_OUT1      (1 << 2)    // control: Aux Out #1

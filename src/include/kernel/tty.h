@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <kernel/device.h>
 #include <kernel/fs.h>
+#include <kernel/input.h>
 #include <kernel/list.h>
 #include <kernel/termios.h>
 
@@ -45,16 +46,16 @@
 #define TTYS_MIN                (TTY_MAX+1)         // serial TTY min minor ID
 #define TTYS_MAX                (TTYS_MIN+NR_SERIAL)// serial TTY max minor ID
 
-#define TTY_STD_TERMIOS {       \
-    .c_line = N_TTY,            \
-    .c_iflag = ICRNL | IXON,    \
-    .c_oflag = OPOST | ONLCR,   \
-    .c_lflag = ECHO | ECHOCTL,  \
-    .c_cflag = HUPCL,           \
-    .c_cc = {                   \
-        0x13, /* VSTOP  = ^X */ \
-        0x11  /* VSTART = ^S */ \
-    }                           \
+#define TTY_STD_TERMIOS {               \
+    .c_line = N_TTY,                    \
+    .c_iflag = ICRNL | IXON | IXOFF,    \
+    .c_oflag = OPOST | ONLCR,           \
+    .c_lflag = ECHO | ECHOCTL,          \
+    .c_cflag = HUPCL,                   \
+    .c_cc = {                           \
+        0x13, /* VSTOP  = ^X */         \
+        0x11  /* VSTART = ^S */         \
+    }                                   \
 }
 
 #define __mkttydev(num)         __mkdev(TTY_MAJOR, TTY_MIN+(num)-1)
@@ -73,19 +74,22 @@
 #define I_IGNCR(tty)            _I_FLAG(tty, IGNCR)
 #define I_IXON(tty)             _I_FLAG(tty, IXON)
 #define I_IXOFF(tty)            _I_FLAG(tty, IXOFF)
+#define I_IGNBRK(tty)           _I_FLAG(tty, IGNBRK)
+#define I_IGNPAR(tty)           _I_FLAG(tty, IGNPAR)
+#define I_PARMRK(tty)           _I_FLAG(tty, PARMRK)
+#define I_INPCK(tty)            _I_FLAG(tty, INPCK)
 
 #define O_OPOST(tty)            _O_FLAG(tty, OPOST)
 #define O_ONLCR(tty)            _O_FLAG(tty, ONLCR)
 #define O_OCRNL(tty)            _O_FLAG(tty, OCRNL)
 
 #define C_CRTSCTS(tty)          _C_FLAG(tty, CRTSCTS)
-#define C_HUPCL(tty)            _C_FLAG(tty, CRTSCTS)
+#define C_HUPCL(tty)            _C_FLAG(tty, HUPCL)
 
 #define L_ECHO(tty)             _L_FLAG(tty, ECHO)
 #define L_ECHOCTL(tty)          _L_FLAG(tty, ECHOCTL)
 
 struct tty;
-
 //
 // TTY Line Discipline
 //
@@ -96,7 +100,7 @@ struct tty_ldisc {
     const char *name;                   // line disc. name
     int ldisc_num;                      // line disc. identifier (N_TTY, etc.)
 
-    // called from above (system)
+    // called from above (user/system)
     int     (*open)(struct tty *);      // open line disc.
     void    (*close)(struct tty *);     // close line disc.
     ssize_t (*read)(struct tty *,       // read buffered chars from line disc.
@@ -108,14 +112,11 @@ struct tty_ldisc {
     // ssize_t (*count)(struct tty *);     // get number of avail. chars in buffer
     void    (*clear)(struct tty *);     // clear line disc. input buffer
 
-    // called from below (interrupt)
+    // called from below (interrupt)    // TODO: rename to put_recv or something so it doesn't sound like we're receiving
     void    (*recv)(struct tty *,       // put received chars in input buffer
                 char *buf, size_t count);
     size_t  (*recv_room)(struct tty *); // get input buffer available size
 };
-
-// system line discipline table
-extern struct tty_ldisc ldiscs[NR_LDISC];
 
 //
 // TTY Driver
@@ -133,9 +134,9 @@ struct tty_driver {
     int flags;                          // driver flags
     int *refcount;                      // driver instance count
 
-    struct tty **tty_table;             // per-instance TTY pointers
+    struct tty **tty_table;             // per-instance TTYs
     struct termios **termios;           // per-instance termios
-    struct termios default_termios;     // default termios
+    struct termios default_termios;     // default line discipline behavior
 
     // interface functions
     int     (*open)(struct tty *);      // open TTY device
@@ -157,33 +158,41 @@ struct tty_driver {
 //
 // TTY - Teletype Emulation
 //
-// The TTY serves as the "portal" between a character device and a program (or
-// job or session).
+// The TTY serves as the interface between a character device and a program,
+// job, or session.
 //
 struct tty {
     uint32_t magic;                 // tty magic number
     dev_t device;                   // device ID
     int refcount;                   // reference count
 
-    bool throttled;                 // is the receiver channel throttled?
-    bool stopped;                   // is transmitter channel stopped? (XON/XOFF)
-    bool hw_stopped;                // is transmitter stopped? (CTS/RTS)
+    bool throttled;                 // is sender (them) stopped? (IXOFF, input flow control)
+    bool stopped;                   // is receiver (us) stopped? (IXON, output flow control)
+    bool hw_stopped;                // is receiver stopped by hardware? (CTS/RTS)
 
     struct termios *termios;        // input/output behavior
     struct tty_driver driver;       // low-level device driver
     struct tty_ldisc ldisc;         // line discipline
+    struct winsize winsz;           // terminal window size (0 if N/A)
 
     void *ldisc_data;               // N_TTY data
 };
 
+// driver registration
 int tty_register_driver(struct tty_driver *driver);
 int tty_register_ldisc(int ldsic_num, struct tty_ldisc *ldisc);
 
-// int tty_putchar(struct tty *tty, char c);
+void tty_flush(struct tty *tty);        // flush output buffer
 
-void tty_flush(struct tty *tty);
+void tty_hangup(struct tty *tty);       // hang up now!
+int tty_hung_up(struct file *file);     // are we hung up?
 
-void tty_hangup(struct tty *tty);
-int tty_hung_up(struct file *file);
+// flow control
+void tty_unthrottle(struct tty *tty);   // tell sender (them) to start sending
+void tty_throttle(struct tty *tty);     // tell sender (them) to stop sending
+void tty_start(struct tty *tty);        // tell receiver (us) to start receiving
+void tty_stop(struct tty *tty);         // tell receiver (us) to stop receiving
+
+int __n_tty_getc(struct tty *tty);      // pull char from input buffer, or -EAGAIN
 
 #endif // __TTY_H

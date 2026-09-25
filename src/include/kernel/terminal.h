@@ -37,13 +37,6 @@
 #define MAX_TABSTOP             80      // maximum number of tabstops allowed
 #define TABSTOP_WIDTH           8       // TODO: make configurable
 
-struct terminal_save_state {
-    bool blink_on;
-    char tabstops[MAX_TABSTOP];
-    uint32_t attr;
-    uint64_t cursor;
-};
-
 struct terminal {
     int number;                         // virtual terminal number
     int state;                          // current control state
@@ -71,14 +64,16 @@ struct terminal {
     struct _char_attr {                 // character attributes
         union {
             struct {
-                uint32_t fg        : 8; //   foreground color
-                uint32_t bg        : 8; //   background colors
-                uint32_t bright    : 1; //   use bright foreground
-                uint32_t faint     : 1; //   use dim foreground
-                uint32_t italic    : 1; //   italicize (simulated with color)
-                uint32_t underline : 1; //   underline (simulated with color)
-                uint32_t blink     : 1; //   blink character (if enabled)
-                uint32_t invert    : 1; //   swap background and foreground colors
+                uint32_t fg        : 8; // foreground color
+                uint32_t bg        : 8; // background color
+                uint32_t bold      : 1; // bright/high-intensity foreground
+                uint32_t faint     : 1; // dim foreground (simulated with dark gray)
+                uint32_t italic    : 1; // italicize (simulated with green)
+                uint32_t underline : 1; // underline (simulated with cyan)
+                uint32_t strike    : 1; // strikethrough (simulated with magenta)
+                uint32_t conceal   : 1; // hide text (foreground set to background)
+                uint32_t blink     : 1; // make character blink, or control background intensity
+                uint32_t invert    : 1; // swap background and foreground colors
             };
             uint32_t _value;
         };
@@ -98,19 +93,21 @@ struct terminal {
     } cursor;
     static_assert(sizeof(struct _cursor) == 8, "_cursor too large!");
 
-    struct _csi_defaults {              // CSI defaults (ESC [0m)
+    struct _csi_defaults {              // ESC [0m
         struct _char_attr attr;
         struct _cursor cursor;
     } csi_defaults;
 
-    struct terminal_save_state saved_state; // saved parameters
+    struct terminal_save_state {        // ESC 7 / ESC 8
+        bool blink_on;
+        char tabstops[MAX_TABSTOP];
+        uint32_t attr;
+        uint64_t cursor;                // ESC [s / ESC [u
+    } saved_state;
 };
 
 // get virtual terminal; 0 returns current terminal
 struct terminal * get_terminal(int num);
-
-// get active virtual terminal number
-int current_terminal(void);
 
 // switch to a virtual terminal
 int switch_terminal(int num);
@@ -118,28 +115,13 @@ int switch_terminal(int num);
 // has the keyboard driver been configured
 // and is the keyboard currently usable?
 bool kb_avail(void);
-
 bool kb_sysrq_enabled(void);        // will SysRq functions work?
 void kb_enable_sysrq(bool enable);  // enable/disable SysRq key
-
-
 bool kb_int3_enabled(void);         // will Ctrl+Alt+F3 trigger a debug break?
 void kb_enable_int3(bool enable);   // enable/disable debug break via keyboard
 
-// wait for a character keypress (NOTE: BLOCKS!!)
-int kb_getc(void);
-
-// save/restore terminal state
-void terminal_save(struct terminal *term, struct terminal_save_state *save);
-void terminal_restore(struct terminal *term, struct terminal_save_state *save);
-
-// set terminal defaults
-void terminal_defaults(struct terminal *term);
-
 // write directly to terminal, bypassing TTY
-void terminal_putchar(struct terminal *term, char c);
-int terminal_print(struct terminal *term, const char *str);
-int terminal_write(struct terminal *term, const char *buf, size_t count);
+void __terminal_putc(struct terminal *term, char c);
 
 
 /**

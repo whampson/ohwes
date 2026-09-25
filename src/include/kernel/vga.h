@@ -213,6 +213,7 @@ enum vga_color {
     VGA_MAGENTA,
     VGA_YELLOW,
     VGA_WHITE,
+    VGA_BRIGHT,
 };
 
 /**
@@ -240,14 +241,14 @@ struct vga_fb_info {
 struct vga_attr {
     union {
         struct {
-            uint8_t color_fg : 3;
-            uint8_t bright   : 1;
-            uint8_t color_bg : 3;
-            uint8_t blink    : 1;   // not supported on all devices
+            uint8_t fg    : 4;
+            uint8_t bg    : 4;
         };
         struct {
-            uint8_t fg : 4;
-            uint8_t bg : 4;
+            uint8_t       : 3;
+            uint8_t bold  : 1;
+            uint8_t       : 3;
+            uint8_t blink : 1;
         };
         uint8_t _value;
     };

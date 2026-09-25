@@ -43,7 +43,7 @@
 #define ANSI_BG_GREEN    "\e[42m"
 #define ANSI_BG_YELLOW   "\e[43m"
 #define ANSI_BG_BLUE     "\e[44m"
-#define ANSI_BG_PURPLE   "\e[45m"
+#define ANSI_BG_MAGENTA  "\e[45m"
 #define ANSI_BG_CYAN     "\e[46m"
 #define ANSI_BG_WHITE    "\e[47m"
 #define ANSI_BG_DEFAULT  "\e[49m"
