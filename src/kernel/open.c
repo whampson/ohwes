@@ -74,21 +74,25 @@ SYSCALL_ENTRY(open, const char *name, int oflag)
     inode = find_inode(file, name);
     if (!inode) {
         ret = -ENOENT;  // File not found
+        free_fd(file);
         goto done;
     }
 
     if (!file->fops) {
         ret = -ENOENT;  // No such file or directory
+        free_fd(file);
         goto done;
     }
 
     if (!file->fops->open) {
         ret = -ENOSYS;  // Function not implemented
+        free_fd(file);
         goto done;
     }
 
     ret = file->fops->open(inode, file);
     if (ret < 0) {
+        free_fd(file);
         goto done;
     }
 
@@ -102,6 +106,7 @@ done:
 SYSCALL_ENTRY(close, int fd)
 {
     struct file *file;
+    int ret;
 
     assert(getpl() == KERNEL_PL);
 
@@ -110,21 +115,26 @@ SYSCALL_ENTRY(close, int fd)
     }
 
     file = current_task()->files[fd];
+
     if (!file) {
-        return -EBADF;
+        ret = -EBADF;
+        goto done;
     }
     if (!file->fops) {
-        return -ENXIO;
+        ret = -ENXIO;
+        goto done;
     }
     if (!file->fops->close) {
-        return -ENOSYS;
+        ret = -ENOSYS;
+        goto done;
     }
 
-    file->fops->close(file);
+    ret = file->fops->close(file);
 
-    free_fd(file);
+done:
     current_task()->files[fd] = NULL;
-    return 0;
+    free_fd(file);
+    return ret;
 }
 
 static int dupfd(int fd, int newfd)
