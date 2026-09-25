@@ -34,7 +34,7 @@
 
 __noreturn void _exit(int status)
 {
-    _syscall1_asm(_SYS__exit, status & 0xFF);
+    _syscall1_asm(_SYS__exit, status & 0xFF);   // does not return
     for (;;);
 }
 
@@ -42,7 +42,6 @@ __noreturn void exit(int status)
 {
     // TODO: flush buffers, close files, atexit(), etc.
     _exit(status);
-    for (;;);
 }
 
 LINK_SYSCALL1(int,close, int,fd)

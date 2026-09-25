@@ -49,6 +49,7 @@ do { \
 do { \
     if (!(x)) { \
         printf(_ASSERT_STRING_FORMAT(x)); \
+        printf("\n"); \
         _exit(1); \
     } \
 } while (0)

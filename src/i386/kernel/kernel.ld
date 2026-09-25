@@ -193,7 +193,7 @@ SECTIONS
     {
         /* kernel stack */
         __kstack = .;
-        . += FRAME_SIZE;
+        . += FRAME_SIZE * 8;
     } > RAM_VIRTUAL
     SECTION_EPILOGUE(kstack);
 
