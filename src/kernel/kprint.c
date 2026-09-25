@@ -178,6 +178,14 @@ static void klog_write_to_console(struct console *cons, size_t offset, size_t co
 
     unsigned int msg_level = _klog_curr_msg_level;
 
+    bool start_new_line = (offset == 0);
+    if (!start_new_line) {
+        char prev;
+        if (ring_get_at(&klog_ring, offset - 1, prev, char) && prev == '\n') {
+            start_new_line = true;
+        }
+    }
+
     size_t nremain = count;
 
     while (nremain > 0) {
@@ -211,9 +219,45 @@ static void klog_write_to_console(struct console *cons, size_t offset, size_t co
                 break;
             }
 
-            if (msg_level <= _klog_curr_msg_level && msg_level <= _klog_set_level) {
+            bool emit = (msg_level <= _klog_curr_msg_level && msg_level <= _klog_set_level);
+
+            if (start_new_line) {
+                start_new_line = false;
+                if (emit) {
+#if KPRINT_TIME
+                    char timebuf[64];
+                    uint64_t ns = get_uptime();
+                    int ntimebuf = snprintf(timebuf, sizeof(timebuf),
+#if KPRINT_COLOR
+                        "\e[22;32m"  // unbold+green
+#endif
+                        "[%5lu.%06lu] ",
+                        (uint32_t) (ns / 1000000000),           // seconds
+                        (uint32_t) ((ns % 1000000000) / 1000)); // microseconds
+                    cons->write(cons, timebuf, ntimebuf);
+#endif
+
+#if KPRINT_COLOR
+                    const char *ansi_prefix = _klog_console_level_prefix[_klog_curr_msg_level];
+                    cons->write(cons, ansi_prefix, strlen(ansi_prefix));
+#endif
+                }
+            }
+
+            if (emit) {
                 cons->write(cons, &c, 1);
             }
+
+            if (c == '\n') {
+                if (emit) {
+#if KPRINT_COLOR
+                    const char *ansi_suffix = _klog_console_level_suffix;
+                    cons->write(cons, ansi_suffix, strlen(ansi_suffix));   // TODO: move color formatting to log flush/dump
+#endif
+                }
+                start_new_line = true;
+            }
+
             offset += 1;
             nremain -= 1;
         }
@@ -225,10 +269,11 @@ int vkprint(const char *fmt, va_list args)
     static bool start_new_line = true;
     static bool in_kprint = false;
 
-    char special = 0;   // prefix special char (<c>, <d>, etc.)
-    int nprefix = 0;    // prefix length
-    int nprinted = 0;   // num chars printed to log
-    int nbufwrit = 0;   // num chars written to _kprint_buf
+    char special = 0;       // prefix special char (<c>, <d>, etc.)
+    int nprefix = 0;        // prefix length
+    int nprinted = 0;       // num chars printed to log
+    int nbufwrit = 0;       // num chars written to _kprint_buf
+    bool buggered = false;  // not a Brit but I like this word
 
     const char *p;
     struct console *cons;
@@ -238,6 +283,7 @@ int vkprint(const char *fmt, va_list args)
         const char *bug_msg = KLOG_ERROR "BUG: kprint recursion detected!\n";
         strcpy(_kprint_buf, bug_msg);
         nbufwrit += strlen(bug_msg);
+        buggered = true;
     }
     in_kprint = true;
 
@@ -285,7 +331,7 @@ int vkprint(const char *fmt, va_list args)
 
     // skip past leading newlines; leave one if start_new_line==false
     if (nlinefeed) {
-        p += nlinefeed - (!start_new_line);
+        p += nspace - (!start_new_line);
     }
 
     // write the log line to the buffer
@@ -300,29 +346,6 @@ int vkprint(const char *fmt, va_list args)
                 nprinted += klog_write_char('0' + _klog_curr_msg_level);
                 nprinted += klog_write_char('>');
             }
-
-        // #if KPRINT_COLOR
-            const char *ansi_suffix = _klog_console_level_suffix;
-            nprinted += klog_write_buf(ansi_suffix, strlen(ansi_suffix));   // TODO: move formatting to log flush/dump
-        // #endif
-
-        #if KPRINT_TIME
-            char timebuf[64];
-            uint64_t ns = get_uptime();
-            snprintf(timebuf, sizeof(timebuf),
-            #if KPRINT_COLOR
-                ANSI_UNBOLD ANSI_GREEN
-            #endif
-                "[%5lu.%06lu] ",         // TODO: move color formatting to log flush/dump
-                (uint32_t) (ns / 1000000000),           // seconds
-                (uint32_t) ((ns % 1000000000) / 1000)); // microseconds
-            nprinted += klog_write_buf(timebuf, sizeof(timebuf));
-        #endif
-
-        #if KPRINT_COLOR
-            const char *ansi_prefix = _klog_console_level_prefix[_klog_curr_msg_level];
-            nprinted += klog_write_buf(ansi_prefix, strlen(ansi_prefix));   // TODO: move formatting to log flush/dump
-        #endif
         }
 
         nprinted += klog_write_char(*p);
@@ -342,41 +365,47 @@ int vkprint(const char *fmt, va_list args)
         cons = cons->next;
     }
 
+    if (buggered) {
+        // early-out here because lazy console inits can be spew'y
+        goto kprint_done;
+    }
+
     // deal with early console registrations;
     //   register_console will dump current klog if _CONSOLE_FLAG_KLOG set
 #if E9_HACK && ENABLE_E9HACK_CONSOLE
     static bool e9_console_registered = false;
     if (!e9_console_registered) {
+        e9_console_registered = true;   // keep set to prevent re-registration attempt
         if (!register_console(&e9_console)) {
-            panic("failed to register e9_console!\n");
+            pr_error("failed to register e9_console!\n");
+            // TODO: some way to defer the write so we don't recurse
         }
-        e9_console_registered = true;
     }
 #endif
 
 #if EARLY_PRINT
     static bool early_cons_registered = false;
     if (!early_cons_registered) {
+        early_cons_registered = true;
   #if ENABLE_VT_CONSOLE
         extern struct console vt_console;       // see char/terminal.c
         if (!register_console(&vt_console)) {
-            panic("failed to register vt_console!\n");
+            pr_error("failed to register vt_console!\n");
         }
   #elif ENABLE_SERIAL_CONSOLE
         extern struct console serial_console;   // see char/serial.c
         if (!register_console(&serial_console)) {
-            panic("failed to register serial_console!\n");
+            pr_error("failed to register serial_console!\n");
         }
   #else
     #error "config: no console enabled for early print!"
   #endif
-        early_cons_registered = true;
     }
 #endif
 
 kprint_done:
     in_kprint = false;
-    return nprinted;
+    return nbufwrit;
 }
 
 int kprint(const char *fmt, ...)
@@ -419,14 +448,17 @@ bool register_console(struct console *cons)
         } while (curr_cons != NULL);
         prev_cons->next = cons;
     }
+    cons->next = NULL;
 
     // initialize
     success = cons->init(cons);
-    cons->next = NULL;
-
-    if (cons->flags & _CONSOLE_FLAG_KLOG) {
+    if (success && cons->flags & _CONSOLE_FLAG_KLOG) {
         // flush entire log to console
         klog_write_to_console(cons, 0, ring_count(&klog_ring));
+    }
+    else if (!success) {
+        unregister_console(cons);
+        // TODO: maybe initialize first, then add to list
     }
 
 registered:

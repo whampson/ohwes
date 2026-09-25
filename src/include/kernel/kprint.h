@@ -22,6 +22,14 @@
 #ifndef __KPRINT_H
 #define __KPRINT_H
 
+// TODO: ensure that kprint-family functions are:
+//      WELL-BEHAVED WHEN CALLED FROM ANYWHERE IN C CODE.
+//
+// this means it needs to:
+//  * lazy-initialize drivers; support basic VGA and COM output
+//  * lazy-initialize console structures so the kernel log interface works
+
+
 #include <stdarg.h>
 
 // inspired by Linux printk log levels
@@ -58,10 +66,6 @@ extern int vkprint(const char *fmt, va_list args);
 #define pr_debug(fmt, ...) \
     kprint(KLOG_DEBUG pr_fmt(fmt), ##__VA_ARGS__)
 #define pr_cont(fmt, ...) \
-    kprint(KLOG_CONT  pr_fmt(fmt), ##__VA_ARGS__)
-
-#define pr_warning  pr_warn
-#define pr_err      pr_error
-#define pr_dbg      pr_debug
+    kprint(KLOG_CONT fmt, ##__VA_ARGS__)
 
 #endif // __KPRINT_H
