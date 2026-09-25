@@ -93,6 +93,46 @@ typedef uint32_t pte_t;
 typedef uint32_t pde_t;
 typedef uint32_t pgflags_t;
 
+/**
+ * Page Directory Entry for 32-bit Paging
+ *
+ * Points to a 4M page or a 4K page table.
+ */
+struct x86_pde {
+    uint32_t p      : 1;    // Present
+    uint32_t rw     : 1;    // Read/Write; 1 = writable
+    uint32_t us     : 1;    // User/Supervisor; 1 = user accessible
+    uint32_t pwt    : 1;    // Page-Level Write-Through
+    uint32_t pcd    : 1;    // Page-Level Cache Disable
+    uint32_t a      : 1;    // Accessed; software has accessed this page
+    uint32_t d      : 1;    // Dirty; software has written this page
+    uint32_t ps     : 1;    // Page Size; 0 = 4K page table, 1 = 4M page (requires CR4.PSE=1)
+    uint32_t g      : 1;    // Global; pins page to TLB (requires CR4.PGE=1)
+    uint32_t        : 3;    // (available for software use)
+    uint32_t pfn    : 20;   // Page Frame Number: aligned address of 4K page table or 4M page
+};
+static_assert(sizeof(struct x86_pde) == 4, "bad PDE size!");
+
+/**
+ * Page Table Entry for 32-bit Paging
+ *
+ * Points to a 4K page.
+ */
+struct x86_pte {
+    uint32_t p      : 1;    // Present
+    uint32_t rw     : 1;    // Read/Write; 1 = writable
+    uint32_t us     : 1;    // User/Supervisor; 1 = user accessible
+    uint32_t pwt    : 1;    // Page-Level Write-Through
+    uint32_t pcd    : 1;    // Page-Level Cache Disable
+    uint32_t a      : 1;    // Accessed; software has accessed this page
+    uint32_t d      : 1;    // Dirty; software has written this page
+    uint32_t        : 1;    // (reserved; PAT)
+    uint32_t g      : 1;    // Global; pins page to TLB (requires CR4.PGE=1)
+    uint32_t        : 3;    // (available for software use)
+    uint32_t pfn    : 20;   // Page Frame Number: 4K-aligned address of 4K page
+};
+static_assert(sizeof(struct x86_pte) == 4, "bad PTE size!");
+
 //
 // Combined x86 PDE/PTE.
 // Designed to map onto a `struct x86_pde` or `struct x86_pte` or be used cast

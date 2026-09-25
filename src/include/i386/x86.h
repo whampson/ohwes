@@ -214,19 +214,19 @@
  * Loads a segment register with the bottom 16 bits of a 32-bit value from
  * memory. Clobbers AX.
  */
-.macro LOAD_SEGMENT addr, reg
-        movl            \addr, %eax
-        movw            %ax, \reg
+.macro LDSEG addr, reg
+        movl    \addr, %eax
+        movw    %ax, \reg
 .endm
 
 /**
  * Stores a segment register in the bottom 16 bits of a 32-bit value in memory.
  * Clobbers EAX.
  */
-.macro STORE_SEGMENT reg, addr
-        xorl            %eax, %eax
-        movw            \reg, %ax
-        movl            %eax, \addr
+.macro STSEG reg, addr
+        xorl    %eax, %eax
+        movw    \reg, %ax
+        movl    %eax, \addr
 .endm
 
 /**
@@ -620,12 +620,12 @@ __asm__ volatile (                              \
     :"a"(fn)                                    \
 )
 
-#define __cli() __asm__ volatile ("cli")
-#define __sti() __asm__ volatile ("sti")
+#define __cli() __asm__ volatile ("cli" ::: "memory")
+#define __sti() __asm__ volatile ("sti" ::: "memory")
 
-#define __pause() __asm__ volatile("pause")     // spin-wait loop processor hint
-#define __hlt()   __asm__ volatile("hlt")       // stop instruction execution
-#define __int3()  __asm__ volatile ("int3")     // trigger debug-break interrupt
+#define __pause() __asm__ volatile("pause"  ::: "memory")   // spin-wait loop processor hint
+#define __hlt()   __asm__ volatile("hlt"    ::: "memory")   // stop instruction execution
+#define __int3()  __asm__ volatile ("int3"  ::: "memory")   // trigger debug-break interrupt
 
 #define __get_dr0(v) __asm__ volatile ("movl %%dr0, %0" : "=r"(v))
 #define __set_dr0(v) __asm__ volatile ("movl %0, %%dr0" :: "r"(v) : "memory")

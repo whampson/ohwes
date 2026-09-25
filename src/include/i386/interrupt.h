@@ -158,6 +158,8 @@ __asm__ volatile (                                                          \
     cli                                                                     \n\
     "                                                                       \
     : "=r"(flags)                                                           \
+    :                                                                       \
+    : "memory"                                                              \
 )
 
 /**
@@ -173,6 +175,7 @@ __asm__ volatile (                                                          \
     "                                                                       \
     :                                                                       \
     : "r"(flags)                                                            \
+    : "memory", "cc"                                                        \
 )
 
 #endif /* __ASSEMBLER__ */
