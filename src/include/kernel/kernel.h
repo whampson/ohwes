@@ -26,14 +26,16 @@
 #error "Can't include this header outside of kernel mode!"
 #endif
 
+#define MINIMUM_KB_RAM  576
+
 // x86 segment selectors (TODO: move to some x86 header)
-#define KERNEL_LDT                      0x08
-#define KERNEL_CS                       0x10
-#define KERNEL_DS                       0x18
-#define USER_CS                         0x23
-#define USER_DS                         0x2B
-#define KERNEL_TSS                      0x30
-#define EMERG_TSS                       0x38
+#define KERNEL_LDT      0x08
+#define KERNEL_CS       0x10
+#define KERNEL_DS       0x18
+#define USER_CS         0x23
+#define USER_DS         0x2B
+#define KERNEL_TSS      0x30
+#define EMERG_TSS       0x38
 
 #ifndef __ASSEMBLER__
 
@@ -57,8 +59,12 @@ do { \
 //  interrupts must be ON or it will beep/block forever!
 extern void beep(int hz, int ms, bool block);
 
-// get the amount of time the system has been up and running, in microseconds
+// get the amount of time the system has been up and running, in nanoseconds
 extern uint64_t get_uptime(void);
+
+extern void __idle(void) __noreturn;
+extern void __hard_reset(void) __noreturn;
+extern void __debug_break(void);
 
 // TODO: verify/test these!!
 #define PHYSICAL_ADDR(v)    (((uintptr_t) (v) >= KERNEL_VA) ? ((uintptr_t) (v) - KERNEL_VA) : (uintptr_t) (v))
