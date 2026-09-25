@@ -26,11 +26,14 @@
 #include <i386/io.h>
 #include <i386/x86.h>
 #include <kernel/kernel.h>
-#include <kernel/kprint.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
 #include <kernel/rtc.h>
 #include <kernel/fs.h>
+#include <kernel/char.h>
+
+#define pr_fmt(fmt) "rtc: " fmt
+#include <kernel/kprint.h>
 
 // TODO: virtualize RTC so rates and interrupt types can be controlled per-process
 
@@ -66,10 +69,10 @@
 //
 // Register C: Interrupt Status
 //
-#define REG_C_UF                0x10    // Update Ended Interrupt Flag
-#define REG_C_AF                0x20    // Alarm Interrupt Flag
-#define REG_C_PF                0x40    // Periodic Interrupt Flag
-#define REG_C_IRQF              0x80    // IRQ sent to CPU
+#define REG_C_UF                RTC_UF  // Update Interrupt
+#define REG_C_AF                RTC_AF  // Alarm Interrupt
+#define REG_C_PF                RTC_PF  // Periodic Interrupt
+#define REG_C_IRQF              RTC_IRQF// IRQ sent to CPU
 
 //
 // Register D: RAM Status
@@ -105,9 +108,9 @@
 #define bcd2bin(n)              ((((n)>>4)*10)+((n)&0x0F))  // bin = ((bcd / 16) * 10) + (bcd % 16)
 #define bin2bcd(n)              ((((n)/10)<<4)+((n)%10))    // bcd = ((bin / 10) * 16) + (bin % 10)
 
-int rtc_open(struct file **file, int flags);
+int rtc_open(struct inode *inode, struct file *file);
 int rtc_close(struct file *file);
-int rtc_read(struct file *file, char *buf, size_t count);
+ssize_t rtc_read(struct file *file, char *buf, size_t count);
 int rtc_ioctl(struct file *file, int op, void *arg);
 
 static void rtc_interrupt(int irq, struct iregs *regs);
@@ -122,32 +125,28 @@ static void get_time(struct rtc_time *time, bool alarm);
 static int set_time(struct rtc_time *time, bool alarm);
 
 struct rtc {
-    uint64_t int_count;         // interrupt count
-    uint64_t alarm_ticks;       // alarm ticks
-    uint64_t periodic_ticks;    // periodic (clock) ticks
-    uint64_t update_ticks;      // update ended
+    bool opened;
+    uint64_t int_count;         // total interrupt count
+    uint64_t alarm_ticks;       // alarm interrupt count
+    uint64_t periodic_ticks;    // periodic interrupt count
+    uint64_t update_ticks;      // update interrupt count
+
+    unsigned long int_hist;     // interrupt history
 };
 static struct rtc _rtc; // TODO: make per-process
+
+static struct file_ops rtc_fops = {
+    .open = rtc_open,
+    .close = rtc_close,
+    .read = rtc_read,
+    .write = NULL,
+    .ioctl = rtc_ioctl
+};
 
 volatile struct rtc * get_rtc(void)
 {
     return &_rtc;
 }
-
-// static struct file_ops rtc_fops =
-// {
-//     .read = rtc_read,
-//     .write = NULL,
-//     .open = rtc_open,
-//     .close = rtc_close,
-//     .ioctl = rtc_ioctl
-// };
-
-// static struct file rtc_file =
-// {
-//     .fops = &rtc_fops,
-//     .ioctl_code = _IOC_RTC
-// };
 
 void init_rtc(void)
 {
@@ -170,7 +169,7 @@ void init_rtc(void)
     //
     data = rd_d();
     if (!(data & REG_D_VRT)) {
-        kprint("rtc: VRT bit not set! Is your CMOS battery dead?\n");
+        pr_warn("VRT bit not set! Is your CMOS battery dead?\n");
     }
 
     //
@@ -184,7 +183,7 @@ void init_rtc(void)
     // configure mode
     //
     data = rd_b();
-    data &= ~REG_B_UIE; // disable 'update ended' interrupts
+    data &= ~REG_B_UIE; // disable update interrupts
     data &= ~REG_B_AIE; // disable alarm interrupts
     data &= ~REG_B_PIE; // disable periodic interrupts
     data &= ~REG_B_DSE; // disable 'daylight saving enable'
@@ -195,6 +194,13 @@ void init_rtc(void)
     //
     irq_register(IRQ_RTC, rtc_interrupt);
     irq_unmask(IRQ_RTC);
+
+    //
+    // register character device
+    //
+    if (register_chdev(RTC_MAJOR, "rtc", &rtc_fops) < 0) {
+        pr_error("unable to register RTC character device!");
+    }
 
     //
     // restore interrupt state
@@ -218,8 +224,11 @@ static void rtc_interrupt(int irq, struct iregs *regs)
     if (reg_c & REG_C_UF) {
         get_rtc()->update_ticks++;
     }
-
     get_rtc()->int_count++;
+
+    get_rtc()->int_hist <<= 8;
+    get_rtc()->int_hist |= (reg_c & REG_C_UF) | (reg_c & REG_C_AF) |
+        (reg_c & REG_C_PF) | (reg_c & REG_C_IRQF);
 }
 
 static void set_mode(int mask)
@@ -274,7 +283,7 @@ static int set_rate(unsigned char rate)
     restore_flags(flags);
 
 #if CHATTY_RTC
-    kprint("rtc: periodic interrupt frequency is now %dHz\n", rate2hz(rate));
+    kprint("rtc: periodic interrupt freq set to %dHz\n", rate2hz(rate));
 #endif
 
     return 0;
@@ -323,12 +332,12 @@ static void get_time(struct rtc_time *time, bool alarm)
 
 #if CHATTY_RTC
     if (alarm) {
-        kprint("rtc: get_time: cmos alarm is %02d:%02d:%02d (hex: %02x:%02x:%02x)\n",
+        kprint("rtc: current alarm is time %02d:%02d:%02d (hex: %02x:%02x:%02x)\n",
             time->tm_hour, time->tm_min, time->tm_sec,
             time->tm_hour, time->tm_min, time->tm_sec);
     }
     else {
-        kprint("rtc: get_time: cmos time is %02d/%02d/%02d %02d:%02d:%02d (hex: %02x/%02x/%02x %02x:%02x:%02x)\n",
+        kprint("rtc: current time is %02d/%02d/%02d %02d:%02d:%02d (hex: %02x/%02x/%02x %02x:%02x:%02x)\n",
             time->tm_mon, time->tm_mday, time->tm_year,
             time->tm_hour, time->tm_min, time->tm_sec,
             time->tm_mon, time->tm_mday, time->tm_year,
@@ -342,7 +351,7 @@ static void get_time(struct rtc_time *time, bool alarm)
     pm = false;
     if (!(regb & REG_B_24H)) {
 #if CHATTY_RTC
-        kprint("rtc: get_time: time is in 12h format\n");
+        kprint("rtc: time is in 12h format\n");
 #endif
         if ((time->tm_hour & PM_FLAG)) {
             time->tm_hour &= ~PM_FLAG;
@@ -355,7 +364,7 @@ static void get_time(struct rtc_time *time, bool alarm)
     // so just read it as-is and convert to binary if necessary
     if (!(regb & REG_B_DM)) {
 #if CHATTY_RTC
-        kprint("rtc: get_time: time is in BCD\n");
+        kprint("rtc: time is in BCD format\n");
 #endif
         time->tm_sec = bcd2bin(time->tm_sec);
         time->tm_min = bcd2bin(time->tm_min);
@@ -421,6 +430,9 @@ static int set_time(struct rtc_time *time, bool alarm)
     // if so, convert time to 12h and keep track of PM bit
     pm = false;
     if (!(regb & REG_B_24H)) {
+#if CHATTY_RTC
+        kprint("rtc: time is in 12h format\n");
+#endif
         pm = (time->tm_hour >= 12);
         if (time->tm_hour > 12) {
             time->tm_hour -= 12;        // [13-23] -> [1-12] PM
@@ -433,6 +445,9 @@ static int set_time(struct rtc_time *time, bool alarm)
     // RTC using BCD?
     // if so, convert to BCD
     if (!(regb & REG_B_DM)) {
+#if CHATTY_RTC
+        kprint("rtc: time is in BCD format\n");
+#endif
         time->tm_year = bin2bcd(time->tm_year);
         time->tm_mon = bin2bcd(time->tm_mon);
         time->tm_mday = bin2bcd(time->tm_mday);
@@ -471,12 +486,12 @@ static int set_time(struct rtc_time *time, bool alarm)
 
 #if CHATTY_RTC
     if (alarm) {
-        kprint("rtc: set_time: cmos alarm set to %02d:%02d:%02d (hex: %02x:%02x:%02x)\n",
+        kprint("rtc: alarm set to %02d:%02d:%02d (hex: %02x:%02x:%02x)\n",
             time->tm_hour, time->tm_min, time->tm_sec,
             time->tm_hour, time->tm_min, time->tm_sec);
     }
     else {
-        kprint("rtc: set_time: cmos time set to %02d/%02d/%02d %02d:%02d:%02d (hex: %02x/%02x/%02x %02x:%02x:%02x)\n",
+        kprint("rtc: time set to %02d/%02d/%02d %02d:%02d:%02d (hex: %02x/%02x/%02x %02x:%02x:%02x)\n",
             time->tm_mon, time->tm_mday, time->tm_year,
             time->tm_hour, time->tm_min, time->tm_sec,
             time->tm_mon, time->tm_mday, time->tm_year,
@@ -492,48 +507,75 @@ static int set_time(struct rtc_time *time, bool alarm)
     return 0;
 }
 
-int rtc_open(struct file **file, int flags)
+int rtc_open(struct inode *inode, struct file *file)
 {
-    (void) flags;
+    volatile struct rtc *rtc;
 
-    // *file = &rtc_file;
-    assert(!"implement me!");
-    return -ENOSYS;
+    if (!inode || !file) {
+        return -EINVAL;
+    }
+
+    rtc = get_rtc();
+    if (rtc->opened) {
+        return -EBUSY;
+    }
+    rtc->opened = true;
+
+    // TODO: turn on RTC
+
+    file->fops = &rtc_fops;
+    file->inode = inode;
+    file->private_data = NULL;
+    return 0;
 }
 
 int rtc_close(struct file *file)
 {
-    assert(!"implement me!");
-    return -ENOSYS;
-}
-
-int rtc_read(struct file *file, char *buf, size_t count)
-{
-    uint32_t flags;
-    uint32_t tick;
-
-    if (count < sizeof(uint32_t)) {
+    if (!file) {
         return -EINVAL;
     }
 
-    // TODO: encode interrupt type into returned value
-    // TODO: tick 'count/sizeof(uint32_t)' times?
+    file->fops = NULL;
+    file->inode = NULL;
+    file->private_data = NULL;
+    get_rtc()->opened = false;
 
-    // get current interrupt count
+    return 0;
+}
+
+ssize_t rtc_read(struct file *file, char *buf, size_t count)
+{
+    uint32_t flags;
+    volatile uint32_t tick;
+    uint8_t mode;
+    unsigned long data;
+
+    if (count < sizeof(unsigned long)) {
+        return -EINVAL;
+    }
+
     cli_save(flags);
+
+    mode = rd_b();
+    if (!((mode & REG_B_AIE) | (mode & REG_B_PIE) | (mode & REG_B_UIE))) {
+        pr_warn("reading RTC without RTC interrupts enabled!");
+    }
+
+    // TODO: nonblocking, etc.
+
     tick = get_rtc()->int_count;
     __sti();
-
-    // spin until another interrupt happens
-    spin(tick == get_rtc()->int_count);
+    spin(tick == get_rtc()->int_count); // spin until another interrupt happens
     __cli();
 
-    // capture new interrupt count
-    tick = get_rtc()->int_count;
-    memcpy(buf, &tick, sizeof(uint32_t));
+    data = get_rtc()->int_hist;
+    if (!copy_to_user(buf, &data, sizeof(unsigned long))) {
+        restore_flags(flags);
+        return -EFAULT;
+    }
 
     restore_flags(flags);
-    return sizeof(uint32_t);
+    return sizeof(unsigned long);
 }
 
 int rtc_ioctl(struct file *file, int op, void *arg)

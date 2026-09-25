@@ -50,19 +50,19 @@ struct file {
 };
 
 
-// represents a node to a file
+// represents an index node, information about a file
 struct inode {
     list_t inodes;
     dev_t device;
     struct file_ops *fops;
-    // TODO: functions...
+    // TODO: permissions, location info, refcnt...
 };
 
 // represents an item in a file system directory
 struct dentry {
     list_t dentries;
     char name[DENTRY_NAME_LENGTH];
-    struct inode *inode;
+    struct inode *inode;    // TODO: maybe this should be a number
 };
 
 // represents a mounted fle system

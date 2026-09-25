@@ -26,6 +26,7 @@
 #include <kernel/list.h>
 #include <kernel/pool.h>
 #include <kernel/tty.h>
+#include <kernel/rtc.h>
 #include <sys/ohwes.h>
 
 static list_t inodes;
@@ -127,6 +128,7 @@ struct file_ops readme_fops = {
 // ----------------------------------------------------------------------------
 //
 
+// TODO: this is all basically a hack too...
 __init void init_fs(void)
 {
     list_init(&inodes);
@@ -145,6 +147,10 @@ __init void init_fs(void)
     if (file_pool == INVALID_POOL) {
         panic("failed to create file pool!");
     }
+
+
+    // TODO: everything below this line should be in userspace (init)... maybe
+    // TODO: mknod("/dev")
 
     // create TTY dentries
     for (int i = 0; i < NR_TTY; i++) {
@@ -171,6 +177,10 @@ __init void init_fs(void)
 
     struct dentry *readme_dentry = create_file("readme.txt");
     readme_dentry->inode->fops = &readme_fops;  // HACK
+
+    struct dentry *rtc_dentry = create_file("/dev/rtc");
+    rtc_dentry->inode->device = __mkdev(RTC_MAJOR, 0);
+    rtc_dentry->inode->fops = &chdev_ops;
 }
 
 struct inode * find_inode(struct file *file, const char *name)

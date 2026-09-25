@@ -63,4 +63,12 @@ struct rtc_time {
 
 #define rate2hz(r)      (32768 >> ((r) - 1))
 
+//
+// Interrupt Status (returned by read())
+//
+#define RTC_UF          0x10    // Update Interrupt
+#define RTC_AF          0x20    // Alarm Interrupt
+#define RTC_PF          0x40    // Periodic Interrupt
+#define RTC_IRQF        0x80    // Interrupt Flag
+
 #endif // __RTC_H

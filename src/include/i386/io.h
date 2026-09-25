@@ -59,6 +59,7 @@
         "inb    %w1, %b0"                                                   \
         : "=a"(_x)                                                          \
         : "d"(port)                                                         \
+        : "memory"                                                          \
     );                                                                      \
     _x;                                                                     \
 })
@@ -74,6 +75,7 @@
         : "=a"(_x)                                                          \
         : "d"(port),                                                        \
           "i"(IO_DELAY_PORT)                                                \
+        : "memory"                                                          \
     );                                                                      \
     _x;                                                                     \
 })
@@ -84,6 +86,7 @@ do {                                                                        \
         "outb   %b0, %w1"                                                   \
         :                                                                   \
         : "a"(data), "d"(port)                                              \
+        : "memory"                                                          \
     );                                                                      \
 } while (0)
 
@@ -97,29 +100,32 @@ do {                                                                        \
         :                                                                   \
         : "a"(data), "d"(port),                                             \
           "i"(IO_DELAY_PORT)                                                \
+        : "memory"                                                          \
     );                                                                      \
 } while (0)
 
 #define cmos_read(addr)                                                     \
 ({                                                                          \
-    outb_slow(CMOS_INDEX_PORT, addr);                                      \
+    uint8_t __nmi = inb(CMOS_INDEX_PORT) & 0x80;                            \
+    outb(CMOS_INDEX_PORT, addr | __nmi);                                    \
     inb(CMOS_DATA_PORT);                                                    \
 })
 
 #define cmos_write(addr,data)                                               \
 ({                                                                          \
-    outb_slow(CMOS_INDEX_PORT, addr);                                      \
-    outb_slow(CMOS_DATA_PORT, data);                                       \
+    uint8_t __nmi = inb(CMOS_INDEX_PORT) & 0x80;                            \
+    outb(CMOS_INDEX_PORT, addr | __nmi);                                    \
+    outb(CMOS_DATA_PORT, data);                                             \
 })
 
 #define nmi_disable()                                                       \
 do {                                                                        \
-    cmos_write(CMOS_INDEX_PORT, cmos_read(CMOS_INDEX_PORT) | 0x80);         \
+    outb(CMOS_INDEX_PORT, inb(CMOS_INDEX_PORT) | 0x80);                     \
 } while(0)
 
 #define nmi_enable()                                                        \
 do {                                                                        \
-    cmos_write(CMOS_INDEX_PORT, cmos_read(CMOS_INDEX_PORT) & 0x7F);         \
+    outb(CMOS_INDEX_PORT, inb(CMOS_INDEX_PORT) & 0x7F);                     \
 } while(0)
 
 

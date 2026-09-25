@@ -65,6 +65,9 @@ int chdev_open(struct inode *inode, struct file *file)
     }
 
     return chdev->fops->open(inode, file);
+    // TODO: assign these here?
+    // file->fops = &tty_fops;
+    // file->inode = inode;
 }
 
 struct file_ops chdev_ops = {

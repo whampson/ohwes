@@ -30,5 +30,6 @@
 #define __mkdev(maj,min)    ((((min) & 0xFFFF) << 16) | ((maj) & 0xFFFF))
 
 #define TTY_MAJOR           1
+#define RTC_MAJOR           2
 
 #endif // __DEVICE_H
