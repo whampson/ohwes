@@ -211,8 +211,8 @@ void vga_set_scan_start(uint16_t word_offset)
     uint32_t flags;
 
     cli_save(flags);
-    vga_crtc_write(VGA_CRTC_REG_ADDR_LO, word_offset & 0xFF);
     vga_crtc_write(VGA_CRTC_REG_ADDR_HI, word_offset >> 8);
+    vga_crtc_write(VGA_CRTC_REG_ADDR_LO, word_offset & 0xFF);
     restore_flags(flags);
 }
 
