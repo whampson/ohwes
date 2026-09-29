@@ -36,21 +36,21 @@ struct io_range {
 };
 
 list_t io_ranges_list = LIST_INITIALIZER(io_ranges_list);
-struct io_range _io_ranges_pool[MAX_NR_IO_RANGES];
+struct io_range _io_ranges_pool[MAX_NR_IO_RESERVATIONS];
 pool_t *io_ranges_pool;
 
 __init void init_io(void)
 {
     io_ranges_pool = pool_create(
         "io_ranges",
-        MAX_NR_IO_RANGES,
+        MAX_NR_IO_RESERVATIONS,
         sizeof(struct io_range), 0);
     if (io_ranges_pool == INVALID_POOL) {
         panic("failed to create io_ranges_pool!");
     }
 
-#if SERIAL_DEBUGGING
-    if (reserve_io_range(SERIAL_DEBUG_PORT, NR_COM_REGS, "serial_debug") < 0) {
+#if CONFIG_SERIAL_DEBUG
+    if (reserve_io_range(__mkcomport(CONFIG_SERIAL_DEBUG_COM), NR_COM_REGS, "serial_debug") < 0) {
         panic("unable to reserve I/O ports for serial debugging!");
     }
 #endif

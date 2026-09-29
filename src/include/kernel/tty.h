@@ -36,15 +36,10 @@
 #include <kernel/list.h>
 #include <kernel/termios.h>
 
-#define NR_TTY                  (1+NR_TERMINAL+NR_SERIAL)    // +1 for tty0
-
-#define TTY_BUFFER_SIZE         1024
-#define TTY_THROTTLE_THRESH     128
-
 #define TTY_MIN                 1                   // TTY min minor ID
 #define TTY_MAX                 NR_TERMINAL         // TTY max minor ID
 #define TTYS_MIN                (TTY_MAX+1)         // serial TTY min minor ID
-#define TTYS_MAX                (TTYS_MIN+NR_SERIAL)// serial TTY max minor ID
+#define TTYS_MAX                (TTYS_MIN+NR_COM)// serial TTY max minor ID
 
 #define TTY_STD_TERMIOS {               \
     .c_line = N_TTY,                    \
