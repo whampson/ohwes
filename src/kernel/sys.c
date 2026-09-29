@@ -109,7 +109,7 @@ SYSCALL_ENTRY(ioctl, int fd, int op, void *arg)
     size = (op & _IOCTL_SIZEMASK) >> _IOCTL_SIZESHIFT;
     dir  = (op & _IOCTL_DIRMASK)  >> _IOCTL_DIRSHIFT;
 
-#if PRINT_IOCTL
+#if CONFIG_PRINT_IOCTL
     kprint("ioctl: 0x%08X (seq=%ld,code=%ld,size=%ld%s)\n",
         op, seq, code, size,
         (dir & _IOCTL_READ) && (dir & _IOCTL_WRITE) ? ",dir=rw" :

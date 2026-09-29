@@ -22,14 +22,7 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
-#include <i386/paging.h>        // for PAGE_SIZE
-
-// OS version info strings
-#define OS_NAME                 "OH-WES"
-#define OS_VERSION              "0.1"
-#define OS_AUTHOR               "Wes Hampson"
-#define OS_COPYRIGHT            "Copyright (C) 2020-2025 " OS_AUTHOR ". " \
-                                "All Rights Reserved."
+#include <i386/paging.h>
 
 // TODO: make a lot of this runtime configurable
 
@@ -39,82 +32,90 @@
 //
 
 // booting
-#define USB_BOOT        0   // (bool) set if booting from USB device
+#define CONFIG_FLOPPY_BOOT          1   // (bool) configure for boot from floppy disk
 
 // memory
-#define HIGHER_GROUND           1   // (bool) map kernel in high virtual address space
+#define CONFIG_HIGHER_GROUND        1   // (bool) map kernel in high virtual address space
+#define CONFIG_STACK_SIZE           8   // (pages) stack frame size
 
-// general printing
-#define PRINT_LOGO              1   // (bool) show a special logo at boot
-#define PRINT_PAGE_MAP          0   // (bool) show initial page table mappings
-#define PRINT_IOCTL             1   // (bool) show ioctl calls
-#define SHOW_CRASH_SCREEN       1   // (bool) display blue screen of death upon crash
+// crash behavior
+#define CONFIG_SHOW_CRASH_SCREEN    1   // (bool) display a visceral screen upon system crash
+#define CONFIG_CRASH_KEY            1   // (bool) test various crash scenarios w/ keystroke
 
-// kernel log
-#define KERNEL_LOG_SIZE         (4*PAGE_SIZE)
-#define KPRINT_TIME             1   // (bool) show timestamp in kernel log messages
-#define KPRINT_COLOR            1   // (bool) print a colorful kernel log
-#define DEFAULT_LOG_LEVEL       5   // (0-5)  default console log level (4=INFO)
+// log messages
+#define CONFIG_PRINT_LOGO           1   // (bool) show a special logo at boot
+#define CONFIG_PRINT_PAGE_MAPPINGS  1   // (bool) show updates to page tables
+#define CONFIG_PRINT_IOCTL          1   // (bool) show ioctl calls
 
-// virtual terminal (VGA)
-#define DEFAULT_VT              1   // (1-NR_TERMINAL) initial virtual terminal activated
+// kernel log behavior; log messages written to consoles
+#define CONFIG_KLOG_LEVEL           5   // (0-5) kernel console log level (4=INFO)
+#define CONFIG_KLOG_SHOW_TIME       1   // (bool) show timestamp in kernel log messages
+#define CONFIG_KLOG_USE_COLOR       1   // (bool) print a colorful kernel log
+#define CONFIG_KLOG_RING_SIZE       4   // (pages) log ring buffer size
 
-// debugging
-#define SERIAL_DEBUGGING        1   // (bool) enable debugging over COM port
-#define SERIAL_DEBUG_PORT       COM1_PORT // TODO: make this COM port index
-#define SERIAL_DEBUG_BAUD       BAUD_115200
-#define ENABLE_CRASH_KEY        1   // (bool) test various crash scenarios w/ keystroke
+// console devices
+#define CONFIG_VT_CONSOLE           1   // (bool) use a virtual terminal as a console device
+#define CONFIG_VT_CONSOLE_NUM       0   // (0-NR_TERMINAL) console virtual terminal select, 0 for active terminal
+#define CONFIG_SERIAL_CONSOLE       1   // (bool) use a serial port as a console device
+#define CONFIG_SERIAL_CONSOLE_COM   2   // (1-NR_COM) select COM port to use for serial console
+#define CONFIG_SERIAL_CONSOLE_BAUD  BAUD_115200 // baud rate, one of BAUD_* enums
+#define CONFIG_INITIAL_VT           1   // (1-NR_TERMINAL) virtual terminal shown at boot
+#define CONFIG_EARLY_PRINT          1   // (bool) allow console printing before TTYs are available
+#define CONFIG_E9_HACK              1   // (bool) tee output to I/O port 0xE9
+#define CONFIG_E9_HACK_CONSOLE      1   // (bool) register 0xE9 as a console interface
+#define CONFIG_E9_HACK_VT           1   // (bool) tee writes to active terminal to 0xE9
 
-// console
-#define ENABLE_VT_CONSOLE       1   // (bool) use a virtual terminal as a console device
-#define VT_CONSOLE_NUM          0   //        (0) print console messages to active virtual terminal
-#define ENABLE_SERIAL_CONSOLE   1   // (bool) use a serial port as a console device
-#define SERIAL_CONSOLE_COM      2   //        serial console COM port index
-#define SERIAL_CONSOLE_BAUD     BAUD_115200
-#define EARLY_PRINT             1   // (bool) register console when first char is printed
-#define E9_HACK                 1   // (bool) tee terminal output to 0xE9
-#define ENABLE_E9HACK_CONSOLE   1   // (bool) (requires E9_HACK) register a console as 0xE9 interface
-#define ENABLE_E9HACK_PRINTF    1   // (bool) (requires E9_HACK) tee regular printf calls on active terminal to 0xE9
-// TODO: make _PRINTF select which TTY to write-out to 0xE9, 0 for current
+// debugging over COM port
+#define CONFIG_SERIAL_DEBUG         1   // (bool) enable debugging over a COM port
+#define CONFIG_SERIAL_DEBUG_COM     1   // (1-NR_COM) select COM port to use for debugging, cannot be shared
+#define CONFIG_SERIAL_DEBUG_BAUD    BAUD_115200 // baud rate, one of BAUD_* enums
 
 //
 // ----------------------------------------------------------------------------
 // Counts of Things
 //
 
-#define NR_IDT_VECTORS          256
-
 // memory
-#define MAX_NR_POOLS            32    // max num concurrent pools
+#define MAX_NR_POOLS            256    // max num concurrent pools
 
 // filesystem
-#define MAX_NR_INODES           64    // max num inodes
-#define MAX_NR_DENTRIES         64    // max num directory entries
+#define MAX_NR_INODES           4096  // max num inodes
+#define MAX_NR_DENTRIES         4096  // max num directory entries
 #define MAX_NR_TOTAL_OPEN       64    // max num open files on system
-#define MAX_NR_IO_RANGES        32    // max num I/O range reservations
+#define MAX_NR_IO_RESERVATIONS  8     // max num reserved I/O port ranges
 
 // i/o
 #define NR_TERMINAL             8     // number of virtual terminals
-#define NR_SERIAL               4     // number of serial ports
-#define MAX_PRINTBUF            4096  // max num chars in print buffer
+#define NR_COM                  4     // number of serial (COM) ports
+#define NR_TTY                  (NR_TERMINAL+NR_COM)  // number of TTY endpoints
+#define TTY_BUFFER_SIZE         1024  // rx/tx buffer size
+#define TTY_THROTTLE_THRESH     128   // start/stop threshold (buffer pressure)
 
 //
 // ----------------------------------------------------------------------------
 // Important Memory Addresses
 //
 
-#define FRAME_SIZE              (PAGE_SIZE*2)
-
 // kernel base physical address
 #define KERNEL_BASE             (1 * MB)
 
 // kernel virtual address space
 // the lower 1MB of physical memory is identity-mapped mapped
-#if HIGHER_GROUND
+#if CONFIG_HIGHER_GROUND
   #define KERNEL_VA             0xC0000000
 #else
   #define KERNEL_VA             0x0
 #endif
+
+//
+// ----------------------------------------------------------------------------
+// OS version info strings
+//
+#define OS_NAME                 "OH-WES"
+#define OS_VERSION              "0.1"
+#define OS_AUTHOR               "Wes Hampson"
+#define OS_COPYRIGHT            "Copyright (C) 2020-2026 " OS_AUTHOR ". " \
+                                "All Rights Reserved."
 
 //
 // ----------------------------------------------------------------------------
@@ -123,10 +124,10 @@
 
 #if !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)
 
-static_assert(DEFAULT_VT >= 1 && DEFAULT_VT <= NR_TERMINAL,
-    "invalid DEFAULT_VT value");
-static_assert(VT_CONSOLE_NUM >= 0 && VT_CONSOLE_NUM <= NR_TERMINAL,
-    "invalid VT_CONSOLE_NUM value");
+static_assert(CONFIG_INITIAL_VT >= 1 && CONFIG_INITIAL_VT <= NR_TERMINAL,
+    "invalid CONFIG_INITIAL_VT value");
+static_assert(CONFIG_VT_CONSOLE_NUM >= 0 && CONFIG_VT_CONSOLE_NUM <= NR_TERMINAL,
+    "invalid CONFIG_VT_CONSOLE_NUM value");
 #endif  // !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)
 
 #endif  // __CONFIG_H
