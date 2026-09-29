@@ -40,6 +40,8 @@
 #include <kernel/termios.h>
 #include <kernel/vga.h>
 
+#define MAX_PRINTBUF        4096  // max num chars in print buffer
+
 #define VGA_FB_SIZE_PAGES   8                   // B8000-BFFFF
 #define VGA_FB_SIZE         (VGA_FB_SIZE_PAGES << PAGE_SHIFT)
 #define VGA_FB_WORDS        (VGA_FB_SIZE >> 1)  // 2 bytes per char
@@ -47,13 +49,18 @@
 #define FAST_SCROLL         1   // uses VGA hardware regs to control scrolling
 #define VSYNC               1   // sync large screen updates to vertical retrace
 #define VSYNC_SCROLL        0   // slows scrolling, but no tearing!
-// TODO: smooth scroll? :D
 
 #define __mkwinsize(rows, cols) \
     (struct winsize) { (rows), (cols), 0, 0 }
 
-// TODO: rename 'vgaterm.c'
-// TODO: screen blanking
+// TODO: rename to 'vgaterm.c'
+// TODO: screen blanking, use page flipping cuz it's fast >:)
+// TODO: page flipping for non-tear fast scrolling? check vsync status during timer then flip
+// TODO: smooth scroll? :D
+// TODO: private escape sequences for dim/italic/underline/strike color,
+//       bell freq/time, blank/unblank, blank-after-timeout, terminal switching?
+//       show/hide cursor, set cursor shape
+//
 
 static void initialize_terminal(int num, struct terminal *term);
 static void terminal_defaults(struct terminal *term);
@@ -63,7 +70,7 @@ static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y);
 static void pos2xy(struct terminal *term, uint16_t pos);
 static bool is_current_terminal(struct terminal *term);
 
-static int s_currterm = DEFAULT_VT;
+static int s_currterm = CONFIG_INITIAL_VT;
 static struct terminal s_terms[NR_TERMINAL];
 
 // ----------------------------------------------------------------------------
@@ -211,7 +218,7 @@ static size_t terminal_tty_write_room(struct tty *tty)
 // ----------------------------------------------------------------------------
 // console implementation
 
-#if ENABLE_VT_CONSOLE
+#if CONFIG_VT_CONSOLE
 
 static dev_t vt_console_device(struct console *cons)
 {
@@ -232,6 +239,10 @@ __init void init_early_terminal(int num, struct terminal *term)
     term->framebuf = KERNEL_ADDR(fb_info.base_physical);
     term->backbuf = fb_info.base_physical;
     pos2xy(term, vga_get_cursor_pos());
+
+    // give ourselves a fresh line
+    __terminal_putc(term, '\r');
+    __terminal_putc(term, '\n');
 }
 
 static __init bool vt_console_setup(struct console *cons)
@@ -291,7 +302,7 @@ static int vt_console_getc(struct console *cons)
 struct console vt_console =
 {
     .name = "tty",
-    .number = VT_CONSOLE_NUM,
+    .number = CONFIG_VT_CONSOLE_NUM,
     .flags = _CONSOLE_FLAG_KLOG,
     .device = vt_console_device,
     .init = vt_console_setup,
@@ -397,13 +408,10 @@ __init void init_terminal_driver(void)
             pos2xy(term, vga_get_cursor_pos());
         }
         else {
-            char buf[32];
+            char buf[32];   // TODO: probably have shell/login program print this
             snprintf(buf, sizeof(buf), "\e[2J\e[Htty%d\r\n", i);
             print_to_terminal(term, buf);
         }
-
-        // enable blink, show cursor
-        print_to_terminal(term, "\e4\e6");
     }
 
     // register the terminal TTY driver, needed for terminal switch
@@ -411,14 +419,14 @@ __init void init_terminal_driver(void)
         panic("unable to register terminal driver!");
     }
 
-#if ENABLE_VT_CONSOLE
+#if CONFIG_VT_CONSOLE
     // register the virtual terminal console
     register_console(&vt_console);
 #endif
 
     // switch to configured default terminal
-    if (s_currterm != DEFAULT_VT) {
-        switch_terminal(DEFAULT_VT);
+    if (s_currterm != CONFIG_INITIAL_VT) {
+        switch_terminal(CONFIG_INITIAL_VT);
     }
 }
 
@@ -489,12 +497,16 @@ int switch_terminal(int num)
     uint32_t flags;
     cli_save(flags);
 
+    // need to prevent flushes of the kernel log to the console here
+    // in case we print while remapping video memory
+    klog_defer();
+
     struct vga_fb_info fb_info;
     vga_get_fb_info(&fb_info);
 
     map_terminal_fb(curr, curr->backbuf);
     memcpy(curr->framebuf, KERNEL_ADDR(fb_info.base_physical), VGA_FB_SIZE);
-    apply_vga_state(next);                                                      // will vsync
+    apply_vga_state(next);                                                      // will vsync, if enabled
     memcpy(KERNEL_ADDR(fb_info.base_physical), next->framebuf, VGA_FB_SIZE);    // updates the display
     map_terminal_fb(next, fb_info.base_physical);
 
@@ -503,6 +515,7 @@ int switch_terminal(int num)
 
     s_currterm = next->number;  // make it official
 
+    klog_resume();
     restore_flags(flags);
     return 0;
 }
@@ -548,7 +561,7 @@ int write_to_terminal(struct terminal *term, const char *buf, size_t count)
 
     p = buf;
     while (p < buf + count) {
-#if E9_HACK && ENABLE_E9HACK_PRINTF
+#if CONFIG_E9_HACK && CONFIG_E9_HACK_VT
     if (term == get_terminal(0)) {
         outb(0xE9, *p);
     }

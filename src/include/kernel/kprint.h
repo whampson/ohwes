@@ -68,4 +68,10 @@ extern int vkprint(const char *fmt, va_list args);
 #define pr_cont(fmt, ...) \
     kprint(KLOG_CONT fmt, ##__VA_ARGS__)
 
+// defer console writes, keep messages in memory until resumed
+void klog_defer(void);
+
+// resume console writes, flushes everything since last deferral
+void klog_resume(void);
+
 #endif // __KPRINT_H

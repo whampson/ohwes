@@ -16,6 +16,15 @@
  *         File: include/kernel/terminal.h
  *      Created: October 10, 2023
  *       Author: Wes Hampson
+ *
+ * Virtual Terminal / VGA Terminal / "The Terminal"
+ *
+ * 'vgaterm' or 'terminal' refers to the VT-100'esque implementation of the
+ *    video terminal using the VGA text mode features.
+ * 'vt' is short for "virtual terminal", referring to system that allows for
+ *    multiple virtualized VGA terminals on a single physical monitor/keyboard.
+ * 'tty' is the standard character stream I/O interface to the kernel, short
+ *    for "TeleType" for archaic yet fundamental reasons
  * =============================================================================
  */
 
