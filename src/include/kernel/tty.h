@@ -39,7 +39,7 @@
 #define TTY_MIN                 1                   // TTY min minor ID
 #define TTY_MAX                 NR_TERMINAL         // TTY max minor ID
 #define TTYS_MIN                (TTY_MAX+1)         // serial TTY min minor ID
-#define TTYS_MAX                (TTYS_MIN+NR_COM)// serial TTY max minor ID
+#define TTYS_MAX                (TTYS_MIN+NR_COM)   // serial TTY max minor ID
 
 #define TTY_STD_TERMIOS {               \
     .c_line = N_TTY,                    \
@@ -55,6 +55,9 @@
 
 #define __mkttydev(num)         __mkdev(TTY_MAJOR, TTY_MIN+(num)-1)
 #define __mkserdev(num)         __mkdev(TTY_MAJOR, TTYS_MIN+(num)-1)
+
+#define __tty_index(tty)        (_DEV_MIN((tty)->device)-TTY_MIN)
+#define __tty_driver_index(tty) (_DEV_MIN((tty)->device)-(tty)->driver.minor_start)
 
 #define _I_FLAG(tty,f)          ((tty)->termios->c_iflag & (f))
 #define _O_FLAG(tty,f)          ((tty)->termios->c_oflag & (f))
@@ -175,7 +178,7 @@ struct tty {
 
 // driver registration
 int tty_register_driver(struct tty_driver *driver);
-int tty_register_ldisc(int ldsic_num, struct tty_ldisc *ldisc);
+int tty_register_ldisc(int ldisc_num, struct tty_ldisc *ldisc);
 
 void tty_flush(struct tty *tty);        // flush output buffer
 

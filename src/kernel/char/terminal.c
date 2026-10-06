@@ -129,12 +129,12 @@ static int tty_get_terminal(struct tty *tty, struct terminal **term)
         return -ENODEV; // not a TTY device
     }
 
-    int index = _DEV_MIN(tty->device);
-    if (index < TTY_MIN || index > TTY_MAX) {
+    int minor = _DEV_MIN(tty->device);
+    if (minor < TTY_MIN || minor > TTY_MAX) {
         return -ENXIO;  // TTY device is not a virtual terminal
     }
 
-    *term = get_terminal(index);
+    *term = get_terminal(1 + __tty_driver_index(tty));
     return 0;
 }
 
@@ -539,7 +539,7 @@ int print_to_terminal(struct terminal *term, const char *buf)
     if (!term || !buf) {
         return -EINVAL;
     }
-    return write_to_terminal(term, buf, strnlen(buf, MAX_PRINTBUF));
+    return write_to_terminal(term, buf, strnlen(buf, MAX_PRINT_LEN));
 }
 
 int write_to_terminal(struct terminal *term, const char *buf, size_t count)
@@ -573,7 +573,8 @@ void __terminal_putc(struct terminal *term, char c)
     // prevent reentrancy from interrupt/DPC context
     // to avoid mucking with terminal state
     if (test_and_set_bit(&term->printing, 0)) {
-        return; // TODO: do we just drop the char?
+        // TODO: preserve the char and defer print
+        return;
     }
 
     // TODO: ioctl to prevent processing of control characters

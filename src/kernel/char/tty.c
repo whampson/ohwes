@@ -36,9 +36,6 @@
 #define TTY_DRIVER_MAGIC    (uint32_t) 'dytt'
 #define TTY_PARANOID        1
 
-#define tty_index(tty) \
-    _DEV_MIN((tty)->device) - (tty)->driver.minor_start
-
 // system line discipline table
 static struct tty_ldisc s_ldiscs[NR_LDISC];
 
@@ -84,8 +81,8 @@ static int tiocgwinsz(struct tty *tty, struct winsize *winsz);
 static bool tty_driver_sane(const struct tty_driver *driver)
 {
     return driver && driver->magic == TTY_DRIVER_MAGIC
-        && driver->name && driver->device_count > 0
-        && driver->refcount && driver->tty_table && driver->termios
+        && driver->name && driver->refcount
+        && driver->tty_table && driver->termios
         && driver->open && driver->write;
 }
 
@@ -94,6 +91,9 @@ static bool tty_sane(const struct tty *tty)
     return tty && tty->magic == TTY_MAGIC
         && tty->termios
 #if TTY_PARANOID
+        && _DEV_MAJ(tty->device) == TTY_MAJOR
+        && _DEV_MIN(tty->device) >= TTY_MIN
+        && _DEV_MIN(tty->device) - tty->driver.minor_start < tty->driver.device_count
         && tty_driver_sane(&tty->driver)
 #endif
         ;
@@ -111,23 +111,23 @@ int tty_register_driver(struct tty_driver *driver)
         return -EINVAL;
     }
 
+    driver->magic = TTY_DRIVER_MAGIC;
     int ret = register_chdev(driver->major, driver->name, &tty_fops);
     if (ret < 0) {
         return ret;
     }
-    list_push_back(&s_tty_drivers, &driver->list);
 
-    driver->magic = TTY_DRIVER_MAGIC;
+    list_push_back(&s_tty_drivers, &driver->list);
     return 0;
 }
 
-int tty_register_ldisc(int ldsic_num, struct tty_ldisc *ldisc)
+int tty_register_ldisc(int ldisc_num, struct tty_ldisc *ldisc)
 {
-    if (ldsic_num < 0 || ldsic_num >= NR_LDISC || !ldisc) {
+    if (ldisc_num < 0 || ldisc_num >= NR_LDISC || !ldisc) {
         return -EINVAL;
     }
 
-    s_ldiscs[ldsic_num] = *ldisc;
+    s_ldiscs[ldisc_num] = *ldisc;
     return 0;
 }
 
@@ -227,6 +227,8 @@ static const struct tty_driver * get_tty_driver(dev_t device)
 
 static void tty_free_mem(struct tty *tty, int index)
 {
+    assert(index >= 0 && index < tty->driver.device_count);
+
     // TODO: control w/ flag in case we want to persist termios
     if (tty->driver.termios[index]) {
         pool_free(s_termios_pool, tty->driver.termios[index]);
@@ -279,7 +281,7 @@ static void tty_shutdown(struct tty *tty)
     }
     // TODO: reset line disc. to N_TTY?
 
-    tty_free_mem(tty, tty_index(tty));
+    tty_free_mem(tty, __tty_driver_index(tty));
     tty->magic = 0;
 
 shutdown_done:
@@ -291,7 +293,7 @@ int tty_startup(dev_t device, struct tty **out_tty)
     int ret;
     struct tty *tty;
     const struct tty_driver *driver;
-    int index;
+    int driver_index;
 
     if (!out_tty) {
         return -EINVAL;
@@ -306,10 +308,15 @@ int tty_startup(dev_t device, struct tty **out_tty)
         return -EIO;
     }
 
+    // ensure device number is a valid index for this driver
+    driver_index = _DEV_MIN(device) - driver->minor_start;
+    if (driver_index < 0 || driver_index >= driver->device_count) {
+        return -EINVAL;
+    }
+
     // check if driver instance already exists for this device
-    index = _DEV_MIN(device) - driver->minor_start;
-    if (driver->tty_table[index]) {
-        tty = driver->tty_table[index];
+    if (driver->tty_table[driver_index]) {
+        tty = driver->tty_table[driver_index];
         if (!tty_sane(tty)) {
             return -EIO;
         }
@@ -319,21 +326,21 @@ int tty_startup(dev_t device, struct tty **out_tty)
     ret = 0;
 
     // create new driver instance
-    driver->tty_table[index] = pool_alloc(s_tty_pool, 0);
-    if (!driver->tty_table[index]) {
+    driver->tty_table[driver_index] = pool_alloc(s_tty_pool, 0);
+    if (!driver->tty_table[driver_index]) {
         ret = -ENOMEM;
         goto fail;
     }
-    tty = driver->tty_table[index];
+    tty = driver->tty_table[driver_index];
     (*driver->refcount)++;
 
     // create new termios   TODO: flag for this
-    driver->termios[index] = pool_alloc(s_termios_pool, 0);
-    if (!driver->termios[index]) {
+    driver->termios[driver_index] = pool_alloc(s_termios_pool, 0);
+    if (!driver->termios[driver_index]) {
         ret = -ENOMEM;
         goto fail_dealloc;
     }
-    tty->termios = driver->termios[index];
+    tty->termios = driver->termios[driver_index];
 
     // initialize TTY
     tty->magic = TTY_MAGIC;
@@ -351,6 +358,7 @@ int tty_startup(dev_t device, struct tty **out_tty)
     }
 
 startup_done:
+    assert(__tty_driver_index(tty) == driver_index);
     *out_tty = tty;
     return 0;
 
@@ -359,7 +367,7 @@ fail_cleanup_ldisc:
         tty->driver.close(tty);
     }
 fail_dealloc:
-    tty_free_mem(tty, index);
+    tty_free_mem(tty, driver_index);
 fail:
     return ret;
 }
@@ -409,7 +417,7 @@ static int tty_close(struct file *file)
 
 #ifdef TTY_PARANOID
     {
-        int index = _DEV_MIN(file->inode->device) - tty->driver.minor_start;
+        int driver_index = _DEV_MIN(file->inode->device) - tty->driver.minor_start;
         const struct tty_driver *driver = get_tty_driver(file->inode->device);
         if (!driver) {
             panic("dev%d,%d: %s: no TTY driver registered!",
@@ -419,7 +427,7 @@ static int tty_close(struct file *file)
             panic("dev%d,%d: %s: bad TTY driver!",
                 _DEV_MAJ(tty->device), _DEV_MIN(tty->device), __FUNCTION__);
         }
-        if (driver->tty_table[index] != tty) {
+        if (driver->tty_table[driver_index] != tty) {
             panic("dev%d,%d: %s: "
                 "TTY in driver table does not match TTY in file descriptor!",
                 _DEV_MAJ(tty->device), _DEV_MIN(tty->device), __FUNCTION__);

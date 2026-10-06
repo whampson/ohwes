@@ -57,7 +57,7 @@ struct n_tty_ldisc_data {
     struct ring rx_ring;
     char _rxbuf[TTY_BUFFER_SIZE];   // TODO: dynamically allocate
 };
-static struct n_tty_ldisc_data ldisc_data[NR_TTY];
+static struct n_tty_ldisc_data s_ldisc_data[NR_TTY];
 
 static int opost(struct tty *tty, char c);
 static int echo(struct tty *tty, char c);
@@ -72,11 +72,12 @@ __init void init_n_tty(void)
 
 static int n_tty_open(struct tty *tty)
 {
-    if (!tty || _DEV_MIN(tty->device) >= NR_TTY) {
+    int idx = __tty_index(tty);
+    if (!tty || idx < 0 || idx >= NR_TTY) {
         return -EINVAL;
     }
 
-    struct n_tty_ldisc_data *data = &ldisc_data[_DEV_MIN(tty->device)];
+    struct n_tty_ldisc_data *data = &s_ldisc_data[__tty_index(tty)];
     ring_init(&data->rx_ring, data->_rxbuf, TTY_BUFFER_SIZE);
     tty->ldisc_data = data;
     return 0;

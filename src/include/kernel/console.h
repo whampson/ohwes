@@ -63,7 +63,7 @@ struct console {
     /**
      * Friendly name for this console.
      */
-    char *name;
+    const char *name;
 
     /**
      * Console number. Can be used by driver to identify TTY associated with console.
