@@ -227,12 +227,20 @@ enum vga_fb_select {
 };
 
 /**
+ * VGA Cursor Shape
+ */
+enum vga_cursor {
+    VGA_CURSOR_BLOCK     = 0xF00,   // min=0, max=15
+    VGA_CURSOR_UNDERLINE = 0xF0E,   // min=14, max=15   TODO: might need to scale with char size
+};
+
+/**
  * Frame Buffer Geometry
  */
 struct vga_fb_info {
-    intptr_t base_physical; // frame buffer base physical address
+    struct vga_cell *ptr;   // frame buffer virtual address
+    intptr_t phys_ptr;      // frame buffer physical address
     uint16_t size_pages;    // frame buffer total size in pages
-    uint32_t scan_start;    // byte offset of visible portion of frame buffer
 };
 
 /**
@@ -293,7 +301,7 @@ void vga_get_fb_info(struct vga_fb_info *fb_info);
  *
  * @param fb_select one of the vga_fb_select enum values
  */
-void vga_set_fb(enum vga_fb_select fb_select);
+void vga_set_fb_base(enum vga_fb_select fb_select);
 
 /**
  * Enable character blink effect if the 'blink' bit is set in the character
@@ -349,6 +357,9 @@ void vga_set_scan_start(uint16_t scan_line);
 void vga_set_line_compare(uint16_t scan_line);
 
 void vga_wait_for_vsync(void);
+
+uint8_t vga_get_page(void);
+void vga_set_page(uint8_t page);
 
 // ----------------------------------------------------------------------------
 

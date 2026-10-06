@@ -56,8 +56,7 @@ struct terminal {
     int refcount;
 
     uint16_t cols, rows;                // screen dimensions
-    void *framebuf;                     // frame buffer, always valid (i.e. when visible or hidden)
-    uintptr_t backbuf;                  // physical address of terminal's back buffer
+    void *backbuf;                      // virtual frame buffer, always valid (i.e. when visible or hidden)
     uint16_t origin;                    // scan line starting word offset within frame buffer
 
     char tabstops[MAX_TABSTOP];         // tab stops

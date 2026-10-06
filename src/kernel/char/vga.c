@@ -63,34 +63,33 @@ void vga_get_fb_info(struct vga_fb_info *fb_info)
     assert(fb_info);
 
     cli_save(flags);
-    fb_info->scan_start = vga_crtc_read(VGA_CRTC_REG_ADDR_HI) << 8;
-    fb_info->scan_start |= vga_crtc_read(VGA_CRTC_REG_ADDR_LO);
-    fb_info->scan_start <<= 1;  // 2 bytes per cell
     grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
     fb_select = (grfx_misc & VGA_GRFX_FLD_MISC_MMAP_MASK) >> 2;
     restore_flags(flags);
 
     switch (fb_select) {
         case VGA_GRFX_ENUM_MISC_MMAP_128K:
-            fb_info->base_physical = 0xA0000;
+            fb_info->phys_ptr = 0xA0000;
             fb_info->size_pages = 32;
             break;
         case VGA_GRFX_ENUM_MISC_MMAP_64K:
-            fb_info->base_physical = 0xA0000;
+            fb_info->phys_ptr = 0xA0000;
             fb_info->size_pages = 16;
             break;
         case VGA_GRFX_ENUM_MISC_MMAP_32K_LO:
-            fb_info->base_physical = 0xB0000;
+            fb_info->phys_ptr = 0xB0000;
             fb_info->size_pages = 8;
             break;
         case VGA_GRFX_ENUM_MISC_MMAP_32K_HI:
-            fb_info->base_physical = 0xB8000;
+            fb_info->phys_ptr = 0xB8000;
             fb_info->size_pages = 8;
             break;
     }
+
+    fb_info->ptr = KERNEL_ADDR(fb_info->phys_ptr);
 }
 
-void vga_set_fb(enum vga_fb_select fb_select)
+void vga_set_fb_base(enum vga_fb_select fb_select)
 {
     uint32_t flags;
     uint8_t grfx_misc;
