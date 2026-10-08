@@ -227,7 +227,7 @@ int gdb_main(struct iregs *regs, bool from_com)
     }
 
     // work-out COM port info
-    state->com = get_com(get_com_num(SERIAL_DEBUG_PORT));
+    state->com = get_com(CONFIG_SERIAL_DEBUG_COM);
     if (!state->com) {
         pr_fatal("gdb_main: com is NULL!\n");
         goto gdb_done;
