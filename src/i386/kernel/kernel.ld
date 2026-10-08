@@ -155,7 +155,7 @@ SECTIONS
     {
         /* interrupt descriptor table */
         __idt = .;
-        . += (NR_IDT_VECTORS << 3);
+        . += 0x800;
     } > RAM_VIRTUAL
     SECTION_EPILOGUE(idt);
 
@@ -184,7 +184,7 @@ SECTIONS
     {
         /* kernel console log buffer */
         __klog = .;
-        . += KERNEL_LOG_SIZE;
+        . += (CONFIG_KLOG_RING_SIZE) << PAGE_SHIFT;
     } > RAM_VIRTUAL
     SECTION_EPILOGUE(klog);
 
@@ -193,7 +193,7 @@ SECTIONS
     {
         /* kernel stack */
         __kstack = .;
-        . += FRAME_SIZE * 8;
+        . += (CONFIG_STACK_SIZE) << PAGE_SHIFT;
     } > RAM_VIRTUAL
     SECTION_EPILOGUE(kstack);
 
@@ -202,7 +202,7 @@ SECTIONS
     {
         /* user stack */
         __ustack = .;
-        . += FRAME_SIZE;
+        . += (CONFIG_STACK_SIZE) << PAGE_SHIFT;
     } > RAM_VIRTUAL
     SECTION_EPILOGUE(ustack);
 
@@ -211,7 +211,7 @@ SECTIONS
     {
         /* emergency stack */
         __estack = .;
-        . += FRAME_SIZE;
+        . += (CONFIG_STACK_SIZE) << PAGE_SHIFT;
     } > RAM_VIRTUAL
     SECTION_EPILOGUE(estack);
 
