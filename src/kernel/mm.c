@@ -291,7 +291,7 @@ static __init void init_zones(void)
     size_t size_pages = (top - zone->mem_start) >> PAGE_SHIFT;
     pr_warn("RAM limited to 4M until multiple PDEs implemented!\n");
     pgflags_t flags = _PAGE_WRITABLE | _PAGE_PRESENT;
-    update_page_mappings((uintptr_t) KERNEL_ADDR(zone->mem_start), zone->mem_start, size_pages, flags);
+    update_page_mappings(KERNEL_ADDR(zone->mem_start), zone->mem_start, size_pages, flags);
 
     // TODO: could calculate how many page tables are needed to alloc all of
     // "Normal" memory, then stuff them before the bitmap too...

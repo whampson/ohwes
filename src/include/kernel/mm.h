@@ -47,7 +47,7 @@ bool walk_page_table(uintptr_t va, pte_t **pte);
 
 // update a range of contiguous page mappings with the specified attributes,
 //   flags set to 0 will clear the mapping
-void update_page_mappings(uintptr_t va, uintptr_t pa, size_t count, pgflags_t flags);
+void update_page_mappings(void *va, uintptr_t pa, size_t count, pgflags_t flags);
 
 // allocate physical page frames;
 //  uses a buddy allocator
