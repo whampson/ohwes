@@ -217,10 +217,14 @@ __init void init_timer(void)
 
 uint64_t get_uptime(void)
 {
+    int64_t ticks;
     uint32_t flags;
     cli_save(flags);
 
-    int64_t ticks = g_pit->timer_last_tick - read_timer(CLOCK_TIMER);
+    ticks = g_pit->timer_last_tick;
+    if (ticks != 0) {
+        ticks -= read_timer(CLOCK_TIMER);
+    }
     if (ticks < 0) {
         ticks += g_pit->timer_reloads[CLOCK_TIMER];
     }
@@ -244,16 +248,17 @@ void beep(int hz, int ms, bool block)
     div = calculate_divisor(hz);
     reload_timer(PCSPK_TIMER, div);
 
-    g_pit->pcspk_ticks_remaining = div_round(ms, QUANTUM_MS);
+    volatile struct timer_state *t = g_pit;
+
+    t->pcspk_ticks_remaining = div_round(ms, QUANTUM_MS);
     pcspk_on(); // turned off in interrupt handler
 
-    restore_flags(flags);
+    if (block) {
+        __sti();
+        while (t->pcspk_ticks_remaining > 0) {
+            // TODO: timeout
+        }
+    }
 
-    volatile uint64_t ticks;
-    volatile struct timer_state *t = g_pit;
-    do {
-        cli_save(flags);
-        ticks = t->pcspk_ticks_remaining;
-        restore_flags(flags);
-    } while (block && ticks > 0);
+    restore_flags(flags);
 }
