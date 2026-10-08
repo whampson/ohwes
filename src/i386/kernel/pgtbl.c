@@ -26,8 +26,6 @@
 #include <kernel/kprint.h>
 #include <kernel/mm.h>
 
-#define CHATTY 1
-
 bool virt_addr_valid(uintptr_t va)
 {
     pte_t *pte;
@@ -57,16 +55,19 @@ bool walk_page_table(uintptr_t va, pte_t **pte)
     return true;
 }
 
-void update_page_mappings(uintptr_t va, uintptr_t pa, size_t count, pgflags_t flags)
+void update_page_mappings(void *va, uintptr_t pa, size_t count, pgflags_t flags)
 {
     pde_t *pgdir;
     pde_t *pde;
     pte_t *pte;
     bool unmap;
+    uintptr_t va_ptr;
 
     // TODO: these "page mappings" should probably be managed somewhere in a
     // structure if we're going to be "updating" them. So we can disallow
     // duplicate mappings and know how many pages are in each "mapping"
+
+    // TODO: use invlpg
 
     // ... or we can be hardcore and leave it up to the caller!
     // TODO: allow map modding by calling again with valid VA?
@@ -81,33 +82,34 @@ void update_page_mappings(uintptr_t va, uintptr_t pa, size_t count, pgflags_t fl
         return;
     }
 
-#if CHATTY
+#if CONFIG_PRINT_PAGE_MAPPINGS
     uintptr_t base_pa = pa;
-    uintptr_t base_va = va;
+    uintptr_t base_va = (uintptr_t) va;
 #endif
 
+    va_ptr = (uintptr_t) va;
     for (int i = 0; i < count; i++) {
-        pde = KERNEL_ADDR(pde_offset(pgdir, va));
+        pde = KERNEL_ADDR(pde_offset(pgdir, va_ptr));
         if (!pde_present(*pde)) {
             // TODO: map a new PDE and associated page table...
             panic("mem: mappings that require a new PDE and page table not yet implemented! pa(%p) va(%p)\n",
-                _P(pa), _P(va));
+                _P(pa), _P(va_ptr));
         }
-        pte = KERNEL_ADDR(pte_offset(pde, va));
+        pte = KERNEL_ADDR(pte_offset(pde, va_ptr));
 
         pte_clear(pte);
         if (!unmap) {   // map
             *pte = __mkpte(pa, flags);
         }
 
-        va += PAGE_SIZE;
+        va_ptr += PAGE_SIZE;
         pa += PAGE_SIZE;
     }
 
     // TODO: be able to control this w/ flag
     flush_tlb();
 
-#if CHATTY
+#if CONFIG_PRINT_PAGE_MAPPINGS
     // size_t size_bytes = (count << PAGE_SHIFT);
     if (unmap) { // TODO: show zone!!
         pr_info("mem: unmap %p phys %p pages %zd flags %02lXh\n",
