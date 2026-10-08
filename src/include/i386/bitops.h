@@ -25,6 +25,13 @@
 #include <assert.h>
 #include <stdint.h>
 
+// let's future proof a bit...
+#if CONFIG_SMP
+#define LOCK_PREFIX "lock "
+#else
+#define LOCK_PREFIX ""
+#endif
+
 /**
  * Set a bit in a bitstring.
  *
@@ -35,7 +42,7 @@ static inline void set_bit(volatile void *addr, unsigned int index)
 {
     volatile uint32_t *bits = (volatile uint32_t *) addr;
     __asm__ volatile (
-        "lock btsl %1, %0"
+        LOCK_PREFIX "btsl %1, %0"
         : "+m"(*bits)
         : "Ir"(index)
         : "cc", "memory");
@@ -51,7 +58,7 @@ static inline void clear_bit(volatile void *addr, unsigned int index)
 {
     volatile uint32_t *bits = (volatile uint32_t *) addr;
     __asm__ volatile (
-        "lock btrl %1, %0"
+        LOCK_PREFIX "btrl %1, %0"
         : "+m"(*bits)
         : "Ir"(index)
         : "cc", "memory");
@@ -67,7 +74,7 @@ static inline void flip_bit(volatile void *addr, unsigned int index)
 {
     volatile uint32_t *bits = (volatile uint32_t *) addr;
     __asm__ volatile (
-        "lock btcl %1, %0"
+        LOCK_PREFIX "btcl %1, %0"
         : "+m"(*bits)
         : "Ir"(index)
         : "cc", "memory");
@@ -118,8 +125,8 @@ static inline int test_and_set_bit(volatile void *addr, unsigned int index)
 
     unsigned char bit;
     __asm__ volatile (
-        "                   \n\
-   lock btsl    %2, %1      \n\
+        LOCK_PREFIX "       \n\
+        btsl    %2, %1      \n\
         setc    %0          \n\
         "
         : "=q"(bit), "+m"(*bits)
@@ -144,8 +151,8 @@ static inline int test_and_clear_bit(volatile void *addr, unsigned int index)
 
     unsigned char bit;
     __asm__ volatile (
-        "                   \n\
-   lock btrl    %2, %1      \n\
+        LOCK_PREFIX "       \n\
+        btrl    %2, %1      \n\
         setc    %0          \n\
         "
         : "=q"(bit), "+m"(*bits)
@@ -170,8 +177,8 @@ static inline int test_and_flip_bit(volatile void *addr, unsigned int index)
 
     unsigned char bit;
     __asm__ volatile (
-        "                   \n\
-   lock btcl    %2, %1      \n\
+        LOCK_PREFIX "       \n\
+        btcl    %2, %1      \n\
         setc    %0          \n\
         "
         : "=q"(bit), "+m"(*bits)
