@@ -35,16 +35,18 @@
 
 uint16_t vga_get_rows(void)
 {
-    uint32_t flags;
-    cli_save(flags);
+    uint16_t vde;
+    uint8_t of, msl;
+    uint8_t crtc[] = { VGA_CRTC_REG_OF, VGA_CRTC_REG_MSL, VGA_CRTC_REG_VDE };
+    uint8_t data[3];
 
-    uint8_t of = vga_crtc_read(VGA_CRTC_REG_OF);
-    uint16_t vde = vga_crtc_read(VGA_CRTC_REG_VDE);
-    vde |= ((of & VGA_CRTC_FLD_OF_VDE8_MASK) >> VGA_CRTC_FLD_OF_VDE8_SHIFT) << 8;
-    vde |= ((of & VGA_CRTC_FLD_OF_VDE9_MASK) >> VGA_CRTC_FLD_OF_VDE9_SHIFT) << 9;
-    uint8_t msl = vga_crtc_read(VGA_CRTC_REG_MSL) & VGA_CRTC_FLD_MSL_MSL_MASK;
+    vga_crtc_read_n(crtc, data, countof(crtc));
+    of = data[0];
+    msl = data[1] & VGA_CRTC_FLD_MSL_MSL_MASK;
+    vde = data[2]
+        | (((of & VGA_CRTC_FLD_OF_VDE8_MASK) >> VGA_CRTC_FLD_OF_VDE8_SHIFT) << 8)
+        | (((of & VGA_CRTC_FLD_OF_VDE9_MASK) >> VGA_CRTC_FLD_OF_VDE9_SHIFT) << 9);
 
-    restore_flags(flags);
     return ((vde + 1) / (msl + 1));
 }
 
@@ -140,114 +142,95 @@ void vga_enable_cursor(bool enable)
 
 uint16_t vga_get_cursor_pos(void)
 {
-    uint32_t flags;
+    uint8_t crtc[] = { VGA_CRTC_REG_CL_HI, VGA_CRTC_REG_CL_LO };
+    uint8_t data[2];
 
-    cli_save(flags);
-    uint8_t cl_hi = vga_crtc_read(VGA_CRTC_REG_CL_HI);
-    uint8_t cl_lo = vga_crtc_read(VGA_CRTC_REG_CL_LO);
-    restore_flags(flags);
+    vga_crtc_read_n(crtc, data, countof(crtc));
 
-    return (cl_hi << 8) | cl_lo;
+    return (data[0] << 8) | data[1];
 }
 
 void vga_set_cursor_pos(uint16_t pos)
 {
-    uint32_t flags;
+    uint8_t crtc[] = { VGA_CRTC_REG_CL_HI, VGA_CRTC_REG_CL_LO };
+    uint8_t data[] = { pos >> 8,           pos & 0xFF };
 
-    cli_save(flags);
-    vga_crtc_write(VGA_CRTC_REG_CL_HI, pos >> 8);
-    vga_crtc_write(VGA_CRTC_REG_CL_LO, pos & 0xFF);
-    restore_flags(flags);
+    vga_crtc_write_n(crtc, data, countof(crtc));
 }
 
 uint16_t vga_get_cursor_shape(void)
 {
-    uint32_t flags;
     uint8_t start, end;
+    uint8_t crtc[] = { VGA_CRTC_REG_CSE, VGA_CRTC_REG_CSS };
+    uint8_t data[2];
 
-    cli_save(flags);
-    start = vga_crtc_read(VGA_CRTC_REG_CSS) & VGA_CRTC_FLD_CSS_CSS_MASK;
-    end   = vga_crtc_read(VGA_CRTC_REG_CSE) & VGA_CRTC_FLD_CSE_CSE_MASK;
-    restore_flags(flags);
+    vga_crtc_read_n(crtc, data, countof(crtc));
+    end   = data[0] & VGA_CRTC_FLD_CSE_CSE_MASK;
+    start = data[1] & VGA_CRTC_FLD_CSS_CSS_MASK;
 
     return (end << 8) | start;
 }
 
 void vga_set_cursor_shape(uint16_t shape)
 {
-    uint32_t flags;
-    uint8_t css, cse;
-    uint8_t start, end;
+    uint8_t crtc[] = { VGA_CRTC_REG_CSE, VGA_CRTC_REG_CSS };
+    uint8_t data[2];
 
-    start = shape & 0xFF;
-    end = shape >> 8;
-
-    cli_save(flags);
-    css = vga_crtc_read(VGA_CRTC_REG_CSS) & ~VGA_CRTC_FLD_CSS_CSS_MASK;
-    cse = vga_crtc_read(VGA_CRTC_REG_CSE) & ~VGA_CRTC_FLD_CSE_CSE_MASK;
-    css |= (start & VGA_CRTC_FLD_CSS_CSS_MASK);
-    cse |= (end   & VGA_CRTC_FLD_CSE_CSE_MASK);
-    vga_crtc_write(VGA_CRTC_REG_CSS, css);
-    vga_crtc_write(VGA_CRTC_REG_CSE, cse);
-    restore_flags(flags);
+    vga_crtc_read_n(crtc, data, countof(crtc));
+    data[0] &= ~VGA_CRTC_FLD_CSE_CSE_MASK;
+    data[1] &= ~VGA_CRTC_FLD_CSS_CSS_MASK;
+    data[0] |= ((shape >> 8)   & VGA_CRTC_FLD_CSE_CSE_MASK);    // end
+    data[1] |= ((shape & 0xFF) & VGA_CRTC_FLD_CSS_CSS_MASK);    // start
+    vga_crtc_write_n(crtc, data, countof(crtc));
 }
 
 uint16_t vga_get_scan_start(void)
 {
-    uint16_t word_offset;
-    uint32_t flags;
+    uint8_t crtc[] = { VGA_CRTC_REG_ADDR_HI, VGA_CRTC_REG_ADDR_LO };
+    uint8_t data[2];
 
-    cli_save(flags);
-    word_offset = vga_crtc_read(VGA_CRTC_REG_ADDR_HI) << 8;
-    word_offset |= vga_crtc_read(VGA_CRTC_REG_ADDR_LO);
-    restore_flags(flags);
+    vga_crtc_read_n(crtc, data, countof(crtc));
 
-    return word_offset;
+    return (data[0] << 8) | data[1];
 }
 
 void vga_set_scan_start(uint16_t word_offset)
 {
-    uint32_t flags;
+    uint8_t crtc[] = { VGA_CRTC_REG_ADDR_HI, VGA_CRTC_REG_ADDR_LO };
+    uint8_t data[] = { word_offset >> 8,     word_offset & 0xFF };
 
-    cli_save(flags);
-    vga_crtc_write(VGA_CRTC_REG_ADDR_HI, word_offset >> 8);
-    vga_crtc_write(VGA_CRTC_REG_ADDR_LO, word_offset & 0xFF);
-    restore_flags(flags);
+    vga_crtc_write_n(crtc, data, countof(crtc));
 }
 
 uint16_t vga_get_line_compare(void)
 {
-    uint8_t lc8_mask, lc9_mask;
     uint16_t scan_line;
-    uint32_t flags;
+    uint8_t lc8_mask, lc9_mask;
+    uint8_t crtc[] = { VGA_CRTC_REG_OF, VGA_CRTC_REG_MSL, VGA_CRTC_REG_LC };
+    uint8_t data[3];
 
-    cli_save(flags);
-    lc8_mask = vga_crtc_read(VGA_CRTC_REG_OF) & VGA_CRTC_FLD_OF_LC8_MASK;
-    lc9_mask = vga_crtc_read(VGA_CRTC_REG_MSL) & VGA_CRTC_FLD_MSL_LC9_MASK;
-    scan_line = vga_crtc_read(VGA_CRTC_REG_LC);
-    scan_line |= (lc8_mask >> VGA_CRTC_FLD_OF_LC8_SHIFT) << 8;
-    scan_line |= (lc9_mask >> VGA_CRTC_FLD_MSL_LC9_SHIFT) << 9;
-    restore_flags(flags);
+    vga_crtc_read_n(crtc, data, countof(crtc));
+    lc8_mask = data[0] & VGA_CRTC_FLD_OF_LC8_MASK;
+    lc9_mask = data[1] & VGA_CRTC_FLD_MSL_LC9_MASK;
+    scan_line = data[2] | ((lc8_mask >> VGA_CRTC_FLD_OF_LC8_SHIFT) << 8)
+                        | ((lc9_mask >> VGA_CRTC_FLD_MSL_LC9_SHIFT) << 9);
 
     return scan_line;
 }
 
 void vga_set_line_compare(uint16_t scan_line)
 {
-    uint8_t of, msl;
-    uint32_t flags;
+    uint8_t crtc[] = { VGA_CRTC_REG_OF, VGA_CRTC_REG_MSL, VGA_CRTC_REG_LC };
+    uint8_t data[3];
 
-    cli_save(flags);
-    msl = vga_crtc_read(VGA_CRTC_REG_MSL) & ~VGA_CRTC_FLD_MSL_LC9_MASK;
-    msl |= ((scan_line >> 9) & 1) << VGA_CRTC_FLD_MSL_LC9_SHIFT;
-    of = vga_crtc_read(VGA_CRTC_REG_OF) & ~VGA_CRTC_FLD_OF_LC8_MASK;
-    of |= ((scan_line >> 8) & 1) << VGA_CRTC_FLD_OF_LC8_SHIFT;
-    vga_crtc_write(VGA_CRTC_REG_MSL, msl);
-    vga_crtc_write(VGA_CRTC_REG_OF, of);
-    vga_crtc_write(VGA_CRTC_REG_LC, scan_line & 0xFF);
-    restore_flags(flags);
+    vga_crtc_read_n(crtc, data, countof(crtc));
+    data[0] = (data[0] & ~VGA_CRTC_FLD_OF_LC8_MASK)
+            | (((scan_line >> 8) & 1) << VGA_CRTC_FLD_OF_LC8_SHIFT);
+    data[1] = (data[1] & ~VGA_CRTC_FLD_MSL_LC9_MASK)
+            | (((scan_line >> 9) & 1) << VGA_CRTC_FLD_MSL_LC9_SHIFT);
+    data[2] = scan_line & 0xFF;
+    vga_crtc_write_n(crtc, data, countof(crtc));
 }
-
 
 void vga_wait_for_vsync(void)
 {
@@ -263,9 +246,45 @@ void vga_wait_for_vsync(void)
     restore_flags(flags);
 }
 
+void vga_blank_screen(void)
+{
+    uint8_t mode = vga_seqr_read(VGA_SEQR_REG_CLOCKING);
+    vga_seqr_write(VGA_SEQR_REG_CLOCKING, mode | VGA_SEQR_FLD_CLOCKING_SO);
+}
+
+void vga_unblank_screen(void)
+{
+    uint8_t mode = vga_seqr_read(VGA_SEQR_REG_CLOCKING);
+    vga_seqr_write(VGA_SEQR_REG_CLOCKING, mode & ~VGA_SEQR_FLD_CLOCKING_SO);
+}
+
+void vga_crtc_read_n(const uint8_t *regs, uint8_t *values, size_t n)
+{
+    uint32_t flags;
+
+    cli_save(flags);
+    for (size_t i = 0; i < n; i++) {
+        outb(VGA_CRTC_PORT_ADDR, regs[i]);
+        values[i] = inb(VGA_CRTC_PORT_DATA);
+    }
+    restore_flags(flags);
+}
+
+void vga_crtc_write_n(const uint8_t *regs, const uint8_t *values, size_t n)
+{
+    uint32_t flags;
+
+    cli_save(flags);
+    for (size_t i = 0; i < n; i++) {
+        outb(VGA_CRTC_PORT_ADDR, regs[i]);
+        outb(VGA_CRTC_PORT_DATA, values[i]);
+    }
+    restore_flags(flags);
+}
+
 uint8_t vga_crtc_read(uint8_t reg)
 {
-    int flags;
+    uint32_t flags;
     uint8_t data;
 
     cli_save(flags);
@@ -278,7 +297,7 @@ uint8_t vga_crtc_read(uint8_t reg)
 
 void vga_crtc_write(uint8_t reg, uint8_t data)
 {
-    int flags;
+    uint32_t flags;
 
     cli_save(flags);
     outb(VGA_CRTC_PORT_ADDR, reg);
@@ -288,7 +307,7 @@ void vga_crtc_write(uint8_t reg, uint8_t data)
 
 uint8_t vga_grfx_read(uint8_t reg)
 {
-    int flags;
+    uint32_t flags;
     uint8_t data;
 
     cli_save(flags);
@@ -301,7 +320,7 @@ uint8_t vga_grfx_read(uint8_t reg)
 
 void vga_grfx_write(uint8_t reg, uint8_t data)
 {
-    int flags;
+    uint32_t flags;
 
     cli_save(flags);
     outb(VGA_GRFX_PORT_ADDR, reg);
@@ -311,7 +330,7 @@ void vga_grfx_write(uint8_t reg, uint8_t data)
 
 uint8_t vga_seqr_read(uint8_t reg)
 {
-    int flags;
+    uint32_t flags;
     uint8_t data;
 
     cli_save(flags);
@@ -324,7 +343,7 @@ uint8_t vga_seqr_read(uint8_t reg)
 
 void vga_seqr_write(uint8_t reg, uint8_t data)
 {
-    int flags;
+    uint32_t flags;
 
     cli_save(flags);
     outb(VGA_SEQR_PORT_ADDR, reg);
@@ -334,7 +353,7 @@ void vga_seqr_write(uint8_t reg, uint8_t data)
 
 uint8_t vga_attr_read(uint8_t reg)
 {
-    int flags;
+    uint32_t flags;
     uint8_t addr = reg & VGA_ATTR_FLD_ADDR_ADDR;
     uint8_t data;
 
@@ -349,7 +368,7 @@ uint8_t vga_attr_read(uint8_t reg)
 
 void vga_attr_write(uint8_t reg, uint8_t data)
 {
-    int flags;
+    uint32_t flags;
     uint8_t addr = reg & VGA_ATTR_FLD_ADDR_ADDR;
 
     cli_save(flags);

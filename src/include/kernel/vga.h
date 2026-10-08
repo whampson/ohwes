@@ -168,6 +168,10 @@
 #define VGA_SEQR_REG_CHMAP          0x03    /* Character Map Select Register */
 #define VGA_SEQR_REG_MODE           0x04    /* Sequencer Memory Mode Register */
 
+/* Sequencer Clocking Mode Register Fields */
+#define VGA_SEQR_FLD_CLOCKING_SO    (1 << 5)    /* Screen Off */
+
+
 /**
  * Color Registers
  * http://www.osdever.net/FreeVGA/vga/colorreg.htm
@@ -230,8 +234,8 @@ enum vga_fb_select {
  * VGA Cursor Shape
  */
 enum vga_cursor {
-    VGA_CURSOR_BLOCK     = 0xF00,   // min=0, max=15
-    VGA_CURSOR_UNDERLINE = 0xF0E,   // min=14, max=15   TODO: might need to scale with char size
+    VGA_CURSOR_BLOCK,
+    VGA_CURSOR_UNDERLINE,
 };
 
 /**
@@ -358,10 +362,21 @@ void vga_set_line_compare(uint16_t scan_line);
 
 void vga_wait_for_vsync(void);
 
-uint8_t vga_get_page(void);
-void vga_set_page(uint8_t page);
+
+void vga_blank_screen(void);
+void vga_unblank_screen(void);
 
 // ----------------------------------------------------------------------------
+
+/**
+ * Bulk read CRTC registers with interrupts disabled.
+ */
+void vga_crtc_read_n(const uint8_t *regs, uint8_t *vals, size_t n);
+
+/**
+ * Bulk write CRTC registers with interrupts disabled.
+ */
+void vga_crtc_write_n(const uint8_t *regs, const uint8_t *vals, size_t n);
 
 /**
  * Read a CRT controller register.
