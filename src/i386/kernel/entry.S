@@ -148,10 +148,10 @@ recv_interrupt:
         movl            %edi, IREGS_EDI(%esp)
         movl            %ebp, IREGS_EBP(%esp)
         movl            %eax, IREGS_EAX(%esp)
-        STORE_SEGMENT   %ds, IREGS_DS(%esp)
-        STORE_SEGMENT   %es, IREGS_ES(%esp)
-        STORE_SEGMENT   %fs, IREGS_FS(%esp)
-        STORE_SEGMENT   %gs, IREGS_GS(%esp)
+        STSEG           %ds, IREGS_DS(%esp)
+        STSEG           %es, IREGS_ES(%esp)
+        STSEG           %fs, IREGS_FS(%esp)
+        STSEG           %gs, IREGS_GS(%esp)
         MEM2MEM         SIZEOF_IREGS+IRET_VEC(%esp), IREGS_VEC(%esp)
         MEM2MEM         SIZEOF_IREGS+IRET_ERR(%esp), IREGS_ERR(%esp)
         MEM2MEM         SIZEOF_IREGS+IRET_EFLAGS(%esp), IREGS_EFLAGS(%esp)
@@ -168,7 +168,7 @@ _store_kernel_stack:
         movl            %esp, %eax
         addl            $SIZEOF_IREGS+IRET_ESP, %eax
         movl            %eax, IREGS_ESP(%esp)
-        STORE_SEGMENT   %ss, IREGS_SS(%esp)
+        STSEG           %ss, IREGS_SS(%esp)
         jmp             handle_interrupt
 
 ##
@@ -271,10 +271,10 @@ _return_from_syscall:
         movl            IREGS_ECX(%esp), %ecx
         movl            IREGS_EBX(%esp), %ebx
         movl            %eax, IREGS_ERR(%esp)   # reuse error code slot to
-        LOAD_SEGMENT    IREGS_DS(%esp), %ds     #  temporarily store eax; used
-        LOAD_SEGMENT    IREGS_ES(%esp), %es     #  by these macros to restore
-        LOAD_SEGMENT    IREGS_FS(%esp), %fs     #  segment registers
-        LOAD_SEGMENT    IREGS_GS(%esp), %gs
+        LDSEG           IREGS_DS(%esp), %ds     #  temporarily store eax; used
+        LDSEG           IREGS_ES(%esp), %es     #  by these macros to restore
+        LDSEG           IREGS_FS(%esp), %fs     #  segment registers
+        LDSEG           IREGS_GS(%esp), %gs
         MEM2MEM         IREGS_EFLAGS(%esp), SIZEOF_IREGS+IRET_EFLAGS(%esp)
         MEM2MEM         IREGS_EIP(%esp), SIZEOF_IREGS+IRET_EIP(%esp)
         MEM2MEM         IREGS_CS(%esp), SIZEOF_IREGS+IRET_CS(%esp)
@@ -312,8 +312,8 @@ _exception_thunks:
         .long           _except_0Ch, _except_0Dh, _except_0Eh, _except_0Fh
         .long           _except_10h, _except_11h, _except_12h, _except_13h
         .long           _except_14h, _except_15h, _except_16h, _except_17h
-        .long           _except_18h, _except_19h, _except_1Ah, _except_19h
-        .long           _except_1Ch, _except_1Ch, _except_1Eh, _except_1Fh
+        .long           _except_18h, _except_19h, _except_1Ah, _except_1Bh
+        .long           _except_1Ch, _except_1Dh, _except_1Eh, _except_1Fh
 
 .globl _irq_thunks
 _irq_thunks:
