@@ -58,11 +58,11 @@ typedef void (*irq_handler)(int irq, struct iregs *regs);
 void irq_unmask(int irq);
 void irq_mask(int irq);
 
-uint16_t irq_getmask(void);
-void irq_setmask(uint16_t mask);
+uint16_t irq_getmask(void);         // TODO: rename get_irq_mask
+void irq_setmask(uint16_t mask);    // TODO: rename set_irq_mask
 
-void irq_register(int irq, irq_handler func);
-void irq_unregister(int irq, irq_handler func);
+void irq_register(int irq, irq_handler func);       // TODO: rename register_isr
+void irq_unregister(int irq, irq_handler func);     // TODO: rename unregister_isr
 
 #endif // __ASSEMBLER__
 

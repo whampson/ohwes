@@ -26,48 +26,88 @@
 #include <kernel/kernel.h>
 #include <kernel/irq.h>
 
-#define PARANOID        1
+#define PIC_M           0   // master
+#define PIC_S           1   // slave
 
-#define MASTER_PIC      0
-#define SLAVE_PIC       1
+#define PIC1_CMD_PORT   0x20
+#define PIC1_DATA_PORT  0x21
+#define PIC2_CMD_PORT   0xA0
+#define PIC2_DATA_PORT  0xA1
 
-#define SLAVE_MASK      (1<<(IRQ_SLAVE))
+#define SLAVE_IRQ_MASK      (1<<(IRQ_SLAVE))
 
 // Initialization Command Words (ICW)
 #define ICW1            0x11                // edge-triggered, 8 byte vectors, cascade mode, ICW4 needed
 #define ICW2_M          (IRQ_BASE_VECTOR)   // master PIC base interrupt vector
 #define ICW2_S          (IRQ_BASE_VECTOR+8) // slave PIC base interrupt vector
-#define ICW3_M          (SLAVE_MASK)        // mask of slave IRQ line on master PIC
-#define ICW3_S          (IRQ_SLAVE)         // slave IRQ number, to be sent to master
+#define ICW3_M          (SLAVE_IRQ_MASK)    // mask of slave IRQ line on master PIC
+#define ICW3_S          (IRQ_SLAVE)         // slave PIC IRQ number to raise on master
 #define ICW4            0x01                // not special fully nested, not auto EOI, 8086 mode
 
 // Operation Command Words (OCW)
 #define OCW1_MASK_ALL   0xFF            // mask all interrupt lines
-#define OCW2_EOI        0x60            // specific EOI; needs IRQ num in bits 2-0
+#define OCW2_EOI        0x60            // specific EOI; needs IRQ num in bits[2:0]
+#define OCW3_READ_IRR   0x0A            // read Interrupt Request Register
+#define OCW3_READ_ISR   0x0B            // read In-Service Register
 
-static void pic_write_cmd(int pic, uint8_t cmd);
-static void pic_write_data(int pic, uint8_t data);
-static uint8_t pic_read_data(int pic);
+
+#define __PIC_CMD_PORT(p) ((p) == PIC_M) ? PIC1_CMD_PORT : PIC2_CMD_PORT
+#define __PIC_DATA_PORT(p) ((p) == PIC_M) ? PIC1_DATA_PORT : PIC2_DATA_PORT
+
+static inline void __pic_write_cmd(int pic, uint8_t cmd)
+{
+    outb(__PIC_CMD_PORT(pic), cmd);
+}
+
+static inline void __pic_write_cmd_slow(int pic, uint8_t cmd)
+{
+    outb_slow(__PIC_CMD_PORT(pic), cmd);
+}
+
+static inline void __pic_write_data(int pic, uint8_t data)
+{
+    outb(__PIC_DATA_PORT(pic), data);
+}
+
+static inline void __pic_write_data_slow(int pic, uint8_t data)
+{
+    outb_slow(__PIC_DATA_PORT(pic), data);
+}
+
+static inline uint8_t __pic_read_reg(int pic, uint8_t ocw3)
+{
+    outb(__PIC_CMD_PORT(pic), (ocw3 & 0xB) | 0x8);  // bit[3]: OCW3 ident
+    return inb(__PIC_CMD_PORT(pic));                // intentionally reading CMD port
+}
+
+static inline uint8_t __pic_read_data(int pic)
+{
+    return inb(__PIC_DATA_PORT(pic));
+}
+
 
 void init_pic(void)
 {
+    uint32_t flags;
+    cli_save(flags);
+
     // configure master PIC
-    pic_write_cmd(MASTER_PIC, ICW1);
-    pic_write_data(MASTER_PIC, ICW2_M);
-    pic_write_data(MASTER_PIC, ICW3_M);
-    pic_write_data(MASTER_PIC, ICW4);
+    __pic_write_cmd_slow(PIC_M, ICW1);
+    __pic_write_data_slow(PIC_M, ICW2_M);
+    __pic_write_data_slow(PIC_M, ICW3_M);
+    __pic_write_data_slow(PIC_M, ICW4);
 
     // configure slave PIC
-    pic_write_cmd(SLAVE_PIC, ICW1);
-    pic_write_data(SLAVE_PIC, ICW2_S);
-    pic_write_data(SLAVE_PIC, ICW3_S);
-    pic_write_data(SLAVE_PIC, ICW4);
+    __pic_write_cmd_slow(PIC_S, ICW1);
+    __pic_write_data_slow(PIC_S, ICW2_S);
+    __pic_write_data_slow(PIC_S, ICW3_S);
+    __pic_write_data_slow(PIC_S, ICW4);
 
-    // mask all IRQs, except slave line on master PIC
-    pic_write_data(MASTER_PIC, OCW1_MASK_ALL & ~SLAVE_MASK);
-    pic_write_data(SLAVE_PIC, OCW1_MASK_ALL);
+    // mask all interrupts
+    __pic_write_data(PIC_M, OCW1_MASK_ALL);
+    __pic_write_data(PIC_S, OCW1_MASK_ALL);
 
-    pic_setmask(PIC_MASK_ALL);  // disable all device interrupts
+    restore_flags(flags);
 }
 
 void pic_eoi(uint8_t irq_num)
@@ -76,117 +116,90 @@ void pic_eoi(uint8_t irq_num)
     cli_save(flags);
 
     if (irq_num >= 8) {
-        pic_write_cmd(SLAVE_PIC, OCW2_EOI | (irq_num & 0x7));
-        pic_write_cmd(MASTER_PIC, OCW2_EOI | IRQ_SLAVE);
+        __pic_write_cmd(PIC_S, OCW2_EOI | (irq_num & 0x7));
+        __pic_write_cmd(PIC_M, OCW2_EOI | IRQ_SLAVE);
     }
     else {
-        pic_write_cmd(MASTER_PIC, OCW2_EOI | (irq_num & 0x7));
+        __pic_write_cmd(PIC_M, OCW2_EOI | (irq_num & 0x7));
     }
 
     restore_flags(flags);
 }
 
-void pic_mask(uint8_t irq_num)
+void pic_mask_irq(uint8_t irq_num)
 {
     uint32_t flags;
     cli_save(flags);
 
-    uint8_t pic_num = (irq_num >= 8);
+    uint8_t pic_num = (irq_num >= 8) ? PIC_S : PIC_M;
     uint8_t mask = (1 << (irq_num & 0x7));
 
-    uint8_t ocw1 = pic_read_data(pic_num);
-    ocw1 |= mask;
-    pic_write_data(pic_num, ocw1);
-
-#ifdef PARANOID
-    uint8_t ocw1_readback = pic_read_data(pic_num);
-    assert(ocw1 == ocw1_readback);
-#endif
+    uint8_t ocw1 = __pic_read_data(pic_num);
+    __pic_write_data(pic_num, ocw1 | mask);
 
     restore_flags(flags);
 }
 
-void pic_unmask(uint8_t irq_num)
+void pic_unmask_irq(uint8_t irq_num)
 {
     uint32_t flags;
     cli_save(flags);
 
-    uint8_t pic_num = (irq_num >= 8);
+    uint8_t pic_num = (irq_num >= 8) ? PIC_S : PIC_M;
     uint8_t mask = (1 << (irq_num & 0x7));
 
-    uint8_t ocw1 = pic_read_data(pic_num);
-    ocw1 &= ~mask;
-    pic_write_data(pic_num, ocw1);
+    uint8_t ocw1 = __pic_read_data(pic_num);
+    __pic_write_data(pic_num, ocw1 & ~mask);
 
-#ifdef PARANOID
-    uint8_t ocw1_readback = pic_read_data(pic_num);
-    assert(ocw1 == ocw1_readback);
-#endif
+    if (pic_num == PIC_S) {
+        __pic_write_data(PIC_M, __pic_read_data(PIC_M) & ~SLAVE_IRQ_MASK);
+    }
 
     restore_flags(flags);
 }
 
-uint16_t pic_getmask(void)
+uint16_t pic_get_mask(void)
 {
     uint32_t flags;
     cli_save(flags);
 
-    uint8_t ocw1_m = pic_read_data(MASTER_PIC);
-    uint8_t ocw1_s = pic_read_data(SLAVE_PIC);
-
-    uint16_t mask = (ocw1_s << 8) | ocw1_m;
+    uint16_t mask = (__pic_read_data(PIC_S) << 8) | __pic_read_data(PIC_M);
 
     restore_flags(flags);
     return mask;
 }
 
-void pic_setmask(uint16_t mask)
+void pic_set_mask(uint16_t mask)
 {
     uint32_t flags;
     cli_save(flags);
 
-    uint8_t mask_m = mask & 0xFF;
-    uint8_t mask_s = (mask >> 8) & 0xFF;
-
-    pic_write_data(MASTER_PIC, mask_m);
-    pic_write_data(SLAVE_PIC, mask_s);
-
-#ifdef PARANOID
-    uint8_t readback;
-
-    readback = pic_read_data(MASTER_PIC);
-    assert(mask_m == readback);
-
-    readback = pic_read_data(SLAVE_PIC);
-    assert(mask_s == readback);
-#endif
+    __pic_write_data(PIC_M, mask & 0xFF);
+    __pic_write_data(PIC_S, (mask >> 8) & 0xFF);
 
     restore_flags(flags);
 }
 
-static void pic_write_cmd(int pic, uint8_t cmd)
+uint16_t pic_read_isr(void)
 {
-    uint16_t port = (pic == MASTER_PIC)
-        ? PIC_MASTER_CMD_PORT
-        : PIC_SLAVE_CMD_PORT;
+    uint32_t flags;
+    cli_save(flags);
 
-    outb_delay(port, cmd);
+    uint16_t isr = (__pic_read_reg(PIC_S, OCW3_READ_ISR) << 8) |
+                    __pic_read_reg(PIC_M, OCW3_READ_ISR);
+
+    restore_flags(flags);
+    return isr;
 }
 
-static void pic_write_data(int pic, uint8_t data)
+uint16_t pic_read_irr(void)
 {
-    uint16_t port = (pic == MASTER_PIC)
-        ? PIC_MASTER_DATA_PORT
-        : PIC_SLAVE_DATA_PORT;
+    uint32_t flags;
+    cli_save(flags);
 
-    outb_delay(port, data);
-}
+    uint16_t irr = (__pic_read_reg(PIC_S, OCW3_READ_IRR) << 8) |
+                    __pic_read_reg(PIC_M, OCW3_READ_IRR);
 
-static uint8_t pic_read_data(int pic)
-{
-    uint16_t port = (pic == MASTER_PIC)
-        ? PIC_MASTER_DATA_PORT
-        : PIC_SLAVE_DATA_PORT;
-
-    return inb_delay(port);
+    restore_flags(flags);
+    return irr;
 }

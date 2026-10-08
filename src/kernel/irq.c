@@ -48,22 +48,22 @@ static irq_handler _isr_map[NR_IRQS][MAX_ISR];
 
 void irq_mask(int irq)
 {
-    pic_mask(irq);
+    pic_mask_irq(irq);
 }
 
 void irq_unmask(int irq)
 {
-    pic_unmask(irq);
+    pic_unmask_irq(irq);
 }
 
 uint16_t irq_getmask(void)
 {
-    return pic_getmask();
+    return pic_get_mask();
 }
 
 void irq_setmask(uint16_t mask)
 {
-    pic_setmask(mask);
+    pic_set_mask(mask);
 }
 
 void irq_register(int irq, irq_handler func)
@@ -105,9 +105,12 @@ __fastcall void handle_irq(struct iregs *regs)
 {
     int irq = ~regs->vec;
     bool handled = false;
-    bool masked = _IRQ_MASKED(irq);
 
-    if ((irq == 7 && masked) || (irq == 15 && masked)) {
+    bool spur = (irq == 7)  ? !(pic_read_isr() & (1 << 7))  :
+                (irq == 15) ? !(pic_read_isr() & (1 << 15)) :
+                false;
+
+    if (spur) {
         bool pic0 = irq == 7;
         int count = (pic0)
             ? (++g_irqstats->spur_pic0)
@@ -137,12 +140,14 @@ __fastcall void handle_irq(struct iregs *regs)
     pic_eoi(irq);
 
     if (dpc_pending()) {
-        __sti();
-        dpc_run();  // DPCs scheduled here will run after next interrupt
-        __cli();
+        uint32_t flags;
+        cli_save(flags);
+        __sti();            // DPCs run with interrupts enabled (!!!)
+        dpc_run();          // DPCs scheduled here will run after next interrupt
+        restore_flags(flags);
     }
 
-#if DEBUG && ENABLE_CRASH_KEY   // CTRL+ALT+F# to test crash kernel
+#if DEBUG && CONFIG_CRASH_KEY   // CTRL+ALT+F# to test crash kernel
     extern int g_test_crashkey;
     extern void crash_key_irq(int irq, struct iregs *regs);
     if (irq == IRQ_KEYBOARD && g_test_crashkey >= 0) {
