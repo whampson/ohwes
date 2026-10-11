@@ -689,7 +689,7 @@ __asm__ volatile (                              \
 #define flush_tlb()                         \
 __asm__ volatile (                          \
     "movl %%cr3, %%eax; movl %%eax, %%cr3"  \
-    ::: "eax"                               \
+    ::: "eax", "memory"                     \
 );
 
 #endif /* !defined(__LDSCRIPT__) */
