@@ -31,6 +31,7 @@
 #include <i386/io.h>
 #include <i386/ps2.h>
 #include <kernel/kernel.h>
+#include <i386/interrupt.h>
 
 #define pr_fmt(fmt) "ps2-ctl: " fmt
 #include <kernel/kprint.h>
@@ -94,12 +95,14 @@ __init void init_ps2(void)
 {
     static bool s_ps2_initialized = false;
 
+    uint32_t flags;
     uint8_t cfg, result;
     bool port1, port2;
 
     if (s_ps2_initialized) {
         return;
     }
+    cli_save(flags);
 
     //
     // disable ports and flush output buffer
@@ -172,9 +175,10 @@ __init void init_ps2(void)
     }
 #endif
 
-
     s_ps2_initialized = true;
     // TODO: we assume it's good, set some kind of status if bad
+
+    restore_flags(flags);
 }
 
 uint8_t ps2_read(void)
