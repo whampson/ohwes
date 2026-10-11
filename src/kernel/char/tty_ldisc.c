@@ -165,8 +165,11 @@ static ssize_t n_tty_write(struct tty *tty, struct file *file, const char *buf, 
     if (!tty || !file || !buf) {
         return -EINVAL;
     }
+    if (!tty->driver.write) {
+        return -ENOSYS;
+    }
 
-    // TODO: handle O_NONBLOCK
+    // TODO: handle O_NONBLOCK properly
 
     ptr = buf; ret = 0;
     while (count > 0) {
@@ -186,15 +189,13 @@ static ssize_t n_tty_write(struct tty *tty, struct file *file, const char *buf, 
             ptr++; count--;
         }
         else {
-            if (tty->driver.write) {
-                ret = tty->driver.write(tty, ptr, count);
-                if (ret < 0) {
-                    if (file->f_oflag & O_NONBLOCK) {
-                        ret = -EAGAIN;  // operation would block
-                        break;
-                    }
-                    continue;   // spin until a character appears, TODO: SCHEDULE HERE
+            ret = tty->driver.write(tty, ptr, count);
+            if (ret <= 0) {
+                if (file->f_oflag & O_NONBLOCK) {
+                    ret = -EAGAIN;  // operation would block
+                    break;
                 }
+                continue;   // spin until the device can accept more, TODO: SCHEDULE HERE
             }
             count -= ret;
             ptr += ret;
