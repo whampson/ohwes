@@ -83,6 +83,7 @@ void vga_get_fb_info(struct vga_fb_info *fb_info)
             fb_info->size_pages = 8;
             break;
         case VGA_GRFX_ENUM_MISC_MMAP_32K_HI:
+        default:
             fb_info->phys_ptr = 0xB8000;
             fb_info->size_pages = 8;
             break;
@@ -103,6 +104,23 @@ void vga_set_fb_base(enum vga_fb_select fb_select)
 
     grfx_misc = vga_grfx_read(VGA_GRFX_REG_MISC);
     assert((grfx_misc & 0x0C) >> 2 == fb_select);
+    restore_flags(flags);
+}
+
+void vga_set_screen_blank(bool blank)
+{
+    uint32_t flags;
+    uint8_t mode;
+
+    cli_save(flags);
+    mode = vga_seqr_read(VGA_SEQR_REG_CLOCKING);
+    if (blank) {
+        mode |= VGA_SEQR_FLD_CLOCKING_SO;
+    }
+    else {
+        mode &= ~VGA_SEQR_FLD_CLOCKING_SO;
+    }
+    vga_seqr_write(VGA_SEQR_REG_CLOCKING, mode);
     restore_flags(flags);
 }
 
@@ -232,39 +250,13 @@ void vga_set_line_compare(uint16_t scan_line)
     vga_crtc_write_n(crtc, data, countof(crtc));
 }
 
-void vga_wait_for_vsync(void)
-{
-    uint32_t flags;
-    cli_save(flags);
-
-    // wait 'til end of current retrace
-    while ((inb(VGA_EXTL_PORT_IS1) & VGA_EXTL_FLD_IS1_VRT_MASK) != 0);
-
-    // wait 'til start of next retrace
-    while ((inb(VGA_EXTL_PORT_IS1) & VGA_EXTL_FLD_IS1_VRT_MASK) == 0);
-
-    restore_flags(flags);
-}
-
-void vga_blank_screen(void)
-{
-    uint8_t mode = vga_seqr_read(VGA_SEQR_REG_CLOCKING);
-    vga_seqr_write(VGA_SEQR_REG_CLOCKING, mode | VGA_SEQR_FLD_CLOCKING_SO);
-}
-
-void vga_unblank_screen(void)
-{
-    uint8_t mode = vga_seqr_read(VGA_SEQR_REG_CLOCKING);
-    vga_seqr_write(VGA_SEQR_REG_CLOCKING, mode & ~VGA_SEQR_FLD_CLOCKING_SO);
-}
-
 void vga_crtc_read_n(const uint8_t *regs, uint8_t *values, size_t n)
 {
     uint32_t flags;
 
     cli_save(flags);
     for (size_t i = 0; i < n; i++) {
-        outb(VGA_CRTC_PORT_ADDR, regs[i]);
+        outb(VGA_CRTC_PORT_ADDR, regs[i]);          // TODO: use IOAS! (XOR 6)
         values[i] = inb(VGA_CRTC_PORT_DATA);
     }
     restore_flags(flags);

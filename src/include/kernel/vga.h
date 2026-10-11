@@ -360,11 +360,7 @@ uint16_t vga_get_line_compare(void);
 void vga_set_scan_start(uint16_t scan_line);
 void vga_set_line_compare(uint16_t scan_line);
 
-void vga_wait_for_vsync(void);
-
-
-void vga_blank_screen(void);
-void vga_unblank_screen(void);
+void vga_set_screen_blank(bool blank);
 
 // ----------------------------------------------------------------------------
 
