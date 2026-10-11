@@ -34,8 +34,8 @@
 //
 // TTY IOCTL functions
 //
-#define TCGETS              _IOCTL_R(_IOC_TTY,0x01,struct termios)              // Set termios
-#define TCSETS              _IOCTL_W(_IOC_TTY,0x02,const struct termios)        // Get termios
+#define TCGETS              _IOCTL_R(_IOC_TTY,0x01,struct termios)              // Get termios
+#define TCSETS              _IOCTL_W(_IOC_TTY,0x02,const struct termios)        // Set termios
 #define TIOCMGET            _IOCTL_R(_IOC_TTY,0x03,int)                         // Get modem control/status bits
 #define TIOCMSET            _IOCTL_W(_IOC_TTY,0x04,const int)                   // Set modem control bits
 #define TIOCGICOUNT         _IOCTL_R(_IOC_TTY,0x05,struct serial_stats)         // Get serial line interrupt counts

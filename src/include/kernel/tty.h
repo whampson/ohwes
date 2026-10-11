@@ -48,8 +48,8 @@
     .c_lflag = ECHO | ECHOCTL,          \
     .c_cflag = HUPCL,                   \
     .c_cc = {                           \
-        0x13, /* VSTOP  = ^X */         \
-        0x11  /* VSTART = ^S */         \
+        0x13, /* VSTOP  = ^S */         \
+        0x11  /* VSTART = ^Q */         \
     }                                   \
 }
 
