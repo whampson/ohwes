@@ -54,6 +54,7 @@
 #define MAX_PROBES          3       // max times to probe for device before giving up
 #define MAX_RESENDS         3       // max command resends (0xFE) before giving up
 #define MAX_STRAYS          6       // max stray chars to accept during command sequence
+#define MAX_CMDLOOP         32      // max number of iterations in command send loop
 
 static inline void atomic_inc(uint32_t volatile *value)
 {
@@ -246,8 +247,9 @@ static bool ps2kb_init(void)
 
     // self-test
 #if SELFTEST
+    pr_debug("selftest");
     if (!ps2kb_selftest()) {
-        pr_error("self-test failed\n");
+        pr_error("selftest failed\n");
         g_kb->init_errors++;
         return false;
     }
@@ -256,11 +258,13 @@ static bool ps2kb_init(void)
     ps2_flush();
 
     // ensure keyboard interrupts and translation are off
+    pr_debug("disable translation");
     ps2cfg = ps2_read_config();
     ps2cfg &= ~(PS2_CFG_P1INTON|PS2_CFG_TRANSLATE);
     ps2_write_config(ps2cfg);
 
     // identify
+    pr_debug("identify");
     g_kb->ident = ps2kb_identify();
     switch (g_kb->ident) {
         case 0xAB83:
@@ -275,6 +279,7 @@ static bool ps2kb_init(void)
 
 
     // select scancode set
+    pr_debug("select scancode %d", SCANCODE_SET);
     if (!ps2kb_set_scanmode(SCANCODE_SET)) {
         pr_error("failed to select scancode set %d\n", SCANCODE_SET);
         g_kb->init_errors++;
@@ -286,16 +291,19 @@ static bool ps2kb_init(void)
         (SCANCODE_SET == 3) ? "MF2" : "???");
 
     // set typematic properties
+    pr_debug("set typematic");
     if (!ps2kb_set_typematic(TYPEMATIC_BYTE)) {
         pr_warn("unable to set typematic byte %02Xh\n", TYPEMATIC_BYTE);
     }
 
     // set LED state
+    pr_debug("set LEDs");
     kb_state = &(get_terminal(0)->kb_state).hw_state;
-    kb_state->numlk = NUMLOCK_ON;
+    // kb_state->numlk = NUMLOCK_ON;
     ps2kb_set_leds(kb_state->_leds);
 
     // enable scanning
+    pr_debug("enable scanning");
     if (!ps2kb_send_cmd(PS2KB_CMD_SCANON, NULL)) {
         pr_warn("failed to re-enable scanning\n");
     }
@@ -313,40 +321,17 @@ static bool ps2kb_init(void)
     g_kb->timeout_errors = 0;
 
     // enable port and port interrupts
+    pr_debug("enable interrupts");
     ps2cfg |= PS2_CFG_P1INTON;
     ps2_write_config(ps2cfg);
     ps2_write_cmd(PS2_CMD_P1ON);
 
     g_kb->init_count++;
+    pr_debug("init count: %d", g_kb->init_count);
     return true;
 }
 
 // ----------------------------------------------------------------------------
-
-
-static void ps2kb_on_connect(void)
-{
-    uint32_t flags;
-
-    pr_debug("keyboard connected\n");
-    g_kb->hw_connected = true;
-
-    const uint64_t c_settle_time_ms = 2;
-
-    cli_save(flags);
-    ps2_flush();
-    restore_flags(flags);
-
-    uint64_t settle = get_uptime() + (c_settle_time_ms * 1000000);
-    while (get_uptime() < settle) {
-        __pause();  // 2ms spin-wait
-    }
-
-    cli_save(flags);
-    ps2_flush();
-    ps2kb_init();
-    restore_flags(flags);
-}
 
 static void ps2kb_on_disconnect(void)
 {
@@ -358,8 +343,39 @@ static void ps2kb_on_disconnect(void)
 
     ps2_flush();
     ps2_write_config(ps2_read_config() & ~PS2_CFG_P1INTON); // disable interrupts
+    irq_mask(IRQ_KEYBOARD);
 
     restore_flags(flags);
+}
+
+static void ps2kb_on_connect(void)
+{
+    uint32_t flags;
+
+    cli_save(flags);
+    ps2_flush();
+    restore_flags(flags);
+
+    // give the keyboard some time to settle after hotplug
+    const uint64_t PollTime = 2; // ms
+    uint64_t wait = get_uptime() + (PollTime * 1000000);
+    while (get_uptime() < wait) {
+        __pause();
+    }
+
+    cli_save(flags);
+    ps2_flush();
+    restore_flags(flags);
+
+    if (ps2kb_init()) {
+        pr_info("keyboard connected\n");
+        g_kb->hw_connected = true;
+        irq_unmask(IRQ_KEYBOARD);
+    }
+    else {
+        pr_error("error initializing keyboard");
+        ps2kb_on_disconnect();
+    }
 }
 
 static void __dpc __ps2kb_hotplug_detect_dpc(void *arg)
@@ -370,9 +386,9 @@ static void __dpc __ps2kb_hotplug_detect_dpc(void *arg)
 
     cli_save(flags);
     g_kb->pending_hotplug = false;
-
     was = g_kb->hw_connected;
     now = ps2kb_is_connected();
+    restore_flags(flags);
 
     if (was && !now) {
         ps2kb_on_disconnect();
@@ -380,8 +396,6 @@ static void __dpc __ps2kb_hotplug_detect_dpc(void *arg)
     if (!was && now) {
         ps2kb_on_connect();
     }
-
-    restore_flags(flags);
 }
 
 static void __isr kb_hotplug_detect(int irq, struct iregs *regs)
@@ -408,8 +422,9 @@ static void __isr kb_hotplug_detect(int irq, struct iregs *regs)
 
 __init void init_kb(void)
 {
+    uint8_t ps2cfg;
     uint32_t flags;
-    cli_save(flags);
+    irq_mask(IRQ_KEYBOARD);
 
     // initialize PS/2 controller
     if (!g_kb->ps2ctl_init) {
@@ -418,28 +433,25 @@ __init void init_kb(void)
     }
 
     // port 1 clock should be enabled if init passed...
-    if (ps2_read_config() & PS2_CFG_P1CLKOFF) {
-        pr_error("no keyboard port detected on controller\n");
-        goto init_kb_done;
-    }
+    cli_save(flags);
+    ps2cfg = ps2_read_config();
+    restore_flags(flags);
 
-    // check if keyboard connected...
-    if (ps2kb_is_connected()) {
-        ps2kb_on_connect();
+    if (ps2cfg & PS2_CFG_P1CLKOFF) {
+        pr_info("no keyboard port detected on controller\n");
     }
     else {
-        ps2kb_on_disconnect();
+        if (ps2kb_is_connected()) {
+            ps2kb_on_connect();
+        }
+        else {
+            ps2kb_on_disconnect();
+        }
     }
 
-init_kb_done:
-    // enable hotplug detection
     irq_register(IRQ_TIMER, kb_hotplug_detect);
-
-    // register ISR and unmask IRQ1 on the PIC
     irq_register(IRQ_KEYBOARD, kb_interrupt);
     irq_unmask(IRQ_KEYBOARD);
-
-    restore_flags(flags);
 }
 
 static void tty_putq(struct tty *tty, char c)
@@ -458,9 +470,7 @@ static void __dpc __ps2kb_terminal_switch_dpc(void *arg)
     g_kb->pending_termsw = false;
     restore_flags(flags);
 
-    if (switch_terminal(term) != 0) {
-        pr_error("failed to switch to tty%d!\n", term);
-    }
+    (void) switch_terminal(term);
 }
 
 static void __dpc __ps2kb_sysrq_dpc(void *arg)
@@ -495,7 +505,7 @@ static void __isr kb_interrupt(int irq, struct iregs *regs)
     uint16_t sc;
     uint16_t key;
     bool release;
-    unsigned char c;
+    unsigned char c = 0;
     char *s;
     struct key_event evt;
 
@@ -920,6 +930,9 @@ static bool ps2kb_is_connected(void)
 {
     bool connected = false;
 
+    // TODO: sometimes I see "stray char 0xEE"
+    // when pressing many keys because of this
+
     ps2_flush();
     for (int i = 0; i < MAX_PROBES; i++) {
         ps2_write_fast(PS2KB_CMD_ECHO);
@@ -939,8 +952,9 @@ static bool ps2kb_send_cmd(uint8_t cmd, uint8_t *data)
     enum { P_CMD, P_DATA } phase = P_CMD;
     uint8_t byte = cmd, resp;
     int resends = 0, strays = 0;
+    int iterations = 0;
 
-    while (true) {
+    while (iterations++ < MAX_CMDLOOP) {
         // write command or data, depending on phase
         if (!ps2_write_fast(byte)) {
             goto sync_fail;     // device unresponsive
@@ -966,21 +980,22 @@ static bool ps2kb_send_cmd(uint8_t cmd, uint8_t *data)
 
             case 0xFE:      // 'resend last command'
                 if (++resends > MAX_RESENDS) {
+                    pr_debug("send_cmd: resend limit exceeded\n");
                     goto sync_fail;
                 }
                 break;
 
-            case 0xAA:      // BAT in progress (0xFF/reset/selftest); ignore
-                break;
-
-            default:        // could be queued scancode; ignore for a while
+            default:        // could be queued scancode, or reset/selftest result; ignore
+                pr_debug("send_cmd: stray byte %02Xh", resp);
                 if (++strays > MAX_STRAYS) {
+                    pr_debug("send_cmd: stray byte limit exceeded\n");
                     goto sync_fail;
                 }
                 break;
-
         }
     }
+
+    pr_debug("send_cmd: max iterations exceeded\n");
 
 sync_fail:
     if (data != NULL && phase == P_CMD) {
