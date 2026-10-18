@@ -234,7 +234,11 @@ static void klog_write_to_console(struct console *cons, size_t offset, size_t co
 #if CONFIG_KLOG_USE_COLOR
                         "\e[22;32m"  // unbold+green
 #endif
-                        "[%5lu.%06lu] ",
+                        "[%5lu.%06lu]"
+#if CONFIG_KLOG_USE_COLOR
+                        "\e[0m"     // default
+#endif
+                        " ",
                         (uint32_t) (ns / 1000000000),           // seconds
                         (uint32_t) ((ns % 1000000000) / 1000)); // microseconds
                     cons->write(cons, timebuf, ntimebuf);
