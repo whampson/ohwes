@@ -209,15 +209,24 @@
  * Default Text Mode Color Palette
  */
 enum vga_color {
-    VGA_BLACK,
-    VGA_BLUE,
-    VGA_GREEN,
-    VGA_CYAN,
-    VGA_RED,
-    VGA_MAGENTA,
-    VGA_YELLOW,
-    VGA_WHITE,
-    VGA_BRIGHT,
+    _VGA_BRIGHT_BIT     = 0b1000,
+
+    VGA_BLACK           = 0,
+    VGA_BLUE            = 1,
+    VGA_GREEN           = 2,
+    VGA_CYAN            = 3,
+    VGA_RED             = 4,
+    VGA_MAGENTA         = 5,
+    VGA_BROWN           = 6,
+    VGA_LIGHT_GRAY      = 7,
+    VGA_DARK_GRAY       = (_VGA_BRIGHT_BIT | VGA_BLACK),
+    VGA_LIGHT_BLUE      = (_VGA_BRIGHT_BIT | VGA_BLUE),
+    VGA_LIGHT_GREEN     = (_VGA_BRIGHT_BIT | VGA_GREEN),
+    VGA_LIGHT_CYAN      = (_VGA_BRIGHT_BIT | VGA_CYAN),
+    VGA_LIGHT_RED       = (_VGA_BRIGHT_BIT | VGA_RED),
+    VGA_LIGHT_MAGENTA   = (_VGA_BRIGHT_BIT | VGA_MAGENTA),
+    VGA_YELLOW          = (_VGA_BRIGHT_BIT | VGA_BROWN),
+    VGA_WHITE           = (_VGA_BRIGHT_BIT | VGA_LIGHT_GRAY),
 };
 
 /**
@@ -228,14 +237,6 @@ enum vga_fb_select {
     VGA_MEMORY_64K,     // 1: 0xA0000-0xAFFFF 64k
     VGA_MEMORY_32K_LO,  // 2: 0xB0000-0xB7FFF 32k
     VGA_MEMORY_32K_HI,  // 3: 0xB8000-0xBFFFF 32k
-};
-
-/**
- * VGA Cursor Shape
- */
-enum vga_cursor {
-    VGA_CURSOR_BLOCK,
-    VGA_CURSOR_UNDERLINE,
 };
 
 /**
@@ -273,7 +274,7 @@ static_assert(sizeof(struct vga_attr) == 1, "sizeof(struct vga_attr)");
 struct vga_cell {
     union {
         struct {
-            char ch;
+            unsigned char ch;
             struct vga_attr attr;
         };
         uint16_t _value;

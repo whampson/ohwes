@@ -34,84 +34,146 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <ring.h>
 #include <kernel/tty.h>
 #include <kernel/vga.h>
 
-// TODO: set via ioctl
-#define BELL_FREQ               750     // Hz
-#define BELL_TIME               100     // ms
-
-#define MAX_CSIPARAM            16      // ESC[p;q;r;s;...,n param count
-#define MAX_TABSTOP             80      // maximum number of tabstops allowed
+#define MAX_CSIPARAM            16      // ESC[p;q;r;s;... param count
+#define MAX_TABSTOP             256     // max number of tabstops per line
 #define TABSTOP_WIDTH           8       // TODO: make configurable
 
+//
+// 'Set Graphics Rendition' Color Codes
+//
+enum sgr_color {
+    _SGR_BRIGHT_BIT    = 0b1000,
+
+    SGR_BLACK          = 0,
+    SGR_RED            = 1,
+    SGR_GREEN          = 2,
+    SGR_YELLOW         = 3,
+    SGR_BLUE           = 4,
+    SGR_MAGENTA        = 5,
+    SGR_CYAN           = 6,
+    SGR_WHITE          = 7,
+    SGR_GRAY           = (_SGR_BRIGHT_BIT | SGR_BLACK),
+    SGR_BRIGHT_RED     = (_SGR_BRIGHT_BIT | SGR_RED),
+    SGR_BRIGHT_GREEN   = (_SGR_BRIGHT_BIT | SGR_GREEN),
+    SGR_BRIGHT_YELLOW  = (_SGR_BRIGHT_BIT | SGR_YELLOW),
+    SGR_BRIGHT_BLUE    = (_SGR_BRIGHT_BIT | SGR_BLUE),
+    SGR_BRIGHT_MAGENTA = (_SGR_BRIGHT_BIT | SGR_MAGENTA),
+    SGR_BRIGHT_CYAN    = (_SGR_BRIGHT_BIT | SGR_CYAN),
+    SGR_BRIGHT_WHITE   = (_SGR_BRIGHT_BIT | SGR_WHITE),
+};
+
+enum cursor_style {
+    CURSOR_BLOCK     = 1,
+    CURSOR_UNDERLINE = 3,
+    // 2 and 4 are non-blinking variants, which are not yet supported
+};
+
+//
+// VGA Terminal
+//
 struct terminal {
+    //
+    // immutable fields; cannot be controlled by user terminal input
+    //
+
     int number;                         // virtual terminal number
-    int state;                          // current control state
     bool initialized;                   // terminal has been switched to once
     uint32_t printing;                  // terminal is currently printing (atomic)
 
-    struct tty *tty;
-    int refcount;
+    struct tty *tty;                    // attached TTY
+    int refcount;                       // open TTY references
 
     uint16_t cols, rows;                // screen dimensions
     void *backbuf;                      // virtual frame buffer, always valid (i.e. when visible or hidden)
     uint16_t origin;                    // scan line starting word offset within frame buffer
 
-    char tabstops[MAX_TABSTOP];         // tab stops
+    struct keyboard_state kb_state;     // current keyboard state
 
+    //
+    // mutable fields; controllable by user input to terminal
+    //
+
+    char tabstops[MAX_TABSTOP>>3];      // tab stops (bitmap)
+
+    int seq_state;                      // current control sequence state
     int csiparam[MAX_CSIPARAM];         // control sequence parameters
     int paramidx;                       // control sequence parameter index
 
-    bool blink_on;                      // character blinking enabled
-    bool line_wrap_pending;             // a line wrap is pending
-
-    struct keyboard_state kb_state;     // current keyboard state
-
-    struct _char_attr {                 // character attributes
+    struct _display_state {
         union {
             struct {
-                uint32_t fg        : 8; // foreground color
-                uint32_t bg        : 8; // background color
-                uint32_t bold      : 1; // bright/high-intensity foreground
-                uint32_t faint     : 1; // dim foreground (simulated with dark gray)
-                uint32_t italic    : 1; // italicize (simulated with green)
-                uint32_t underline : 1; // underline (simulated with cyan)
-                uint32_t strike    : 1; // strikethrough (simulated with magenta)
-                uint32_t conceal   : 1; // hide text (foreground set to background)
-                uint32_t blink     : 1; // make character blink, or control background intensity
-                uint32_t invert    : 1; // swap background and foreground colors
+                uint32_t switch_to     : 8; // switch to selected terminal
+                uint32_t blanked       : 1; // display contents are temporarily hidden
+                uint32_t blink_on      : 1; // character blinking enabled
+                uint32_t reverse_video : 1; // all foreground and background colors swapped
+                uint32_t pending_wrap  : 1; // a line wrap is pending
+                uint32_t autowrap      : 1; // auto-wrap enabled (ESC[?7h/l)
             };
             uint32_t _value;
         };
-    } attr;
-    static_assert(sizeof(struct _char_attr) == 4, "_char_attr too large!");
+    } disp;
 
-    struct _cursor {                    // cursor parameters
+    struct _sgr_attr {
         union {
             struct {
-                uint64_t shape : 16;    //   start/end scan line
-                uint64_t x     : 12;    //   x position (4096 max)
-                uint64_t y     : 12;    //   y position (4096 max)
-                uint64_t hidden : 1;    //   visibility
+                uint32_t fg     : 4;    // foreground color
+                uint32_t bg     : 4;    // background color
+                uint32_t bold   : 1;    // bright/high-intensity foreground
+                uint32_t faint  : 1;    // dim foreground (simulated with dark gray)
+                uint32_t italic : 1;    // italicize (simulated with green)
+                uint32_t undline: 1;    // underline (simulated with cyan)
+                uint32_t strike : 1;    // strikethrough (simulated with magenta)
+                uint32_t conceal: 1;    // hide text (foreground set to background)
+                uint32_t blink  : 1;    // make character blink, or control background intensity
+                uint32_t invert : 1;    // swap background and foreground colors
             };
-            uint64_t _value;
+            uint32_t _value;
         };
-    } cursor;
-    static_assert(sizeof(struct _cursor) == 8, "_cursor too large!");
+    } sgr;                              // current character attributes
 
-    struct _csi_defaults {              // ESC [0m
-        struct _char_attr attr;
-        struct _cursor cursor;
-    } csi_defaults;
+    struct _cursor {
+        union {
+            struct {
+                union {
+                    struct {
+                        uint32_t top    : 8;    // start scan line within row
+                        uint32_t bottom : 8;    // end scan line within row
+                    };
+                    uint32_t shape : 16;    // packed scan start/end line
+                };
+                uint32_t x      : 8;    // x coord
+                uint32_t y      : 8;    // y coord
+                uint32_t hidden : 1;    // cursor invisible
+            };
+            uint32_t _value;
+        };
+    } cursor;                           // current cursor parameters
 
-    struct terminal_save_state {        // ESC 7 / ESC 8
-        bool blink_on;
-        char tabstops[MAX_TABSTOP];
-        uint32_t attr;
-        uint64_t cursor;                // ESC [s / ESC [u
-    } saved_state;
+    struct _term_defaults {
+        struct {
+            uint8_t fg      : 4;        // ESC[=0;0;<n>~  - default foreground color
+            uint8_t bg      : 4;        // ESC[=0;1;<n>~  - default background color
+            uint8_t faint   : 4;        // ESC[=0;2;<n>~  - default 'faint' color
+            uint8_t italic  : 4;        // ESC[=0;3;<n>~  - default 'italic' color
+            uint8_t undline : 4;        // ESC[=0;4;<n>~  - default 'underline' color
+            uint8_t strike  : 4;        // ESC[=0;9;<n>~  - default 'strikethrough' color
+        } sgr;
+        struct {
+            uint16_t hz;                // ESC[=7;<n>~    - default BEL frequency
+            uint16_t ms;                // ESC[=7;<n>~    - default BEL duration
+        } bell;
+        enum cursor_style cursor_style; // ESC[<n>q       - cursor style
+    } defaults;
+
+    struct _term_save_state {
+        char tabstops[MAX_TABSTOP>>3];
+        struct _display_state disp;
+        struct _sgr_attr sgr;
+        struct _cursor cursor;          // saved cursor pos (ESC [s / ESC [u)
+    } saved_state;                      // saved terminal state (ESC 7 / ESC 8)
 };
 
 // get virtual terminal; 0 returns current terminal
@@ -120,6 +182,9 @@ struct terminal * get_terminal(int num);
 // switch to a virtual terminal
 int switch_terminal(int num);
 
+// write directly to terminal, bypassing TTY
+void __terminal_putc(struct terminal *term, char c);
+
 // has the keyboard driver been configured
 // and is the keyboard currently usable?
 bool kb_avail(void);
@@ -127,10 +192,6 @@ bool kb_sysrq_enabled(void);        // will SysRq functions work?
 void kb_enable_sysrq(bool enable);  // enable/disable SysRq key
 bool kb_int3_enabled(void);         // will Ctrl+Alt+F3 trigger a debug break?
 void kb_enable_int3(bool enable);   // enable/disable debug break via keyboard
-
-// write directly to terminal, bypassing TTY
-void __terminal_putc(struct terminal *term, char c);
-
 
 /**
  * ASCII Control Characters

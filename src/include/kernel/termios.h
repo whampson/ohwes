@@ -49,6 +49,9 @@ struct winsize {
     unsigned short ws_ypixel;       // unused
 };
 
+#define __mkwinsize(rows, cols) \
+    (struct winsize) { (rows), (cols), 0, 0 }
+
 // c_iflag: input modes
 #define ICRNL           (1 << 0)    // map CR to NL (unless IGNCR is set)
 #define INLCR           (1 << 1)    // map NL to CR
