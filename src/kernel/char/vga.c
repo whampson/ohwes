@@ -83,7 +83,7 @@ void vga_get_fb_info(struct vga_fb_info *fb_info)
             fb_info->size_pages = 8;
             break;
         case VGA_GRFX_ENUM_MISC_MMAP_32K_HI:
-        default:
+        default:    // 2-bit fallback
             fb_info->phys_ptr = 0xB8000;
             fb_info->size_pages = 8;
             break;

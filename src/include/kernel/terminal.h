@@ -37,6 +37,26 @@
 #include <kernel/tty.h>
 #include <kernel/vga.h>
 
+#define EIGHT_DOT_MODE          0       // use 8 horizontal dots per char, instead of 9
+#define FAST_SCROLL             1       // uses VGA hardware regs to control scrolling
+
+#define MIN_BELL_HZ             20
+#define MAX_BELL_HZ             20000
+#define MIN_BELL_MS             100
+#define MAX_BELL_MS             5000
+#define MAX_BLANK_TIME          1440    // minutes
+
+#define DEFAULT_BELL_HZ         1000
+#define DEFAULT_BELL_MS         100
+#define DEFAULT_FG_COLOR        SGR_WHITE
+#define DEFAULT_BG_COLOR        SGR_BLACK
+#define DEFAULT_FAINT_COLOR     SGR_GRAY
+#define DEFAULT_ITALIC_COLOR    SGR_GREEN
+#define DEFAULT_UNDERLINE_COLOR SGR_CYAN
+#define DEFAULT_STRIKE_COLOR    SGR_MAGENTA
+#define DEFAULT_CURSOR_STYLE    CURSOR_UNDERLINE
+#define DEFAULT_BLANK_TIME      5       // minutes
+
 #define MAX_CSIPARAM            16      // ESC[p;q;r;s;... param count
 #define MAX_TABSTOP             256     // max number of tabstops per line
 #define TABSTOP_WIDTH           8       // TODO: make configurable
@@ -103,18 +123,17 @@ struct terminal {
     int paramidx;                       // control sequence parameter index
 
     struct _display_state {
-        union {
-            struct {
-                uint32_t switch_to     : 8; // switch to selected terminal
-                uint32_t blanked       : 1; // display contents are temporarily hidden
-                uint32_t blink_on      : 1; // character blinking enabled
-                uint32_t reverse_video : 1; // all foreground and background colors swapped
-                uint32_t pending_wrap  : 1; // a line wrap is pending
-                uint32_t autowrap      : 1; // auto-wrap enabled (ESC[?7h/l)
-            };
-            uint32_t _value;
-        };
+        uint8_t switch_to;              // switch to selected terminal
+        bool blink_on;                  // character blinking enabled
+        bool reverse_video;             // all foreground and background colors swapped
+        bool pending_wrap;              // a line wrap is pending
+        bool autowrap;                  // auto-wrap enabled (ESC[?7h/l)
+        bool blank_on;                  // display contents are temporarily hidden
     } disp;
+
+    bool autoblank;                 // automatic screen blanking enabled (ESC[=4~)
+    bool autoblank_on;              // automatic screen blanking currently in effect
+    uint64_t next_autoblank;        // uptime (ns) after which to blank the screen
 
     struct _sgr_attr {
         union {
@@ -137,19 +156,13 @@ struct terminal {
     struct _cursor {
         union {
             struct {
-                union {
-                    struct {
-                        uint32_t top    : 8;    // start scan line within row
-                        uint32_t bottom : 8;    // end scan line within row
-                    };
-                    uint32_t shape : 16;    // packed scan start/end line
-                };
-                uint32_t x      : 8;    // x coord
-                uint32_t y      : 8;    // y coord
-                uint32_t hidden : 1;    // cursor invisible
+                uint16_t top    : 8;    // start scan line within row
+                uint16_t bottom : 8;    // end scan line within row
             };
-            uint32_t _value;
+            uint16_t shape;             // packed scan start/end line
         };
+        uint8_t x, y;                   // visible display coords
+        bool hidden;                    // cursor invisible
     } cursor;                           // current cursor parameters
 
     struct _term_defaults {
@@ -165,6 +178,7 @@ struct terminal {
             uint16_t hz;                // ESC[=7;<n>~    - default BEL frequency
             uint16_t ms;                // ESC[=7;<n>~    - default BEL duration
         } bell;
+        uint16_t autoblank_interval;    // ESC[=4;<n>~    - screen blank timeout, in minutes
         enum cursor_style cursor_style; // ESC[<n>q       - cursor style
     } defaults;
 
@@ -184,6 +198,9 @@ int switch_terminal(int num);
 
 // write directly to terminal, bypassing TTY
 void __terminal_putc(struct terminal *term, char c);
+
+// wake active terminal from screensaver
+void poke_blanked_terminal(struct terminal *term);
 
 // has the keyboard driver been configured
 // and is the keyboard currently usable?

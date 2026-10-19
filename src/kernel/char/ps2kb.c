@@ -724,6 +724,8 @@ static void __isr kb_interrupt(int irq, struct iregs *regs)
     // Handle Special Keystrokes
     // ----------------------------------------------------------------
 
+    poke_blanked_terminal(term);
+
 #ifdef DEBUG
     // Ctrl+Alt+<FN>: crash function select
     if (input_state->ctrl && input_state->alt && is_fnkey(key)) {

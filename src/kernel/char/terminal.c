@@ -50,25 +50,6 @@
 static_assert(VGA_FB_SELECT == VGA_MEMORY_32K_HI);  // only supported region for now
 static_assert(VGA_FB_PAGES == 2);                   // for double buffering
 
-#define EIGHT_DOT_MODE          0       // use 8 horizontal dots per char, instead of 9
-#define FAST_SCROLL             1       // uses VGA hardware regs to control scrolling
-#define MAX_PRINT_LEN           4096    // chars max allowed for print_to_terminal()
-
-#define MIN_BELL_HZ             20
-#define MAX_BELL_HZ             20000
-#define MIN_BELL_MS             100
-#define MAX_BELL_MS             5000
-
-#define DEFAULT_BELL_HZ         1000
-#define DEFAULT_BELL_MS         100
-#define DEFAULT_FG_COLOR        SGR_WHITE
-#define DEFAULT_BG_COLOR        SGR_BLACK
-#define DEFAULT_FAINT_COLOR     SGR_GRAY
-#define DEFAULT_ITALIC_COLOR    SGR_GREEN
-#define DEFAULT_UNDERLINE_COLOR SGR_CYAN
-#define DEFAULT_STRIKE_COLOR    SGR_MAGENTA
-#define DEFAULT_CURSOR_STYLE    CURSOR_UNDERLINE
-
 // TODO: rename to 'vgaterm.c'
 // TODO: blank screen after some set amount of time
 // TODO: smooth scroll? :D
@@ -351,6 +332,10 @@ static void enable_blink(struct terminal *term);                    // ESC [=5~
 static void disable_blink(struct terminal *term);                   // ESC [=6~
 static void blank_screen(struct terminal *term);                    // ESC [=2~
 static void unblank_screen(struct terminal *term);                  // ESC [=3~
+static void set_autoblank_timeout(struct terminal *term, int min);  // ESC [=4;<n>~
+static void set_autoblank(struct terminal *term);
+static void clear_autoblank(struct terminal *term);
+static void rearm_autoblank(struct terminal *term);
 static void show_cursor(struct terminal *term);                     // ESC [?25h
 static void hide_cursor(struct terminal *term);                     // ESC [?25l
 
@@ -393,6 +378,8 @@ static int sgr_to_vga_color(int sgr_color);
 static struct vga_cell * get_terminal_fb(struct terminal *term);
 static void set_fb_cell(struct terminal *term, uint16_t pos, char c);
 static void set_sgr(const struct terminal *term, struct vga_cell *cell, struct _sgr_attr *sgr);
+
+static void /*__isr*/ autoblank_timer(int irq, struct iregs *regs);
 
 // ----------------------------------------------------------------------------
 // initialization
@@ -462,6 +449,8 @@ __init void init_terminal_driver(void)
     register_console(&vt_console);
 #endif
 
+    irq_register(IRQ_TIMER, autoblank_timer);
+
     // switch to configured default terminal
     if (s_curr_term != CONFIG_INITIAL_VT) {
         if (switch_terminal(CONFIG_INITIAL_VT)) {
@@ -492,6 +481,7 @@ static void initialize_terminal(int num, struct terminal *term)
     term->defaults.sgr.italic = DEFAULT_ITALIC_COLOR;
     term->defaults.sgr.undline = DEFAULT_UNDERLINE_COLOR;
     term->defaults.sgr.strike = DEFAULT_STRIKE_COLOR;
+    term->defaults.autoblank_interval = DEFAULT_BLANK_TIME;
     terminal_defaults(term);
     term->initialized = true;
 }
@@ -507,12 +497,13 @@ static void terminal_defaults(struct terminal *term)
     memset(term->csiparam, -1, sizeof(term->csiparam));
     term->paramidx = 0;
     term->seq_state = S_NORM;
-    term->disp._value = 0;
+    memset(&term->disp, 0, sizeof(struct _display_state));
     term->disp.autowrap = true;
+    set_autoblank_timeout(term, term->defaults.autoblank_interval);
     term->sgr._value = 0;
     term->sgr.bg = term->defaults.sgr.bg;
     term->sgr.fg = term->defaults.sgr.fg;
-    term->cursor._value = 0;
+    memset(&term->cursor, 0, sizeof(struct _cursor));
     cursor_style(term, term->defaults.cursor_style);
     save_terminal(term);
 }
@@ -549,6 +540,9 @@ int switch_terminal(int num)
     s_curr_term = next->number;
     s_curr_page = (s_curr_page & 1) ^ 1;
     memcpy(get_curr_hwfb_page(), next->backbuf, VT_FB_SIZE);
+
+    // apply display state
+    rearm_autoblank(next);
     apply_vga_state(next);
 
     // preserve current held-down key state, apply other terminal's keyboard state
@@ -579,6 +573,11 @@ struct terminal * get_terminal(int num)
     }
 
     return term;
+}
+
+void poke_blanked_terminal(struct terminal *term)
+{
+    rearm_autoblank(term);
 }
 
 // ----------------------------------------------------------------------------
@@ -715,9 +714,10 @@ write_vga:
     if (update_attr || update_char) {
         set_fb_cell(term, char_pos, (update_char) ? c : '\0');
     }
-    if (update_cursor_pos && is_current_terminal(term)) {
+    if (is_current_terminal(term) && update_cursor_pos) {
         apply_cursor_pos(term);
     }
+    poke_blanked_terminal(term);
 
 done:
     clear_bit(&term->printing, 0);
@@ -1072,7 +1072,9 @@ static void pvt_sequence(struct terminal *term, unsigned char c)
             unblank_screen(term);
             break;
         case 4:     // ESC [=4;<n>~         - set screen blank timeout interval to n minutes
-            // TODO
+            param_clamp_min(1, 0);
+            param_clamp_max(1, MAX_BLANK_TIME);
+            set_autoblank_timeout(term, term->csiparam[1]);
             break;
         case 5:     // ESC [=5~             - enable VGA character blink
             enable_blink(term);
@@ -1312,7 +1314,7 @@ static void reverse_video(struct terminal *term)
 
 static void unblank_screen(struct terminal *term)
 {
-    term->disp.blanked = false;
+    term->disp.blank_on = false;
     if (is_current_terminal(term)) {
         apply_display_blank(term);
     }
@@ -1320,9 +1322,77 @@ static void unblank_screen(struct terminal *term)
 
 static void blank_screen(struct terminal *term)
 {
-    term->disp.blanked = true;
+    term->disp.blank_on = true;
     if (is_current_terminal(term)) {
         apply_display_blank(term);
+    }
+}
+
+static void set_autoblank(struct terminal *term)
+{
+    term->autoblank_on = true;
+    if (is_current_terminal(term)) {
+        apply_display_blank(term);
+    }
+}
+
+static void clear_autoblank(struct terminal *term)
+{
+    term->autoblank_on = false;
+    if (is_current_terminal(term)) {
+        apply_display_blank(term);
+    }
+}
+
+static void set_autoblank_timeout(struct terminal *term, int min)
+{
+    if (min > MAX_BLANK_TIME) {
+        min = MAX_BLANK_TIME;
+    }
+    else if (min < 0) {
+        min = 0;
+    }
+
+    term->defaults.autoblank_interval = min;
+
+    if (min == 0) {
+        term->autoblank = false;
+        term->next_autoblank = 0;
+    }
+    else {
+        term->autoblank = true;
+        rearm_autoblank(term);
+    }
+
+    if (term->autoblank_on) {
+        clear_autoblank(term);
+    }
+}
+
+static void rearm_autoblank(struct terminal *term)
+{
+    if (!term->autoblank) {
+        return;
+    }
+
+    term->next_autoblank = get_uptime()
+        + (term->defaults.autoblank_interval * 60 * 1000000000ULL);
+
+    if (term->autoblank_on) {
+        clear_autoblank(term);
+    }
+}
+
+static void /*__isr*/ autoblank_timer(int irq, struct iregs *regs)
+{
+    assert(irq == IRQ_TIMER);
+    (void) regs;
+
+    uint64_t now = get_uptime();
+    struct terminal *term = get_terminal(0);
+
+    if (term->autoblank && !term->autoblank_on && now >= term->next_autoblank) {
+        set_autoblank(term);   // TODO: use a DPC?
     }
 }
 
@@ -1689,7 +1759,7 @@ static void apply_display_blink(const struct terminal *term)
 
 static void apply_display_blank(const struct terminal *term)
 {
-    vga_set_screen_blank(term->disp.blanked);
+    vga_set_screen_blank(term->disp.blank_on || term->autoblank_on);
 }
 
 static void apply_display_state(const struct terminal *term)
