@@ -55,6 +55,7 @@
 #define MAX_RESENDS         3       // max command resends (0xFE) before giving up
 #define MAX_STRAYS          6       // max stray chars to accept during command sequence
 #define MAX_CMDLOOP         32      // max number of iterations in command send loop
+#define IDLE_TIMEOUT_MS     1000    // keyboard considered idle after this long without input
 
 static inline void atomic_inc(uint32_t volatile *value)
 {
@@ -99,6 +100,7 @@ struct ps2kb
     volatile bool pending_sysrq;    // a SysRq action is armed
     volatile bool ih_active;        // keyboard interrupt handler active
     volatile bool hw_connected;     // keyboard hardware is connected
+    volatile uint64_t last_activity;// uptime (ns) of last genuine scancode
 
     // keyboard software state
     bool ps2ctl_init;       // PS/2 controller initialized
@@ -171,6 +173,7 @@ static void __dpc __ps2kb_sysrq_dpc(void *arg);
 static bool ps2kb_selftest(void);
 static uint16_t ps2kb_identify(void);
 static bool ps2kb_is_connected(void);
+static bool ps2kb_is_idle(void);
 
 static bool ps2kb_set_scanmode(uint8_t sc_set);
 static bool ps2kb_set_leds(uint8_t leds);
@@ -290,6 +293,8 @@ static bool ps2kb_init(void)
         (SCANCODE_SET == 2) ? "AT" :
         (SCANCODE_SET == 3) ? "MF2" : "???");
 
+    static_assert(SCANCODE_SET == 1, "do not change SCANCODE_SET!!");
+
     // set typematic properties
     pr_debug("set typematic");
     if (!ps2kb_set_typematic(TYPEMATIC_BYTE)) {
@@ -357,8 +362,8 @@ static void ps2kb_on_connect(void)
     restore_flags(flags);
 
     // give the keyboard some time to settle after hotplug
-    const uint64_t PollTime = 2; // ms
-    uint64_t wait = get_uptime() + (PollTime * 1000000);
+    const uint64_t c_poll_time_ms = 2;
+    uint64_t wait = get_uptime() + (c_poll_time_ms * 1000000ULL);
     while (get_uptime() < wait) {
         __pause();
     }
@@ -370,6 +375,7 @@ static void ps2kb_on_connect(void)
     if (ps2kb_init()) {
         pr_info("keyboard connected\n");
         g_kb->hw_connected = true;
+        g_kb->last_activity = get_uptime();
         irq_unmask(IRQ_KEYBOARD);
     }
     else {
@@ -387,8 +393,20 @@ static void __dpc __ps2kb_hotplug_detect_dpc(void *arg)
     cli_save(flags);
     g_kb->pending_hotplug = false;
     was = g_kb->hw_connected;
-    now = ps2kb_is_connected();
     restore_flags(flags);
+
+    // Only echo-probe when the keyboard is disconnected (reconnection) or has
+    // been idle (disconnection). Probing a busy keyboard queues the 0xEE echo
+    // reply behind pending scancodes, which then leak into the interrupt
+    // handler as stray echo replies.
+    if (!was || ps2kb_is_idle()) {
+        cli_save(flags);
+        now = ps2kb_is_connected();
+        restore_flags(flags);
+    }
+    else {
+        now = was;
+    }
 
     if (was && !now) {
         ps2kb_on_disconnect();
@@ -549,6 +567,9 @@ static void __isr kb_interrupt(int irq, struct iregs *regs)
     if (!g_kb->hw_connected) {
         goto done;
     }
+
+    // note the activity so the hotplug probe doesn't disrupt active typing
+    g_kb->last_activity = get_uptime();
 
     // check for some unexpected scancodes
     switch (sc) {
@@ -928,12 +949,15 @@ static uint16_t ps2kb_identify(void)
     return (hi << 8) | lo;
 }
 
+static bool ps2kb_is_idle(void)
+{
+    const uint64_t c_idle_timeout_ns = IDLE_TIMEOUT_MS * 1000000ULL;
+    return (get_uptime() - g_kb->last_activity) >= c_idle_timeout_ns;
+}
+
 static bool ps2kb_is_connected(void)
 {
     bool connected = false;
-
-    // TODO: sometimes I see "stray char 0xEE"
-    // when pressing many keys because of this
 
     ps2_flush();
     for (int i = 0; i < MAX_PROBES; i++) {
