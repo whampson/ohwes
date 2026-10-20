@@ -41,19 +41,23 @@
 #include <kernel/termios.h>
 #include <kernel/vga.h>
 
-#define VGA_FB_SELECT           VGA_MEMORY_32K_HI               // B8000-BFFFF
-#define VGA_FB_SIZE             (32 << KB_SHIFT)                // total VGA memory in bytes
-#define VGA_FB_PAGES            2                               // num frame buffer pages (not MMU pages)
-#define VT_FB_SIZE              (VGA_FB_SIZE / VGA_FB_PAGES)    // visible frame buffer size
-#define VT_FB_WORDS             (VT_FB_SIZE / sizeof(struct vga_cell)) // chars in frame buffer
+#define VGA_SIZE        (32 << KB_SHIFT)    // total VGA memory in bytes
+#define VT_FB_SIZE      (VGA_SIZE / 2)      // visible frame buffer size
+#define VT_FB_WORDS     (VT_FB_SIZE / 2)    // chars in frame buffer
 
-static_assert(VGA_FB_SELECT == VGA_MEMORY_32K_HI);  // only supported region for now
-static_assert(VGA_FB_PAGES == 2);                   // for double buffering
+// We use double buffering to allow for flickerless terminal switching when
+// using fast scrolling. If we only used one buffer, the act of writing-in the
+// new terminal's frame buffer and setting the CRTC scan start address causes
+// a visible "blip" of previously shown text. Double buffering allows us to
+// write the new terminal's frame buffer into VGA memory outside the visible
+// region, then set the scan start address to an offset within the new
+// terminal's page, resulting in only one visual update.
 
 // TODO: rename to 'vgaterm.c'
 // TODO: blank screen after some set amount of time
 // TODO: smooth scroll? :D
 // TODO: Shift+PgUp / Shift+PgDn for terminal scrollback
+// TODO: possible to show real underline using Underline Location Register?
 
 static int s_curr_page = 0;
 static int s_curr_term = CONFIG_INITIAL_VT;
@@ -386,22 +390,21 @@ static void /*__isr*/ autoblank_timer(int irq, struct iregs *regs);
 
 __init void init_terminal_driver(void)
 {
-    // set frame buffer address
-    vga_set_fb_base(VGA_FB_SELECT);
+    // get frame buffer address
     vga_get_fb_info(&s_vga_fb);
 
     // ensure VGA aperture mapped uncached  (TODO: improve this interface)
-    update_page_mappings(s_vga_fb.ptr, s_vga_fb.phys_ptr, (VT_FB_SIZE >> PAGE_SHIFT),
+    update_page_mappings(s_vga_fb.ptr, s_vga_fb.phys_ptr, s_vga_fb.size >> PAGE_SHIFT,
         _PAGE_PRESENT | _PAGE_WRITABLE | _PAGE_PCD | _PAGE_PWT);
 
-    pr_debug("vga: frame buffer %u pages %p-%p\n",
-        s_vga_fb.size_pages, KERNEL_ADDR(s_vga_fb.phys_ptr),
-        KERNEL_ADDR(s_vga_fb.phys_ptr + (s_vga_fb.size_pages << PAGE_SHIFT)-1));
+    pr_debug("vga: frame buffer mapped %zu pages %p-%p\n",
+        s_vga_fb.size >> PAGE_SHIFT, KERNEL_ADDR(s_vga_fb.phys_ptr),
+        KERNEL_ADDR(s_vga_fb.phys_ptr + (s_vga_fb.size-1)));
 
     uint16_t rows = vga_get_rows();
     uint16_t cols = vga_get_cols();
 
-    pr_debug("vga: window size %dx%x\n", cols, rows);
+    pr_debug("vga: console window size %dx%d\n", cols, rows);
     assert(cols <= MAX_TABSTOP); // shouldn't be an issue for a while...
 
 #if EIGHT_DOT_MODE

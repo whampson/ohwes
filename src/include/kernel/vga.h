@@ -243,7 +243,7 @@ enum vga_fb_select {
 struct vga_fb_info {
     struct vga_cell *ptr;   // frame buffer virtual address
     intptr_t phys_ptr;      // frame buffer physical address
-    uint16_t size_pages;    // frame buffer total size in pages
+    size_t size;            // frame buffer total size bytes
 };
 
 /**

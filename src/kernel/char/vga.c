@@ -72,20 +72,20 @@ void vga_get_fb_info(struct vga_fb_info *fb_info)
     switch (fb_select) {
         case VGA_GRFX_ENUM_MISC_MMAP_128K:
             fb_info->phys_ptr = 0xA0000;
-            fb_info->size_pages = 32;
+            fb_info->size = (128 << KB_SHIFT);
             break;
         case VGA_GRFX_ENUM_MISC_MMAP_64K:
             fb_info->phys_ptr = 0xA0000;
-            fb_info->size_pages = 16;
+            fb_info->size = (64 << KB_SHIFT);
             break;
         case VGA_GRFX_ENUM_MISC_MMAP_32K_LO:
             fb_info->phys_ptr = 0xB0000;
-            fb_info->size_pages = 8;
+            fb_info->size = (32 << KB_SHIFT);
             break;
         case VGA_GRFX_ENUM_MISC_MMAP_32K_HI:
         default:    // 2-bit fallback
             fb_info->phys_ptr = 0xB8000;
-            fb_info->size_pages = 8;
+            fb_info->size = (32 << KB_SHIFT);
             break;
     }
 
