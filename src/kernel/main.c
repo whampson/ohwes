@@ -52,11 +52,15 @@ extern __init void init_mm(void);
 extern __init void init_io(void);
 extern __init void init_fs(void);
 extern __init void init_tty(void);
+__noreturn void ring3_init(void);
 
-static __init void print_boot_info(void);
-static __init void print_cpu_info(void);
-static __init void print_kernel_image_sections(void);
-static __init void print_page_mappings(void);
+#if DEBUG
+static void print_boot_info(void);
+static void print_cpu_info(void);
+static void print_vga_info(void);
+static void print_kernel_image_sections(void);
+static void print_page_mappings(void);
+#endif
 
 static __init __noreturn void go_to_ring3(void *entry, void *stack);
 
@@ -64,67 +68,59 @@ static __init __noreturn void go_to_ring3(void *entry, void *stack);
 extern void run_tests(void);
 #endif
 
-void init(void);
-
-// init globals
 __init struct boot_info *g_boot;
 
 __fastcall __init __noreturn void kmain(struct boot_info **info)
 {
-    g_boot = *info; // copy boot info pointer kernel memory
-                    // TODO: validate that this ptr isn't bogus
+    // NOTE: Interrupts are ON! Is that crazy? Maybe...
 
-#if PRINT_LOGO
+    g_boot = *info; // copy boot info pointer kernel memory
+                    // TODO: validate that this ptr isn't bogus, magic number perhaps?
+
+#if CONFIG_PRINT_LOGO
+    pr_info("\r\n");
     pr_info(ANSI_BOLD "  ____  __ __   _      __________");
     pr_info(ANSI_BOLD " / __ \\/ // /__| | /| / / __/ __/");
     pr_info(ANSI_BOLD "/ /_/ / _  /___/ |/ |/ / _/_\\ \\  ");
     pr_info(ANSI_BOLD "\\____/_//_/    |__/|__/___/___/  ");
 #endif
+
     pr_info(ANSI_BOLD "%s %s (gcc %s) %s %s\n", OS_NAME, OS_VERSION, __VERSION__, __DATE__, __TIME__);
-    pr_info(ANSI_BOLD "%s\n", OS_COPYRIGHT);  // printing will lazy-initialize terminal
+    pr_info(ANSI_BOLD "%s\n", OS_COPYRIGHT ANSI_RESET);  // printing will lazy-initialize terminal
+
+#if DEBUG
     print_boot_info();
     print_cpu_info();
+    print_vga_info();
+#endif
 
-    init_mm();
-    init_io();
-    init_fs();
-    init_tty();
+    // initialize the kernel
+    init_mm();      // alloc/free pages, pools
+    init_io();      // i/o port ranges (not used much yet)
+    init_fs();      // virtual file system infrastructure
+    init_tty();     // character i/o system
 
-// #if TEST_BUILD
-//     run_tests(); // TODO lol
-// #endif
+    vga_crtc_write(VGA_CRTC_REG_UL, 13);
+    pr_info("underline location = %d\n", vga_crtc_read(VGA_CRTC_REG_UL));
 
-    pr_info("switching to ring 3...\n");
-    go_to_ring3(init, __ustack_end);    // TODO: declare user stack in high memory
-    for (;;);
-
-    // for future reference...
-    // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
-}
-
-static __init __noreturn void go_to_ring3(void *entry, void *stack)
-{
-    assert(getpl() == KERNEL_PL);
-
-    // tweak flags
-    struct eflags eflags;
-    cli_save(eflags);
-    eflags.intf = 1;        // enable interrupts
-
-    // ring 3 initial register context
+    // set up ring 3 initial register context
     struct iregs regs = {};
     regs.cs = USER_CS;
     regs.ss = USER_DS;
     regs.ds = USER_DS;
     regs.es = USER_DS;
-    regs.ebp = (uint32_t) stack;
-    regs.esp = (uint32_t) stack;
-    regs.eip = (uint32_t) entry;
-    regs.eflags = eflags._value;
+    regs.ebp = (uint32_t) __ustack_end;
+    regs.esp = (uint32_t) __ustack_end;
+    regs.eip = (uint32_t) ring3_init;
+    cli_save(regs.eflags);
+    regs.eflags |= EFLAGS_IF;       // interrupts enabled
+    regs.eflags &= ~EFLAGS_IOPL;    // I/O port access restricted
 
     // drop to ring 3
     switch_context(&regs);
-    for (;;);
+
+    // for future reference...
+    // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
 }
 
 static __init void print_boot_info(void)
@@ -143,8 +139,8 @@ static __init void print_boot_info(void)
     pr_info("bios-boot: %s PS/2 mouse, %s game port\n",
         A_OR_B(g_boot->hwflags.has_ps2mouse, "has", "no"),
         A_OR_B(g_boot->hwflags.has_gameport, "has", "no"));
-    pr_info("bios-boot: video mode is %02lXh\n",
-        g_boot->vga_mode & 0x7F);
+    pr_info("bios-boot: video mode=%02Xh page=%02Xh cols=%d\n",
+        g_boot->vga_mode, g_boot->vga_page, g_boot->vga_cols);
     if (g_boot->ebda_base) {
         pr_info("bios-boot: EBDA=%08lX,%lXh\n",
             g_boot->ebda_base, EBDA_TOP - g_boot->ebda_base);
@@ -161,15 +157,17 @@ static __init void print_cpu_info(void)
 
     #define YN(cond)    A_OR_B(cond, "yes","no")
 
-    pr_info("%s: family=%02Xh model=%02Xh stepping=%02Xh type=%02Xh\n",
+    pr_info("cpu: %s family %02Xh model %02Xh stepping %02Xh type %02Xh\n",
         cpuid.vendor_id, cpuid.family, cpuid.model, cpuid.stepping, cpuid.type);
-    pr_info("%s\n", cpuid.brand_name);
-    pr_info("  on-chip FPU? %s\n", YN(cpuid.fpu_support));
-    pr_info("  large pages? %s\n", YN(cpuid.pse_support));
-    pr_info(" global pages? %s\n", YN(cpuid.pge_support));
-    // pr_info("  PAT support? %s\n", YN(cpuid.pat_support));
-    pr_info("  TSC support? %s\n", YN(cpuid.tsc_support));
-    pr_info("  MSR support? %s\n", YN(cpuid.msr_support));
+    if (strcmp(cpuid.brand_name, "") != 0) {
+        pr_info("cpu: \"%s\"\n", cpuid.brand_name);
+    }
+    pr_info("cpu:   on-chip FPU? %s\n", YN(cpuid.fpu_support));
+    pr_info("cpu:   large pages? %s\n", YN(cpuid.pse_support));
+    pr_info("cpu:  global pages? %s\n", YN(cpuid.pge_support));
+    // pr_info("cpu:  PAT support? %s\n", YN(cpuid.pat_support));
+    pr_info("cpu:   TSC support? %s\n", YN(cpuid.tsc_support));
+    pr_info("cpu:   MSR support? %s\n", YN(cpuid.msr_support));
 
     #undef YN
 }
@@ -270,6 +268,62 @@ static __init void print_page_mappings(void)
     }
 }
 
+static __init void print_vga_info(void)
+{
+    if (!g_boot->has_vgabios_table) {
+        return;
+    }
+
+    struct vgabios_table *vgabios_table = KERNEL_ADDR(g_boot->vgabios_table_ptr);
+
+    uint16_t static_state_base = (uint16_t) vgabios_table->static_state_addr;
+    uint16_t static_state_seg = (uint16_t) (vgabios_table->static_state_addr >> 16);
+
+    void *_vgabios_static_state = (void *) (static_state_seg << 4) + static_state_base;
+    struct vgabios_static_state *vgabios_static_state = KERNEL_ADDR(_vgabios_static_state);
+
+    pr_info("vga: vgabios_table (INT-10h,AH=1Bh):\n");
+    pr_info("vga:   vgabios_static_state found at %p:\n", _vgabios_static_state);
+    pr_info("vga:     modes_supported = ");
+    for (int i = 0, m = 0; i < countof(vgabios_static_state->modes_supported); i++) {
+        for (int b = 0; b < 8; b++, m++) {
+            if (vgabios_static_state->modes_supported[i] & (1 << b)) {
+                pr_cont("%X ", m);
+            }
+        }
+    }
+    pr_info("vga:     scan_lines_supported = %d\n", vgabios_static_state->scan_lines_supported);
+    pr_info("vga:     num_char_blocks = %d\n", vgabios_static_state->num_char_blocks);
+    pr_info("vga:     max_active_char_blocks = %d\n", vgabios_static_state->max_active_char_blocks);
+    pr_info("vga:     misc_flags = %04Xh\n", vgabios_static_state->misc_flags);
+    pr_info("vga:     saveptr_flags = %02Xh\n", vgabios_static_state->saveptr_flags);
+    pr_info("vga:   video_mode = %d\n", vgabios_table->video_mode);
+    pr_info("vga:   num_cols = %d\n", vgabios_table->num_cols);
+    pr_info("vga:   regen_buf_size = %d\n", vgabios_table->regen_buf_size);
+    pr_info("vga:   regen_buf_addr = %d\n", vgabios_table->regen_buf_addr);
+    for (int i = 0; i < countof(vgabios_table->cursor_pos); i++) {
+        pr_info("vga:   cursor_pos[%d] = %04Xh\n", i, vgabios_table->cursor_pos[i]);
+    }
+    pr_info("vga:   cursor_shape = %04Xh\n", vgabios_table->cursor_shape);
+    pr_info("vga:   curr_page = %d\n", vgabios_table->curr_page);
+    pr_info("vga:   crtc_port_addr = %04Xh\n", vgabios_table->crtc_port_addr);
+    pr_info("vga:   port_3x8h_setting = %d\n", vgabios_table->port_3x8h_setting);
+    pr_info("vga:   port_3x9h_setting = %d\n", vgabios_table->port_3x9h_setting);
+    pr_info("vga:   max_row_index = %d\n", vgabios_table->max_row_index);
+    pr_info("vga:   char_height = %d\n", vgabios_table->char_height);
+    pr_info("vga:   curr_display_dcc = %d\n", vgabios_table->curr_display_dcc);
+    pr_info("vga:   alt_display_dcc = %d\n", vgabios_table->alt_display_dcc);
+    pr_info("vga:   num_colors = %d\n", vgabios_table->num_colors);
+    pr_info("vga:   num_pages = %d\n", vgabios_table->num_pages);
+    pr_info("vga:   num_active_scan_lines = %d\n", vgabios_table->num_scan_lines);
+    pr_info("vga:   primary_char_block = %d\n", vgabios_table->primary_char_block);
+    pr_info("vga:   secondary_char_block = %d\n", vgabios_table->secondary_char_block);
+    pr_info("vga:   misc_flags = %02Xh\n", vgabios_table->misc_flags);
+    pr_info("vga:   non_vga_mode_support = %02Xh\n", vgabios_table->non_vga_mode_support);
+    pr_info("vga:   vidmem_avail = %d\n", vgabios_table->vidmem_avail);
+    pr_info("vga:   saveptr_state_flags = %02Xh\n", vgabios_table->saveptr_state_flags);
+    pr_info("vga:   display_info_and_status = %02Xh\n", vgabios_table->display_info_and_status);
+}
 
 // ----------------------------------------------------------------------------
 // ----------------------------- Ring 3 ---------------------------------------
@@ -288,7 +342,7 @@ static __init void print_page_mappings(void)
 })
 
 
-void init(void)
+__noreturn void ring3_init(void)
 {
     // TODO: this should be /bin/init
     assert(getpl() == USER_PL);

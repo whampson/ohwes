@@ -140,7 +140,7 @@ static_assert(offsetof(struct iregs, esp) == IREGS_ESP, "offsetof(struct iregs, 
 static_assert(offsetof(struct iregs, ss) == IREGS_SS, "offsetof(struct iregs, ss)");
 static_assert(sizeof(struct iregs) == SIZEOF_IREGS, "sizeof(struct iregs)");
 
-__fastcall void switch_context(struct iregs *regs);     // see entry.S
+__fastcall __noreturn void switch_context(struct iregs *regs);     // see entry.S
 
 
 /**
