@@ -250,50 +250,82 @@ void vga_set_line_compare(uint16_t scan_line)
     vga_crtc_write_n(crtc, data, countof(crtc));
 }
 
+uint16_t vga_crtc_addr_port(void)
+{
+    return (inb(VGA_EXTL_PORT_MO_R) & VGA_EXTL_FLD_MO_IOAS)
+        ? VGA_CRTC_PORT_ADDR : VGA_CRTC_PORT_ADDR_MONO;
+}
+
+uint16_t vga_crtc_data_port(void)
+{
+    return (inb(VGA_EXTL_PORT_MO_R) & VGA_EXTL_FLD_MO_IOAS)
+        ? VGA_CRTC_PORT_DATA : VGA_CRTC_PORT_DATA_MONO;
+}
+
+uint16_t vga_is1_port(void)
+{
+    return (inb(VGA_EXTL_PORT_MO_R) & VGA_EXTL_FLD_MO_IOAS)
+        ? VGA_EXTL_PORT_IS1 : VGA_EXTL_PORT_IS1_MONO;
+}
+
 void vga_crtc_read_n(const uint8_t *regs, uint8_t *values, size_t n)
 {
     uint32_t flags;
-
     cli_save(flags);
+
+    const uint16_t crtc_addr_port = vga_crtc_addr_port();
+    const uint16_t crtc_data_port = crtc_addr_port + 1;
+
     for (size_t i = 0; i < n; i++) {
-        outb(VGA_CRTC_PORT_ADDR, regs[i]);          // TODO: use IOAS! (XOR 6)
-        values[i] = inb(VGA_CRTC_PORT_DATA);
+        outb(crtc_addr_port, regs[i]);
+        values[i] = inb(crtc_data_port);
     }
+
     restore_flags(flags);
 }
 
 void vga_crtc_write_n(const uint8_t *regs, const uint8_t *values, size_t n)
 {
     uint32_t flags;
-
     cli_save(flags);
+
+    const uint16_t crtc_addr_port = vga_crtc_addr_port();
+    const uint16_t crtc_data_port = crtc_addr_port + 1;
+
     for (size_t i = 0; i < n; i++) {
-        outb(VGA_CRTC_PORT_ADDR, regs[i]);
-        outb(VGA_CRTC_PORT_DATA, values[i]);
+        outb(crtc_addr_port, regs[i]);
+        outb(crtc_data_port, values[i]);
     }
+
     restore_flags(flags);
 }
 
 uint8_t vga_crtc_read(uint8_t reg)
 {
     uint32_t flags;
-    uint8_t data;
-
     cli_save(flags);
-    outb(VGA_CRTC_PORT_ADDR, reg);
-    data = inb(VGA_CRTC_PORT_DATA);
-    restore_flags(flags);
 
+    const uint16_t crtc_addr_port = vga_crtc_addr_port();
+    const uint16_t crtc_data_port = crtc_addr_port + 1;
+
+    outb(crtc_addr_port, reg);
+    uint8_t data = inb(crtc_data_port);
+
+    restore_flags(flags);
     return data;
 }
 
 void vga_crtc_write(uint8_t reg, uint8_t data)
 {
     uint32_t flags;
-
     cli_save(flags);
-    outb(VGA_CRTC_PORT_ADDR, reg);
-    outb(VGA_CRTC_PORT_DATA, data);
+
+    const uint16_t crtc_addr_port = vga_crtc_addr_port();
+    const uint16_t crtc_data_port = crtc_addr_port + 1;
+
+    outb(crtc_addr_port, reg);
+    outb(crtc_data_port, data);
+
     restore_flags(flags);
 }
 
@@ -350,8 +382,8 @@ uint8_t vga_attr_read(uint8_t reg)
     uint8_t data;
 
     cli_save(flags);
-    (void) inb(VGA_EXTL_PORT_IS1);
-    outb(VGA_ATTR_PORT_ADDR, VGA_ATTR_FLD_ADDR_PAS | addr); /* keep PAS set */
+    (void) inb(vga_is1_port()); // reset index/data flip-flop
+    outb(VGA_ATTR_PORT_ADDR, VGA_ATTR_FLD_ADDR_PAS | addr);     // keep PAS set
     data = inb(VGA_ATTR_PORT_DATA_R);
     restore_flags(flags);
 
@@ -364,8 +396,8 @@ void vga_attr_write(uint8_t reg, uint8_t data)
     uint8_t addr = reg & VGA_ATTR_FLD_ADDR_ADDR;
 
     cli_save(flags);
-    (void) inb(VGA_EXTL_PORT_IS1);
-    outb(VGA_ATTR_PORT_ADDR, VGA_ATTR_FLD_ADDR_PAS | addr); /* keep PAS set */
+    (void) inb(vga_is1_port()); // reset index/data flip-flop
+    outb(VGA_ATTR_PORT_ADDR, VGA_ATTR_FLD_ADDR_PAS | addr);     // keep PAS set
     outb(VGA_ATTR_PORT_DATA_W, data);
     restore_flags(flags);
 }

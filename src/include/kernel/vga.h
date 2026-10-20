@@ -36,11 +36,10 @@
  * CRT Controller Registers
  * http://www.osdever.net/FreeVGA/vga/crtcreg.htm
  */
-// CRTC Port Addresses controlled by IOAS bit in Miscellaneous Output Register
 #define VGA_CRTC_PORT_ADDR          0x3D4   /* CRTC Address Port */
 #define VGA_CRTC_PORT_DATA          0x3D5   /* CRTC Data Port */
-#define VGA_CRTC_PORT_ADDR_MONO     0x3B4   /* CRTC Address Port (Monochrome) */
-#define VGA_CRTC_PORT_DATA_MONO     0x3B5   /* CRTC Data Port (Monochrome) */
+#define VGA_CRTC_PORT_ADDR_MONO     (VGA_CRTC_PORT_ADDR ^ 0x60)
+#define VGA_CRTC_PORT_DATA_MONO     (VGA_CRTC_PORT_DATA ^ 0x60)
 
 #define VGA_CRTC_REG_HT             0x00    /* Horizontal Total Register */
 #define VGA_CRTC_REG_HDE            0x01    /* End Horizontal Display Register */
@@ -171,7 +170,6 @@
 /* Sequencer Clocking Mode Register Fields */
 #define VGA_SEQR_FLD_CLOCKING_SO    (1 << 5)    /* Screen Off */
 
-
 /**
  * Color Registers
  * http://www.osdever.net/FreeVGA/vga/colorreg.htm
@@ -186,11 +184,11 @@
  * External Registers
  * http://www.osdever.net/FreeVGA/vga/extreg.htm
  */
-#define VGA_EXTL_PORT_MO_R          0x33C   /* Miscellaneous Output Port (Read) */
-#define VGA_EXTL_PORT_MO_W          0x332   /* Miscellaneous Output Port (Write) */
-#define VGA_EXTL_PORT_IS0           0x3C2   /* Input Status Port #0 */
-#define VGA_EXTL_PORT_IS1           0x3DA   /* Input Status Port #1 */
-#define VGA_EXTL_PORT_IS1_MONO      0x3BA   /* Input Status Port #1 (Monochrome) */
+#define VGA_EXTL_PORT_MO_R          0x3CC   /* Miscellaneous Output Port (Read) */
+#define VGA_EXTL_PORT_MO_W          0x3C2   /* Miscellaneous Output Port (Write) */
+#define VGA_EXTL_PORT_IS0           0x3C2   /* Input Status Port #0 (Read-Only) */
+#define VGA_EXTL_PORT_IS1           0x3DA   /* Input Status Port #1 (Read-Only) */
+#define VGA_EXTL_PORT_IS1_MONO      (VGA_EXTL_PORT_IS1 ^ 0x60)
 
 /* Miscellaneous Output Port Fields */
 #define VGA_EXTL_FLD_MO_IOAS        0x01    /* Input/Output Address Select Field */
@@ -364,6 +362,10 @@ void vga_set_line_compare(uint16_t scan_line);
 void vga_set_screen_blank(bool blank);
 
 // ----------------------------------------------------------------------------
+
+uint16_t vga_crtc_addr_port(void);
+uint16_t vga_crtc_data_port(void);
+uint16_t vga_is1_port(void);
 
 /**
  * Bulk read CRTC registers with interrupts disabled.
