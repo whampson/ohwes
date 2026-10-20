@@ -112,7 +112,6 @@ static void print_mmap_entry(const struct acpi_mmap_entry *e)
 
 static __init void init_phys_mmap(void)
 {
-    ;
     void *bios_mem_map = g_boot->mem_map;
 
     if (bios_mem_map) {
