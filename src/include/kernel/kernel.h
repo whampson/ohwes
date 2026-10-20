@@ -46,6 +46,7 @@
 #include <kernel/console.h>
 #include <sys/ohwes.h>
 
+// demarcates a kernel-mode init function run once at boot
 #define __init  // TODO: put in special .init section or something
 
 extern __fastcall __noreturn void _kpanic(const char *fmt, ...);

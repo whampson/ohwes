@@ -51,7 +51,7 @@ struct pool_info {
 static struct pool_info _pools;
 struct pool_info *g_poolinfo = &_pools;
 
-void lazy_init_pools(void)
+static __init void lazy_init_pools(void)
 {
     size_t num_pools = MAX_NR_POOLS;
     size_t master_pool_size = align(num_pools * sizeof(struct pool), 4);
