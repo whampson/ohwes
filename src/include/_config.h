@@ -31,6 +31,21 @@
 // General Configuration
 //
 
+// CONFIG_VGA_MODE
+//    0: (do not set mode)
+//    1: 40x25,text,color
+//    3: 80x25,text,color
+//    7: 80x25,text,mono
+#define CONFIG_VGA_MODE     0
+
+// CONFIG_VGA_FONT
+// set the text mode font (character size)
+//    0: (do not set font)
+//    1: 8x14 (28 rows)
+//    2:  8x8 (50 rows)
+//    4: 8x16 (25 rows)
+#define CONFIG_VGA_FONT     1
+
 // booting
 #define CONFIG_FLOPPY_BOOT          1   // (bool) configure for boot from floppy disk
 

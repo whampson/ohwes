@@ -47,6 +47,10 @@ ksetup:
         # make damn sure interrupts are off!
         cli
 
+        # TODO: cookie check: 'ofni'
+        # TODO: fixup pointers in boot info struct!
+        # TODO: ensure boot info struct is resident in kernel memory!
+
         # copy boot params from stage2
         movl            %ecx, %esi
         movl            boot_info_ptr, %edi
@@ -54,12 +58,12 @@ ksetup:
         cld
     rep movsb
 
-        # set up the inititial stack
+        # set up the initial stack
         leal            __kstack_base, %ebp
         addl            $__kstack_size, %ebp
         movl            %ebp, %esp
 
-#if SERIAL_DEBUGGING
+#if CONFIG_SERIAL_DEBUG
         call            setup_debug_port
 #endif
 
@@ -67,8 +71,8 @@ ksetup:
         call            setup_paging
 
         # now that paging is enabled and kernel space is mapped at KERNEL_VA,
-        # reload the stack pointer and adjust the adjust the boot info pointer
-        # to point to kernel space
+        # reload the stack pointer and adjust the boot info pointer to point to
+        # kernel space
         addl            $KERNEL_VA, %ebp
         movl            %ebp, %esp
         addl            $KERNEL_VA, boot_info_ptr
@@ -112,7 +116,7 @@ _ksetup_continue:
         movl            $__bss_start, %edi
    rep stosb
 
-#if HIGHER_GROUND
+#if CONFIG_HIGHER_GROUND
         movl            $0, __page_dir          # clear identity mapping
 #endif
 
@@ -121,7 +125,7 @@ _ksetup_continue:
         #
 
         # now we can build the CPU descriptor tables;
-        # the GDT is partially initiailzed statically below (see _gdt)
+        # the GDT is partially initialized statically below (see _gdt)
         call            setup_cpu               # see cpu.c
 
         # initialize interrupts and timers
@@ -129,7 +133,7 @@ _ksetup_continue:
         call            init_timer              # see timer.c
         call            init_rtc                # see rtc.c
 
-        # pass control off to the kernel
+        # pass control off to the kernel (must be dones last!)
         movl            %cr3, %eax
         movl            %eax, %cr3              # flush TLB
         sti                                     # enable interrupts (!!)
@@ -163,7 +167,7 @@ _idle:  # we should never end up here... but in case we do, spin forever
 ##
 setup_paging:
 
-PAGE_FLAGS = _PAGE_PRESENT | _PAGE_RW
+PAGE_FLAGS = _PAGE_PRESENT | _PAGE_WRITABLE
 PAGE_FLAGS = PAGE_FLAGS |  _PAGE_USER   # TODO: don't map kernel memory with user privileges lol
 KERNEL_PDN = KERNEL_VA >> (PGDIR_SHIFT - 2)
 NR_ENTRIES = PAGE_SIZE >> 2
@@ -205,7 +209,7 @@ _map_low_loop:
         orl             $PAGE_FLAGS, %eax
         orl             $_PAGE_PDE, %eax
         movl            %eax, 0(%edi)               # identity map
-#if HIGHER_GROUND
+#if CONFIG_HIGHER_GROUND
         movl            %eax, KERNEL_PDN(%edi)      # "high" map
 #endif
 
@@ -227,10 +231,13 @@ _setup_paging_done:
 # -----------------------------------------------------------------------------
 # Initializes the serial port for remote debugging.
 ##
+
+DEBUG_PORT = __mkcomport(CONFIG_SERIAL_DEBUG_COM)
+
 setup_debug_port:
         # determine whether the port exists
         xorb            %al, %al
-        movw            $SERIAL_DEBUG_PORT+UART_SCR, %dx
+        movw            $DEBUG_PORT+UART_SCR, %dx
         outb            %al, %dx
         movb            $0x55, %al
         outb            %al, %dx
@@ -240,34 +247,34 @@ setup_debug_port:
         jne             setup_debug_port_done
 
         # configure the UART port
-        movw            $SERIAL_DEBUG_PORT+UART_LCR, %dx
+        movw            $DEBUG_PORT+UART_LCR, %dx
         movb            $0x80, %al
         outb            %al, %dx        # enable DLAB so we can set baud
-        movb            $SERIAL_DEBUG_BAUD >> 8, %al
-        movw            $SERIAL_DEBUG_PORT+UART_DLM, %dx
+        movb            $CONFIG_SERIAL_DEBUG_BAUD >> 8, %al
+        movw            $DEBUG_PORT+UART_DLM, %dx
         outb            %al, %dx        # set baud divisor high byte
-        movw            $SERIAL_DEBUG_PORT+UART_DLL, %dx
-        movb            $SERIAL_DEBUG_BAUD & 0xFF, %al
+        movw            $DEBUG_PORT+UART_DLL, %dx
+        movb            $CONFIG_SERIAL_DEBUG_BAUD & 0xFF, %al
         outb            %al, %dx        # set baud divisor low byte
-        movw            $SERIAL_DEBUG_PORT+UART_LCR, %dx
+        movw            $DEBUG_PORT+UART_LCR, %dx
         movb            $0x03, %al
         outb            %al, %dx        # LCR = 8N1
-        movw            $SERIAL_DEBUG_PORT+UART_MCR, %dx
+        movw            $DEBUG_PORT+UART_MCR, %dx
         movb            $0x0B, %al
         outb            %al, %dx        # MCR = dtr rts out2
         movb            $0x01, %al
-        movw            $SERIAL_DEBUG_PORT+UART_IER, %dx
+        movw            $DEBUG_PORT+UART_IER, %dx
         outb            %al, %dx        # interrupts on
-        movw            $SERIAL_DEBUG_PORT+UART_FCR, %dx
-        movb            $0xC7, %al
+        movw            $DEBUG_PORT+UART_FCR, %dx
+        movb            $0x07, %al      # FIFO_TRIG_1
         outb            %al, %dx        # enable FIFO
 
         # clear any pending reads
-        movw            $SERIAL_DEBUG_PORT+UART_LSR, %dx
+        movw            $DEBUG_PORT+UART_LSR, %dx
         inb             %dx, %al
-        movw            $SERIAL_DEBUG_PORT+UART_MSR, %dx
+        movw            $DEBUG_PORT+UART_MSR, %dx
         inb             %dx, %al
-        movw            $SERIAL_DEBUG_PORT+UART_IIR, %dx
+        movw            $DEBUG_PORT+UART_IIR, %dx
         inb             %dx, %al
 
 setup_debug_port_done:

@@ -13,27 +13,45 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * -----------------------------------------------------------------------------
- *         File: src/i386/boot/boot.ld
+ *         File: src/i386/boot/bootldr.ld
  *      Created: July 5, 2024
  *       Author: Wes Hampson
  * =============================================================================
  */
 
+#include "bootldr.h"
+
+#define STAGE1_SIZE 512
+#define STAGE2_SIZE (KERNEL_LOAD - STAGE2_BASE)
+#define SECTOR_SIZE (1 << SECTOR_SHIFT)
+
+ASSERT(KERNEL_LOAD > STAGE2_BASE, "kernel must be loaded higher than stage 2!")
+
 MEMORY
 {
-    STAGE1 (rwx)    : ORIGIN = 0x7C00, LENGTH = 512
-    STAGE2 (rwx)    : ORIGIN = 0x7E00, LENGTH = 0x8200
+    STAGE1 (rwx) : ORIGIN = STAGE1_BASE, LENGTH = STAGE1_SIZE
+    STAGE2 (rwx) : ORIGIN = STAGE2_BASE, LENGTH = STAGE2_SIZE
 }
 
 SECTIONS
 {
-    .stage1 :
+    .stage1 : ALIGN(SECTOR_SIZE)
     {
         *(.stage1)
-    } > STAGE1
+        . = STAGE1_SIZE - 2;
+        SHORT(STAGE1_MAGIC);
+    } > STAGE1 =FILL_CHAR
 
-    .stage2 :
+    ASSERT(SIZEOF(.stage1) % SECTOR_SIZE == 0, ".stage1 invalid alignment!")
+    ASSERT(SIZEOF(.stage1) == STAGE1_SIZE, ".stage1 too big!")
+
+    .stage2 : ALIGN(SECTOR_SIZE)
     {
         *(.stage2)
-    } > STAGE2
+        . = ALIGN(SECTOR_SIZE) - 4;
+        LONG(STAGE2_MAGIC);
+    } > STAGE2 =FILL_CHAR
+
+    ASSERT(SIZEOF(.stage2) % SECTOR_SIZE == 0, ".stage2 invalid alignment!")
+    ASSERT(SIZEOF(.stage2) + STAGE2_BASE < KERNEL_LOAD, ".stage2 too big!")
 }
