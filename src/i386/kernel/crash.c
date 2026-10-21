@@ -24,8 +24,9 @@
 #include <signal.h>
 #include <i386/bitops.h>
 #include <i386/cpu.h>
-#include <i386/gdbstub.h>
+#include <i386/debug.h>
 #include <i386/interrupt.h>
+#include <i386/ps2.h>
 #include <i386/x86.h>
 #include <kernel/kernel.h>
 #include <kernel/kprint.h>
@@ -35,19 +36,6 @@
 #include <kernel/serial.h>
 #include <kernel/vga.h>
 #include <sys/ohwes.h>
-
-
-// ESC[<x>m color code
-enum csi_color {
-    CSI_COLOR_BLACK   = 0,
-    CSI_COLOR_RED     = 1,
-    CSI_COLOR_GREEN   = 2,
-    CSI_COLOR_YELLOW  = 3,
-    CSI_COLOR_BLUE    = 4,
-    CSI_COLOR_MAGENTA = 5,
-    CSI_COLOR_CYAN    = 6,
-    CSI_COLOR_WHITE   = 7
-};
 
 #define CRASH_MSG_BUFSIZ    256
 #define CRASH_MARGIN        5
@@ -72,7 +60,8 @@ static const char *exception_names[NR_EXCEPTIONS];
 
 static int console_print(const char *fmt, ...) __format_printf(1, 2);
 static int vga_print(const char *fmt, ...) __format_printf(1, 2);
-static int vga_vprint(const char *fmt, va_list args);
+static int vga_vprint(const char *fmt, va_list args) __format_printf(1, 0);
+static int vga_write(const char *buf, size_t count);
 
 static void vga_print_centered(int maxwidth, const char *fmt, ...) __format_printf(2, 3);
 static void vga_print_wrapped(int margin, const char *fmt, ...) __format_printf(2, 3);
@@ -80,6 +69,8 @@ static void vga_print_wrapped(int margin, const char *fmt, ...) __format_printf(
 extern __init void init_early_terminal(int num, struct terminal *term);
 
 typedef int (*dumpfn_t)(const char *fmt, ...) __format_printf(1, 2);
+
+static void show_kdcom_msg(dumpfn_t dumpfn);
 
 // all the "dump" functions print a leading newline
 static void dump_cpu(struct cpu_state *cpu, dumpfn_t to);
@@ -90,9 +81,50 @@ static void dump_segregs(struct cpu_state *cpu, dumpfn_t to);
 static void dump_stack(struct cpu_state *cpu, dumpfn_t to, int max_rows, int num_cols);
 static void dump_segsel(struct segsel *segsel, dumpfn_t to);
 
-extern void terminal_initialize(int num, struct terminal *term);    // terminal.c
+// ----------------------------------------------------------------------------
+
+__noreturn void __idle(void)
+{
+    for (;;) {
+        __sti(); __hlt();
+        // TODO: schedule new task
+    }
+}
+
+__noreturn void __hard_reset(void)
+{
+    kprint(KLOG_ALERT "system is going down NOW!\n");
+
+    // first, try resetting via the PS/2 controller
+    ps2_write_cmd(PS2_CMD_SYSRESET);
+
+    // if that didn't work, triple fault
+    struct table_desc idt_desc = { .limit = 0, .base = 0 };
+    __lidt(idt_desc);   // yoink away the IDT :D
+    __sti();
+
+    // and if by some miracle /that/ didn't work, show a message and spin forever
+    panic("unable to shut down -- please hard-reset your computer");
+}
+
+void __debug_break(void)
+{
+    __sti(); __int3();
+}
 
 // ----------------------------------------------------------------------------
+
+static void show_kdcom_msg(dumpfn_t dumpfn)
+{
+    if (!dumpfn) {
+        return;
+    }
+
+    if (dumpfn == kprint) dumpfn(KLOG_INFO);
+    dumpfn("\e[5m*** DEBUG BREAK - attach a debugger (GDB) to COM%d now...",
+        CONFIG_SERIAL_DEBUG_COM);
+    if (dumpfn == kprint) dumpfn(KLOG_DEFAULT);
+}
 
 //
 // Capture the extraneous CPU state and combine with interrupt regs into a
@@ -100,6 +132,7 @@ extern void terminal_initialize(int num, struct terminal *term);    // terminal.
 //
 static void capture_cpu_state(struct cpu_state *state, struct iregs *iregs)
 {
+    memset(state, 0, sizeof(struct cpu_state));
     state->iregs.ebx = iregs->ebx;
     state->iregs.ecx = iregs->ecx;
     state->iregs.edx = iregs->edx;
@@ -121,53 +154,47 @@ static void capture_cpu_state(struct cpu_state *state, struct iregs *iregs)
     store_cr0(state->cr0);
     store_cr2(state->cr2);
     store_cr3(state->cr3);
-    state->cr4 = 0; if (cpu_has_cr4()) store_cr4(state->cr4);
+    if (cpu_has_cr4()) {
+        store_cr4(state->cr4);
+    }
     __sgdt(state->gdtr);
     __sidt(state->idtr);
     __sldt(state->ldtr);
     __str(state->tr);
 }
 
-static __noreturn void die(int irq)
+static __noreturn void die(struct iregs *regs, dumpfn_t dumpfn)
 {
-    __cli();
     irq_setmask(IRQ_MASKALL);
 
-    bool has_kb = kb_avail() && irq != IRQ_KEYBOARD;
-    bool has_tm = irq != IRQ_TIMER;
-
+    bool has_kb = kb_avail() && regs->vec != IRQ_KEYBOARD;
     if (has_kb) {
-        kb_enable_tty(false);
-        kb_enable_sysrq(false);
-        kb_enable_int3(false);
+        // TODO: disallow terminal switching
+        //       sysrq probably ok, but text will mess up crash screen
+        // TODO: "restrict" keyboard? (Ctrl+Alt+Del only)
         irq_unmask(IRQ_KEYBOARD);
     }
 
-    if (has_tm) {
-        irq_unmask(IRQ_TIMER);
-        __sti();
-        beep(913, 276, true);   // NOTE: BLOCKS!!!
-        beep(1370, 276, true);  // TODO: rewrite beep()
-        beep(1777, 380, true);
-        // "We're sorry..."
-        __cli();
-    }
-
-#if SERIAL_DEBUGGING
-    if (SERIAL_DEBUG_PORT == COM1_PORT || SERIAL_DEBUG_PORT == COM3_PORT) {
+#if CONFIG_SERIAL_DEBUG
+    show_kdcom_msg(dumpfn);
+    if (CONFIG_SERIAL_DEBUG_COM == 1 || CONFIG_SERIAL_DEBUG_COM == 3) {
         irq_unmask(IRQ_COM1);
     }
     else {
         irq_unmask(IRQ_COM2);
     }
-    __int3();
 #endif
 
-    __sti();
-    for (;;) __hlt();   // this is the end... my only friend... the end...
+    for (;;) {
+#if CONFIG_SERIAL_DEBUG
+        __enter_debugger_loop(regs, false);
+#else
+        __sti(); __hlt();   // this is the end... my only friend... the end...
+#endif
+    }
 }
 
-#if SHOW_CRASH_SCREEN
+#if CONFIG_SHOW_CRASH_SCREEN
 static __noreturn void show_crash_screen(
     struct cpu_state *cpu,
     int color, int margin,
@@ -187,21 +214,20 @@ static __noreturn void show_crash_screen(
     vga_print("\e[4%dm\e[2J", color & 7);   // paint background
 
     // dump regs
-    if (cpu) {
-        int stack_max_lines = (has_secondary) ? 5 : STACK_DUMP_ROWS;
-        int stack_lines = min(stack_max_lines, max((ptrdiff_t) ((cpu->iregs.ebp - cpu->iregs.esp) >> 2) / STACK_DUMP_ROWS, 0));
-        int regs_pos = 4 + stack_lines;
+    int stack_max_lines = (has_secondary) ? 5 : STACK_DUMP_ROWS;
+    int stack_lines = (cpu->iregs.esp != 0) ? min(stack_max_lines,  // ridiculous I know...
+        max((ptrdiff_t) ((cpu->iregs.ebp - cpu->iregs.esp) >> 2) / STACK_DUMP_ROWS, 0)) : 0;
+    int regs_pos = 4 + stack_lines;
 
-        vga_print("\e[999;999H\r\e[%dA", regs_pos);
-        dump_stack(cpu, vga_print, stack_max_lines, STACK_DUMP_COLS);
-        vga_print("\n");
-        dump_gprs(&cpu->iregs, vga_print);
-        dump_ctrl_regs(cpu, vga_print);
+    vga_print("\e[999;999H\r\e[%dA", regs_pos);
+    dump_stack(cpu, vga_print, stack_max_lines, STACK_DUMP_COLS);
+    vga_print("\n");
+    dump_gprs(&cpu->iregs, vga_print);
+    dump_ctrl_regs(cpu, vga_print);
 
-        banner_pos = max(4,
-            (MaxHeight / 3) - stack_lines -
-            (STACK_DUMP_ROWS - stack_max_lines));
-    }
+    banner_pos = max(4,
+        (MaxHeight / 3) - stack_lines -
+        (STACK_DUMP_ROWS - stack_max_lines));
 
     // print banner
     vga_print("\e[%dH", banner_pos);
@@ -217,28 +243,32 @@ static __noreturn void show_crash_screen(
         vga_print_wrapped(margin, secondary_text);
     }
 
-    if (cpu) {
-        bool has_kb = kb_avail() && cpu->iregs.vec != IRQ_KEYBOARD;
+    // prompt
+    vga_print("\n\n\n");
 
-        // prompt
-        vga_print("\n\n\n");
-        if (has_kb) {
-            vga_print_centered(MaxWidth,
-                "Press CTRL+ALT+DEL to restart your computer . . . \e6");
-        }
-        else {
-            vga_print_centered(MaxWidth,
-                "The exception occurred in the keyboard handler.\n");
-            vga_print_centered(MaxWidth,
-                "Please restart your computer manually.\e6");
-        }
-        die(cpu->iregs.vec);
+#if CONFIG_SERIAL_DEBUG
+    vga_print_centered(MaxWidth, "\e4\e[5m*** COMDBG AVAILABLE ***\e[25m");
+    vga_print("\n");
+    vga_print_centered(MaxWidth,
+        "Attach a debugger (GDB) to COM%d now . . .",
+        CONFIG_SERIAL_DEBUG_COM);
+#else
+    if (kb_avail() && cpu->iregs.vec != IRQ_KEYBOARD) {
+        vga_print_centered(MaxWidth,
+            "Press CTRL+ALT+DEL to restart your computer . . . \e6");
     }
     else {
-        die(-1);
+        vga_print_centered(MaxWidth,
+            "The exception occurred in the keyboard handler.\n");
+        vga_print_centered(MaxWidth,
+            "Please restart your computer manually.\e6");
     }
+#endif
+
+    // idle forever or wait in debugger loop
+    die(&cpu->iregs, NULL); // already printed COMDBG msg
 }
-#endif // SHOW_CRASH_SCREEN
+#endif // CONFIG_SHOW_CRASH_SCREEN
 
 //
 // Uh oh! An exception occurred in the exception handler.
@@ -250,47 +280,48 @@ static __noreturn void show_crash_screen(
 static __noreturn void handle_soft_double_fault(
     struct cpu_state *curr_cpu, struct cpu_state *prev_cpu)
 {
-    console_print(ANSI_FG_DEFAULT ANSI_BOLD "\n(1) %s at %p", exception_names[curr_cpu->iregs.vec], _P(curr_cpu->iregs.eip));
+    console_print(ANSI_FG_DEFAULT ANSI_BOLD "\n(1) %s at %p",
+        exception_names[curr_cpu->iregs.vec], _P(curr_cpu->iregs.eip));
     dump_cpu(curr_cpu, console_print);
     dump_stack(curr_cpu, console_print, STACK_DUMP_ROWS, STACK_DUMP_COLS);
-    console_print("\n\n(2) %s at %p", exception_names[prev_cpu->iregs.vec], _P(prev_cpu->iregs.eip));
+    console_print("\n\n(2) %s at %p",
+        exception_names[prev_cpu->iregs.vec], _P(prev_cpu->iregs.eip));
     dump_cpu(prev_cpu, console_print);
     dump_stack(prev_cpu, console_print, STACK_DUMP_ROWS, STACK_DUMP_COLS);
     console_print("\n\n" RED("*** FATAL: %s (1) occurred while handling %s (2)"),
         exception_names[curr_cpu->iregs.vec], exception_names[prev_cpu->iregs.vec]);
     console_print(ANSI_UNBOLD ANSI_FG_DEFAULT);
 
-#if SHOW_CRASH_SCREEN
+#if CONFIG_SHOW_CRASH_SCREEN
     char msgbuf[CRASH_MSG_BUFSIZ];
     snprintf(msgbuf, sizeof(msgbuf),
-        "A fatal %s exception %02lX occurred at %p while handling a previous "
+        "A fatal exception %02lX (%s) occurred at %p while handling a previous "
         "%s exception %02lX at %p. " MSG_FATAL_REBOOT,
-        exception_names[curr_cpu->iregs.vec], curr_cpu->iregs.vec, _P(curr_cpu->iregs.eip),
+        curr_cpu->iregs.vec, exception_names[curr_cpu->iregs.vec], _P(curr_cpu->iregs.eip),
         exception_names[prev_cpu->iregs.vec], prev_cpu->iregs.vec, _P(prev_cpu->iregs.eip));
-    show_crash_screen(curr_cpu, CSI_COLOR_RED, 5, "Double Fault", msgbuf, NULL);
+    show_crash_screen(curr_cpu, SGR_RED, 5, "Double Fault", msgbuf, NULL);
 #else
-    die(curr_cpu->iregs.vec);
+    die(&curr_cpu->iregs, console_print);
 #endif
 }
 
 //
 // Generic x86 exception handler.
 //
-__fastcall __noreturn void handle_exception(struct iregs *iregs)
+__fastcall void handle_exception(struct iregs *iregs)
 {
     // static vars for soft double-fault detection
-    static bool already_crashing = false;
+    static volatile uint32_t s_crashing = false;
     static struct cpu_state prev_cpu;
 
     char errbuf[CRASH_MSG_BUFSIZ];
     struct cpu_state cpu;
     size_t errbuf_len;
 
-#if SERIAL_DEBUGGING
+#if CONFIG_SERIAL_DEBUG
     if (iregs->vec == BREAKPOINT || iregs->vec == DEBUG_EXCEPTION) {
-        struct gdb_state state;
-        gdb_init(&state, get_com(get_com_num(SERIAL_DEBUG_PORT)));
-        gdb_main(&state, iregs, SIGTRAP);
+        show_kdcom_msg((g_consoles) ? kprint : vga_print);
+        __enter_debugger_loop(iregs, /*from_com=*/false);    // blocks until a debugger connects
         return;
     }
 #endif
@@ -299,13 +330,12 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
     capture_cpu_state(&cpu, iregs);
 
     // if we're already crashing... well... that's not good... handle it here!
-    if (test_and_set_bit(&already_crashing, 0)) {
+    if (test_and_set_bit(&s_crashing, 0)) {
         handle_soft_double_fault(&cpu, &prev_cpu);  // noreturn
     }
-    already_crashing = true;
     prev_cpu = cpu;
 
-#if DEBUG && ENABLE_CRASH_KEY
+#if DEBUG && CONFIG_CRASH_KEY
     // test a software double fault
     if (g_test_soft_double_fault) {
         __asm__ volatile (".short 0x0A0F");
@@ -349,14 +379,14 @@ __fastcall __noreturn void handle_exception(struct iregs *iregs)
     console_print(ANSI_UNBOLD ANSI_FG_DEFAULT);
 
 
-#if SHOW_CRASH_SCREEN
+#if CONFIG_SHOW_CRASH_SCREEN
     char msgbuf[CRASH_MSG_BUFSIZ];
     snprintf(msgbuf, sizeof(msgbuf),
-        "A fatal %s exception %02lX occurred at %p. " MSG_FATAL_REBOOT,
-        exception_names[iregs->vec], iregs->vec, _P(iregs->eip));
-    show_crash_screen(&cpu, CSI_COLOR_BLUE, CRASH_MARGIN, OS_NAME, msgbuf, errbuf);
+        "A fatal exception %02lX (%s) occurred at %p. " MSG_FATAL_REBOOT,
+        iregs->vec, exception_names[iregs->vec], _P(iregs->eip));
+    show_crash_screen(&cpu, SGR_BLUE, CRASH_MARGIN, OS_NAME, msgbuf, errbuf);
 #else
-    die(cpu.iregs.vec);
+    die(&cpu.iregs, console_print);
 #endif
 }
 
@@ -372,7 +402,7 @@ __fastcall __noreturn void _kpanic(const char *fmt, ...)
     dump = (g_consoles) ? kprint  : vga_print;
     vdump = (g_consoles) ? vkprint : vga_vprint;
     prefix = (g_consoles) ? KLOG_FATAL : ANSI_BOLD ANSI_RED;
-    suffix = ANSI_UNBOLD ANSI_FG_DEFAULT;
+    suffix = (g_consoles) ? KLOG_DEFAULT : ANSI_UNBOLD ANSI_FG_DEFAULT;
 
     va_start(args, fmt);
     dump(prefix);
@@ -381,7 +411,10 @@ __fastcall __noreturn void _kpanic(const char *fmt, ...)
     va_end(args);
 
     // TODO: stack trace
-    die(-1);    // programmatic death; no IRQ
+
+    for (;;) {
+        __debug_break();    // TODO: allow continue?
+    }
 }
 
 static void dump_cpu(struct cpu_state *cpu, dumpfn_t dump)
@@ -494,28 +527,30 @@ static void dump_segsel(struct segsel *segsel, dumpfn_t dump)
     }
 }
 
-static int _vga_print(const char *buf, size_t count)
+// print message to all attached consoles,
+//   like kprint but with no klog features,
+//   will write directly to vga terminal if no console is registered
+static int console_print(const char *fmt, ...)
 {
-    struct terminal *term;
-    const char *p;
+    char buf[CRASH_MSG_BUFSIZ] = { };
+    va_list args;
+    size_t count;
+    struct console *cons;
 
-    term = get_terminal(VT_CONSOLE_NUM);
-    if (!term->initialized) {
-        init_early_terminal(VT_CONSOLE_NUM, term);
+    va_start(args, fmt);
+    count = vsnprintf(buf, CRASH_MSG_BUFSIZ, fmt, args);
+    va_end(args);
+
+    if (!g_consoles) {
+        return vga_write(buf, count);
     }
-
-    p = buf;
-    while (p < buf + count) {
-        if (*p == '\n') {
-            terminal_putchar(term, '\r');
-        }
-        p += terminal_putchar(term, *p);
+    for (cons = g_consoles; cons; cons = cons->next) {
+        cons->write(cons, buf, count);
     }
-
-    return (p - buf);
+    return count;
 }
 
-// print directly to vga frame buffer via the terminal
+// print directly to the VGA via terminal
 static int vga_print(const char *fmt, ...)
 {
     va_list args;
@@ -534,29 +569,28 @@ static int vga_vprint(const char *fmt, va_list args)
     char buf[CRASH_MSG_BUFSIZ] = { };
 
     count = vsnprintf(buf, CRASH_MSG_BUFSIZ, fmt, args);
-    return _vga_print(buf, count);
+    return vga_write(buf, count);
 }
 
-// like kprint but with no klog features,
-// will write directly to vga if no console is registered
-static int console_print(const char *fmt, ...)
+static int vga_write(const char *buf, size_t count)
 {
-    char buf[CRASH_MSG_BUFSIZ] = { };
-    va_list args;
-    size_t count;
-    struct console *cons;
+    struct terminal *term;
+    const char *p;
 
-    va_start(args, fmt);
-    count = vsnprintf(buf, CRASH_MSG_BUFSIZ, fmt, args);
-    va_end(args);
+    term = get_terminal(CONFIG_VT_CONSOLE_NUM);
+    if (!term->initialized) {
+        init_early_terminal(CONFIG_VT_CONSOLE_NUM, term);
+    }
 
-    if (!g_consoles) {
-        return _vga_print(buf, count);
+    p = buf;
+    while (p < buf + count) {
+        if (*p == '\n') {
+            __terminal_putc(term, '\r');
+        }
+        __terminal_putc(term, *p++);
     }
-    for (cons = g_consoles; cons; cons = cons->next) {
-        cons->write(cons, buf, count);
-    }
-    return count;
+
+    return (p - buf);
 }
 
 static void vga_print_centered(int maxwidth, const char *fmt, ...)
@@ -732,7 +766,7 @@ static void vga_print_wrapped(int margin, const char *fmt, ...)
     vga_print("%.*s", wordlen + esclen, word);
 }
 
-#if DEBUG && ENABLE_CRASH_KEY
+#if DEBUG && CONFIG_CRASH_KEY
 void crash_key_irq(int irq, struct iregs *regs)   // TODO: call this vis sysreq...
 {
     int crash_type;
@@ -753,7 +787,7 @@ void crash_key_irq(int irq, struct iregs *regs)   // TODO: call this vis sysreq.
             __asm__ volatile ("int $2");
             break;
         case 3:     // F3 - debug break
-            __asm__ volatile ("int $3");
+            __debug_break();
             break;
         case 4:     // F4 - panic()
             panic("you fucked up!!");
