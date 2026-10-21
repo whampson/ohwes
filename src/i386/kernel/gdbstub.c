@@ -233,9 +233,8 @@ int gdb_main(struct iregs *regs, bool from_com)
         goto gdb_done;
     }
     if (!state->com->io_port) {
-        state->com->io_port = SERIAL_DEBUG_PORT;
+        state->com->io_port = __mkcomport(CONFIG_SERIAL_DEBUG_COM);
     }
-    assert(state->com->io_port == SERIAL_DEBUG_PORT);
 
     // deal with any pending COM chars
     if (from_com) {

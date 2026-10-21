@@ -24,14 +24,21 @@
 
 // TODO: clarify "COM" and "UART" naming
 
+// OK, this deserves some explanation. I got a bug up my ass one night to write
+// a 'simple' function for calculating the COM I/O port based on the port index.
+// It was simple enough anyway. The rightmost operation tests num < 3. Turns out
+// that macro evaluation behaves differently between GCC and GNU AS (believe it
+// or not), and 'true' evaluates to '-1' instead of '1' on GNU AS... oops. So we
+// needed a more clever way to test for num < 3... hence this monstrosity.
+#define __mkcomport(num)    (0x2E8 | (((num)&1)<<8) | ((1-(((num)+1)>>2))<<4))
+
 //
 // UART Base IO Port Numbers
 //
-#define COM1_PORT           0x3F8
-#define COM2_PORT           0x2F8
-#define COM3_PORT           0x3E8
-#define COM4_PORT           0x2E8
-// could go up to 8... but 4 will do!
+#define COM1_PORT           __mkcomport(1)  // 0x3F8
+#define COM2_PORT           __mkcomport(2)  // 0x2F8
+#define COM3_PORT           __mkcomport(3)  // 0x3E8
+#define COM4_PORT           __mkcomport(4)  // 0x2E8
 
 //
 // Number of I/O address associated with each COM port.
@@ -87,12 +94,20 @@
 #define BAUD_75             1536
 #define BAUD_50             2304
 
-#ifndef __ASSEMBLER__
+#if !defined(__ASSEMBLER__) && !defined(__LDSCRIPT__)
 #include <assert.h>
 #include <ring.h>
 #include <stdint.h>
 #include <i386/io.h>
 #include <kernel/tty.h>
+
+static_assert(COM1_PORT == 0x3F8, "COM1_PORT == 0x3F8");
+static_assert(COM2_PORT == 0x2F8, "COM2_PORT == 0x2F8");
+static_assert(COM3_PORT == 0x3E8, "COM3_PORT == 0x3E8");
+static_assert(COM4_PORT == 0x2E8, "COM4_PORT == 0x2E8");
+static_assert(NR_COM == 4, "do not change NR_COM");
+
+// TODO: USE _MASK & _SHIFT
 
 //
 // Interrupt Enable Register
@@ -133,20 +148,43 @@ enum priority {
 // FIFOs.
 //
 #define UART_FCR_EN         0x01    // FIFO Enable
-#define UART_FCR_RESET_RCVR 0x02    // Receiver FIFO Reset
-#define UART_FCR_RESET_XMIT 0x04    // Transmitter FIFO Reset
+#define UART_FCR_RXRST      0x02    // Receiver FIFO Reset
+#define UART_FCR_TXRST      0x04    // Transmitter FIFO Reset
 #define UART_FCR_DMA        0x08    // DMA Mode Select
-#define UART_FCR_RCVR_TRIG  0xC0    // Receiver Interrupt Trigger
+#define UART_FCR_TRIG       0xC0    // Receiver Interrupt Trigger
+
+#define UART_FCR_EN_SHIFT       0
+#define UART_FCR_RXRST_SHIFT    1
+#define UART_FCR_TXRST_SHIFT    2
+#define UART_FCR_DMA_SHIFT      3
+#define UART_FCR_TRIG_SHIFT     6
+
+enum uart_fifo_enable {
+    FIFO_OFF = 0,
+    FIFO_ON = 1,
+};
 
 //
 // Receiver Interrupt Trigger Levels
 //
-enum recv_trig {
-    RCVR_TRIG_1,                    // Interrupt when 1 byte received
-    RCVR_TRIG_4,                    // Interrupt when 4 bytes received
-    RCVR_TRIG_8,                    // Interrupt when 8 bytes received
-    RCVR_TRIG_14                    // Interrupt when 14 bytes received
+enum uart_recv_trig {
+    FIFO_TRIG_1,                    // Interrupt when 1 byte received
+    FIFO_TRIG_4,                    // Interrupt when 4 bytes received
+    FIFO_TRIG_8,                    // Interrupt when 8 bytes received
+    FIFO_TRIG_14                    // Interrupt when 14 bytes received
 };
+
+enum uart_dma_select {
+    DMA_OFF = 0,                    // TXRDY=1 when FIFO empty
+    DMA_ON = 1,                     // TXRDY=1 when room in FIFO
+};
+
+#define __mkuart_fcr(dma, fifo_en, fifo_trig, rxreset, txreset) \
+    ((((fifo_en) << UART_FCR_EN_SHIFT) & UART_FCR_EN) | \
+     (((rxreset) << UART_FCR_RXRST_SHIFT) & UART_FCR_RXRST) | \
+     (((txreset) << UART_FCR_TXRST_SHIFT) & UART_FCR_TXRST) | \
+     (((dma) << UART_FCR_DMA_SHIFT) & UART_FCR_DMA) | \
+     (((fifo_trig) << UART_FCR_TRIG_SHIFT) & UART_FCR_TRIG))
 
 //
 // Line Control Register
@@ -156,29 +194,50 @@ enum recv_trig {
 // rate to be set via registers 0 and 1.
 //
 #define UART_LCR_WLS        0x03    // Word Length Select
-#define UART_LCS_STB        0x04    // Stop Bit Select
+#define UART_LCR_STB        0x04    // Stop Bit Select
 #define UART_LCR_PEN        0x08    // Parity Enable
 #define UART_LCR_EPS        0x10    // Even Parity Select
 #define UART_LCR_STK        0x20    // Stick Parity
 #define UART_LCR_BRK        0x40    // Set Break
 #define UART_LCR_DLAB       0x80    // Divisor Latch Access
 
+#define UART_LCR_WLS_SHIFT      0
+#define UART_LCR_STB_SHIFT      2
+#define UART_LCR_PEN_SHIFT      3
+#define UART_LCR_EPS_SHIFT      4
+#define UART_LCR_STK_SHIFT      5
+#define UART_LCR_BRK_SHIFT      6
+#define UART_LCR_DLAB_SHIFT     7
+
+#define __mkuart_lcr(word_length, parity, stop_bits) \
+    ((((word_length) << UART_LCR_WLS_SHIFT) & UART_LCR_WLS) | \
+     (((stop_bits) << UART_LCR_STB_SHIFT) & UART_LCR_STB) | \
+     (((parity) << UART_LCR_PEN_SHIFT) & (UART_LCR_PEN | UART_LCR_EPS | UART_LCR_STK)))
+
 //
 // Word Length Select Values
 //
-enum word_length {
+enum uart_word_length {
     WLS_5,                          // 5 bits per character
     WLS_6,                          // 6 bits per character
     WLS_7,                          // 7 bits per character
-    WLS_8                           // 8 bits per character
+    WLS_8,                          // 8 bits per character
+
+    WORDLEN_5 = WLS_5,
+    WORDLEN_6 = WLS_6,
+    WORDLEN_7 = WLS_7,
+    WORDLEN_8 = WLS_8,
 };
 
 //
 // Stop But Select Values
 //
-enum stop_bits {
+enum uart_stop_bits {
     STB_1,                          // 1 stop bit
     STB_2,                          // 1.5 or 2 stop bits (1.5 when WSL_5 is used)
+
+    STOPBITS_1 = STB_1,
+    STOPBITS_2 = STB_2,
 };
 
 //
@@ -186,7 +245,7 @@ enum stop_bits {
 //
 // This is a combined value of LCR bits [5:3].
 //
-enum parity {
+enum uart_parity {
     PARITY_NONE     = 0,
     PARITY_ODD      = UART_LCR_PEN,
     PARITY_EVEN     = UART_LCR_PEN | UART_LCR_EPS,
@@ -302,7 +361,7 @@ struct fcr {
             uint8_t tx_reset    : 1;    // Clear transmitter FIFO
             uint8_t dma         : 1;    // Enable DMA mode
             uint8_t             : 2;    // (reserved)
-            uint8_t trig        : 2;    // FIFO depth; see recv_trig enum
+            uint8_t trig        : 2;    // FIFO depth; see uart_recv_trig enum
         };
         uint8_t _value;
     };
@@ -423,6 +482,10 @@ struct com {
     struct mcr mcr;             // modem control register
     struct msr msr;             // modem status register
     uint16_t baud_divisor;      // baud rate divisor
+
+    // hardware parameters
+    bool fifo_enabled;          // input FIFO enabled
+    enum uart_recv_trig fifo_trig;   // input FIFO interrupt trigger level identifier
 
     // statistics
     struct serial_stats stats;
