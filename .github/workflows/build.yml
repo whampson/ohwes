@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches: [ test-pipeline ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Native Build Tools and QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential qemu-system-x86 unzip
+
+      - name: Cache Cross-Compiler Toolchain
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: build/i686-elf-tools
+          key: i686-elf-tools-15.2.0
+
+      # The prebuilt lordmilko toolchain is large (~874 MB); cache it to avoid
+      # re-downloading on every run.
+      - name: Download and Extract Cross-Compiler
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p build/i686-elf-tools
+          curl -fL -o /tmp/i686-elf-tools-linux.zip \
+            https://github.com/lordmilko/i686-elf-tools/releases/download/latest/i686-elf-tools-linux.zip
+          unzip -q /tmp/i686-elf-tools-linux.zip -d build/i686-elf-tools
+          rm -f /tmp/i686-elf-tools-linux.zip
+
+      - name: Build OS and Disk Image
+        run: |
+          TOOLCHAIN_BIN="$(dirname "$(find build/i686-elf-tools -name i686-elf-gcc -type f | head -1)")"
+          echo "Using cross-compiler from: $TOOLCHAIN_BIN"
+          export PATH="$TOOLCHAIN_BIN:$PWD/bin/tools:$PATH"
+          i686-elf-gcc --version | head -1
+          make -j"$(nproc)" img
+          ls -la bin/
