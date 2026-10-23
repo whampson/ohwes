@@ -33,6 +33,7 @@
 #include <kernel/kprint.h>
 #include <kernel/char.h>
 #include <kernel/console.h>
+#include <kernel/dpc.h>
 #include <kernel/ioctls.h>
 #include <kernel/irq.h>
 #include <kernel/mm.h>
@@ -54,10 +55,9 @@
 // terminal's page, resulting in only one visual update.
 
 // TODO: rename to 'vgaterm.c'
-// TODO: blank screen after some set amount of time
-// TODO: smooth scroll? :D
-// TODO: Shift+PgUp / Shift+PgDn for terminal scrollback
-// TODO: possible to show real underline using Underline Location Register?
+// TODO: smooth scroll? :D (DECSCLM ESC[?4h/l)
+// TODO: Shift+PgUp/Dn for active terminal scrollback
+// TODO: ability to print the glyphs that occupy C0 and C1 control char range
 
 static int s_curr_page = 0;
 static int s_curr_term = CONFIG_INITIAL_VT;
@@ -69,7 +69,7 @@ static struct vga_fb_info s_vga_fb;
 
 static void initialize_terminal(int num, struct terminal *term);
 static void terminal_defaults(struct terminal *term);
-static bool is_current_terminal(struct terminal *term);
+static bool is_active_terminal(struct terminal *term);
 static int write_to_terminal(struct terminal *term, const char *buf, size_t count);
 static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y);
 static void pos2xy(struct terminal *term, uint16_t pos);
@@ -89,6 +89,8 @@ static int terminal_tty_ioctl(struct tty *, int op, void *arg);
 static int terminal_tty_write(struct tty *, const char *buf, size_t count);
 static void terminal_tty_write_char(struct tty *, char c);
 static size_t terminal_tty_write_room(struct tty *);
+static void terminal_tty_stop(struct tty *);
+static void terminal_tty_start(struct tty *);
 
 static struct tty_driver terminal_driver = {
     .major = TTY_MAJOR,
@@ -108,8 +110,8 @@ static struct tty_driver terminal_driver = {
     .clear = NULL,
     .unthrottle = NULL,
     .throttle = NULL,
-    .stop= NULL,
-    .start = NULL,
+    .stop = terminal_tty_stop,
+    .start = terminal_tty_start,
     .hangup = NULL,
 };
 
@@ -206,6 +208,36 @@ static size_t terminal_tty_write_room(struct tty *tty)
     return (tty->stopped) ? 0 : 4096;
 }
 
+static void terminal_tty_stop(struct tty *tty)
+{
+    struct terminal *term;
+
+    int ret = tty_get_terminal(tty, &term);
+    if (ret < 0) {
+        return;
+    }
+
+    term->kb_state.hw_state.scrlk = true;
+    if (is_active_terminal(term)) {
+        ps2kb_apply_state(&term->kb_state.hw_state);
+    }
+}
+
+static void terminal_tty_start(struct tty *tty)
+{
+    struct terminal *term;
+
+    int ret = tty_get_terminal(tty, &term);
+    if (ret < 0) {
+        return;
+    }
+
+    term->kb_state.hw_state.scrlk = false;
+    if (is_active_terminal(term)) {
+        ps2kb_apply_state(&term->kb_state.hw_state);
+    }
+}
+
 static int terminal_tty_ioctl(struct tty *tty, int op, void *arg)
 {
     return -ENOTTY;
@@ -217,6 +249,8 @@ static int terminal_tty_ioctl(struct tty *tty, int op, void *arg)
 // console implementation
 
 #if CONFIG_VT_CONSOLE
+
+extern struct console vt_console;
 
 static dev_t vt_console_device(struct console *cons)
 {
@@ -301,7 +335,7 @@ struct console vt_console =
     .device = vt_console_device,
     .init = vt_console_setup,
     .write = vt_console_write,
-    .read_char = vt_console_getc
+    .read_char = vt_console_getc,
 };
 
 #endif
@@ -536,7 +570,7 @@ int switch_terminal(int num)
     }
 
     irq_mask(IRQ_KEYBOARD);
-    klog_defer();
+    suspend_klog();
 
     // swap frame buffers
     memcpy(curr->backbuf, get_curr_hwfb_page(), VT_FB_SIZE);
@@ -552,7 +586,7 @@ int switch_terminal(int num)
     next->kb_state._modkeys = curr->kb_state._modkeys;
     ps2kb_apply_state(&next->kb_state.hw_state);
 
-    klog_resume();
+    resume_klog();
     irq_unmask(IRQ_KEYBOARD);
 
 switch_unlock:
@@ -586,7 +620,7 @@ void poke_blanked_terminal(struct terminal *term)
 // ----------------------------------------------------------------------------
 // private functions
 
-static bool is_current_terminal(struct terminal *term)
+static bool is_active_terminal(struct terminal *term)
 {
     return term->number == s_curr_term;
 }
@@ -662,7 +696,9 @@ void __terminal_putc(struct terminal *term, char c)
     // control characters
     switch (c) {
         case '\a':      // ^G - BEL - beep!
-            beep(term->defaults.bell.hz, term->defaults.bell.ms, false);
+            if (is_active_terminal(term)) {
+                beep(term->defaults.bell.hz, term->defaults.bell.ms, false);
+            }
             break;
         case '\b':      // ^H - BS  - backspace
             backspace(term);
@@ -717,7 +753,7 @@ write_vga:
     if (update_attr || update_char) {
         set_fb_cell(term, char_pos, (update_char) ? c : '\0');
     }
-    if (is_current_terminal(term) && update_cursor_pos) {
+    if (is_active_terminal(term) && update_cursor_pos) {
         apply_cursor_pos(term);
     }
     poke_blanked_terminal(term);
@@ -1243,7 +1279,7 @@ static void cursor_style(struct terminal *term, int cursor)
             return; // invalid
     }
 
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_cursor_shape(term);
     }
 }
@@ -1252,7 +1288,7 @@ static void reset_terminal(struct terminal *term)
 {
     terminal_defaults(term);
     erase(term, ERASE_ALL);
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_vga_state(term);
     }
 }
@@ -1278,7 +1314,7 @@ static void restore_terminal(struct terminal *term)
     term->sgr = saved->sgr;
     term->cursor = saved->cursor;
 
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_vga_state(term);
     }
 }
@@ -1294,7 +1330,7 @@ static void restore_cursor_pos(struct terminal *term)
     term->cursor.x = term->saved_state.cursor.x;
     term->cursor.y = term->saved_state.cursor.y;
 
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_cursor_state(term);
     }
 }
@@ -1318,7 +1354,7 @@ static void reverse_video(struct terminal *term)
 static void unblank_screen(struct terminal *term)
 {
     term->disp.blank_on = false;
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_display_blank(term);
     }
 }
@@ -1326,7 +1362,7 @@ static void unblank_screen(struct terminal *term)
 static void blank_screen(struct terminal *term)
 {
     term->disp.blank_on = true;
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_display_blank(term);
     }
 }
@@ -1334,7 +1370,7 @@ static void blank_screen(struct terminal *term)
 static void set_autoblank(struct terminal *term)
 {
     term->autoblank_on = true;
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_display_blank(term);
     }
 }
@@ -1342,7 +1378,7 @@ static void set_autoblank(struct terminal *term)
 static void clear_autoblank(struct terminal *term)
 {
     term->autoblank_on = false;
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_display_blank(term);
     }
 }
@@ -1402,7 +1438,7 @@ static void /*__isr*/ autoblank_timer(int irq, struct iregs *regs)
 static void enable_blink(struct terminal *term)
 {
     term->disp.blink_on = true;
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_display_blink(term);
     }
 }
@@ -1410,7 +1446,7 @@ static void enable_blink(struct terminal *term)
 static void disable_blink(struct terminal *term)
 {
     term->disp.blink_on = false;
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_display_blink(term);
     }
 }
@@ -1418,7 +1454,7 @@ static void disable_blink(struct terminal *term)
 static void show_cursor(struct terminal *term)
 {
     term->cursor.hidden = false;
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_cursor_hidden(term);
     }
 }
@@ -1426,7 +1462,7 @@ static void show_cursor(struct terminal *term)
 static void hide_cursor(struct terminal *term)
 {
     term->cursor.hidden = true;
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         apply_cursor_hidden(term);
     }
 }
@@ -1517,7 +1553,7 @@ static void scroll(struct terminal *term, int n)   // n < 0 is reverse scroll
         set_fb_cell(term, pos, ' ');
     }
 
-    if (is_current_terminal(term)) {
+    if (is_active_terminal(term)) {
         vga_set_scan_start((s_curr_page * VT_FB_WORDS) + term->origin);
     }
 
@@ -1704,7 +1740,7 @@ static void pos2xy(struct terminal *term, uint16_t pos)
 
 static struct vga_cell * get_terminal_fb(struct terminal *term)
 {
-    return is_current_terminal(term) ? get_curr_hwfb_page() : term->backbuf;
+    return is_active_terminal(term) ? get_curr_hwfb_page() : term->backbuf;
 }
 
 static void set_sgr(const struct terminal *term, struct vga_cell *cell, struct _sgr_attr *sgr)

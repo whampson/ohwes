@@ -92,12 +92,14 @@ struct ps2kb
     struct dpc hotplug_dpc;     // hotplug detection
     struct dpc termsw_dpc;      // terminal switch
     struct dpc sysrq_dpc;       // SysRq handler
+    struct dpc scrlk_dpc;       // terminal pause toggle
 
     // atomic state
     volatile bool pending_leds;     // an LED update is armed
     volatile bool pending_hotplug;  // a hotplug flush is armed
     volatile bool pending_termsw;   // a terminal switch is armed
     volatile bool pending_sysrq;    // a SysRq action is armed
+    volatile bool pending_scrlk;    // a pause toggle is armed
     volatile bool ih_active;        // keyboard interrupt handler active
     volatile bool hw_connected;     // keyboard hardware is connected
     volatile uint64_t last_activity;// uptime (ns) of last genuine scancode
@@ -169,6 +171,7 @@ static void __dpc __ps2kb_leds_dpc(void *arg);
 static void __dpc __ps2kb_hotplug_detect_dpc(void *arg);
 static void __dpc __ps2kb_terminal_switch_dpc(void *arg);
 static void __dpc __ps2kb_sysrq_dpc(void *arg);
+static void __dpc __ps2kb_scrlk_dpc(void *arg);
 
 static bool ps2kb_selftest(void);
 static uint16_t ps2kb_identify(void);
@@ -338,6 +341,8 @@ static bool ps2kb_init(void)
 
 // ----------------------------------------------------------------------------
 
+// TODO: guard hotplug detect with CONFIG_* param
+
 static void ps2kb_on_disconnect(void)
 {
     uint32_t flags;
@@ -489,6 +494,25 @@ static void __dpc __ps2kb_terminal_switch_dpc(void *arg)
     restore_flags(flags);
 
     (void) switch_terminal(term);
+}
+
+static void __dpc __ps2kb_scrlk_dpc(void *arg)
+{
+    uint32_t flags;
+    struct tty *tty = arg;
+
+    cli_save(flags);
+    g_kb->pending_scrlk = false;
+    restore_flags(flags);
+
+    if (tty) {
+        if (tty->stopped) {
+            tty_start(tty);
+        }
+        else {
+            tty_stop(tty);
+        }
+    }
 }
 
 static void __dpc __ps2kb_sysrq_dpc(void *arg)
@@ -684,6 +708,7 @@ static void __isr kb_interrupt(int irq, struct iregs *regs)
     }
 
     uint8_t lock_bit = 0;
+    bool scrlk_press = false;
     switch (key) {
         case KEY_CAPSLK: lock_bit = (1 << 0); break;
         case KEY_NUMLK:  lock_bit = (1 << 0); break;
@@ -699,7 +724,7 @@ static void __isr kb_interrupt(int irq, struct iregs *regs)
             switch (key) {
                 case KEY_CAPSLK: kb_state->capslk ^= true; break;
                 case KEY_NUMLK:  kb_state->numlk  ^= true; break;
-                case KEY_SCRLK:  kb_state->scrlk  ^= true; break;
+                case KEY_SCRLK:  scrlk_press = true; break;
             }
             g_kb->lock_edge |= lock_bit;
         }
@@ -762,15 +787,18 @@ static void __isr kb_interrupt(int irq, struct iregs *regs)
         __hard_reset(); // TODO: soft reset
     }
 
-    // SCRLK: toggle terminal pause; uses flow control (CTRL+S/Q)
-    if (key == KEY_SCRLK) {
-        if (kb_state->scrlk)
-            tty_putq(tty, ASCII_DC3); // CTRL+S XOFF
-        else
-            tty_putq(tty, ASCII_DC1); // CTRL+Q XON
+    // SCRLK: toggle terminal pause; the LED tracks the tty's stopped
+    // state through the terminal driver's stop/start hooks (also used by ^S/^Q)
+    if (key == KEY_SCRLK && scrlk_press && tty) {
+        if (!g_kb->pending_scrlk) {
+            g_kb->pending_scrlk = true;
+            schedule_dpc(&g_kb->scrlk_dpc, __ps2kb_scrlk_dpc, tty);
+        }
     }
 
     // TODO: CTRL+SCRLK = dump/flush kernel log
+
+    // TODO: Shift+PgUp/Dn = scroll active terminal
 
     // ALT+<FN>: switch terminal
     if (!input_state->ctrl && input_state->alt && is_fnkey(key)) {
