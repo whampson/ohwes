@@ -48,7 +48,7 @@ struct ring {
 
 // initializer list
 // NOTE: capacity must be >0 */
-#define RING_INIT(buffer, capacity) { \
+#define RING_INITIALIZER(buffer, capacity) { \
     .buf = (buffer), .cap = (capacity), \
     .count = 0, .head = 0, .tail = 0, \
 }

@@ -32,9 +32,9 @@ typedef struct {
 static void test_ring_initializer_list(void)
 {
     int buffer[10];
-    struct ring r = RING_INIT(buffer, 10);
+    struct ring r = RING_INITIALIZER(buffer, 10);
 
-    TEST("RING_INIT initializer list");
+    TEST("RING_INITIALIZER initializer list");
     ASSERT_EQ_INT((void *)buffer, r.buf, "buffer pointer incorrect");
     ASSERT_EQ_INT(10, r.cap, "capacity incorrect");
     ASSERT_EQ_INT(0, r.count, "count should be 0");
@@ -46,7 +46,7 @@ static void test_ring_initializer_list(void)
 static void test_ring_clear(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
 
     TEST("clear");
     ring_push_back(&r, 10, int);
@@ -63,7 +63,7 @@ static void test_ring_clear(void)
 static void test_push_pop_int(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     int val;
 
     TEST("push back and pop front (int)");
@@ -100,7 +100,7 @@ static void test_push_pop_int(void)
 static void test_push_pop_char(void)
 {
     char buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     char val;
 
     TEST("push back and pop front (char)");
@@ -136,7 +136,7 @@ static void test_push_pop_char(void)
 static void test_push_pop_struct(void)
 {
     test_struct buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     test_struct val;
 
     TEST("push back and pop front (struct)");
@@ -186,7 +186,7 @@ static void test_push_pop_struct(void)
 static void test_peek(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
 
     TEST("peek front and back");
     ring_push_back(&r, 10, int);
@@ -202,7 +202,7 @@ static void test_peek(void)
 static void test_get_set_at(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     int val;
 
     TEST("get and set at position");
@@ -228,7 +228,7 @@ static void test_get_set_at(void)
 static void test_iterator_int(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     int val;
 
     TEST("forward iteration");
@@ -248,7 +248,7 @@ static void test_iterator_int(void)
 static void test_iterator_struct(void)
 {
     test_struct buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     test_struct val;
 
     TEST("forward iteration (struct)");
@@ -284,7 +284,7 @@ static void test_iterator_struct(void)
 static void test_reverse_iterator_int(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     int val;
 
     TEST("reverse iteration");
@@ -304,7 +304,7 @@ static void test_reverse_iterator_int(void)
 static void test_reverse_iterator_struct(void)
 {
     test_struct buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     test_struct val;
 
     TEST("reverse iteration (struct)");
@@ -340,7 +340,7 @@ static void test_reverse_iterator_struct(void)
 static void test_push_front_pop_back_int(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     int val;
 
     TEST("push front and pop back (int)");
@@ -376,7 +376,7 @@ static void test_push_front_pop_back_int(void)
 static void test_push_front_pop_back_char(void)
 {
     char buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     char val;
 
     TEST("push front and pop back (char)");
@@ -412,7 +412,7 @@ static void test_push_front_pop_back_char(void)
 static void test_push_front_pop_back_struct(void)
 {
     test_struct buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     test_struct val;
 
     TEST("push front and pop back (struct)");
@@ -462,7 +462,7 @@ static void test_push_front_pop_back_struct(void)
 static void test_peek_both_ends_int(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
 
     TEST("peek both ends after mixed ops (int)");
     ring_push_back(&r, 10, int);
@@ -484,7 +484,7 @@ static void test_peek_both_ends_int(void)
 static void test_peek_both_ends_char(void)
 {
     char buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
 
     TEST("peek both ends after mixed ops (char)");
     ring_push_back(&r, 'a', char);
@@ -506,7 +506,7 @@ static void test_peek_both_ends_char(void)
 static void test_peek_both_ends_struct(void)
 {
     test_struct buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     test_struct val;
 
     TEST("peek both ends after mixed ops (struct)");
@@ -559,7 +559,7 @@ static void test_ring_init(void)
 static void test_accessors(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
 
     TEST("accessors");
     ASSERT_EQ_INT(5, ring_capacity(&r), "capacity should be 5");
@@ -579,7 +579,7 @@ static void test_accessors(void)
 static void test_empty_ring_failures(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     int val;
 
     TEST("empty ring failure paths");
@@ -596,7 +596,7 @@ static void test_empty_ring_failures(void)
 static void test_out_of_bounds(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     int val;
 
     TEST("out-of-bounds get/set");
@@ -614,7 +614,7 @@ static void test_out_of_bounds(void)
 static void test_clear_then_reuse(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     int val;
 
     TEST("clear then reuse");
@@ -636,7 +636,7 @@ static void test_clear_then_reuse(void)
 static void test_wrap_around(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     int val;
 
     TEST("wrap-around");
@@ -692,7 +692,7 @@ static void test_wrap_around(void)
 static void test_iterator_empty(void)
 {
     int buffer[5];
-    struct ring r = RING_INIT(buffer, 5);
+    struct ring r = RING_INITIALIZER(buffer, 5);
     int val = -1;
     int iterations = 0;
     size_t i = 0;
