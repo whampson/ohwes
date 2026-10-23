@@ -43,19 +43,20 @@
 #include <kernel/serial.h>
 #include <sys/ohwes.h>
 
-#define GDB_NACK_THRESH     10
-#define GDB_BUFLEN          512
-#define GDB_IO_POLLCNT      1000000
-#define GDB_IO_MAX_TIMEOUT  1000
+#define GDB_NACK_THRESH         10
+#define GDB_BUFLEN              512
+#define GDB_IO_POLLCNT          1000000
+#define GDB_IO_MAX_TIMEOUT      1000
 
-#define ENABLE_GDB_PRINT    0
-#define ENABLE_GDB_ERROR    0
-#define PRINT_ACKS          0
+#define ENABLE_GDB_PRINT        0
+#define ENABLE_GDB_ERROR        0
+#define PRINT_ACKS              0
 
-#define GDB_RECV_PENDING    (-2)
+#define GDB_STATUS_EOF          (-1)
+#define GDB_STATUS_RECV_PEND    (-2)
 
 #if ENABLE_GDB_PRINT
-#define GDB_PRINT(...)  pr_info(KLOG_INFO "gdb: " __VA_ARGS__)
+#define GDB_PRINT(...)  pr_info(KLOG_LEVEL_INFO "gdb: " __VA_ARGS__)
 #else
 #define GDB_PRINT(...)
 #endif
@@ -182,8 +183,8 @@ extern __noreturn void __hard_reset(void);
 
 #define GDB_PUTC_EOF_CHECK(state, c) \
 do { \
-    if (gdb_putc(state, c) == EOF) { \
-        return EOF; \
+    if (gdb_putc(state, c) == GDB_STATUS_EOF) { \
+        return GDB_STATUS_EOF; \
     } \
 } while (0)
 
@@ -286,9 +287,9 @@ int gdb_main(struct iregs *regs, bool from_com)
     }
 
     // main command loop
-    while (status != EOF) {
+    while (status != GDB_STATUS_EOF) {
         status = gdb_recv_packet(state, pkt, sizeof(pkt), &len);
-        if (status == EOF) {
+        if (status == GDB_STATUS_EOF) {
             break;      // timeout; break-out
         }
         else if (status == 0x03) {
@@ -358,7 +359,7 @@ int gdb_main(struct iregs *regs, bool from_com)
         }
     }
 
-    if (status == EOF) {
+    if (status == GDB_STATUS_EOF) {
         GDB_ERROR("EOF!\n");
         status = gdb_send_error(state, GDB_EUNKNOWN);   // communication error
         gdb_enable_com_int(state);  // ensure we can receive new characters
@@ -499,8 +500,8 @@ static int gdb_write_regs(struct gdb_state *state, char *pkt, size_t pktlen)
     int status;
 
     status = decode_hex(pkt, pktlen, state->regs, sizeof(state->regs));
-    if (status == EOF) {
-        return EOF;     // payload too large
+    if (status == GDB_STATUS_EOF) {
+        return GDB_STATUS_EOF;     // payload too large
     }
 
     return gdb_send_ok(state);
@@ -518,18 +519,18 @@ static int gdb_read_mem(struct gdb_state *state, char *pkt, size_t pktlen)
     addr = (uintptr_t) strtoul(pkt, &p, 16);
     if (errno == ERANGE || *p != ',') {
         GDB_ERROR("read_mem: bad packet format (addr)\n");
-        return EOF;
+        return GDB_STATUS_EOF;
     }
 
     errno = 0;
     count = strtoul(p+1, &p, 16);
     if (errno == ERANGE || *p != '\0') {
         GDB_ERROR("read_mem: bad packet format (count)\n");
-        return EOF;
+        return GDB_STATUS_EOF;
     }
     if (count > sizeof(data)) {
         GDB_ERROR("read_mem: too many bytes requested!\n");
-        return EOF;
+        return GDB_STATUS_EOF;
     }
 
     if (count == 0 || (addr + count - 1) < addr ||
@@ -554,18 +555,18 @@ static int gdb_write_mem(struct gdb_state *state, char *pkt, size_t pktlen)
     addr = (uintptr_t) strtoul(pkt, &p, 16);
     if (errno == ERANGE || *p != ',') {
         GDB_ERROR("write_mem: bad packet format (addr)\n");
-        return EOF;
+        return GDB_STATUS_EOF;
     }
 
     errno = 0;
     count = strtoul(p+1, &p, 16);
     if (errno == ERANGE || *p != ':') {
         GDB_ERROR("write_mem: bad packet format (count)\n");
-        return EOF;
+        return GDB_STATUS_EOF;
     }
     if (count > sizeof(data)) {
         GDB_ERROR("write_mem: too many bytes requested\n");
-        return EOF;
+        return GDB_STATUS_EOF;
     }
 
     if (count == 0 || (addr + count - 1) < addr ||
@@ -574,8 +575,8 @@ static int gdb_write_mem(struct gdb_state *state, char *pkt, size_t pktlen)
     }
 
     status = decode_hex(p+1, (size_t) pktlen - (p+1 - pkt), data, count);
-    if (status == EOF) {
-        return EOF;     // payload too large
+    if (status == GDB_STATUS_EOF) {
+        return GDB_STATUS_EOF;     // payload too large
     }
 
     memcpy((void *) addr, data, count);
@@ -620,7 +621,7 @@ static void gdb_report_break(struct gdb_state *state)
             state->interrupt_pending = true;
             return;
         }
-        else if (status == GDB_RECV_PENDING) {
+        else if (status == GDB_STATUS_RECV_PEND) {
             (void) gdb_getc(state); // consume unexpected char, retry
         }
         // else: timeout (EOF), retry
@@ -632,8 +633,8 @@ static int gdb_recv_ack(struct gdb_state *state)
     int c;
 
     c = gdb_getc(state);
-    if (c == EOF) {
-        return EOF; // timeout
+    if (c == GDB_STATUS_EOF) {
+        return GDB_STATUS_EOF; // timeout
     }
     switch (c) {
         case '+': return gdb_handle_ack(state);
@@ -649,7 +650,7 @@ static int gdb_recv_ack(struct gdb_state *state)
 
     state->pending_char = c;    // got something unexpected, cache it
     state->has_pending_char = true;
-    return GDB_RECV_PENDING;
+    return GDB_STATUS_RECV_PEND;
 }
 
 static int gdb_handle_ack(struct gdb_state *state)
@@ -704,7 +705,7 @@ static int gdb_recv_packet(struct gdb_state *state,
     do { \
         if (++(x) >= GDB_IO_MAX_TIMEOUT) { \
             GDB_ERROR("recv: host disconnected (timeout)\n"); \
-            return EOF; \
+            return GDB_STATUS_EOF; \
         } \
     } while (0)
 
@@ -715,7 +716,7 @@ static int gdb_recv_packet(struct gdb_state *state,
         // read 'til we find packet start
         while (true) {
             c = gdb_getc(state);
-            if (c == EOF) {
+            if (c == GDB_STATUS_EOF) {
                 HANDLE_TIMEOUT(timeout_count);
                 continue;
             }
@@ -749,7 +750,7 @@ static int gdb_recv_packet(struct gdb_state *state,
         // read-in packet data
         while (1) {
             c = gdb_getc(state);
-            if (c == EOF) {
+            if (c == GDB_STATUS_EOF) {
                 HANDLE_TIMEOUT(timeout_count);
                 continue;
             }
@@ -765,7 +766,7 @@ static int gdb_recv_packet(struct gdb_state *state,
 
             if (length >= (bufsiz-1) || length >= (GDB_BUFLEN-1)) {
                 GDB_ERROR("recv: packet buffer overflow!\n");
-                return EOF;
+                return GDB_STATUS_EOF;
             }
             buf[(length)++] = c;
             cksum += c;
@@ -776,7 +777,7 @@ static int gdb_recv_packet(struct gdb_state *state,
         int i = 0;
         while (i < 2) {
             c = gdb_getc(state);
-            if (c == EOF) {
+            if (c == GDB_STATUS_EOF) {
                 HANDLE_TIMEOUT(timeout_count);
                 continue;
             }
@@ -789,7 +790,7 @@ static int gdb_recv_packet(struct gdb_state *state,
             cksum_buf[i++] = c;
         }
         status = decode_hex(cksum_buf, sizeof(cksum_buf), &tx_cksum, sizeof(tx_cksum));
-        if (status == EOF) {
+        if (status == GDB_STATUS_EOF) {
             (void) gdb_send_nack(state);    // send NACK and retry
             continue;
         }
@@ -822,12 +823,12 @@ static int gdb_send_packet_raw(struct gdb_state *state, const char *buf, size_t 
 
     if (!buf && len > 0) {
         GDB_ERROR("send: user provided NULL buffer!\n");
-        return EOF;
+        return GDB_STATUS_EOF;
     }
 
     if (len > (GDB_BUFLEN-1)) {
         GDB_ERROR("send: packet buffer overflow!\n");
-        return EOF;
+        return GDB_STATUS_EOF;
     }
 
     frame[0] = '$';
@@ -837,8 +838,8 @@ static int gdb_send_packet_raw(struct gdb_state *state, const char *buf, size_t 
     }
 
     status = encode_hex(cksum_buf, sizeof(cksum_buf), &cksum, 1);
-    if (status == EOF) {
-        return EOF;
+    if (status == GDB_STATUS_EOF) {
+        return GDB_STATUS_EOF;
     }
 
     frame[1 + len] = '#';
@@ -868,8 +869,8 @@ static int gdb_send_packet_raw(struct gdb_state *state, const char *buf, size_t 
 static int gdb_send_packet(struct gdb_state *state, const char *buf, size_t len)
 {
     int status = gdb_send_packet_raw(state, buf, len);
-    if (status == EOF) {
-        return EOF;
+    if (status == GDB_STATUS_EOF) {
+        return GDB_STATUS_EOF;
     }
     return gdb_recv_ack(state);
 }
@@ -893,8 +894,8 @@ static int gdb_send_signal(struct gdb_state *state, int signal)
 
     buf[0] = 'S';
     status = encode_hex(buf+1, sizeof(buf)-1, &sig, 1);
-    if (status == EOF) {
-        return EOF;
+    if (status == GDB_STATUS_EOF) {
+        return GDB_STATUS_EOF;
     }
 
     len = status + 1;
@@ -911,8 +912,8 @@ static int gdb_send_signal_noack(struct gdb_state *state, int signal)
 
     buf[0] = 'S';
     status = encode_hex(buf+1, sizeof(buf)-1, &sig, 1);
-    if (status == EOF) {
-        return EOF;
+    if (status == GDB_STATUS_EOF) {
+        return GDB_STATUS_EOF;
     }
 
     len = status + 1;
@@ -929,8 +930,8 @@ static int gdb_send_error(struct gdb_state *state, int error)
 
     buf[0] = 'E';
     status = encode_hex(buf+1, sizeof(buf)-1, &err, 1);
-    if (status == EOF) {
-        return EOF;
+    if (status == GDB_STATUS_EOF) {
+        return GDB_STATUS_EOF;
     }
     state->error_count++;
 
@@ -966,7 +967,7 @@ static int encode_hex(char *buf, size_t bufsiz, const void *data, size_t len)
 
     if ((len*2) > bufsiz) {
         GDB_ERROR("encode_hex: payload too large!\n");
-        return EOF;
+        return GDB_STATUS_EOF;
     }
 
     for (int i = 0; i < len; i++) {
@@ -987,7 +988,7 @@ static int decode_hex(const char *buf, size_t bufsiz, void *data, size_t len)
 
     if ((len*2) > bufsiz) {
         GDB_ERROR("decode_hex: payload too large!\n");
-        return EOF;
+        return GDB_STATUS_EOF;
     }
 
     p = (uint8_t *) data;
@@ -1003,7 +1004,7 @@ static int decode_hex(const char *buf, size_t bufsiz, void *data, size_t len)
                 *p += (tolower(c) - 'a') + 0xA;
             }
             else {
-                return EOF; // invalid hex digit
+                return GDB_STATUS_EOF; // invalid hex digit
             }
         }
     }
@@ -1031,7 +1032,7 @@ static int gdb_getc(struct gdb_state *state)
         return com_in(state->com, UART_RX);
     }
 
-    return EOF;     // timeout
+    return GDB_STATUS_EOF;     // timeout
 }
 
 static int gdb_putc(struct gdb_state *state, char c)
@@ -1045,7 +1046,7 @@ static int gdb_putc(struct gdb_state *state, char c)
         return c;
     }
 
-    return EOF;     // timeout
+    return GDB_STATUS_EOF;     // timeout
 }
 
 static void gdb_disable_com_int(struct gdb_state *state)

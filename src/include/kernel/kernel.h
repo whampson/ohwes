@@ -53,7 +53,7 @@ extern __fastcall __noreturn void _kpanic(const char *fmt, ...);
 
 #define panic(...) \
 do { \
-    _kpanic("\n*** KERNEL PANIC - " __VA_ARGS__); \
+    _kpanic("\r\n\r\n*** KERNEL PANIC - " __VA_ARGS__); \
 } while (0)
 
 // beep at hz for millis;

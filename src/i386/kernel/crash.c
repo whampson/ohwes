@@ -55,7 +55,6 @@ int g_test_crashkey;
 int g_test_soft_double_fault;
 #endif
 
-extern struct console *g_consoles;
 static const char *exception_names[NR_EXCEPTIONS];
 
 static int console_print(const char *fmt, ...) __format_printf(1, 2);
@@ -93,7 +92,7 @@ __noreturn void __idle(void)
 
 __noreturn void __hard_reset(void)
 {
-    kprint(KLOG_ALERT "system is going down NOW!\n");
+    kprint(KLOG_LEVEL_ALERT "system is going down NOW!\n");
 
     // first, try resetting via the PS/2 controller
     ps2_write_cmd(PS2_CMD_SYSRESET);
@@ -120,10 +119,10 @@ static void show_kdcom_msg(dumpfn_t dumpfn)
         return;
     }
 
-    if (dumpfn == kprint) dumpfn(KLOG_INFO);
+    if (dumpfn == kprint) dumpfn(KLOG_LEVEL_WARN);
     dumpfn("\e[5m*** DEBUG BREAK - attach a debugger (GDB) to COM%d now...",
         CONFIG_SERIAL_DEBUG_COM);
-    if (dumpfn == kprint) dumpfn(KLOG_DEFAULT);
+    if (dumpfn == kprint) dumpfn(KLOG_LEVEL_DEFAULT);
 }
 
 //
@@ -401,8 +400,8 @@ __fastcall __noreturn void _kpanic(const char *fmt, ...)
 
     dump = (g_consoles) ? kprint  : vga_print;
     vdump = (g_consoles) ? vkprint : vga_vprint;
-    prefix = (g_consoles) ? KLOG_FATAL : ANSI_BOLD ANSI_RED;
-    suffix = (g_consoles) ? KLOG_DEFAULT : ANSI_UNBOLD ANSI_FG_DEFAULT;
+    prefix = (g_consoles) ? KLOG_LEVEL_FATAL : ANSI_BOLD ANSI_RED;
+    suffix = (g_consoles) ? KLOG_LEVEL_DEFAULT : ANSI_UNBOLD ANSI_FG_DEFAULT;
 
     va_start(args, fmt);
     dump(prefix);

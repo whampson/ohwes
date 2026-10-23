@@ -63,10 +63,12 @@
 #define CONFIG_PRINT_IOCTL          1   // (bool) show ioctl calls
 
 // kernel log behavior; log messages written to consoles
-#define CONFIG_KLOG_LEVEL           5   // (0-5) kernel console log level (4=INFO)
+#define CONFIG_KLOG_LEVEL           5   // (0-5) kernel console log level (5=DEBUG)
+#define CONFIG_KLOG_DEFAULT_MSG_LEVEL 4 // (0-5) default message log level (4=INFO)
 #define CONFIG_KLOG_SHOW_TIME       1   // (bool) show timestamp in kernel log messages
 #define CONFIG_KLOG_USE_COLOR       1   // (bool) print a colorful kernel log
 #define CONFIG_KLOG_RING_SIZE       4   // (pages) log ring buffer size
+#define CONFIG_KPRINT_BUFSIZ        512 // (int) maximum kprint message length
 
 // console devices
 #define CONFIG_VT_CONSOLE           1   // (bool) use a virtual terminal as a console device
