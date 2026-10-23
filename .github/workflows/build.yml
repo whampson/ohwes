@@ -31,7 +31,7 @@ jobs:
         run: |
           mkdir -p build/i686-elf-tools/15.2.0
           curl -fL -o /tmp/i686-elf-tools-linux.zip \
-            https://github.com/lordmilko/i686-elf-tools/releases/download/latest/i686-elf-tools-linux.zip
+            https://github.com/lordmilko/i686-elf-tools/releases/download/15.2.0/i686-elf-tools-linux.zip
           unzip -q /tmp/i686-elf-tools-linux.zip -d build/i686-elf-tools/15.2.0
           rm -f /tmp/i686-elf-tools-linux.zip
 
