@@ -337,7 +337,7 @@ __init void init_serial_driver(void)
         }
 
         com->valid = true;
-        pr_info("com%d: detected on port %Xh\n", com->num, com->io_port);
+        pr_info("com%d: detected COM on port %Xh\n", com->num, com->io_port);
 
         // collect initial register state
         shadow_regs(com);
@@ -345,15 +345,17 @@ __init void init_serial_driver(void)
         // TODO: kind of want to remove this and check explicitly for kernel debug reservation
         if (reserve_io_range(com->io_port, 8, "serial") < 0) {
             com->reserved = true;   // serial port is reserved by another driver (e.g. debug interface)
-            pr_warn("com%d: port reserved, not usable as a tty\n", com->num);
+            pr_warn("com%d: COM port reserved, not usable as a tty\n", com->num);
             continue;
         }
-    }
 
 #if CONFIG_SERIAL_CONSOLE
-    pr_info("com%d: using as console", serial_console.number);
-    register_console(&serial_console);
+        if (serial_console.number == com->num) {
+            register_console(&serial_console);
+            pr_info("com%d: registered as console device\n", com->num);
+        }
 #endif
+    }
 
     irq_register(IRQ_COM1, com1_irq);   // TODO: disallow duplicate IH at API level
     irq_register(IRQ_COM2, com2_irq);

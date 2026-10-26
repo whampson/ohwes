@@ -66,6 +66,7 @@ static void vga_print_centered(int maxwidth, const char *fmt, ...) __format_prin
 static void vga_print_wrapped(int margin, const char *fmt, ...) __format_printf(2, 3);
 
 extern __init void init_early_terminal(int num, struct terminal *term);
+extern void __terminal_putc(struct terminal *term, char c); // write directly to terminal, bypassing TTY
 
 typedef int (*dumpfn_t)(const char *fmt, ...) __format_printf(1, 2);
 
@@ -108,6 +109,7 @@ __noreturn void __hard_reset(void)
 
 void __debug_break(void)
 {
+    show_kdcom_msg((g_consoles) ? kprint : vga_print);
     __sti(); __int3();
 }
 
@@ -246,7 +248,7 @@ static __noreturn void show_crash_screen(
     vga_print("\n\n\n");
 
 #if CONFIG_SERIAL_DEBUG
-    vga_print_centered(MaxWidth, "\e4\e[5m*** COMDBG AVAILABLE ***\e[25m");
+    vga_print_centered(MaxWidth, "\e[=5~\e[5m*** COMDBG AVAILABLE ***\e[25m");
     vga_print("\n");
     vga_print_centered(MaxWidth,
         "Attach a debugger (GDB) to COM%d now . . .",
@@ -254,13 +256,13 @@ static __noreturn void show_crash_screen(
 #else
     if (kb_avail() && cpu->iregs.vec != IRQ_KEYBOARD) {
         vga_print_centered(MaxWidth,
-            "Press CTRL+ALT+DEL to restart your computer . . . \e6");
+            "Press CTRL+ALT+DEL to restart your computer . . . \e[?25h");
     }
     else {
         vga_print_centered(MaxWidth,
             "The exception occurred in the keyboard handler.\n");
         vga_print_centered(MaxWidth,
-            "Please restart your computer manually.\e6");
+            "Please restart your computer manually.\e[?25h");
     }
 #endif
 
@@ -319,7 +321,6 @@ __fastcall void handle_exception(struct iregs *iregs)
 
 #if CONFIG_SERIAL_DEBUG
     if (iregs->vec == BREAKPOINT || iregs->vec == DEBUG_EXCEPTION) {
-        show_kdcom_msg((g_consoles) ? kprint : vga_print);
         __enter_debugger_loop(iregs, /*from_com=*/false);    // blocks until a debugger connects
         return;
     }

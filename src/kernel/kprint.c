@@ -34,6 +34,12 @@
 #include <kernel/mm.h>
 #include <kernel/terminal.h>
 
+// TODO: maybe a timer to print any incomplete log lines;
+//      like, if the user calls kprint() without '\n' at the end, and no other
+//      kprint calls happen for a long time, make sure that last message shows
+//      up within some short amount of time. If the user had intended to use <c>
+//      to continue the line, it should've happened long before this timeout
+
 #if CONFIG_KLOG_USE_COLOR
 // TODO: make color prefixes configurable
 static const char* _klog_level_prefix[MAX_KLOG_LEVEL+1] =
@@ -49,7 +55,7 @@ static const char *_klog_level_suffix = ANSI_RESET;
 static const char *_klog_timestamp_color = "\e[0;32m";
 #endif
 
-static klog_level_t _klog_log_level = CONFIG_KLOG_LEVEL;    // TODO: control this with SysRq+<0-5>
+static volatile klog_level_t _klog_log_level = CONFIG_KLOG_LEVEL;  // can control w/ SysRq+<0-5>
 static klog_level_t _klog_curr_msg_level = CONFIG_KLOG_DEFAULT_MSG_LEVEL;
 
 static struct ring _klog_ring =
@@ -461,6 +467,18 @@ void resume_klog(void)
     _klog_suspend_count--;
     if (_klog_suspend_count == 0) {
         klog_flush_lines();
+    }
+}
+
+klog_level_t get_klog_level(void)
+{
+    return _klog_log_level;
+}
+
+void set_klog_level(klog_level_t level)
+{
+    if (level <= MAX_KLOG_LEVEL) {
+        _klog_log_level = level;
     }
 }
 

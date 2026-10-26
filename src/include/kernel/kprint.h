@@ -21,22 +21,22 @@
  * written to all registered consoles. Log messages are prepended with a log
  * level prefix `<N>`, where N is the log level (0-5, with 0 being the most
  * important). If `CONFIG_KLOG_SHOW_TIME` is set, a timestamp is prepended to
- * the log message when after the level prefix in the form `[<sec>.<usec>]`.
+ * the log message just after the level prefix in the form `[<sec>.<usec>] `.
  *
  * The user may designate a message's log level by prepending one of the `<N>`
  * prefixes to their message, e.g. `kprint("<4>Foo!");`. The message will only
  * be written to the registered consoles if the message's log level is equal to
  * or exceeds the kernel's current set log level in terms of importance.
  * However, all messages regardless of their log level are kept in the ring
- * buffer until overwritten. If no log level prefix is provided, the kernel's
- * current set log level is assumed. The user may also specify one of `<c>` or
- * `<d>`, where `<c>` will the current line (i.e. append the current message to
- * the most-recently-written log message), and `<d>` will use the default log
- * level (specified by `CONFIG_KLOG_DEFAULT_MSG_LEVEL`). Log level prefixes may
- * only appear at the very beginning of a message; any string of the form `<N>`
- * present elsewhere in the string is treated as normal text. Similarly,
- * timestamps are not controllable by the user; they are taken at the time the
- * message is written into the ring buffer.
+ * buffer until overwritten. If no log level prefix is provided, the default
+ * message level (specified by `CONFIG_KLOG_DEFAULT_MSG_LEVEL`) is assumed. The
+ * user may also specify one of `<c>` or `<d>`, where `<c>` will continue the
+ * current line (i.e. append the current message to the most-recently-written
+ * log message), and `<d>` will use the default log level (specified by
+ * `CONFIG_KLOG_DEFAULT_MSG_LEVEL`). Log level prefixes are only honored at the
+ * start of a line; any string of the form `<N>` present elsewhere in a line is
+ * treated as normal text. Similarly, timestamps are not controllable by the
+ * user; they are taken at the time the message is written into the ring buffer.
  * =============================================================================
  */
 
@@ -78,11 +78,15 @@ typedef unsigned int klog_level_t;
  * to the consoles, however all messages will be retained in the internal ring
  * buffer (until it gets overwritten, see `CONFIG_KLOG_RING_SIZE`).
  *
- * Indicate a message's importance by prepending one of the  `KLOG_LEVEL_`
- * strings the message, or by calling one of the log level macros below.
- * Messages written without a level prefix are logged at `CONFIG_KLOG_LEVEL`.
- * Control the kernel's current log level using `Alt+SysRq+<0-9>`. Log messages
- * are always terminated with `\n` unless `KLOG_LEVEL_CONT` is used.
+ * Indicate a message's importance by prepending one of the `KLOG_LEVEL_`
+ * strings to the message, or by calling one of the log level macros below.
+ * Messages written without a level prefix are logged at
+ * `CONFIG_KLOG_DEFAULT_MSG_LEVEL`.
+ *
+ * Control the kernel's current log level using `SysRq+<0-5>`. Messages are not
+ * automatically terminated with a newline; a message lacking a trailing `\n`
+ * stays buffered as an incomplete line until a later message closes it, or
+ * `KLOG_LEVEL_CONT` is used to continue the current line.
  */
 extern int kprint(const char *fmt, ...)
     __format_printf(1, 2);
@@ -119,5 +123,17 @@ void suspend_klog(void);
  * to all consoles immediately.
  */
 void resume_klog(void);
+
+/**
+ * Get the current kernel log level. Messages of equal or higher importance will
+ * be printed to the consoles.
+ */
+klog_level_t get_klog_level(void);
+
+/**
+ * Set the current kernel log level. Messages of equal or higher importance will
+ * be printed to the consoles.
+ */
+void set_klog_level(klog_level_t level);
 
 #endif // __KPRINT_H

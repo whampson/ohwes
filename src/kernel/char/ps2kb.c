@@ -518,7 +518,7 @@ static void __dpc __ps2kb_scrlk_dpc(void *arg)
 static void __dpc __ps2kb_sysrq_dpc(void *arg)
 {
     uint32_t flags;
-    char c = (char)(intptr_t) arg;
+    unsigned char c = (unsigned char)(intptr_t) arg;
 
     cli_save(flags);
     g_kb->pending_sysrq = false;
@@ -526,7 +526,7 @@ static void __dpc __ps2kb_sysrq_dpc(void *arg)
 
     switch (c) {
         case 'c':   // c - crash
-            __sti(); load_ss(0x00); for (;;);
+            load_ss(0x00); for (;;);
             // TODO: trigger crash_key_irq poison selection prompt
         case 'g':   // g - debug break
             __debug_break();
@@ -535,8 +535,19 @@ static void __dpc __ps2kb_sysrq_dpc(void *arg)
             __hard_reset();
             break;
         default:
-            if (c != '\0') {
-                pr_info("sysrq: HELP: crash(c) debug-break(g) reboot(r)\a\n");
+            if (isdigit(c) && (c - '0') <= MAX_KLOG_LEVEL) {
+                set_klog_level(MAX_KLOG_LEVEL); // ensure the message is always printed
+                kprint("sysrq: log-level is now %d\n", c - '0');
+                set_klog_level((klog_level_t) (c - '0'));
+            }
+            else if (c != '\0') {
+                klog_level_t level = get_klog_level();
+                set_klog_level(MAX_KLOG_LEVEL);
+                kprint("sysrq: HELP: "
+                    "crash(c) debug-break(g) reboot(r) "
+                    "log-level(0-%d)\a\n",
+                    MAX_KLOG_LEVEL);
+                set_klog_level(level);
             }
             break;
     }

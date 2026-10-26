@@ -196,19 +196,11 @@ struct terminal * get_terminal(int num);
 // switch to a virtual terminal
 int switch_terminal(int num);
 
-// write directly to terminal, bypassing TTY
-void __terminal_putc(struct terminal *term, char c);
-
 // wake active terminal from screensaver
 void poke_blanked_terminal(struct terminal *term);
 
-// has the keyboard driver been configured
-// and is the keyboard currently usable?
+// has the keyboard driver been configured and is the keyboard currently usable?
 bool kb_avail(void);
-bool kb_sysrq_enabled(void);        // will SysRq functions work?
-void kb_enable_sysrq(bool enable);  // enable/disable SysRq key
-bool kb_int3_enabled(void);         // will Ctrl+Alt+F3 trigger a debug break?
-void kb_enable_int3(bool enable);   // enable/disable debug break via keyboard
 
 /**
  * ASCII Control Characters
