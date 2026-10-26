@@ -55,7 +55,7 @@ static const char *_klog_level_suffix = ANSI_RESET;
 static const char *_klog_timestamp_color = "\e[0;32m";
 #endif
 
-static klog_level_t _klog_log_level = CONFIG_KLOG_LEVEL;    // TODO: control this with SysRq+<0-5>
+static volatile klog_level_t _klog_log_level = CONFIG_KLOG_LEVEL;  // can control w/ SysRq+<0-5>
 static klog_level_t _klog_curr_msg_level = CONFIG_KLOG_DEFAULT_MSG_LEVEL;
 
 static struct ring _klog_ring =
@@ -467,6 +467,18 @@ void resume_klog(void)
     _klog_suspend_count--;
     if (_klog_suspend_count == 0) {
         klog_flush_lines();
+    }
+}
+
+klog_level_t get_klog_level(void)
+{
+    return _klog_log_level;
+}
+
+void set_klog_level(klog_level_t level)
+{
+    if (level <= MAX_KLOG_LEVEL) {
+        _klog_log_level = level;
     }
 }
 
