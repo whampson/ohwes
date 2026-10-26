@@ -109,6 +109,7 @@ __noreturn void __hard_reset(void)
 
 void __debug_break(void)
 {
+    show_kdcom_msg((g_consoles) ? kprint : vga_print);
     __sti(); __int3();
 }
 
@@ -320,7 +321,6 @@ __fastcall void handle_exception(struct iregs *iregs)
 
 #if CONFIG_SERIAL_DEBUG
     if (iregs->vec == BREAKPOINT || iregs->vec == DEBUG_EXCEPTION) {
-        show_kdcom_msg((g_consoles) ? kprint : vga_print);
         __enter_debugger_loop(iregs, /*from_com=*/false);    // blocks until a debugger connects
         return;
     }
