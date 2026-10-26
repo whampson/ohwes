@@ -100,9 +100,6 @@ __fastcall __init __noreturn void kmain(struct boot_info **info)
     init_fs();      // virtual file system infrastructure
     init_tty();     // character i/o system
 
-    vga_crtc_write(VGA_CRTC_REG_UL, 13);
-    pr_info("underline location = %d\n", vga_crtc_read(VGA_CRTC_REG_UL));
-
     // set up ring 3 initial register context
     struct iregs regs = {};
     regs.cs = USER_CS;

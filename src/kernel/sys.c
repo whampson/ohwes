@@ -110,7 +110,7 @@ SYSCALL_ENTRY(ioctl, int fd, int op, void *arg)
     dir  = (op & _IOCTL_DIRMASK)  >> _IOCTL_DIRSHIFT;
 
 #if CONFIG_PRINT_IOCTL
-    kprint("ioctl: 0x%08X (seq=%ld,code=%ld,size=%ld%s)\n",
+    pr_debug("ioctl: 0x%08X (seq=%ld,code=%ld,size=%ld%s)\n",
         op, seq, code, size,
         (dir & _IOCTL_READ) && (dir & _IOCTL_WRITE) ? ",dir=rw" :
         (dir & _IOCTL_READ)                         ? ",dir=r"  :

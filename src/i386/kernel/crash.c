@@ -248,7 +248,7 @@ static __noreturn void show_crash_screen(
     vga_print("\n\n\n");
 
 #if CONFIG_SERIAL_DEBUG
-    vga_print_centered(MaxWidth, "\e4\e[5m*** COMDBG AVAILABLE ***\e[25m");
+    vga_print_centered(MaxWidth, "\e[=5~\e[5m*** COMDBG AVAILABLE ***\e[25m");
     vga_print("\n");
     vga_print_centered(MaxWidth,
         "Attach a debugger (GDB) to COM%d now . . .",
@@ -256,13 +256,13 @@ static __noreturn void show_crash_screen(
 #else
     if (kb_avail() && cpu->iregs.vec != IRQ_KEYBOARD) {
         vga_print_centered(MaxWidth,
-            "Press CTRL+ALT+DEL to restart your computer . . . \e6");
+            "Press CTRL+ALT+DEL to restart your computer . . . \e[?25h");
     }
     else {
         vga_print_centered(MaxWidth,
             "The exception occurred in the keyboard handler.\n");
         vga_print_centered(MaxWidth,
-            "Please restart your computer manually.\e6");
+            "Please restart your computer manually.\e[?25h");
     }
 #endif
 
