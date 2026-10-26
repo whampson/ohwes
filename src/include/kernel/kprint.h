@@ -17,7 +17,26 @@
  *      Created: May 14, 2026
  *       Author: Wes Hampson
  *
- * Console interface for kernel message logging.
+ * Kernel log. Messages written to the kernel log are held in a ring buffer and
+ * written to all registered consoles. Log messages are prepended with a log
+ * level prefix `<N>`, where N is the log level (0-5, with 0 being the most
+ * important). If `CONFIG_KLOG_SHOW_TIME` is set, a timestamp is prepended to
+ * the log message when after the level prefix in the form `[<sec>.<usec>]`.
+ *
+ * The user may designate a message's log level by prepending one of the `<N>`
+ * prefixes to their message, e.g. `kprint("<4>Foo!");`. The message will only
+ * be written to the registered consoles if the message's log level is equal to
+ * or exceeds the kernel's current set log level in terms of importance.
+ * However, all messages regardless of their log level are kept in the ring
+ * buffer until overwritten. If no log level prefix is provided, the kernel's
+ * current set log level is assumed. The user may also specify one of `<c>` or
+ * `<d>`, where `<c>` will the current line (i.e. append the current message to
+ * the most-recently-written log message), and `<d>` will use the default log
+ * level (specified by `CONFIG_KLOG_DEFAULT_MSG_LEVEL`). Log level prefixes may
+ * only appear at the very beginning of a message; any string of the form `<N>`
+ * present elsewhere in the string is treated as normal text. Similarly,
+ * timestamps are not controllable by the user; they are taken at the time the
+ * message is written into the ring buffer.
  * =============================================================================
  */
 
@@ -34,7 +53,7 @@
 #define KLOG_LEVEL_INFO     "<4>"   // general information
 #define KLOG_LEVEL_DEBUG    "<5>"   // debug messages
 #define KLOG_LEVEL_CONT     "<c>"   // continue message
-#define KLOG_LEVEL_DEFAULT  "<d>"   // use kernel's set log level
+#define KLOG_LEVEL_DEFAULT  "<d>"   // use kernel's default log level
 #define MAX_KLOG_LEVEL      5
 
 typedef unsigned int klog_level_t;
@@ -60,7 +79,7 @@ typedef unsigned int klog_level_t;
  * buffer (until it gets overwritten, see `CONFIG_KLOG_RING_SIZE`).
  *
  * Indicate a message's importance by prepending one of the  `KLOG_LEVEL_`
- * macros to the message, or by calling one of the log level macros below.
+ * strings the message, or by calling one of the log level macros below.
  * Messages written without a level prefix are logged at `CONFIG_KLOG_LEVEL`.
  * Control the kernel's current log level using `Alt+SysRq+<0-9>`. Log messages
  * are always terminated with `\n` unless `KLOG_LEVEL_CONT` is used.
@@ -90,8 +109,8 @@ extern int vkprint(const char *fmt, va_list args)
  * Defer all log message writes to a ring buffer until `resume_klog()` is
  * called.
  *
- * WARNING: ring buffer can wrap and overwrrite! Do not defer for a long time.
- * See `CONFIG_KLOG_RING_SIZE`.
+ * WARNING: ring buffer can wrap and overwrite! Do not defer for a long time if
+ * you don't want to lose log messages. See `CONFIG_KLOG_RING_SIZE`.
  */
 void suspend_klog(void);
 
