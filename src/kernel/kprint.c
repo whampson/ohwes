@@ -62,6 +62,19 @@ static size_t _klog_flush_tail = 0; // index one past the last flushed '\n'
 
 struct console *g_consoles = NULL;  // linked list of registered consoles
 
+static int klog_ring_write_char(char c);
+static int klog_ring_write_buf(const char *buf, size_t count);
+static int parse_log_prefix(const char *buf, klog_level_t *level, char *special);
+static int klog_ring_parse_prefix(size_t off, klog_level_t *level, char *special);
+static int klog_write_line_prefix(void);
+static size_t klog_line_begin_index(size_t pos);
+static size_t klog_current_line_begin_index(void);
+static klog_level_t klog_get_line_level(size_t off);
+static size_t klog_emit_timestamp(struct console *cons, size_t offset, size_t nremain);
+static void klog_write_to_console(struct console *cons, size_t offset, size_t count);
+static void klog_flush_to_consoles(size_t off, size_t count);
+static void klog_flush_lines(void);
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -108,7 +121,8 @@ struct console e9_console =
 
 static void register_early_consoles(void)
 {
-    suspend_klog(); // suppress console output
+    // suppress writes to consoles until resume_klog() called
+    suspend_klog();
 
 #if CONFIG_E9_HACK && CONFIG_E9_HACK_CONSOLE
     static bool e9_console_registered = false;
@@ -140,6 +154,7 @@ static void register_early_consoles(void)
     }
 #endif
 
+    // flush all log messages that may have been written during registration
     resume_klog();
 }
 
@@ -147,7 +162,6 @@ static void register_early_consoles(void)
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
-// write a character to the log message ring buffer
 static int klog_ring_write_char(char c)
 {
     char _c = c;
@@ -158,7 +172,6 @@ static int klog_ring_write_char(char c)
     return ring_push_back(&_klog_ring, _c, char);
 }
 
-// write a buffer to the log message ring buffer
 static int klog_ring_write_buf(const char *buf, size_t count)
 {
     size_t nwritten = 0;
@@ -217,7 +230,7 @@ static int parse_log_prefix(const char *buf, klog_level_t *level, char *special)
 
 // scan up to 3 chars from the ring at 'off' and parse <N> prefix there;
 //    returns the number of chars consumed (0 if no valid prefix)
-static int klog_ring_prefix(size_t off, klog_level_t *level, char *special)
+static int klog_ring_parse_prefix(size_t off, klog_level_t *level, char *special)
 {
     char buf[3] = { };
     for (int k = 0; k < (int) sizeof(buf); k++) {
@@ -229,7 +242,7 @@ static int klog_ring_prefix(size_t off, klog_level_t *level, char *special)
     return parse_log_prefix(buf, level, special);
 }
 
-// write the canonical line prefix for the current log level;
+// write the line prefix for the current log level;
 //    if timestamps are enabled, the prefix is "<N>[<sec>.<usec>] ",
 //    otherwise the prefix is simply "<N>"
 static int klog_write_line_prefix(void)
@@ -249,6 +262,15 @@ static int klog_write_line_prefix(void)
 #endif
 
     return n;
+}
+
+// find the log level of the log line that passes through the given ring offset
+static klog_level_t klog_get_line_level(size_t off)
+{
+    klog_level_t level = CONFIG_KLOG_DEFAULT_MSG_LEVEL;
+    klog_ring_parse_prefix(klog_line_begin_index(off), &level, NULL);
+
+    return level;
 }
 
 // scan backwards in the ring from 'pos' to find the start of the last log line;
@@ -273,23 +295,46 @@ static size_t klog_current_line_begin_index(void)
     return klog_line_begin_index(ring_count(&_klog_ring));
 }
 
-// find the log level of the log line that passes through the given ring offset
-static klog_level_t klog_line_level(size_t off)
+// flush all complete log lines from the ring buffer to the consoles;
+//    a log line is said to be "complete" when it begins with a log prefix '<N>'
+//    and end with a newline '\n'
+static void klog_flush_lines(void)
 {
-    klog_level_t level = CONFIG_KLOG_DEFAULT_MSG_LEVEL;
-    klog_ring_prefix(klog_line_begin_index(off), &level, NULL);
+    if (_klog_suspend_count != 0) {
+        return; // ignore flush if suspended
+    }
+    size_t end_index = klog_current_line_begin_index();
+    if (end_index > _klog_flush_tail) {
+        klog_flush_to_consoles(_klog_flush_tail, end_index - _klog_flush_tail);
+        _klog_flush_tail = end_index;
+    }
+}
 
-    return level;
+// flush 'count' characters of buffered log text to all consoles starting from
+// offset 'off'
+static void klog_flush_to_consoles(size_t off, size_t count)
+{
+    struct console *cons = g_consoles;
+    while (cons) {
+        if (cons->flags & _CONSOLE_FLAG_KLOG) {
+            klog_write_to_console(cons, off, count);
+        }
+        cons = cons->next;
+    }
 }
 
 #if CONFIG_KLOG_SHOW_TIME
-static size_t klog_emit_timestamp(struct console *cons, size_t offset, size_t nremain)
+// prints a timestamp of the form "[<sec>.<usec>]" to the given console if
+// present in the ring at [offset, offset+count);
+//    if CONFIG_KLOG_USE_COLOR is set, the timestamp will be emitted with
+//    color using ANSI escape sequences
+static size_t klog_emit_timestamp(struct console *cons, size_t offset, size_t count)
 {
-    char timestamp[24];     // "[<sec>.<usec>]"
+    char timestamp[24];
     char c = '\0';
 
     size_t n = 0;
-    while (n < nremain && n < sizeof(timestamp)) {
+    while (n < count && n < sizeof(timestamp)) {
         if (!ring_get_at(&_klog_ring, offset + n, c, char) || c == '\n') {
             return 0;
         }
@@ -313,6 +358,14 @@ static size_t klog_emit_timestamp(struct console *cons, size_t offset, size_t nr
 }
 #endif
 
+// prints the text present in the ring at [offset, offset+count) to the
+// specified console;
+//    if CONFIG_KLOG_USE_COLOR is set, the message is printed with color
+//    according to it's log level, the timestamp (if present) will also be
+//    printed with color;
+//    the message printed may come from anywhere in the string -- it doesn't
+//    need to be a complete line, though ideally complete lines are printed as
+//    it makes for proper prefix and timestamp detection (for injecting color)
 static void klog_write_to_console(struct console *cons, size_t offset, size_t count)
 {
     // clamp params to the valid relative range
@@ -333,10 +386,10 @@ static void klog_write_to_console(struct console *cons, size_t offset, size_t co
     }
 
     size_t nremain = count;
-    klog_level_t msg_level = klog_line_level(offset);
+    klog_level_t msg_level = klog_get_line_level(offset);
     while (nremain > 0) {
         // consume an <N> prefix at the start of a line segment, if present
-        int nprefix = klog_ring_prefix(offset, &msg_level, NULL);
+        int nprefix = klog_ring_parse_prefix(offset, &msg_level, NULL);
         offset += nprefix;
         nremain -= nprefix;
 
@@ -347,6 +400,9 @@ static void klog_write_to_console(struct console *cons, size_t offset, size_t co
             s_start_new_line = false;
             if (emit) {
 #if CONFIG_KLOG_SHOW_TIME
+                // need a separate function for this so we can surround the
+                // timestamp with color escape sequences, provided that
+                // CONFIG_KLOG_USE_COLOR is set
                 size_t ntimestamp = klog_emit_timestamp(cons, offset, nremain);
                 offset += ntimestamp;
                 nremain -= ntimestamp;
@@ -366,7 +422,7 @@ static void klog_write_to_console(struct console *cons, size_t offset, size_t co
             }
 
             // stop if <N> found at start of next line
-            if (s_start_new_line && klog_ring_prefix(offset, NULL, NULL) > 0) {
+            if (s_start_new_line && klog_ring_parse_prefix(offset, NULL, NULL) > 0) {
                 break;
             }
 
@@ -386,33 +442,6 @@ static void klog_write_to_console(struct console *cons, size_t offset, size_t co
             offset += 1;
             nremain -= 1;
         }
-    }
-}
-
-// flush 'count' characters of buffered log text to all consoles
-// starting from offset 'off'
-static void klog_flush_to_consoles(size_t off, size_t count)
-{
-    struct console *cons = g_consoles;
-    while (cons) {
-        if (cons->flags & _CONSOLE_FLAG_KLOG) {
-            klog_write_to_console(cons, off, count);
-        }
-        cons = cons->next;
-    }
-}
-
-// flush all complete log lines from the ring buffer to the consoles;
-//    complete lines begin with a log prefix '<N>' and end with a newline '\n'
-static void klog_flush_lines(void)
-{
-    if (_klog_suspend_count != 0) {
-        return; // ignore flush if suspended
-    }
-    size_t end_index = klog_current_line_begin_index();
-    if (end_index > _klog_flush_tail) {
-        klog_flush_to_consoles(_klog_flush_tail, end_index - _klog_flush_tail);
-        _klog_flush_tail = end_index;
     }
 }
 
