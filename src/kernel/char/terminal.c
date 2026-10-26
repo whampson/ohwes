@@ -57,6 +57,7 @@
 // TODO: rename to 'vgaterm.c'
 // TODO: smooth scroll? :D (DECSCLM ESC[?4h/l)
 // TODO: Shift+PgUp/Dn for active terminal scrollback
+// TODO: encode Ctrl/Shift/Alt/Meta state into emitted key character sequences
 // TODO: ability to print the glyphs that occupy C0 and C1 control char range
 
 static int s_curr_page = 0;
@@ -74,6 +75,8 @@ static int write_to_terminal(struct terminal *term, const char *buf, size_t coun
 static uint16_t xy2pos(const struct terminal *term, uint16_t x, uint16_t y);
 static void pos2xy(struct terminal *term, uint16_t pos);
 
+void __terminal_putc(struct terminal *term, char c);
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -87,7 +90,6 @@ static int terminal_tty_open(struct tty *);
 static void terminal_tty_close(struct tty *);
 static int terminal_tty_ioctl(struct tty *, int op, void *arg);
 static int terminal_tty_write(struct tty *, const char *buf, size_t count);
-static void terminal_tty_write_char(struct tty *, char c);
 static size_t terminal_tty_write_room(struct tty *);
 static void terminal_tty_stop(struct tty *);
 static void terminal_tty_start(struct tty *);

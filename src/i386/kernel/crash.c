@@ -66,6 +66,7 @@ static void vga_print_centered(int maxwidth, const char *fmt, ...) __format_prin
 static void vga_print_wrapped(int margin, const char *fmt, ...) __format_printf(2, 3);
 
 extern __init void init_early_terminal(int num, struct terminal *term);
+extern void __terminal_putc(struct terminal *term, char c); // write directly to terminal, bypassing TTY
 
 typedef int (*dumpfn_t)(const char *fmt, ...) __format_printf(1, 2);
 
