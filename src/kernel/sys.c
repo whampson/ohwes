@@ -42,7 +42,7 @@ SYSCALL_ENTRY(_exit, int status)
     status &= 0xFF;
 
     kprint("user mode returned %d: %s\n", status, strerror(status));
-    kprint("\e[1;5;31msystem halted\e[0m");
+    kprint("\e[1;5;31msystem halted\e[0m\n");
 
     __idle();
 }
