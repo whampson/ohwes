@@ -114,6 +114,7 @@ __fastcall __init __noreturn void kmain(struct boot_info **info)
     regs.eflags &= ~EFLAGS_IOPL;    // I/O port access restricted
 
     // drop to ring 3
+    pr_info("switching to ring 3...\n");
     switch_context(&regs);
 
     // for future reference...
@@ -347,6 +348,7 @@ __noreturn void ring3_init(void)
     RIF(open("/dev/tty1", O_RDWR));   // stdin
     RIF(dup(0));                      // stdout
     RIF(dup(0));                      // stderr
+    printf("\e[5;33mHello from user mode!\e[m\n");
 
     // TODO: exec("/bin/sh")
     // _exit(main());
