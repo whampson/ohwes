@@ -84,7 +84,6 @@ int List(const Command *cmd, const CommandArgs *args)
     int dirEntryCount = 0;
     int fileCount = 0;
     int dirCount = 0;
-    int numShown = 0;
     size_t bytesFree = 0;
     size_t bytesTotal = 0;
     size_t bytesAllocd = 0;
@@ -228,7 +227,6 @@ int List(const Command *cmd, const CommandArgs *args)
         }
 
         LogInfo("%s%ls\n", lineBuf, fullName);
-        numShown++;
     }
 
     if (bareFormat) goto Cleanup;

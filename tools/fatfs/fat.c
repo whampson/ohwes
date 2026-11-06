@@ -347,13 +347,13 @@ bool SetShortName(DirEntry *dst, const char *src)
     size_t extLen = 0;
 
     // trim leading spaces
-    while (isspace(*src)) {
+    while (isspace((int) *src)) {
         src++;
     }
 
     // trim trailing spaces
     const char *end = src + strlen(src) - 1;
-    while(end > src && isspace(*end)) {
+    while(end > src && isspace((int) *end)) {
         end--;
     }
 

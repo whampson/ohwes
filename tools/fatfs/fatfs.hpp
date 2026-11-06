@@ -319,9 +319,9 @@ inline FILE * OpenFile(const char *path, const char *mode, size_t *pOutLen)
 ({                                                                              \
     if (fp) {                                                                   \
         void *_fp = fp;                                                         \
+        LogVeryVerbose("closed file with handle %p\n", _fp);                    \
         fclose(fp);                                                             \
         (fp) = NULL;                                                            \
-        LogVeryVerbose("closed file with handle %p\n", _fp);                    \
     }                                                                           \
 })
 
@@ -356,7 +356,9 @@ static inline bool FileExists(const char *path)
     FILE *fp = fopen(path, "r");
     bool exists = (fp != NULL);
 
-    fclose(fp);
+    if (fp != NULL) {
+        fclose(fp);
+    }
     return exists;
 }
 

@@ -93,7 +93,7 @@ void FormatDate(char dst[MAX_DATE], const struct tm *src)
     }
 
     snprintf(dst, MAX_DATE, "%3s %2d %4d",
-        month, src->tm_mday, src->tm_year + 1900);
+        month, (src->tm_mday % 100), (src->tm_year + 1900) % 10000);
 }
 
 void FormatTime(char dst[MAX_TIME], const struct tm *src)
