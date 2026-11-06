@@ -56,6 +56,12 @@ die() {
     exit 1
 }
 
+# Print a shell-quoted command line that can be copy-pasted verbatim.
+print_cmd() {
+    printf '%q ' "$@"
+    printf '\n'
+}
+
 # ------------------------------------------------------------------------------
 # Argument parsing
 # ------------------------------------------------------------------------------
@@ -151,7 +157,7 @@ run_qemu() {
     fi
 
     if ((DRY_RUN)); then
-        echo "$QEMU" "${args[@]}"
+        print_cmd "$QEMU" "${args[@]}"
         return
     fi
 
@@ -219,8 +225,10 @@ run_gdb() {
             ;;
     esac
 
-    echo "$GDB" "${args[@]}"
-    if ((! DRY_RUN)); then
+    if ((DRY_RUN)); then
+        print_cmd "$GDB" "${args[@]}"
+    else
+        echo "$GDB" "${args[@]}"
         "$GDB" "${args[@]}"
     fi
 }
@@ -237,7 +245,7 @@ run_bochs() {
         die "Bochs config not found: $bochsrc"
     fi
 
-    local bochs_flags="-f $bochsrc -q"      # config file, no config menu
+    local -a bochs_args=(-f "$bochsrc" -q)   # config file, no config menu
     case "$(uname -s)" in
         MINGW*)
             # On Windows/MSYS2, launch via PowerShell so the bundled DLLs are
@@ -249,18 +257,20 @@ run_bochs() {
             fi
             local bochs_exe
             bochs_exe=$(cygpath -w "$(command -v "$BOCHS")")
-            bochsrc=$(cygpath -w "$bochsrc")
-            bochs_flags="-f $bochsrc -q"
-            local cmd="powershell -command \"& { & '$bochs_exe' $bochs_flags }\""
+            local bochsrc_win
+            bochsrc_win=$(cygpath -w "$bochsrc")
+            local cmd="powershell -command \"& { & '$bochs_exe' -f '$bochsrc_win' -q }\""
             echo "$cmd"
             if ((! DRY_RUN)); then
                 eval "$cmd"
             fi
             ;;
         *)
-            echo "$BOCHS" $bochs_flags
-            if ((! DRY_RUN)); then
-                "$BOCHS" $bochs_flags
+            if ((DRY_RUN)); then
+                print_cmd "$BOCHS" "${bochs_args[@]}"
+            else
+                echo "$BOCHS" "${bochs_args[@]}"
+                "$BOCHS" "${bochs_args[@]}"
             fi
             ;;
     esac
