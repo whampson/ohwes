@@ -1,7 +1,8 @@
 # boilermake: A reusable, but flexible, boilerplate Makefile.
+# https://github.com/dmoulding/boilermake
 #
 # Copyright 2008, 2009, 2010 Dan Moulding, Alan T. DeKok
-# Copyright 2023, 2024 Wes Hampson
+# Copyright 2023, 2024, 2026 Wes Hampson
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,24 +16,24 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-# boilermake:
-# Modifications made by Wes Hampson.
+#
+# -----------------------------------------------------------------------------
+# Modifications made by Wes Hampson for OH-WES.
 #
 # 29 Sep 23 [Wes Hampson]:
-#  - Added support for compiling ASM files.
+#   - Added support for compiling ASM files.
 #
 # 17 Jul 24 [Wes Hampson]:
-#  - Cleaned up variable, macro, and function names.
-#  - Items in TARGET_LDLIBS are now relative to TARGET_DIR.
-#  - Added function `make-rawbin` to create raw executables with no relocation,
-#    symbol, or debugging information.
-#  - Added TARGET_LDSCRIPT so targets can specify an optional linker script
-#    which is tracked by the build system and will thus trigger a relink if
-#    modified.
-#  - Build system is now aware of Makefile changes. If this file or a
-#    submakefile are modified, the affected objects and targets will be rebuilt
-#    to ensure the Makefile changes are applied properly.
+#   - Cleaned up variable, macro, and function names.
+#   - Items in TARGET_LDLIBS are now relative to TARGET_DIR.
+#   - Added function `make-rawbin` to create raw executables with no relocation,
+#     symbol, or debugging information.
+#   - Added TARGET_LDSCRIPT so targets can specify an optional linker script
+#     which is tracked by the build system and will thus trigger a relink if
+#     modified.
+#   - Build system is now aware of Makefile changes. If this file or a
+#     submakefile are modified, the affected objects and targets will be rebuilt
+#     to ensure the Makefile changes are applied properly.
 #
 # 24 Jul 24 [Wes Hampson]:
 #   - Added the ability to "preprocess" linker scripts, allowing developers to
@@ -53,20 +54,39 @@
 #     which shows the path of the source linker script being preprocessed).
 #     Verbose output can be enabled by running "make V=1", which will show the
 #     full command lines used to build each target.
+#
+# 3 Nov 26 [Wes Hampson]:
+#   - Header dependencies are now generated with gcc's -MMD -MP flags, which
+#     emit the same information (including phony rules for deleted headers)
+#     directly. The old sed-based .d-to-.P post-processing is gone; dep files
+#     are kept as .d files alongside their objects.
+#
+# 6 Nov 26 [Wes Hampson]:
+#   - Submodule discovery now uses a single SUBMODULES variable. Each entry is
+#     a directory whose fragment is expected at <dir>/Module.mk (derived via
+#     the recursive SUBMODULE_MAKEFILES variable). The separate SUBMAKEFILES
+#     variable has been removed, and entry points now set SUBMODULES to the
+#     directory containing their Module.mk rather than naming the file
+#     directly.
 
-# ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
-# Caution: Don't edit this Makefile! Create your own main.mk and other
-#          submakefiles, which will be included by this Makefile.
-#          Only edit this if you need to modify boilermake's behavior (fix
-#          bugs, add features, etc).
-# ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
+# =============================================================================
+#                               !!!  WARNING  !!!
+#                           DO NOT EDIT THIS MAKEFILE!
+#
+# This is the boilermake "engine" and is not meant to be edited directly.
+# Instead, create your own entry point (main.mk) and per-directory Module.mk
+# fragments, which are discovered and included by this file automatically.
+#
+# Only edit this file if you need to modify boilermake's behavior itself
+# (fix bugs, add features, etc.).
+# =============================================================================
 
-# Note: Parameterized "functions" in this makefile that are marked with
-#       "USE WITH EVAL" are only useful in conjuction with eval. This is
-#       because those functions result in a block of Makefile syntax that must
-#       be evaluated after expansion. Since they must be used with eval, most
-#       instances of "$" within them need to be escaped with a second "$" to
-#       accomodate the double expansion that occurs when eval is invoked.
+# Note: Parameterized "functions" in this Makefile that are marked
+#   "USE WITH EVAL" must always be invoked via `$(eval $(call ...))`. They
+#   expand to a block of Makefile syntax that only takes effect once it is
+#   parsed after expansion. Because of that, most instances of "$" within
+#   them must be escaped with a second "$" to accommodate the double
+#   expansion that eval performs.
 
 # ------------------------------------------------------------------------------
 # Global variables and functions
@@ -173,39 +193,24 @@ endef
 define COMPILE_C_CMDS
 	@mkdir -p $(dir $@)
 	${MSG} "CC" "$<"
-	${Q}$(strip ${CC} -o $@ -c -MD ${CFLAGS} ${SOURCE_CFLAGS} ${DEFINES} \
+	${Q}$(strip ${CC} -o $@ -c -MMD -MP ${CFLAGS} ${SOURCE_CFLAGS} ${DEFINES} \
 	    ${SOURCE_DEFINES} ${INCLUDES} ${SOURCE_INCLUDES} $<)
-	@cp ${@:%$(suffix $@)=%.d} ${@:%$(suffix $@)=%.P}; \
-	 sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
-	     -e '/^$$/ d' -e 's/$$/ :/' < ${@:%$(suffix $@)=%.d} \
-	     >> ${@:%$(suffix $@)=%.P}; \
-	 rm -f ${@:%$(suffix $@)=%.d}
 endef
 
 # COMPILE_CXX_CMDS - Commands for compiling C++ source code.
 define COMPILE_CXX_CMDS
 	@mkdir -p $(dir $@)
 	${MSG} "CXX" "$<"
-	${Q}$(strip ${CXX} -o $@ -c -MD ${CXXFLAGS} ${SOURCE_CXXFLAGS} ${DEFINES} \
+	${Q}$(strip ${CXX} -o $@ -c -MMD -MP ${CXXFLAGS} ${SOURCE_CXXFLAGS} ${DEFINES} \
 	    ${SOURCE_DEFINES} ${INCLUDES} ${SOURCE_INCLUDES} $<)
-	@cp ${@:%$(suffix $@)=%.d} ${@:%$(suffix $@)=%.P}; \
-	 sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
-	     -e '/^$$/ d' -e 's/$$/ :/' < ${@:%$(suffix $@)=%.d} \
-	     >> ${@:%$(suffix $@)=%.P}; \
-	 rm -f ${@:%$(suffix $@)=%.d}
 endef
 
 # COMPILE_ASM_CMDS - Commands for compiling ASM source code.
 define COMPILE_ASM_CMDS
 	@mkdir -p $(dir $@)
 	${MSG} "AS" "$<"
-	${Q}$(strip ${AS} -o $@ -c -MD ${ASFLAGS} ${SOURCE_ASFLAGS} ${DEFINES} \
+	${Q}$(strip ${AS} -o $@ -c -MMD -MP ${ASFLAGS} ${SOURCE_ASFLAGS} ${DEFINES} \
 	    ${SOURCE_DEFINES} ${INCLUDES} ${SOURCE_INCLUDES} $<)
-	@cp ${@:%$(suffix $@)=%.d} ${@:%$(suffix $@)=%.P}; \
-	 sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
-	     -e '/^$$/ d' -e 's/$$/ :/' < ${@:%$(suffix $@)=%.d} \
-	     >> ${@:%$(suffix $@)=%.P}; \
-	 rm -f ${@:%$(suffix $@)=%.d}
 endef
 
 # -----------------------------------------------------------------------------
@@ -228,13 +233,19 @@ endef
 
 # -----------------------------------------------------------------------------
 
-# include-submakefile - Parameterized "function" that includes a new
-#   "submakefile" fragment into the overall Makefile. It also recursively
-#   includes all submakefiles of the specified submakefile fragment.
+# SUBMODULE_MAKEFILES - The makefiles of the submodules listed in SUBMODULES.
+#   It is a recursively-expanded variable so that it is resolved lazily, only
+#   after the fragment has been included and has had a chance to define
+#   SUBMODULES.
+SUBMODULE_MAKEFILES = $(addsuffix /Module.mk,$(SUBMODULES))
+
+# include-submodule - Parameterized "function" that includes a module's
+#   Module.mk fragment into the overall Makefile. It also recursively includes
+#   all of that module's submodules.
 #
 #   USE WITH EVAL
 #
-define include-submakefile
+define include-submodule
     # Initialize variables that apply to the current target.
     TARGET              :=
     TARGET_CFLAGS       :=
@@ -260,10 +271,10 @@ define include-submakefile
     SOURCE_INCLUDES     :=
 
     # Initialize other pre-include variables.
-    SUBMAKEFILES  :=
+    SUBMODULES    :=
 
     # A directory stack is maintained so that the correct paths are used as we
-    # recursively include all submakefiles. Get the makefile's directory and
+    # recursively include all submodules. Get the module's directory and
     # push it onto the stack.
     DIR := $(call CANONICAL_PATH,$(dir ${1}))
     _DIR_STACK := $$(call PUSH,$${_DIR_STACK},$${DIR})
@@ -287,7 +298,7 @@ define include-submakefile
 
     # Determine which target this makefile's variables apply to. A stack is
     # used to keep track of which target is the "current" target as we
-    # recursively include other submakefiles.
+    # recursively include other submodules.
     ifneq "$$(strip $${TARGET})" ""
         # This makefile defined a new target. Target variables defined by this
         # makefile apply to this new target. Initialize the target's variables.
@@ -366,7 +377,7 @@ define include-submakefile
         # target-specific variables for the objects based on any source
         # variables that were defined.
         $${TARGET}_OBJECTS += $${OBJECTS}
-        $${TARGET}_DEPENDS += $${OBJECTS:%.o=%.P}
+        $${TARGET}_DEPENDS += $${OBJECTS:%.o=%.d}
         $${OBJECTS}: SOURCE_CFLAGS      := $${$${TARGET}_CFLAGS} $${SOURCE_CFLAGS}
         $${OBJECTS}: SOURCE_CXXFLAGS    := $${$${TARGET}_CXXFLAGS} $${SOURCE_CXXFLAGS}
         $${OBJECTS}: SOURCE_ASFLAGS     := $${$${TARGET}_ASFLAGS} $${SOURCE_ASFLAGS}
@@ -374,10 +385,10 @@ define include-submakefile
         $${OBJECTS}: SOURCE_INCLUDES    := $$(addprefix -I,$${$${TARGET}_INCLUDES} $${SOURCE_INCLUDES})
     endif
 
-    ifneq "$$(strip $${SUBMAKEFILES})" ""
-        # This makefile has submakefiles. Recursively include them.
-        $$(foreach MK,$${SUBMAKEFILES},\
-           $$(eval $$(call include-submakefile,\
+    ifneq "$$(strip $${SUBMODULE_MAKEFILES})" ""
+        # This makefile has submodules. Recursively include them.
+        $$(foreach MK,$${SUBMODULE_MAKEFILES},\
+           $$(eval $$(call include-submodule,\
                       $$(call CANONICAL_PATH,\
                          $$(call QUALIFY_PATH,$${DIR},$${MK})))))
     endif
@@ -463,9 +474,9 @@ _DIR_STACK       :=
 _TARGET_STACK    :=
 _MAKEFILE_STACK  := Makefile    # Initialize stack with this file
 
-# Include the main user-supplied submakefile. This also recursively includes
-# all other user-supplied submakefiles.
-$(eval $(call include-submakefile,main.mk))
+# Include the main user-supplied entry point (main.mk). This also recursively
+# includes all of its submodules.
+$(eval $(call include-submodule,main.mk))
 
 # Perform post-processing on global variables as needed.
 DEFINES := $(addprefix -D,${DEFINES})

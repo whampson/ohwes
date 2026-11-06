@@ -1,7 +1,6 @@
 TARGET := kernel.elf
-TARGET_EXE := ohwes.sys
 
-MODULES := char
+SUBMODULES := char
 
 TARGET_CFLAGS  := -Wno-unused-function -Wno-multichar
 TARGET_DEFINES := __KERNEL__
@@ -14,7 +13,7 @@ TARGET_LDFLAGS_POST := -Wl,--end-group
 TARGET_LDLIBS  := \
     lib/libc.a \
     lib/kernel/${ARCH}.a \
-    $(addsuffix .a,$(addprefix lib/kernel/,${MODULES})) \
+    lib/kernel/char.a \
     usr/shell.a	 # TODO: temp until we can load programs :D
 
 SOURCES := \
@@ -42,8 +41,5 @@ SOURCES += \
     test/test_string.c \
 
 endif
-
-
-SUBMAKEFILES := $(addsuffix /Module.mk,${MODULES})
 
 $(eval $(call make-rawbin,ohwes.sys))

@@ -1,4 +1,2 @@
-MODULES := \
+SUBMODULES := \
     shell
-
-SUBMAKEFILES := $(addsuffix /Module.mk,${MODULES})
