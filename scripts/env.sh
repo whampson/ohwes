@@ -22,8 +22,9 @@ if [ "$1" = clean ]; then
     unset OHWES_ENVIRONMENT_SET OHWES_PATH_BACKUP \
         HOST_CC HOST_CXX HOST_SYSTEM HOST_PREFIX \
         CROSS_PREFIX CROSS_CC CROSS_AR CROSS_AS CROSS_CXX CROSS_LD CROSS_OBJCOPY \
+        PROJ_ROOT TOOLCHAIN ELF_TOOLS_ROOT \
         QEMU BOCHS GDB \
-        PROJ_ROOT TOOLCHAIN BOCHSRC
+        BOCHS_DIR BOCHSRC
 
     unset -f path_append print_name_path env_main
     complete -r make run.sh env.sh
@@ -110,7 +111,7 @@ env_main() {
 
     # Prebuilt cross-compiler, prefer `latest` (symlink to current release),
     # then the versioned release dirs, newest first (all platforms).
-    local ELF_TOOLS_ROOT=${ELF_TOOLS_ROOT:-"$PROJ_ROOT/build/i686-elf-tools"}
+    export ELF_TOOLS_ROOT=${ELF_TOOLS_ROOT:-"$PROJ_ROOT/build/i686-elf-tools"}
     while IFS= read -r ELF_TOOLS_REL; do
         local ELF_TOOLS_BIN="$ELF_TOOLS_ROOT/$ELF_TOOLS_REL/bin"
         if [ -x "$ELF_TOOLS_BIN/${TOOLCHAIN}-gcc" ]; then
