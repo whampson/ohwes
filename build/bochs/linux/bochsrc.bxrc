@@ -1,0 +1,63 @@
+# OH-WES Bochs config (Linux).
+#
+# NOTE: Uses a locally-built Bochs 3.1 (see ~/bochs-3.1). The Debian-packaged
+# Bochs 2.8 BIOS triple-faults during POST (rombios32) before the boot sector
+# runs. Bochs 3.1's BIOS fixes this. Build it with:
+#   git clone --branch REL_3_1_FINAL https://github.com/bochs-emu/Bochs.git ~/bochs-src
+#   cd ~/bochs-src/bochs && ./configure --prefix=$HOME/bochs-3.1 --with-x11 \
+#       --enable-debugger --enable-x86-64 --enable-smp --enable-readline \
+#       --enable-cpu-level=6 --enable-all-optimizations --enable-sb16
+#   make -j$(nproc) && make install
+#
+config_interface: textconfig
+display_library: x
+memory: guest=8, host=8, block_size=128
+romimage: file="/home/wes/bochs-3.1/share/bochs/BIOS-bochs-latest", address=0x00000000, options=none, flash_data=none
+vgaromimage: file="/home/wes/bochs-3.1/share/bochs/VGABIOS-lgpl-latest.bin"
+boot: floppy
+floppy_bootsig_check: disabled=0
+floppya: type=1_44, 1_44="bin/ohwes.img", status=inserted, write_protected=0
+# no floppyb
+ata0: enabled=true, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
+ata0-master: type=none
+ata0-slave: type=none
+ata1: enabled=true, ioaddr1=0x170, ioaddr2=0x370, irq=15
+ata1-master: type=none
+ata1-slave: type=none
+ata2: enabled=false
+ata3: enabled=false
+optromimage1: file=none
+optromimage2: file=none
+optromimage3: file=none
+optromimage4: file=none
+optramimage1: file=none
+optramimage2: file=none
+optramimage3: file=none
+optramimage4: file=none
+pci: enabled=1, chipset=i440fx, slot1=none, slot2=none, slot3=none, slot4=none, slot5=none
+vga: extension=vbe, update_freq=75, realtime=1, ddc=builtin
+cpu: count=1, ips=50000000, reset_on_triple_fault=1, cpuid_limit_winnt=0, ignore_bad_msrs=1, mwait_is_nop=0
+print_timestamps: enabled=0
+debugger: log=-
+magic_break: enabled=0
+port_e9_hack: enabled=true, all_rings=true
+iodebug: all_rings=0
+private_colormap: enabled=0
+clock: sync=realtime, time0=local, rtc_sync=1
+# no cmosimage
+log: -
+logprefix: %t%e%d
+debug: action=ignore
+info: action=report
+error: action=report
+panic: action=ask
+keyboard: type=mf, serial_delay=150, paste_delay=100000, user_shortcut=none
+mouse: type=ps2, enabled=false, toggle=ctrl+mbutton
+sound: waveoutdrv=dummy, waveout=none, waveindrv=dummy, wavein=none, midioutdrv=dummy, midiout=none
+speaker: enabled=true, mode=sound, volume=8
+parport1: enabled=true, file=none
+parport2: enabled=false
+com1: enabled=true, mode=null
+com2: enabled=false
+com3: enabled=false
+com4: enabled=false
