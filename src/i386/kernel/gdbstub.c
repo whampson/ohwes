@@ -507,6 +507,20 @@ static int gdb_write_regs(struct gdb_state *state, char *pkt, size_t pktlen)
     return gdb_send_ok(state);
 }
 
+// Parse an unsigned hex value from a GDB packet, preserving the caller's
+// errno.
+static unsigned long gdb_strtoul(const char *str, char **end, bool *range_error)
+{
+    int saved_errno = errno;
+    unsigned long value;
+
+    errno = 0;
+    value = strtoul(str, end, 16);
+    *range_error = (errno == ERANGE);
+    errno = saved_errno;
+    return value;
+}
+
 static int gdb_read_mem(struct gdb_state *state, char *pkt, size_t pktlen)
 {
     uintptr_t addr;
@@ -514,17 +528,16 @@ static int gdb_read_mem(struct gdb_state *state, char *pkt, size_t pktlen)
     char data[GDB_BUFLEN/2] = { };
     char tx_pkt[GDB_BUFLEN] = { };
     char *p;
+    bool range_error;
 
-    errno = 0;
-    addr = (uintptr_t) strtoul(pkt, &p, 16);
-    if (errno == ERANGE || *p != ',') {
+    addr = (uintptr_t) gdb_strtoul(pkt, &p, &range_error);
+    if (range_error || *p != ',') {
         GDB_ERROR("read_mem: bad packet format (addr)\n");
         return GDB_STATUS_EOF;
     }
 
-    errno = 0;
-    count = strtoul(p+1, &p, 16);
-    if (errno == ERANGE || *p != '\0') {
+    count = gdb_strtoul(p+1, &p, &range_error);
+    if (range_error || *p != '\0') {
         GDB_ERROR("read_mem: bad packet format (count)\n");
         return GDB_STATUS_EOF;
     }
@@ -550,17 +563,16 @@ static int gdb_write_mem(struct gdb_state *state, char *pkt, size_t pktlen)
     size_t count;
     char data[GDB_BUFLEN/2] = { };
     char *p;
+    bool range_error;
 
-    errno = 0;
-    addr = (uintptr_t) strtoul(pkt, &p, 16);
-    if (errno == ERANGE || *p != ',') {
+    addr = (uintptr_t) gdb_strtoul(pkt, &p, &range_error);
+    if (range_error || *p != ',') {
         GDB_ERROR("write_mem: bad packet format (addr)\n");
         return GDB_STATUS_EOF;
     }
 
-    errno = 0;
-    count = strtoul(p+1, &p, 16);
-    if (errno == ERANGE || *p != ':') {
+    count = gdb_strtoul(p+1, &p, &range_error);
+    if (range_error || *p != ':') {
         GDB_ERROR("write_mem: bad packet format (count)\n");
         return GDB_STATUS_EOF;
     }
