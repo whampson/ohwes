@@ -1,4 +1,0 @@
-[submodule "i686-elf-tools"]
-	path = build/i686-elf-tools
-	url = https://github.com/lordmilko/i686-elf-tools
-	ignore = all

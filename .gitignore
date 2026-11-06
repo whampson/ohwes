@@ -1,6 +1,13 @@
-# Build dirs
+# output directories
 bin/
 obj/
+
+# toolchain binaries
+build/i686-elf-tools/
+
+# logs and test programs
+*.exe
+*.log
 
 # Mac stuff
 .DS_Store
@@ -8,7 +15,3 @@ obj/
 .Spotlight-V100
 .TemporaryItems
 .Trashes
-
-# Config files and test programs
-bochsrc.bxrc
-*.exe
