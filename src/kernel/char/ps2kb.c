@@ -57,29 +57,6 @@
 #define MAX_CMDLOOP         32      // max number of iterations in command send loop
 #define IDLE_TIMEOUT_MS     1000    // keyboard considered idle after this long without input
 
-static inline void atomic_inc(uint32_t volatile *value)
-{
-    __asm__ volatile (
-        "lock incl %0"
-        : "+m"(*value)
-        :
-        : "memory"
-    );
-}
-
-static inline uint32_t atomic_cmpxchg(uint32_t volatile *value, uint32_t xchg, uint32_t comp)
-{
-    uint32_t old_value;
-    __asm__ volatile (
-        "lock cmpxchg %2, %0"   // if *value === cmp, *value = xchg
-        : "+m"(*value), "=a"(old_value)
-        : "r"(xchg), "a"(comp)
-        : "cc", "memory"
-    );
-
-    return old_value;
-}
-
 // keyboard configuration
 struct ps2kb
 {
@@ -107,6 +84,7 @@ struct ps2kb
     // keyboard software state
     bool ps2ctl_init;       // PS/2 controller initialized
     int init_count;         // number of times keyboard initialized
+    uint8_t ps2_cfg;        // shadow of controller config
 
     // keyboard scancode state
     bool e0     : 1;        // 0xE0 modifier received
@@ -177,6 +155,8 @@ static bool ps2kb_selftest(void);
 static uint16_t ps2kb_identify(void);
 static bool ps2kb_is_connected(void);
 static bool ps2kb_is_idle(void);
+static void ps2kb_enable_interrupts(void);
+static void ps2kb_disable_interrupts(void);
 
 static bool ps2kb_set_scanmode(uint8_t sc_set);
 static bool ps2kb_set_leds(uint8_t leds);
@@ -222,7 +202,9 @@ static void __dpc __ps2kb_leds_dpc(void *arg)
 
     cli_save(flags);
     g_kb->pending_leds = false;
-    ps2kb_set_leds(leds);   // do not touch hardware with interrupts on
+    ps2kb_disable_interrupts(); // keep ACKs from raising IRQ
+    ps2kb_set_leds(leds);
+    ps2kb_enable_interrupts();
     restore_flags(flags);
 }
 
@@ -249,7 +231,6 @@ void ps2kb_apply_state(const struct ps2kb_state *state)
 static bool ps2kb_init(void)
 {
     struct ps2kb_state *kb_state;
-    uint8_t ps2cfg;
 
     // self-test
 #if SELFTEST
@@ -265,9 +246,9 @@ static bool ps2kb_init(void)
 
     // ensure keyboard interrupts and translation are off
     pr_debug("disable translation");
-    ps2cfg = ps2_read_config();
-    ps2cfg &= ~(PS2_CFG_P1INTON|PS2_CFG_TRANSLATE);
-    ps2_write_config(ps2cfg);
+    g_kb->ps2_cfg = ps2_read_config();
+    g_kb->ps2_cfg &= ~(PS2_CFG_P1INTON|PS2_CFG_TRANSLATE);
+    ps2_write_config(g_kb->ps2_cfg);
 
     // identify
     pr_debug("identify");
@@ -330,8 +311,8 @@ static bool ps2kb_init(void)
 
     // enable port and port interrupts
     pr_debug("enable interrupts");
-    ps2cfg |= PS2_CFG_P1INTON;
-    ps2_write_config(ps2cfg);
+    g_kb->ps2_cfg |= PS2_CFG_P1INTON;
+    ps2_write_config(g_kb->ps2_cfg);
     ps2_write_cmd(PS2_CMD_P1ON);
 
     g_kb->init_count++;
@@ -352,7 +333,7 @@ static void ps2kb_on_disconnect(void)
     g_kb->hw_connected = false;
 
     ps2_flush();
-    ps2_write_config(ps2_read_config() & ~PS2_CFG_P1INTON); // disable interrupts
+    ps2kb_disable_interrupts();
     irq_mask(IRQ_KEYBOARD);
 
     restore_flags(flags);
@@ -445,7 +426,6 @@ static void __isr kb_hotplug_detect(int irq, struct iregs *regs)
 
 __init void init_kb(void)
 {
-    uint8_t ps2cfg;
     uint32_t flags;
     irq_mask(IRQ_KEYBOARD);
 
@@ -457,10 +437,10 @@ __init void init_kb(void)
 
     // port 1 clock should be enabled if init passed...
     cli_save(flags);
-    ps2cfg = ps2_read_config();
+    g_kb->ps2_cfg = ps2_read_config();
     restore_flags(flags);
 
-    if (ps2cfg & PS2_CFG_P1CLKOFF) {
+    if (g_kb->ps2_cfg & PS2_CFG_P1CLKOFF) {
         pr_info("no keyboard port detected on controller\n");
     }
     else {
@@ -994,10 +974,24 @@ static bool ps2kb_is_idle(void)
     return (get_uptime() - g_kb->last_activity) >= c_idle_timeout_ns;
 }
 
+static void ps2kb_enable_interrupts(void)
+{
+    g_kb->ps2_cfg |= PS2_CFG_P1INTON;
+    ps2_write_config(g_kb->ps2_cfg);
+}
+
+static void ps2kb_disable_interrupts(void)
+{
+    g_kb->ps2_cfg &= ~PS2_CFG_P1INTON;
+    ps2_write_config(g_kb->ps2_cfg);
+}
+
 static bool ps2kb_is_connected(void)
 {
     bool connected = false;
+    uint8_t oldcfg = g_kb->ps2_cfg;
 
+    ps2kb_disable_interrupts(); // prevent responses from raising IRQ
     ps2_flush();
     for (int i = 0; i < MAX_PROBES; i++) {
         ps2_write_fast(PS2KB_CMD_ECHO);
@@ -1008,6 +1002,8 @@ static bool ps2kb_is_connected(void)
         }
     }
     ps2_flush();
+    ps2_write_config(oldcfg);
+    g_kb->ps2_cfg = oldcfg;
 
     return connected;
 }
