@@ -55,13 +55,12 @@
 #     Verbose output can be enabled by running "make V=1", which will show the
 #     full command lines used to build each target.
 #
-# 3 Nov 26 [Wes Hampson]:
-#   - Header dependencies are now generated with gcc's -MMD -MP flags, which
-#     emit the same information (including phony rules for deleted headers)
-#     directly. The old sed-based .d-to-.P post-processing is gone; dep files
-#     are kept as .d files alongside their objects.
-#
 # 6 Nov 26 [Wes Hampson]:
+#   - Header dependencies are now generated with gcc's -MMD -MP flags.
+#     Dependency files are post-processed into .P file whose leading target
+#     matches make's own path form, as before. This fixes MSYS2,
+#     where the cross-compiler emits a drive-letter path (D:/...) that make
+#     (using /d/...) would otherwise not detect as changed.
 #   - Submodule discovery now uses a single SUBMODULES variable. Each entry is
 #     a directory whose fragment is expected at <dir>/Module.mk (derived via
 #     the recursive SUBMODULE_MAKEFILES variable). The separate SUBMAKEFILES
@@ -128,6 +127,7 @@ endef
 define add-object
 $${BUILD_DIR}/$$(call CANONICAL_PATH,${1})/%.o: ${2} $${${1}_MAKEFILES}
 	${3}
+	$$(call postprocess-deps,$$@)
 endef
 
 # add-target - Parameterized "function" that adds a new target to the
@@ -187,6 +187,16 @@ endef
 #   the root of the filesystem) also without "./" or "../" sequences.
 define CANONICAL_PATH
 $(patsubst ${CURDIR}/%,%,$(abspath ${1}))
+endef
+
+# postprocess-deps - Rewrites the leading target recorded in a compiler-
+#   generated .d dependency file, emitting a .P file and removing the original
+#   .d file. On MSYS2, the cross-compiler (a native Windows binary) records the
+#   target as a drive-letter path (D:/...) that doesn't match the MSYS2 path
+#   make expects (/d/...), so header changes would otherwise never be detected.
+#   The rewrite is a no-op on Linux/macOS, where the paths already match.
+define postprocess-deps
+@sed '1s|^[^ ]*|$(1):|' $(1:.o=.d) > $(1:.o=.P) && rm -f $(1:.o=.d)
 endef
 
 # COMPILE_C_CMDS - Commands for compiling C source code.
@@ -377,7 +387,7 @@ define include-submodule
         # target-specific variables for the objects based on any source
         # variables that were defined.
         $${TARGET}_OBJECTS += $${OBJECTS}
-        $${TARGET}_DEPENDS += $${OBJECTS:%.o=%.d}
+        $${TARGET}_DEPENDS += $${OBJECTS:%.o=%.P}
         $${OBJECTS}: SOURCE_CFLAGS      := $${$${TARGET}_CFLAGS} $${SOURCE_CFLAGS}
         $${OBJECTS}: SOURCE_CXXFLAGS    := $${$${TARGET}_CXXFLAGS} $${SOURCE_CXXFLAGS}
         $${OBJECTS}: SOURCE_ASFLAGS     := $${$${TARGET}_ASFLAGS} $${SOURCE_ASFLAGS}
